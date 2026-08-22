@@ -1,0 +1,84 @@
+{
+  "app": "todo",
+  "theme": {
+    "background": "lavender",
+    "accent": "indigo"
+  },
+  "data": {
+    "Task": {
+      "title": "text!",
+      "notes": "longtext",
+      "done": "bool=false",
+      "createdAt": "time=now",
+      "priority": "enum[low,normal,high]=normal"
+    }
+  },
+  "views": "auto",
+  "override": {
+    "Task.list": {
+      "title": "All tasks",
+      "columns": [
+        "title",
+        "notes",
+        "done",
+        "createdAt",
+        "priority"
+      ],
+      "search": [
+        "title",
+        "notes"
+      ],
+      "filters": [
+        {
+          "name": "Status",
+          "field": "done",
+          "options": [
+            {
+              "label": "All"
+            },
+            {
+              "label": "Completed",
+              "eq": true
+            },
+            {
+              "label": "Active",
+              "eq": false
+            }
+          ]
+        },
+        {
+          "name": "Priority",
+          "field": "priority",
+          "options": [
+            {
+              "label": "Any"
+            },
+            {
+              "label": "High only",
+              "eq": "high"
+            }
+          ]
+        }
+      ],
+      "rowActions": [
+        "toggle",
+        "edit",
+        "delete"
+      ]
+    }
+  },
+  "actions": [
+    {
+      "name": "toggle",
+      "title": "Mark completed",
+      "altTitle": "Reopen",
+      "in": "Task",
+      "do": [
+        {
+          "block": "db.toggle",
+          "field": "done"
+        }
+      ]
+    }
+  ]
+}

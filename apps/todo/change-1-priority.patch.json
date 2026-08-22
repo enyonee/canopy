@@ -1,0 +1,5 @@
+[ { "op": "add", "path": "/data/Task/priority", "value": "enum[low,normal,high]=normal" },
+  { "op": "add", "path": "/override/Task.list/columns/-", "value": "priority" },
+  { "op": "add", "path": "/override/Task.list/filters/-",
+    "value": { "name": "Priority", "field": "priority",
+               "options": [ { "label": "Any" }, { "label": "High only", "eq": "high" } ] } } ]
