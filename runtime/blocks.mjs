@@ -35,7 +35,7 @@ export const CATALOG = {
       const weights = rows.map((r) => (step.weight ? Math.max(0, Number(r[step.weight]) || 0) : 1));
       const total = weights.reduce((a, b) => a + b, 0) || rows.length;
       let n = Math.random() * total;
-      const hit = rows.find((_, i) => (n -= weights[i] || 1) <= 0) || rows[0];
+      const hit = rows.find((_, i) => (n -= weights[i] || 1) <= 0);
       return { picked: hit };
     },
   },
@@ -63,5 +63,5 @@ export const search = (query) => {
   const q = query.toLowerCase();
   return Object.entries(CATALOG)
     .filter(([name, b]) => name.includes(q) || b.summary.toLowerCase().includes(q))
-    .map(([name, b]) => `${name}(${(b.requires || []).join(', ')}) — ${b.summary} [${b.effects.join(',') || 'pure'}]`);
+    .map(([name, b]) => `${name}(${b.requires.join(', ')}) — ${b.summary} [${b.effects.join(',')}]`);
 };

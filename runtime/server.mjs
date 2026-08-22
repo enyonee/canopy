@@ -57,10 +57,9 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1' }
       if (path === 'now') return new Date().toISOString();
       return path.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), ctx);
     };
-    return (obj) => (obj && typeof obj === 'object' && !Array.isArray(obj)
-      ? Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, one(v)])) : one(obj));
+    return (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, one(v)]));
   };
-  const interpolate = (text, ctx) => String(text || '').replace(/\{([^}]+)\}/g,
+  const interpolate = (text, ctx) => String(text).replace(/\{([^}]+)\}/g,
     (_, p) => String(p.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), ctx) ?? ''));
 
   const validateValues = (entity, values, partial = false) => {
@@ -186,7 +185,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1' }
           return ok(`/${entity}`, `${entity} deleted`);
         }
         if (parts[2] === 'action') {
-          const action = (graph.actions || []).find((a) => a.name === parts[3]);
+          const action = graph.actions?.find((a) => a.name === parts[3]);
           if (!action) return send(404, errorPage(graph, `no action ${parts[3]}`));
           const ctx = runSteps(action.do, { entity, id, values: submitted });
           return ok(action.after || `/${entity}`, action.confirm ? interpolate(action.confirm, ctx) : '');

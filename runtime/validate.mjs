@@ -129,12 +129,12 @@ export function validate(graph) {
       const tp = `${p}/tables/${j}`;
       if (!checkEntity(t.entity, `${tp}/entity`)) return;
       if (t.groupBy) checkField(t.entity, t.groupBy, `${tp}/groupBy`);
-      (t.metrics || []).forEach((m, k) => {
+      (t.metrics ?? []).forEach((m, k) => {
         if (!m.as) err(`${tp}/metrics/${k}/as`, 'metric needs a name in "as"');
         if (!FNS.includes(m.fn)) err(`${tp}/metrics/${k}/fn`, `unknown function "${m.fn}"`, `known: ${FNS.join(', ')}`);
         if (m.fn !== 'count') checkField(t.entity, m.field, `${tp}/metrics/${k}/field`);
       });
-      if (t.sort && !(t.metrics || []).some((m) => m.as === t.sort.field) && t.sort.field !== 'grp')
+      if (t.sort && !(t.metrics ?? []).some((m) => m.as === t.sort.field) && t.sort.field !== 'grp')
         err(`${tp}/sort/field`, `sort must name a metric or "grp"`,
           `metrics here: ${(t.metrics || []).map((m) => m.as).join(', ')}`);
     });
@@ -164,7 +164,7 @@ export function validate(graph) {
         return err(`${path}/${j}/block`, `unknown block "${step.block}"`,
           n.length ? `did you mean: ${n.join(', ')}?` : `catalog: ${Object.keys(CATALOG).join(', ')}`);
       }
-      for (const req of block.requires || [])
+      for (const req of block.requires)
         if (step[req] === undefined) err(`${path}/${j}`, `block "${step.block}" requires "${req}"`, block.summary);
       if (step.entity) checkEntity(step.entity, `${path}/${j}/entity`);
       if (step.from) checkEntity(step.from, `${path}/${j}/from`);

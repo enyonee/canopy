@@ -1,0 +1,339 @@
+{
+  "app": "kitchen",
+  "theme": {
+    "background": "seashell",
+    "accent": "maroon"
+  },
+  "home": "/page/home",
+  "identity": {
+    "entity": "Profile",
+    "defaults": {
+      "name": "Me",
+      "email": "me@example.com"
+    }
+  },
+  "data": {
+    "Profile": {
+      "name": "text!",
+      "email": "text"
+    },
+    "Topic": {
+      "name": "text!"
+    },
+    "Post": {
+      "title": "text!",
+      "body": "longtext",
+      "topic": "ref:Topic!",
+      "author": "ref:Profile",
+      "pinned": "bool=false",
+      "rank": "int=0",
+      "mood": "enum[calm,loud]=calm",
+      "createdAt": "time=now"
+    },
+    "Reply": {
+      "post": "ref:Post!",
+      "body": "longtext!"
+    },
+    "Note": {
+      "text": "text!"
+    },
+    "Prize": {
+      "name": "text!",
+      "weight": "int=1"
+    },
+    "Win": {
+      "prize": "ref:Prize!",
+      "wonAt": "time=now"
+    },
+    "Empty": {
+      "name": "text!"
+    }
+  },
+  "seed": {
+    "Topic": [
+      {
+        "name": "first"
+      },
+      {
+        "name": "second"
+      }
+    ],
+    "Prize": [
+      {
+        "name": "Mug",
+        "weight": 1
+      }
+    ]
+  },
+  "views": "auto",
+  "override": {
+    "Post.list": {
+      "title": "Posts",
+      "columns": [
+        "title",
+        "topic",
+        "author",
+        "pinned",
+        "mood",
+        "rank"
+      ],
+      "search": [
+        "title",
+        "body"
+      ],
+      "filters": [
+        {
+          "name": "Topic",
+          "field": "topic"
+        },
+        {
+          "name": "Mood",
+          "field": "mood"
+        },
+        {
+          "name": "Pinned",
+          "field": "pinned",
+          "options": [
+            {
+              "label": "All"
+            },
+            {
+              "label": "Only pinned",
+              "eq": true
+            }
+          ]
+        }
+      ],
+      "labels": {
+        "pinned": [
+          "Not pinned",
+          "Pinned"
+        ]
+      },
+      "sort": {
+        "field": "rank",
+        "dir": "desc"
+      },
+      "rowActions": [
+        "view",
+        "pin",
+        "edit",
+        "delete"
+      ]
+    },
+    "Post.form": {
+      "fill": {
+        "author": "@me"
+      },
+      "confirm": "Post saved",
+      "after": "/Post",
+      "afterEdit": "/Post"
+    },
+    "Post.detail": {
+      "related": [
+        {
+          "entity": "Reply",
+          "via": "post",
+          "title": "Replies",
+          "columns": [
+            "body"
+          ],
+          "form": [
+            "body"
+          ],
+          "confirm": "Reply added"
+        }
+      ]
+    },
+    "Reply.list": {
+      "hidden": true
+    },
+    "Note.list": {
+      "create": false,
+      "rowActions": []
+    },
+    "Win.list": {
+      "columns": [
+        "prize",
+        "wonAt"
+      ],
+      "rowActions": []
+    },
+    "Empty.list": {
+      "hidden": true
+    }
+  },
+  "actions": [
+    {
+      "name": "pin",
+      "title": "Pin",
+      "altTitle": "Unpin",
+      "in": "Post",
+      "confirm": "Pin state changed",
+      "do": [
+        {
+          "block": "db.toggle",
+          "field": "pinned"
+        }
+      ]
+    },
+    {
+      "name": "spin",
+      "title": "Spin",
+      "after": "/Win",
+      "confirm": "You won: {picked.name}",
+      "do": [
+        {
+          "block": "random.pick",
+          "from": "Prize",
+          "weight": "weight"
+        },
+        {
+          "block": "db.createRow",
+          "entity": "Win",
+          "values": {
+            "prize": "@picked.id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "boom",
+      "title": "Boom",
+      "do": [
+        {
+          "block": "random.pick",
+          "from": "Empty"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "on": "Post.created",
+      "do": [
+        {
+          "block": "db.createRow",
+          "entity": "Note",
+          "values": {
+            "text": "a post appeared"
+          }
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "id": "home",
+      "title": "Home",
+      "heading": "Kitchen sink",
+      "body": [
+        "Everything the format can do."
+      ],
+      "actions": [
+        "spin",
+        "boom"
+      ],
+      "links": [
+        {
+          "label": "Posts",
+          "href": "/Post"
+        }
+      ]
+    }
+  ],
+  "lists": [
+    {
+      "id": "mine",
+      "entity": "Post",
+      "title": "My posts",
+      "where": {
+        "author": "@me"
+      },
+      "columns": [
+        "title",
+        "rank"
+      ],
+      "rowActions": []
+    },
+    {
+      "id": "quiet",
+      "entity": "Post",
+      "title": "Quiet",
+      "where": {
+        "mood": "calm"
+      },
+      "sort": {
+        "field": "title",
+        "dir": "asc"
+      },
+      "search": [
+        "title"
+      ],
+      "hidden": true
+    }
+  ],
+  "dashboards": [
+    {
+      "id": "stats",
+      "title": "Stats",
+      "intro": "counts",
+      "cards": [
+        {
+          "title": "Posts",
+          "entity": "Post",
+          "fn": "count"
+        },
+        {
+          "title": "Pinned",
+          "entity": "Post",
+          "fn": "count",
+          "where": {
+            "pinned": true
+          }
+        },
+        {
+          "title": "Average rank",
+          "entity": "Post",
+          "fn": "avg",
+          "field": "rank"
+        }
+      ],
+      "tables": [
+        {
+          "title": "By topic",
+          "entity": "Post",
+          "groupBy": "topic",
+          "groupTitle": "Topic",
+          "metrics": [
+            {
+              "fn": "count",
+              "as": "n",
+              "title": "Posts"
+            },
+            {
+              "fn": "sum",
+              "field": "rank",
+              "as": "rank"
+            }
+          ],
+          "sort": {
+            "field": "n",
+            "dir": "desc"
+          }
+        },
+        {
+          "title": "By mood",
+          "entity": "Post",
+          "groupBy": "mood",
+          "metrics": [
+            {
+              "fn": "count",
+              "as": "n"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

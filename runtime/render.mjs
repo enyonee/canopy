@@ -84,7 +84,7 @@ export function listView(graph, store, entity, fields, rows, ctx) {
     if (!options && field?.kind === 'enum') {
       options = [{ label: 'All' }, ...field.options.map((o) => ({ label: label(o), eq: o }))];
     }
-    const links = (options || []).map((o) => {
+    const links = options.map((o) => {
       const active = String(ctx.where[f.field] ?? '') === String(o.eq ?? '');
       const href = o.eq === undefined ? `/${entity}` : `/${entity}?${f.field}=${encodeURIComponent(o.eq)}`;
       return `<a class="btn" href="${href}"${active ? ' aria-current="true"' : ''}>${esc(o.label)}</a>`;
@@ -196,12 +196,12 @@ export function dashboardView(graph, store, dash, flash) {
     const rows = store.aggregate(t.entity, t);
     const groupField = t.groupBy ? store.field(t.entity, t.groupBy) : null;
     const head = (t.groupBy ? `<th>${esc(t.groupTitle || label(t.groupBy))}</th>` : '') +
-      (t.metrics || []).map((m) => `<th>${esc(m.title || label(m.as))}</th>`).join('');
+      (t.metrics || []).map((m) => `<th>${esc(m.title ?? label(m.as))}</th>`).join('');
     const body = rows.map((r) => {
       let g = r.grp;
-      if (groupField?.kind === 'ref') g = store.label(groupField.target, store.get(groupField.target, g));
+      if (groupField?.kind === 'ref') g = store.label(groupField.target, store.get(groupField.target, g)) || null;
       return `<tr>${t.groupBy ? `<td>${esc(g ?? '—')}</td>` : ''}${
-        (t.metrics || []).map((m) => `<td>${esc(r[m.as] ?? 0)}</td>`).join('')}</tr>`;
+        (t.metrics ?? []).map((m) => `<td>${esc(r[m.as])}</td>`).join('')}</tr>`;
     }).join('');
     return `<h3>${esc(t.title)}</h3><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }).join('');
