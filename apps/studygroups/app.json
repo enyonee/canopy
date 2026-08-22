@@ -1,0 +1,46 @@
+{
+  "app": "studygroups",
+  "task": "webgen-bench/000059",
+  "theme": { "background": "aliceblue", "accent": "steelblue" },
+  "identity": { "entity": "Profile", "defaults": { "name": "Me", "email": "me@example.com", "bio": "Student" } },
+
+  "data": {
+    "Profile":    { "name": "text!", "email": "text", "bio": "longtext" },
+    "Group":      { "name": "text!", "topic": "text", "description": "longtext" },
+    "Membership": { "group": "ref:Group!", "member": "ref:Profile!", "joinedAt": "time=now" },
+    "Resource":   { "group": "ref:Group!", "title": "text!", "link": "text!", "addedAt": "time=now" },
+    "Discussion": { "group": "ref:Group!", "text": "longtext!", "author": "ref:Profile", "createdAt": "time=now" }
+  },
+
+  "seed": { "Group": [ { "name": "Algebra study group", "topic": "math", "description": "Weekly problem sets" },
+                       { "name": "Systems reading club", "topic": "cs", "description": "Papers and notes" } ] },
+
+  "views": "auto",
+  "override": {
+    "Group.list":   { "title": "Study groups", "columns": ["name", "topic", "description"],
+                      "search": ["name", "topic"], "rowActions": ["view", "join", "edit"] },
+    "Group.detail": { "related": [
+      { "entity": "Resource", "via": "group", "title": "Shared resources", "columns": ["title", "link", "addedAt"],
+        "form": ["title", "link"], "submit": "Share resource", "confirm": "Resource shared successfully" },
+      { "entity": "Discussion", "via": "group", "title": "Project discussion", "columns": ["text", "author", "createdAt"],
+        "form": ["text"], "fill": { "author": "@me" }, "submit": "Post to discussion",
+        "confirm": "Your message was posted to the group discussion" } ] },
+    "Profile.list": { "title": "Personal center", "columns": ["name", "email", "bio"], "create": false },
+    "Profile.form": { "confirm": "Your personal information was saved" },
+    "Membership.list": { "hidden": true },
+    "Resource.list":   { "title": "All resources", "create": false },
+    "Discussion.list": { "hidden": true }
+  },
+
+  "actions": [
+    { "name": "join", "title": "Join group", "in": "Group", "after": "/list/my-groups",
+      "confirm": "You joined the study group — see My groups",
+      "do": [ { "block": "db.createRow", "entity": "Membership",
+                "values": { "group": "@row.id", "member": "@me" } } ] }
+  ],
+
+  "lists": [
+    { "id": "my-groups", "entity": "Membership", "title": "My groups", "where": { "member": "@me" },
+      "columns": ["group", "joinedAt"], "rowActions": [] }
+  ]
+}

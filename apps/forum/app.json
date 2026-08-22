@@ -1,0 +1,38 @@
+{
+  "app": "forum",
+  "task": "webgen-bench/000029",
+  "theme": { "background": "ghostwhite", "accent": "slategray" },
+  "identity": { "entity": "Profile", "defaults": { "name": "Me", "email": "me@example.com", "bio": "Forum member" } },
+
+  "data": {
+    "Category": { "name": "text!", "about": "text" },
+    "Profile":  { "name": "text!", "email": "text", "bio": "longtext" },
+    "Post":     { "title": "text!", "body": "longtext!", "category": "ref:Category!", "author": "ref:Profile", "createdAt": "time=now" },
+    "Reply":    { "post": "ref:Post!", "body": "longtext!", "author": "ref:Profile", "createdAt": "time=now" }
+  },
+
+  "seed": { "Category": [ { "name": "health", "about": "Wellbeing and fitness" },
+                          { "name": "study", "about": "Courses and exams" },
+                          { "name": "offtopic", "about": "Everything else" } ] },
+
+  "views": "auto",
+  "override": {
+    "Post.list":   { "title": "Posts", "columns": ["title", "category", "author", "createdAt"],
+                     "search": ["title", "body"], "filters": [ { "name": "Category", "field": "category" } ],
+                     "rowActions": ["view", "edit", "delete"] },
+    "Post.form":   { "fill": { "author": "@me" }, "confirm": "Post published successfully" },
+    "Post.detail": { "related": [ { "entity": "Reply", "via": "post", "title": "Replies",
+                                    "columns": ["body", "author", "createdAt"], "form": ["body"],
+                                    "fill": { "author": "@me" }, "submit": "Post reply",
+                                    "confirm": "Reply posted successfully" } ] },
+    "Reply.list":  { "hidden": true },
+    "Profile.list": { "title": "Personal information", "columns": ["name", "email", "bio"], "create": false }
+  },
+
+  "lists": [
+    { "id": "my-posts",   "entity": "Post",  "title": "My posts",   "where": { "author": "@me" },
+      "columns": ["title", "category", "createdAt"] },
+    { "id": "my-replies", "entity": "Reply", "title": "My replies", "where": { "author": "@me" },
+      "columns": ["body", "post", "createdAt"] }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "app": "wheel",
+  "task": "webgen-bench/000010",
+  "theme": { "background": "lightgray", "accent": "darkred" },
+  "home": "/page/play",
+
+  "data": {
+    "Prize": { "name": "text!", "description": "text", "weight": "int=1" },
+    "Win":   { "prize": "ref:Prize!", "wonAt": "time=now" }
+  },
+
+  "seed": { "Prize": [ { "name": "Coffee mug", "description": "Ceramic mug", "weight": 4 },
+                       { "name": "Gift card", "description": "10 USD", "weight": 2 },
+                       { "name": "Headphones", "description": "Wireless", "weight": 1 },
+                       { "name": "Try again", "description": "Better luck next spin", "weight": 3 } ] },
+
+  "views": "auto",
+  "override": {
+    "Prize.list": { "title": "Prize list", "columns": ["name", "description", "weight"], "rowActions": ["view"] },
+    "Win.list":   { "title": "All winning records", "columns": ["prize", "wonAt"], "create": false, "rowActions": [] }
+  },
+
+  "actions": [
+    { "name": "spin", "title": "Spin the wheel", "confirm": "The wheel stopped — you won: {picked.name}",
+      "after": "/list/my-wins",
+      "do": [ { "block": "random.pick", "from": "Prize", "weight": "weight" },
+              { "block": "db.createRow", "entity": "Win", "values": { "prize": "@picked.id" } } ] }
+  ],
+
+  "pages": [
+    { "id": "play", "title": "Spin", "heading": "Wheel of fortune",
+      "body": [ "Spin the wheel to win a prize. Every spin is recorded in your winning records." ],
+      "actions": ["spin"],
+      "links": [ { "label": "Prize list", "href": "/Prize" },
+                 { "label": "My winning records", "href": "/list/my-wins" } ] }
+  ],
+
+  "lists": [
+    { "id": "my-wins", "entity": "Win", "title": "My winning records", "columns": ["prize", "wonAt"], "rowActions": [] }
+  ]
+}

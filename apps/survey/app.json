@@ -1,0 +1,43 @@
+{
+  "app": "survey",
+  "task": "webgen-bench/000050",
+  "theme": { "background": "whitesmoke", "accent": "darkcyan" },
+  "home": "/page/home",
+
+  "data": {
+    "Response": { "name": "text!", "age": "int!", "height": "int", "weight": "int",
+                  "symptoms": "longtext!", "consent": "bool=false", "submittedAt": "time=now" }
+  },
+
+  "views": "auto",
+  "override": {
+    "Response.list": { "title": "Submitted information",
+                       "columns": ["name", "age", "height", "weight", "consent", "submittedAt"],
+                       "search": ["name", "symptoms"], "labels": { "consent": ["Not given", "Given"] },
+                       "create": false },
+    "Response.form": { "title": "Women's health survey", "submit": "Submit survey",
+                       "intro": "All fields marked with * are required.",
+                       "confirm": "Thank you — your survey was submitted successfully",
+                       "after": "/Response" }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Women's health survey",
+      "body": [ "Fill out the health survey and submit your information.",
+                "Submitted data is collected for review and reporting." ],
+      "links": [ { "label": "Fill out the survey", "href": "/Response/new" },
+                 { "label": "Submitted information", "href": "/Response" },
+                 { "label": "Report", "href": "/dashboard/report" } ] }
+  ],
+
+  "dashboards": [
+    { "id": "report", "title": "Report", "intro": "Generated from submitted survey data.",
+      "cards": [ { "title": "Responses", "entity": "Response", "fn": "count" },
+                 { "title": "Average age", "entity": "Response", "fn": "avg", "field": "age" },
+                 { "title": "Average weight", "entity": "Response", "fn": "avg", "field": "weight" },
+                 { "title": "Consent given", "entity": "Response", "fn": "count", "where": { "consent": true } } ],
+      "tables": [ { "title": "Responses by consent", "entity": "Response", "groupBy": "consent",
+                    "groupTitle": "Consent", "metrics": [ { "fn": "count", "as": "n", "title": "Responses" },
+                                                          { "fn": "avg", "field": "age", "as": "avgAge", "title": "Average age" } ] } ] }
+  ]
+}

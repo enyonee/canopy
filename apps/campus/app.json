@@ -1,0 +1,44 @@
+{
+  "app": "campus",
+  "task": "webgen-bench/000031",
+  "theme": { "background": "honeydew", "accent": "darkolivegreen" },
+
+  "data": {
+    "Topic":        { "name": "text!" },
+    "Post":         { "body": "longtext!", "topic": "ref:Topic!", "createdAt": "time=now" },
+    "Reply":        { "post": "ref:Post!", "body": "longtext!", "createdAt": "time=now" },
+    "Follow":       { "topic": "ref:Topic!", "createdAt": "time=now" },
+    "Notification": { "text": "text!", "topic": "ref:Topic", "createdAt": "time=now" }
+  },
+
+  "seed": { "Topic": [ { "name": "math" }, { "name": "dorm life" }, { "name": "exams" } ] },
+
+  "views": "auto",
+  "override": {
+    "Topic.list":  { "title": "Topics", "columns": ["name"], "rowActions": ["view", "follow"], "create": false },
+    "Post.list":   { "title": "Discussion", "columns": ["body", "topic", "createdAt"],
+                     "search": ["body"], "filters": [ { "name": "Topic", "field": "topic" } ],
+                     "rowActions": ["view"] },
+    "Post.form":   { "confirm": "Posted anonymously — no personal information is stored" },
+    "Post.detail": { "related": [ { "entity": "Reply", "via": "post", "title": "Replies", "columns": ["body", "createdAt"],
+                                    "form": ["body"], "submit": "Reply anonymously",
+                                    "confirm": "Reply posted anonymously" } ] },
+    "Reply.list":  { "hidden": true },
+    "Follow.list": { "hidden": true },
+    "Notification.list": { "title": "Notifications", "columns": ["text", "topic", "createdAt"], "create": false, "rowActions": [] }
+  },
+
+  "actions": [
+    { "name": "follow", "title": "Follow", "in": "Topic", "confirm": "You are now following this topic",
+      "after": "/list/following",
+      "do": [ { "block": "db.createRow", "entity": "Follow", "values": { "topic": "@row.id" } } ] }
+  ],
+
+  "events": [
+    { "on": "Post.created",
+      "do": [ { "block": "db.createRow", "entity": "Notification",
+                "values": { "text": "New anonymous post in a topic you follow", "topic": "@row.topic" } } ] }
+  ],
+
+  "lists": [ { "id": "following", "entity": "Follow", "title": "Following", "columns": ["topic", "createdAt"] } ]
+}

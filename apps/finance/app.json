@@ -1,0 +1,55 @@
+{
+  "app": "finance",
+  "task": "webgen-bench/000003",
+  "theme": { "background": "mintcream", "accent": "teal" },
+  "home": "/dashboard/consolidated",
+
+  "data": {
+    "Company": { "name": "text!", "sector": "text" },
+    "Report":  { "company": "ref:Company!", "period": "text!", "revenue": "int=0", "expenses": "int=0", "profit": "int=0" }
+  },
+
+  "seed": {
+    "Company": [ { "name": "Northwind", "sector": "logistics" },
+                 { "name": "Helio", "sector": "energy" },
+                 { "name": "Marisol", "sector": "retail" } ],
+    "Report": [
+      { "company": 1, "period": "2026-Q1", "revenue": 1200, "expenses": 900, "profit": 300 },
+      { "company": 1, "period": "2026-Q2", "revenue": 1500, "expenses": 1000, "profit": 500 },
+      { "company": 2, "period": "2026-Q1", "revenue": 800,  "expenses": 700, "profit": 100 },
+      { "company": 2, "period": "2026-Q2", "revenue": 950,  "expenses": 720, "profit": 230 },
+      { "company": 3, "period": "2026-Q1", "revenue": 2100, "expenses": 1900, "profit": 200 },
+      { "company": 3, "period": "2026-Q2", "revenue": 2400, "expenses": 2050, "profit": 350 } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Report.list":  { "title": "Company data", "columns": ["company", "period", "revenue", "expenses", "profit"],
+                      "search": ["period"], "filters": [ { "name": "Company", "field": "company" } ],
+                      "sort": { "field": "period", "dir": "asc" } },
+    "Report.form":  { "confirm": "Financial data saved successfully" },
+    "Company.list": { "title": "Companies" }
+  },
+
+  "dashboards": [
+    { "id": "consolidated", "title": "Consolidated report",
+      "intro": "Combined financial data across all companies.",
+      "cards": [ { "title": "Companies", "entity": "Company", "fn": "count" },
+                 { "title": "Total revenue", "entity": "Report", "fn": "sum", "field": "revenue" },
+                 { "title": "Total expenses", "entity": "Report", "fn": "sum", "field": "expenses" },
+                 { "title": "Total profit", "entity": "Report", "fn": "sum", "field": "profit" } ],
+      "tables": [ { "title": "Revenue, expenses and profit by company", "entity": "Report", "groupBy": "company",
+                    "groupTitle": "Company",
+                    "metrics": [ { "fn": "sum", "field": "revenue", "as": "revenue", "title": "Revenue" },
+                                 { "fn": "sum", "field": "expenses", "as": "expenses", "title": "Expenses" },
+                                 { "fn": "sum", "field": "profit", "as": "profit", "title": "Profit" } ],
+                    "sort": { "field": "revenue", "dir": "desc" } } ] },
+    { "id": "comparison", "title": "Comparison",
+      "intro": "Compare financial metrics of companies side by side.",
+      "tables": [ { "title": "Metrics per company", "entity": "Report", "groupBy": "company", "groupTitle": "Company",
+                    "metrics": [ { "fn": "avg", "field": "revenue", "as": "avgRevenue", "title": "Average revenue" },
+                                 { "fn": "max", "field": "profit", "as": "bestProfit", "title": "Best profit" },
+                                 { "fn": "count", "as": "periods", "title": "Periods" } ],
+                    "sort": { "field": "grp", "dir": "asc" } } ] }
+  ]
+}

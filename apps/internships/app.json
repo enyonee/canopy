@@ -1,0 +1,43 @@
+{
+  "app": "internships",
+  "task": "webgen-bench/000053",
+  "theme": { "background": "mintcream", "accent": "teal" },
+  "home": "/page/students",
+
+  "data": {
+    "Company":     { "name": "text!", "about": "longtext" },
+    "Internship":  { "title": "text!", "company": "ref:Company!", "description": "longtext",
+                     "location": "text", "active": "bool=true", "postedAt": "time=now" },
+    "Application": { "internship": "ref:Internship!", "student": "text!", "email": "text!", "message": "longtext" }
+  },
+
+  "seed": { "Company": [ { "name": "Helio Systems", "about": "Embedded software" },
+                         { "name": "Northline Media", "about": "Publishing and design" } ] },
+
+  "views": "auto",
+  "override": {
+    "Internship.list":   { "title": "Internships", "columns": ["title", "company", "location", "active", "postedAt"],
+                           "search": ["title", "description", "location"],
+                           "filters": [ { "name": "Company", "field": "company" } ],
+                           "labels": { "active": ["Closed", "Open"] }, "rowActions": ["view", "edit", "delete"] },
+    "Internship.form":   { "confirm": "Internship posted successfully — it is now visible to students" },
+    "Internship.detail": { "related": [ { "entity": "Application", "via": "internship", "title": "Applications",
+                                          "columns": ["student", "email", "message"],
+                                          "form": ["student", "email", "message"], "submit": "Apply for this internship",
+                                          "confirm": "Application submitted successfully — a confirmation was recorded" } ] },
+    "Application.list":  { "title": "Applications", "create": false },
+    "Company.list":      { "title": "Companies" }
+  },
+
+  "pages": [
+    { "id": "students", "title": "Student panel", "heading": "Student panel",
+      "body": [ "Browse open internships and apply to the ones that fit." ],
+      "links": [ { "label": "Browse internships", "href": "/Internship" },
+                 { "label": "Company panel", "href": "/page/companies" } ] },
+    { "id": "companies", "title": "Company panel", "heading": "Company panel",
+      "body": [ "Post internship positions and review the applications you receive." ],
+      "links": [ { "label": "Post an internship", "href": "/Internship/new" },
+                 { "label": "Applications", "href": "/Application" },
+                 { "label": "Student panel", "href": "/page/students" } ] }
+  ]
+}

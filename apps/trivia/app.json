@@ -1,0 +1,58 @@
+{
+  "app": "trivia",
+  "task": "webgen-bench/000008",
+  "theme": { "background": "beige", "accent": "saddlebrown" },
+  "home": "/Contest",
+
+  "data": {
+    "Contest":    { "name": "text!", "description": "longtext" },
+    "Question":   { "contest": "ref:Contest!", "text": "text!", "options": "text!", "answer": "text!" },
+    "Enrollment": { "contest": "ref:Contest!", "player": "text!", "enrolledAt": "time=now" },
+    "Answer":     { "question": "ref:Question!", "player": "text!", "choice": "text!", "correct": "bool=false", "answeredAt": "time=now" }
+  },
+
+  "seed": {
+    "Contest": [ { "name": "General knowledge", "description": "Five questions, one point each" },
+                 { "name": "Geography", "description": "Capitals and rivers" } ],
+    "Question": [
+      { "contest": 1, "text": "What is the capital of France?", "options": "Paris / Rome / Madrid", "answer": "Paris" },
+      { "contest": 1, "text": "How many continents are there?", "options": "5 / 6 / 7", "answer": "7" },
+      { "contest": 2, "text": "Which river flows through Cairo?", "options": "Nile / Amazon / Danube", "answer": "Nile" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Contest.list":   { "title": "Contests", "columns": ["name", "description"], "rowActions": ["view", "edit"] },
+    "Contest.detail": { "related": [
+      { "entity": "Question", "via": "contest", "title": "Questions", "columns": ["text", "options"],
+        "form": ["text", "options", "answer"], "submit": "Add question", "confirm": "Question added" },
+      { "entity": "Enrollment", "via": "contest", "title": "Enrolled players", "columns": ["player", "enrolledAt"],
+        "form": ["player"], "submit": "Enroll in this contest",
+        "confirm": "You are enrolled in this contest" } ] },
+    "Question.list":  { "title": "Questions", "columns": ["contest", "text", "options"],
+                        "filters": [ { "name": "Contest", "field": "contest" } ], "rowActions": ["view"] },
+    "Answer.list":    { "title": "Submitted answers", "columns": ["question", "player", "choice", "correct", "answeredAt"],
+                        "labels": { "correct": ["Wrong", "Correct"] } },
+    "Answer.form":    { "title": "Submit an answer", "submit": "Submit answer",
+                        "fields": ["question", "player", "choice"],
+                        "confirm": "Answer submitted — your score is updated on the leaderboard",
+                        "after": "/dashboard/leaderboard" },
+    "Enrollment.list": { "title": "Enrollments", "create": false }
+  },
+
+  "events": [
+    { "on": "Answer.created",
+      "do": [ { "block": "check.matchRef", "ref": "question", "field": "choice", "against": "answer", "into": "correct" } ] }
+  ],
+
+  "dashboards": [
+    { "id": "leaderboard", "title": "Leaderboard", "intro": "Scores of all participants.",
+      "cards": [ { "title": "Answers submitted", "entity": "Answer", "fn": "count" },
+                 { "title": "Correct answers", "entity": "Answer", "fn": "sum", "field": "correct" },
+                 { "title": "Players enrolled", "entity": "Enrollment", "fn": "count" } ],
+      "tables": [ { "title": "Ranking", "entity": "Answer", "groupBy": "player", "groupTitle": "Player",
+                    "metrics": [ { "fn": "sum", "field": "correct", "as": "score", "title": "Score" },
+                                 { "fn": "count", "as": "answered", "title": "Answered" } ],
+                    "sort": { "field": "score", "dir": "desc" } } ] }
+  ]
+}

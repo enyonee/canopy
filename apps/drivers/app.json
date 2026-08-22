@@ -1,0 +1,56 @@
+{
+  "app": "drivers",
+  "task": "webgen-bench/000051",
+  "theme": { "background": "white", "accent": "navy" },
+  "home": "/page/home",
+  "identity": { "entity": "Profile", "defaults": { "name": "Me", "email": "me@example.com", "phone": "+15550000" } },
+
+  "data": {
+    "Profile":        { "name": "text!", "email": "text!", "phone": "text", "createdAt": "time=now" },
+    "Job":            { "title": "text!", "company": "text!", "location": "text", "active": "bool=true", "postedAt": "time=now" },
+    "Application":    { "job": "ref:Job!", "name": "text!", "email": "text!", "message": "longtext" },
+    "ContactMessage": { "name": "text!", "email": "text!", "message": "longtext!", "sentAt": "time=now" }
+  },
+
+  "seed": { "Job": [ { "title": "Long-haul driver", "company": "Northwind Logistics", "location": "Chicago", "active": true },
+                     { "title": "Delivery driver", "company": "City Fresh", "location": "Boston", "active": true } ] },
+
+  "views": "auto",
+  "override": {
+    "Job.list":     { "title": "Jobs", "columns": ["title", "company", "location", "active", "postedAt"],
+                      "search": ["title", "company", "location"], "labels": { "active": ["Closed", "Active"] },
+                      "rowActions": ["view", "edit", "delete"] },
+    "Job.form":     { "confirm": "Job listing created successfully" },
+    "Job.detail":   { "related": [ { "entity": "Application", "via": "job", "title": "Applications",
+                                     "columns": ["name", "email", "message"], "form": ["name", "email", "message"],
+                                     "submit": "Apply for this job",
+                                     "confirm": "Your application was submitted successfully" } ] },
+    "Profile.list": { "title": "Drivers", "columns": ["name", "email", "phone", "createdAt"] },
+    "Profile.form": { "confirm": "Registration completed successfully",
+                      "afterEdit": "/Profile" },
+    "Application.list": { "hidden": true },
+    "ContactMessage.list": { "title": "Contact messages", "create": false },
+    "ContactMessage.form": { "title": "Contact us", "submit": "Send message",
+                             "confirm": "Thank you — your message was sent", "after": "/page/home" }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Drivers wanted",
+      "body": [ "We hire professional drivers and connect them with clients across the country.",
+                "Register, browse active job postings and apply in one place." ],
+      "links": [ { "label": "About us", "href": "/page/about" },
+                 { "label": "Jobs", "href": "/Job" },
+                 { "label": "Active postings", "href": "/list/active-jobs" },
+                 { "label": "Register", "href": "/Profile/new" },
+                 { "label": "Contact", "href": "/ContactMessage/new" } ] },
+    { "id": "about", "title": "About us", "heading": "About us",
+      "body": [ "We have been placing drivers with reliable clients since 2011.",
+                "Our clients post jobs, drivers apply, and we handle the paperwork." ],
+      "links": [ { "label": "Home", "href": "/page/home" } ] }
+  ],
+
+  "lists": [
+    { "id": "active-jobs", "entity": "Job", "title": "Active postings", "where": { "active": true },
+      "columns": ["title", "company", "location", "postedAt"], "rowActions": ["view"] }
+  ]
+}

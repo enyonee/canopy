@@ -12,9 +12,12 @@ const near = (word, pool) => {
         m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
     return m[a.length][b.length];
   };
-  return pool.map((p) => [d(word.toLowerCase(), p.toLowerCase()), p]).sort((a, b) => a[0] - b[0])
+  return pool.map((p) => [d(String(word).toLowerCase(), p.toLowerCase()), p]).sort((a, b) => a[0] - b[0])
     .filter(([n]) => n <= 3).slice(0, 3).map(([, p]) => p);
 };
+
+const VIEWS = ['list', 'form', 'detail'];
+const FNS = ['count', 'sum', 'avg', 'min', 'max'];
 
 export function validate(graph) {
   const errors = [];
@@ -34,73 +37,158 @@ export function validate(graph) {
     for (const [name, raw] of Object.entries(spec)) {
       try {
         const f = parseField(name, raw);
-        if (f.kind === 'ref' && !entities.includes(f.target)) {
+        if (f.kind === 'ref' && !entities.includes(f.target))
           err(`/data/${entity}/${name}`, `reference to unknown entity "${f.target}"`, `known entities: ${entities.join(', ')}`);
-        }
         fields[entity][name] = f;
       } catch (e) { err(`/data/${entity}/${name}`, e.message); }
     }
   }
+  const known = (e) => Object.keys(fields[e] || {});
+  const checkEntity = (e, path) => {
+    if (entities.includes(e)) return true;
+    err(path, `unknown entity "${e}"`, `known entities: ${entities.join(', ')}`);
+    return false;
+  };
+  const checkField = (e, f, path) => {
+    if (known(e).includes(f)) return true;
+    const n = near(f, known(e));
+    err(path, `field "${f}" does not exist on ${e}`,
+      n.length ? `did you mean: ${n.join(', ')}? or add it to /data/${e}` : `known fields: ${known(e).join(', ')}`);
+    return false;
+  };
 
-  if (graph.views !== undefined && graph.views !== 'auto') {
+  if (graph.views !== undefined && graph.views !== 'auto')
     err('/views', 'only "auto" is supported', 'screens are derived from /data; shape them in /override');
+
+  if (graph.identity) {
+    if (checkEntity(graph.identity.entity, '/identity/entity'))
+      for (const k of Object.keys(graph.identity.defaults || {})) checkField(graph.identity.entity, k, `/identity/defaults/${k}`);
   }
+
+  const actionNames = (graph.actions || []).map((a) => a.name);
 
   for (const [key, ov] of Object.entries(graph.override || {})) {
     const [entity, kind] = key.split('.');
-    if (!entities.includes(entity)) {
-      err(`/override/${key}`, `unknown entity "${entity}"`, `known entities: ${entities.join(', ')}`);
-      continue;
-    }
-    if (!['list', 'form', 'detail'].includes(kind)) {
-      err(`/override/${key}`, `unknown view "${kind}"`, 'views are: list, form, detail');
-      continue;
-    }
-    const known = Object.keys(fields[entity]);
-    const checkField = (f, where) => {
-      if (!known.includes(f)) {
-        const n = near(f, known);
-        err(`/override/${key}/${where}`, `field "${f}" does not exist on ${entity}`,
-          n.length ? `did you mean: ${n.join(', ')}? or add it to /data/${entity}` : `known fields: ${known.join(', ')}`);
-      }
-    };
-    (ov.columns || []).forEach((f) => checkField(f, 'columns'));
-    (ov.search || []).forEach((f) => checkField(f, 'search'));
+    if (!checkEntity(entity, `/override/${key}`)) continue;
+    if (!VIEWS.includes(kind)) { err(`/override/${key}`, `unknown view "${kind}"`, `views are: ${VIEWS.join(', ')}`); continue; }
+    (ov.columns || []).forEach((f) => checkField(entity, f, `/override/${key}/columns`));
+    (ov.search || []).forEach((f) => checkField(entity, f, `/override/${key}/search`));
+    (ov.fields || []).forEach((f) => checkField(entity, f, `/override/${key}/fields`));
+    if (ov.sort) checkField(entity, ov.sort.field, `/override/${key}/sort/field`);
+    Object.keys(ov.fill || {}).forEach((f) => checkField(entity, f, `/override/${key}/fill/${f}`));
+    Object.keys(ov.labels || {}).forEach((f) => checkField(entity, f, `/override/${key}/labels/${f}`));
     (ov.filters || []).forEach((flt, i) => {
       if (!flt.field) err(`/override/${key}/filters/${i}`, 'filter needs a "field"');
-      else checkField(flt.field, `filters/${i}/field`);
-      if (!Array.isArray(flt.options) || !flt.options.length)
-        err(`/override/${key}/filters/${i}`, 'filter needs non-empty "options"');
+      else checkField(entity, flt.field, `/override/${key}/filters/${i}/field`);
+      const f = fields[entity]?.[flt.field];
+      if (!flt.options && f && !['ref', 'enum'].includes(f.kind))
+        err(`/override/${key}/filters/${i}`, `filter on "${flt.field}" needs "options"`,
+          'options are derived automatically only for ref and enum fields');
     });
-    const actionNames = (graph.actions || []).map((a) => a.name);
     (ov.rowActions || []).forEach((a, i) => {
-      if (['edit', 'delete'].includes(a)) return;
+      if (['edit', 'delete', 'view'].includes(a)) return;
       if (!actionNames.includes(a))
         err(`/override/${key}/rowActions/${i}`, `unknown action "${a}"`,
-          `built-in: edit, delete; declared in /actions: ${actionNames.join(', ') || '(none)'}`);
+          `built-in: view, edit, delete; declared in /actions: ${actionNames.join(', ') || '(none)'}`);
+    });
+    (ov.related || []).forEach((rel, i) => {
+      const p = `/override/${key}/related/${i}`;
+      if (!checkEntity(rel.entity, `${p}/entity`)) return;
+      if (!rel.via) return err(`${p}/via`, 'related section needs "via" (the ref field on the child)');
+      if (checkField(rel.entity, rel.via, `${p}/via`)) {
+        const f = fields[rel.entity][rel.via];
+        if (f.kind !== 'ref') err(`${p}/via`, `"${rel.via}" is ${f.kind}, not a reference`, `declare it as "ref:${entity}"`);
+        else if (f.target !== entity) err(`${p}/via`, `"${rel.via}" points at ${f.target}, not ${entity}`);
+      }
+      (rel.columns || []).forEach((c) => checkField(rel.entity, c, `${p}/columns`));
+      Object.keys(rel.fill || {}).forEach((c) => checkField(rel.entity, c, `${p}/fill/${c}`));
     });
   }
 
-  (graph.actions || []).forEach((a, i) => {
-    if (!a.name) err(`/actions/${i}/name`, 'action needs a name');
-    if (!entities.includes(a.in))
-      err(`/actions/${i}/in`, `unknown entity "${a.in}"`, `known entities: ${entities.join(', ')}`);
-    if (!Array.isArray(a.do) || !a.do.length) err(`/actions/${i}/do`, 'action needs at least one step');
-    (a.do || []).forEach((step, j) => {
+  (graph.lists || []).forEach((l, i) => {
+    const p = `/lists/${i}`;
+    if (!l.id) err(`${p}/id`, 'list needs an id (it becomes /list/<id>)');
+    if (!checkEntity(l.entity, `${p}/entity`)) return;
+    (l.columns || []).forEach((c) => checkField(l.entity, c, `${p}/columns`));
+    Object.keys(l.where || {}).forEach((c) => checkField(l.entity, c, `${p}/where/${c}`));
+    if (l.sort) checkField(l.entity, l.sort.field, `${p}/sort/field`);
+  });
+
+  (graph.dashboards || []).forEach((d, i) => {
+    const p = `/dashboards/${i}`;
+    if (!d.id) err(`${p}/id`, 'dashboard needs an id (it becomes /dashboard/<id>)');
+    (d.cards || []).forEach((c, j) => {
+      const cp = `${p}/cards/${j}`;
+      if (!checkEntity(c.entity, `${cp}/entity`)) return;
+      if (c.fn && !FNS.includes(c.fn)) err(`${cp}/fn`, `unknown function "${c.fn}"`, `known: ${FNS.join(', ')}`);
+      if (c.fn && c.fn !== 'count' && !c.field) err(`${cp}/field`, `"${c.fn}" needs a field`);
+      if (c.field) checkField(c.entity, c.field, `${cp}/field`);
+      Object.keys(c.where || {}).forEach((f) => checkField(c.entity, f, `${cp}/where/${f}`));
+    });
+    (d.tables || []).forEach((t, j) => {
+      const tp = `${p}/tables/${j}`;
+      if (!checkEntity(t.entity, `${tp}/entity`)) return;
+      if (t.groupBy) checkField(t.entity, t.groupBy, `${tp}/groupBy`);
+      (t.metrics || []).forEach((m, k) => {
+        if (!m.as) err(`${tp}/metrics/${k}/as`, 'metric needs a name in "as"');
+        if (!FNS.includes(m.fn)) err(`${tp}/metrics/${k}/fn`, `unknown function "${m.fn}"`, `known: ${FNS.join(', ')}`);
+        if (m.fn !== 'count') checkField(t.entity, m.field, `${tp}/metrics/${k}/field`);
+      });
+      if (t.sort && !(t.metrics || []).some((m) => m.as === t.sort.field) && t.sort.field !== 'grp')
+        err(`${tp}/sort/field`, `sort must name a metric or "grp"`,
+          `metrics here: ${(t.metrics || []).map((m) => m.as).join(', ')}`);
+    });
+  });
+
+  (graph.pages || []).forEach((p, i) => {
+    if (!p.id) err(`/pages/${i}/id`, 'page needs an id (it becomes /page/<id>)');
+    if (!p.title) err(`/pages/${i}/title`, 'page needs a title (it is the menu label)');
+    (p.actions || []).forEach((a, j) => {
+      const act = (graph.actions || []).find((x) => x.name === a);
+      if (!act) err(`/pages/${i}/actions/${j}`, `unknown action "${a}"`, `declared: ${actionNames.join(', ') || '(none)'}`);
+      else if (act.in) err(`/pages/${i}/actions/${j}`, `action "${a}" is bound to ${act.in}`, 'page buttons need a global action (no "in")');
+    });
+  });
+
+  for (const [entity, rows] of Object.entries(graph.seed || {})) {
+    if (!checkEntity(entity, `/seed/${entity}`)) continue;
+    (rows || []).forEach((row, i) =>
+      Object.keys(row).forEach((f) => checkField(entity, f, `/seed/${entity}/${i}/${f}`)));
+  }
+
+  const checkSteps = (steps, path, entity) => {
+    (steps || []).forEach((step, j) => {
       const block = CATALOG[step.block];
       if (!block) {
         const n = near(step.block || '', Object.keys(CATALOG));
-        err(`/actions/${i}/do/${j}/block`, `unknown block "${step.block}"`,
+        return err(`${path}/${j}/block`, `unknown block "${step.block}"`,
           n.length ? `did you mean: ${n.join(', ')}?` : `catalog: ${Object.keys(CATALOG).join(', ')}`);
-        return;
       }
-      for (const p of block.requires || []) {
-        if (step[p] === undefined) err(`/actions/${i}/do/${j}`, `block "${step.block}" requires "${p}"`, block.summary);
-      }
-      if (step.field && a.in && !fields[a.in]?.[step.field])
-        err(`/actions/${i}/do/${j}/field`, `field "${step.field}" does not exist on ${a.in}`,
-          `known fields: ${Object.keys(fields[a.in] || {}).join(', ')}`);
+      for (const req of block.requires || [])
+        if (step[req] === undefined) err(`${path}/${j}`, `block "${step.block}" requires "${req}"`, block.summary);
+      if (step.entity) checkEntity(step.entity, `${path}/${j}/entity`);
+      if (step.from) checkEntity(step.from, `${path}/${j}/from`);
+      if (step.field && entity) checkField(entity, step.field, `${path}/${j}/field`);
+      if (step.via && step.entity) checkField(step.entity, step.via, `${path}/${j}/via`);
+      if (step.set && entity) Object.keys(step.set).forEach((f) => checkField(entity, f, `${path}/${j}/set/${f}`));
+      if (step.values && step.entity) Object.keys(step.values).forEach((f) => checkField(step.entity, f, `${path}/${j}/values/${f}`));
+      if (step.into && entity) checkField(entity, step.into, `${path}/${j}/into`);
     });
+  };
+
+  (graph.actions || []).forEach((a, i) => {
+    if (!a.name) err(`/actions/${i}/name`, 'action needs a name');
+    if (a.in !== undefined && a.in !== null) checkEntity(a.in, `/actions/${i}/in`);
+    if (!Array.isArray(a.do) || !a.do.length) err(`/actions/${i}/do`, 'action needs at least one step');
+    checkSteps(a.do, `/actions/${i}/do`, a.in);
+  });
+
+  (graph.events || []).forEach((ev, i) => {
+    const p = `/events/${i}`;
+    const m = /^(\w+)\.created$/.exec(ev.on || '');
+    if (!m) err(`${p}/on`, `unsupported trigger "${ev.on}"`, 'only "<Entity>.created" is supported');
+    else checkEntity(m[1], `${p}/on`);
+    checkSteps(ev.do, `${p}/do`, m ? m[1] : null);
   });
 
   return errors;

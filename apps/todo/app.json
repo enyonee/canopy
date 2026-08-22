@@ -64,7 +64,13 @@
         "toggle",
         "edit",
         "delete"
-      ]
+      ],
+      "labels": {
+        "done": [
+          "Not completed",
+          "Completed"
+        ]
+      }
     }
   },
   "actions": [
@@ -79,6 +85,58 @@
           "field": "done"
         }
       ]
+    }
+  ],
+  "lists": [
+    {
+      "id": "completed",
+      "entity": "Task",
+      "title": "Completed",
+      "where": {
+        "done": true
+      },
+      "columns": [
+        "title",
+        "notes",
+        "done",
+        "createdAt"
+      ],
+      "rowActions": [
+        "toggle",
+        "edit",
+        "delete"
+      ],
+      "labels": {
+        "done": [
+          "Not completed",
+          "Completed"
+        ]
+      }
+    },
+    {
+      "id": "active",
+      "entity": "Task",
+      "title": "Active",
+      "where": {
+        "done": false
+      },
+      "columns": [
+        "title",
+        "notes",
+        "done",
+        "createdAt"
+      ],
+      "rowActions": [
+        "toggle",
+        "edit",
+        "delete"
+      ],
+      "labels": {
+        "done": [
+          "Not completed",
+          "Completed"
+        ]
+      }
     }
   ]
 }

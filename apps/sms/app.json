@@ -1,0 +1,40 @@
+{
+  "app": "sms",
+  "task": "webgen-bench/000043",
+  "theme": { "background": "azure", "accent": "darkslateblue" },
+
+  "data": {
+    "Contact": { "name": "text!", "phone": "text!", "email": "text" },
+    "Message": { "recipient": "text!", "text": "longtext!", "status": "enum[queued,sent,failed]=queued", "sentAt": "time=now" },
+    "Policy":  { "name": "text!", "dailyLimit": "int=100", "enabled": "bool=true" }
+  },
+
+  "seed": { "Contact": [ { "name": "Ann Lee", "phone": "+15550101", "email": "ann@example.com" } ],
+            "Policy":  [ { "name": "Default policy", "dailyLimit": 100, "enabled": true } ] },
+
+  "views": "auto",
+  "override": {
+    "Message.list": { "title": "Sending records", "columns": ["recipient", "text", "status", "sentAt"],
+                      "search": ["recipient", "text"], "filters": [ { "name": "Status", "field": "status" } ],
+                      "rowActions": ["view", "delete"] },
+    "Message.form": { "title": "Send a short message", "submit": "Send", "confirm": "Message sent successfully",
+                      "fields": ["recipient", "text"] },
+    "Contact.list": { "title": "User information" },
+    "Policy.list":  { "title": "Configure policies", "labels": { "enabled": ["Disabled", "Active"] } },
+    "Policy.form":  { "confirm": "Policy saved successfully" }
+  },
+
+  "events": [
+    { "on": "Message.created", "do": [ { "block": "db.update", "set": { "status": "sent" } } ] }
+  ],
+
+  "dashboards": [
+    { "id": "monitor", "title": "Monitoring", "intro": "Short message sending situation.",
+      "cards": [ { "title": "Messages total", "entity": "Message", "fn": "count" },
+                 { "title": "Sent", "entity": "Message", "fn": "count", "where": { "status": "sent" } },
+                 { "title": "Failed", "entity": "Message", "fn": "count", "where": { "status": "failed" } },
+                 { "title": "Active policies", "entity": "Policy", "fn": "count", "where": { "enabled": true } } ],
+      "tables": [ { "title": "Messages by status", "entity": "Message", "groupBy": "status",
+                    "groupTitle": "Status", "metrics": [ { "fn": "count", "as": "n", "title": "Messages" } ] } ] }
+  ]
+}
