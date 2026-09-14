@@ -1,0 +1,179 @@
+// Reference app "shop" — each check is one requirement of a small web shop.
+import { colorCheck, navCheck } from '../../verify/lib.mjs';
+
+const itemId = (row) => { const m = /\/OrderItem\/(\d+)/.exec(row || ''); return m ? m[1] : null; };
+let annOrder = null, bobOrder = null;
+
+export const checks = [
+  { task: 'A guest browses the storefront, searches and filters without signing in',
+    run: async ({ asGuest, get, rowWith, must }) => {
+      asGuest();
+      const { html, status } = await get('/Product');
+      must(status === 200, `storefront returned ${status}`);
+      must(rowWith(html, 'Blue mug') && rowWith(html, 'Mountain poster'), 'products are missing');
+      must(!rowWith(html, 'Old poster'), 'an inactive product is on the storefront');
+      must(html.includes('12.50'), 'price is not shown as money');
+      must(!html.includes('Add to cart'), 'a guest sees the cart button');
+      const s = await get('/Product?q=poster');
+      must(rowWith(s.html, 'Mountain poster') && !rowWith(s.html, 'Blue mug'), 'search does not narrow');
+      const f = await get('/Product?category=1');
+      must(rowWith(f.html, 'Blue mug') && !rowWith(f.html, 'Mountain poster'), 'category filter does not narrow');
+      return 'catalog, search, filter, money format, no cart for guests';
+    } },
+  { task: 'A guest is sent to login for orders and gets no dashboard',
+    run: async ({ asGuest, get, must }) => {
+      asGuest();
+      const o = await get('/Order');
+      must(o.location.startsWith('/login'), `orders did not redirect to login: ${o.status} ${o.location}`);
+      const d = await get('/dashboard/sales');
+      must(d.location.startsWith('/login'), 'the dashboard did not redirect to login');
+      return 'redirected to /login with next=';
+    } },
+  { task: 'A customer registers and lands signed in; a duplicate email is refused',
+    run: async ({ post, get, must, flashOf }) => {
+      const r = await post('/register', { email: 'ann@shop.test', password: 'secret1', name: 'Ann' });
+      must(r.status === 303, `register returned ${r.status}: ${r.html.slice(0, 300)}`);
+      const home = await get(r.location);
+      must(/Signed in as ann@shop.test \(customer\)/.test(home.html), 'not signed in after registering');
+      must(/Welcome, ann@shop.test/.test(flashOf(home.html)), 'no welcome message');
+      const dup = await post('/register', { email: 'ann@shop.test', password: 'x', name: 'Ann again' });
+      must(dup.status === 400 && /already (taken|registered)/.test(dup.html), 'a duplicate email was accepted');
+      return 'registered, session cookie set, duplicate refused';
+    } },
+  { task: 'Adding products builds a cart whose count and total are derived',
+    run: async ({ get, follow, idOf, rowWith, must, flashOf }) => {
+      const list = await get('/Product');
+      const blue = idOf(list.html, 'Blue mug'), poster = idOf(list.html, 'Mountain poster');
+      let r = await follow(`/Product/${blue}/action/addToCart`, {});
+      must(/Blue mug added to your cart/.test(flashOf(r.html)), `no confirmation: ${flashOf(r.html)}`);
+      await follow(`/Product/${blue}/action/addToCart`, {});
+      r = await follow(`/Product/${poster}/action/addToCart`, { qty: 2 });
+      const cart = rowWith(r.html, 'Cart');
+      must(cart, 'no cart row');
+      must(cart.includes('<td>4</td>'), `item count is wrong: ${cart}`);
+      must(cart.includes('75.00'), `total is wrong: ${cart}`);
+      annOrder = idOf(r.html, 'Cart');
+      const detail = await get(`/Order/${annOrder}`);
+      must(/Blue mug/.test(detail.html) && /Mountain poster/.test(detail.html), 'items are missing from the order');
+      must(/<td>50\.00<\/td>/.test(detail.html), 'the line total is not derived');
+      return '4 units in 3 lines, total 75.00, line totals derived';
+    } },
+  { task: 'A zero quantity is refused by the rule; editing a quantity updates the total',
+    run: async ({ get, post, follow, rowWith, must }) => {
+      const detail = await get(`/Order/${annOrder}`);
+      const item = itemId(rowWith(detail.html, 'Blue mug'));
+      must(item, 'no edit link on the item row');
+      const bad = await post(`/OrderItem/${item}`, { qty: 0 });
+      must(bad.status === 400 && /Quantity must be at least 1/.test(bad.html), 'qty 0 was accepted');
+      const saved = await post(`/OrderItem/${item}`, { qty: 3 });
+      must(saved.status === 303 && saved.location.startsWith(`/Order/${annOrder}`), `edit did not return to the order: ${saved.status} ${saved.location}`);
+      const r = await get(saved.location);
+      must(/<td>100\.00<\/td>/.test(r.html), 'the total did not follow the quantity');
+      return 'rule message shown, total 100.00 after edit';
+    } },
+  { task: 'Placing the order takes stock, mails a confirmation and notifies fulfilment over HTTP',
+    run: async ({ get, follow, rowWith, must, sink, flashOf }) => {
+      sink.clear();
+      const r = await follow(`/Order/${annOrder}/go/place`, { address: '1 Main st', paymentMethod: 'paypal' });
+      must(new RegExp(`Order #${annOrder} placed, total 100.00`).test(flashOf(r.html)), `flash: ${flashOf(r.html)}`);
+      must(/status">Placed/.test(r.html), 'status is not placed');
+      must(/1 Main st/.test(r.html), 'the address was not stored with the transition');
+      const products = await get('/Product');
+      must(rowWith(products.html, 'Blue mug').includes('<td>6</td>'), 'stock was not decremented (10 - 4)');
+      must(rowWith(products.html, 'Mountain poster').includes('<td>3</td>'), 'stock was not decremented (5 - 2)');
+      must(sink.received.length === 1, `fulfilment received ${sink.received.length} call(s)`);
+      const hook = sink.received[0];
+      must(hook.path === '/hooks/shop' && hook.body.order === Number(annOrder) && hook.body.total === 100 && hook.body.items === 6 && hook.body.payment === 'paypal',
+        `hook body ${JSON.stringify(hook.body)}`);
+      return 'stock 6 and 3, webhook delivered with order, total, items, payment';
+    } },
+  { task: 'Paying moves the order on; the same transition is not offered twice',
+    run: async ({ get, follow, post, must, flashOf }) => {
+      const r = await follow(`/Order/${annOrder}/go/pay`, {});
+      must(/Payment received/.test(flashOf(r.html)), `flash: ${flashOf(r.html)}`);
+      must(/status">Paid/.test(r.html), 'status is not paid');
+      must(!/go\/pay"/.test(r.html) && !/go\/place"/.test(r.html), 'a spent transition is still offered');
+      const again = await post(`/Order/${annOrder}/go/pay`, {});
+      must(again.status === 409, `paying twice returned ${again.status}`);
+      const ship = await post(`/Order/${annOrder}/go/ship`, {});
+      must(ship.status === 403, `a customer could ship: ${ship.status}`);
+      return 'paid once, second pay 409, ship forbidden for customers';
+    } },
+  { task: 'A customer sees only their own orders and nothing of the admin surface',
+    run: async ({ asGuest, post, get, rows, must }) => {
+      asGuest();
+      const r = await post('/register', { email: 'bob@shop.test', password: 'secret2', name: 'Bob' });
+      must(r.status === 303, 'bob could not register');
+      const orders = await get('/Order');
+      must(rows(orders.html).length === 0, `bob sees ${rows(orders.html).length} order(s) that are not his`);
+      const other = await get(`/Order/${annOrder}`);
+      must(other.status === 403, `bob opened ann's order: ${other.status}`);
+      must((await get('/dashboard/sales')).status === 403, 'bob opened the sales dashboard');
+      must((await get('/outbox')).status === 403, 'bob opened the outbox');
+      must((await get('/User')).status === 403, 'bob listed the customers');
+      return 'own rows only; dashboard, outbox and users are 403';
+    } },
+  { task: 'Not enough stock refuses the order and rolls everything back',
+    run: async ({ get, follow, post, idOf, rowWith, must, sink }) => {
+      sink.clear();
+      const red = idOf((await get('/Product')).html, 'Red mug');
+      const cart = await follow(`/Product/${red}/action/addToCart`, { qty: 3 });
+      bobOrder = idOf(cart.html, 'Cart');
+      const r = await post(`/Order/${bobOrder}/go/place`, { address: '2 Side st', paymentMethod: 'card' });
+      must(r.status === 400 && /Not enough stock/.test(r.html), `expected a refusal, got ${r.status}`);
+      const detail = await get(`/Order/${bobOrder}`);
+      must(/status">Cart/.test(detail.html), 'the status moved despite the refusal');
+      must(rowWith((await get('/Product')).html, 'Red mug').includes('<td>2</td>'), 'stock changed despite the rollback');
+      must(sink.received.length === 0, 'fulfilment was notified of a refused order');
+      return 'refused with the rule message; status, stock and outbox untouched';
+    } },
+  { task: 'Cancelling a placed order returns the stock',
+    run: async ({ get, follow, rowWith, must }) => {
+      const detail = await get(`/Order/${bobOrder}`);
+      const item = itemId(rowWith(detail.html, 'Red mug'));
+      await follow(`/OrderItem/${item}`, { qty: 2 });
+      let r = await follow(`/Order/${bobOrder}/go/place`, { address: '2 Side st', paymentMethod: 'card' });
+      must(/status">Placed/.test(r.html), 'the corrected order was not placed');
+      must(rowWith((await get('/Product')).html, 'Red mug').includes('<td>0</td>'), 'stock is not 0 after placing 2');
+      r = await follow(`/Order/${bobOrder}/go/cancel`, {});
+      must(/status">Cancelled/.test(r.html), 'the order is not cancelled');
+      must(rowWith((await get('/Product')).html, 'Red mug').includes('<td>2</td>'), 'stock did not return after cancelling');
+      return 'stock 2 → 0 → 2';
+    } },
+  { task: 'The admin signs in, ships the paid order and reads the outbox',
+    run: async ({ asGuest, login, get, follow, rowWith, rows, must }) => {
+      asGuest();
+      const bad = await login('admin@shop.test', 'nope');
+      must(bad.status === 401 && /Wrong login or password/.test(bad.html), 'a wrong password was accepted');
+      const r = await login('admin@shop.test', 'admin123');
+      must(r.status === 303, `admin login returned ${r.status}`);
+      const orders = await get('/Order');
+      must(rows(orders.html).length >= 2, 'the admin does not see every order');
+      const shipped = await follow(`/Order/${annOrder}/go/ship`, {});
+      must(/status">Shipped/.test(shipped.html), 'the admin could not ship');
+      const outbox = await get('/outbox');
+      must(outbox.status === 200, `outbox returned ${outbox.status}`);
+      const mails = rows(outbox.html).filter((x) => x.includes('<td>mail</td>'));
+      const hooks = rows(outbox.html).filter((x) => x.includes('<td>http</td>'));
+      must(mails.length === 3, `expected 3 letters in the outbox (two orders placed, one paid), got ${mails.length}`);
+      must(hooks.length === 2 && hooks.every((h) => /status">sent<\/span> 200/.test(h)), `expected 2 delivered hooks, got ${hooks.length}: ${hooks.map((h) => /status">(\w+)/.exec(h)?.[1])}`);
+      must(/Order #\d+ received/.test(outbox.html) && /ann@shop.test/.test(outbox.html), 'the confirmation letter is not recorded');
+      return 'wrong password 401; admin ships; outbox shows 3 letters and 2 delivered hooks';
+    } },
+  { task: 'The sales dashboard sums derived totals and filters by period',
+    run: async ({ get, must }) => {
+      const d = await get('/dashboard/sales');
+      must(d.status === 200, `dashboard returned ${d.status}`);
+      must(/<b>100\.00<\/b>Revenue \(paid\)/.test(d.html), 'revenue does not sum the derived total of paid orders');
+      must(/<b>1<\/b>Orders placed/.test(d.html), 'orders placed should count placed and later, not the cancelled one');
+      must(/Shipped<\/td><td>1<\/td><td>100\.00<\/td>/.test(d.html), 'the by-status table is wrong');
+      must(/Blue mug<\/td><td>4<\/td><td>50\.00<\/td>/.test(d.html), 'units by product is wrong');
+      const empty = await get('/dashboard/sales?from=2000-01-01&to=2000-12-31');
+      must(/<b>0<\/b>Orders placed/.test(empty.html), 'the period filter does not exclude');
+      const month = new Date().toISOString().slice(0, 7);
+      must(new RegExp(`${month}</td><td>2</td>`).test(d.html), 'orders by month misses the current month');
+      return 'revenue 100.00, 1 placed, by status, by product, by month, period filter';
+    } },
+  navCheck(3),
+  colorCheck('seashell', 'darkslateblue'),
+];

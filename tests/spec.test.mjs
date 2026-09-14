@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseField, sqlType, defaultValue, coerce } from '../runtime/spec.mjs';
 
 test('parses every kind of field spec', () => {
-  assert.deepEqual(parseField('title', 'text!'), { name: 'title', kind: 'text', options: null, target: null, required: true, optional: false, def: null });
+  assert.deepEqual(parseField('title', 'text!'), { name: 'title', kind: 'text', options: null, target: null, required: true, optional: false, def: null, derive: null, source: null });
   assert.equal(parseField('notes', 'longtext').kind, 'longtext');
   assert.equal(parseField('n', 'int=3').def, '3');
   assert.equal(parseField('at', 'time=now').kind, 'time');
@@ -14,7 +14,7 @@ test('parses every kind of field spec', () => {
 });
 
 test('rejects what it cannot represent, and says what it knows', () => {
-  assert.throws(() => parseField('due', 'date!'), /unknown type "date".*text, longtext, bool, int, time/s);
+  assert.throws(() => parseField('due', 'datetime!'), /unknown type "datetime".*text, longtext, bool, int, money, date, time/s);
   assert.throws(() => parseField('s', 'enum[]'), /enum needs at least one option/);
   assert.throws(() => parseField('s', 42), /spec must be a string/);
 });

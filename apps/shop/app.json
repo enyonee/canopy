@@ -1,0 +1,116 @@
+{
+  "app": "shop",
+  "note": "Reference app for the shop class: a storefront for guests, the cart as a draft order, checkout as transitions that take stock, pay, mail a confirmation and notify fulfilment over HTTP; the admin sees every order, the sales dashboard and the outbox.",
+  "theme": { "background": "seashell", "accent": "darkslateblue" },
+  "home": "/Product",
+
+  "data": {
+    "User":      { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,customer]=customer" },
+    "Category":  { "name": "text!" },
+    "Product":   { "name": "text!", "category": "ref:Category", "price": "money!", "stock": "int=0", "about": "longtext", "active": "bool=true" },
+    "Order":     { "customer": "ref:User!", "status": "enum[cart,placed,paid,shipped,delivered,cancelled]=cart",
+                   "createdAt": "time=now", "address": "text", "paymentMethod": "enum[card,paypal,cash]=card",
+                   "items": "int := sum(OrderItem: qty)", "total": "money := sum(OrderItem: qty * price)" },
+    "OrderItem": { "order": "ref:Order!", "product": "ref:Product!", "qty": "int=1", "price": "money", "line": "money := qty * price" }
+  },
+
+  "rules": {
+    "User":      [ { "unique": "email" } ],
+    "Product":   [ { "check": "price >= 0", "message": "Price cannot be negative" },
+                   { "check": "stock >= 0", "message": "Stock cannot be negative" } ],
+    "OrderItem": [ { "check": "qty > 0", "message": "Quantity must be at least 1" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "customer", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "customer": { "Product": ["view", "do:addToCart"], "Category": ["view"],
+                    "Order": { "own": "customer", "can": ["view", "go:place", "go:pay", "go:cancel"] },
+                    "OrderItem": ["view", "edit", "delete"] },
+      "guest":    { "Product": ["view"], "Category": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":     [ { "email": "admin@shop.test", "password": "admin123", "name": "Admin", "role": "admin" } ],
+    "Category": [ { "name": "Mugs" }, { "name": "Posters" } ],
+    "Product":  [ { "name": "Blue mug", "category": 1, "price": 12.5, "stock": 10, "about": "Ceramic, 300 ml" },
+                  { "name": "Red mug", "category": 1, "price": 14, "stock": 2, "about": "Ceramic, 350 ml" },
+                  { "name": "Mountain poster", "category": 2, "price": 25, "stock": 5, "about": "A2, matte" },
+                  { "name": "Old poster", "category": 2, "price": 5, "stock": 0, "about": "Discontinued", "active": false } ]
+  },
+
+  "actions": [
+    { "name": "addToCart", "in": "Product", "title": "Add to cart", "after": "/list/cart", "confirm": "{row.name} added to your cart",
+      "do": [ { "block": "db.ensure", "entity": "Order", "where": { "customer": "@me", "status": "cart" } },
+              { "block": "db.createRow", "entity": "OrderItem",
+                "values": { "order": "@found.id", "product": "@row.id", "qty": "= coalesce(values.qty, 1)", "price": "@row.price" } } ] }
+  ],
+
+  "states": {
+    "Order": { "field": "status", "transitions": [
+      { "name": "place", "from": ["cart"], "to": "placed", "title": "Place order", "fields": ["address", "paymentMethod"],
+        "confirm": "Order #{row.id} placed, total {row.total}",
+        "do": [ { "block": "db.each", "from": "OrderItem", "where": { "order": "@row.id" },
+                  "do": [ { "block": "db.adjust", "entity": "Product", "id": "@each.product", "field": "stock", "by": "= -each.qty",
+                            "min": 0, "message": "Not enough stock for one of the items" } ] },
+                { "block": "mail.send", "connector": "mail", "to": "@row.customer.email", "subject": "Order #{row.id} received",
+                  "text": "Thank you, {row.customer.name}. {row.items} item(s), total {row.total}. We will ship to {row.address}." },
+                { "block": "http.send", "connector": "fulfilment",
+                  "body": { "order": "@row.id", "customer": "@row.customer.email", "total": "@row.total", "items": "@row.items", "payment": "@row.paymentMethod" } } ] },
+      { "name": "pay", "from": ["placed"], "to": "paid", "title": "Pay now", "confirm": "Payment received, thank you",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.customer.email", "subject": "Payment for order #{row.id} received",
+                  "text": "{row.total} paid by {row.paymentMethod}." } ] },
+      { "name": "ship", "from": ["paid"], "to": "shipped", "by": ["admin"], "title": "Mark shipped" },
+      { "name": "deliver", "from": ["shipped"], "to": "delivered", "by": ["admin"], "title": "Mark delivered" },
+      { "name": "cancel", "from": ["placed", "paid"], "to": "cancelled", "title": "Cancel order", "confirm": "Order cancelled, stock returned",
+        "do": [ { "block": "db.each", "from": "OrderItem", "where": { "order": "@row.id" },
+                  "do": [ { "block": "db.adjust", "entity": "Product", "id": "@each.product", "field": "stock", "by": "= each.qty" } ] } ] }
+    ] }
+  },
+
+  "connectors": {
+    "fulfilment": { "kind": "http", "url": "http://127.0.0.1:8999/hooks/shop" },
+    "mail":       { "kind": "mail", "from": "shop@example.test" }
+  },
+
+  "views": "auto",
+  "override": {
+    "Product.list":   { "title": "Shop", "columns": ["name", "category", "price", "stock"], "search": ["name", "about"],
+                        "filters": [ { "name": "Category", "field": "category" } ], "where": { "active": 1 },
+                        "rowActions": ["view", "addToCart", "edit", "delete"] },
+    "Product.detail": { "actions": ["addToCart"] },
+    "Category.list":  { "hidden": true },
+    "User.list":      { "title": "Customers", "columns": ["email", "name", "role"] },
+    "Order.list":     { "title": "Orders", "columns": ["id", "customer", "status", "items", "total", "createdAt"],
+                        "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"], "create": false },
+    "Order.detail":   { "fields": ["customer", "status", "items", "total", "address", "paymentMethod", "createdAt"],
+                        "related": [ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": ["product", "qty", "price", "line"],
+                                       "form": false, "rowActions": ["edit", "delete"] } ] },
+    "OrderItem.list": { "hidden": true },
+    "OrderItem.form": { "fields": ["qty"], "afterEdit": "/Order/{order}" }
+  },
+
+  "lists": [
+    { "id": "cart", "entity": "Order", "title": "Cart", "roles": ["customer"],
+      "where": { "customer": "@me", "status": "cart" }, "columns": ["items", "total", "status"], "rowActions": ["view"] },
+    { "id": "all-products", "entity": "Product", "title": "All products", "roles": ["admin"],
+      "columns": ["name", "category", "price", "stock", "active"], "rowActions": ["edit", "delete"], "create": true }
+  ],
+
+  "dashboards": [
+    { "id": "sales", "title": "Sales", "roles": ["admin"], "period": { "Order": "createdAt" },
+      "cards": [ { "title": "Orders placed", "entity": "Order", "fn": "count", "where": { "status": { "in": ["placed", "paid", "shipped", "delivered"] } } },
+                 { "title": "Revenue (paid)", "entity": "Order", "fn": "sum", "field": "total", "where": { "status": { "in": ["paid", "shipped", "delivered"] } } },
+                 { "title": "Products", "entity": "Product", "fn": "count" } ],
+      "tables": [ { "title": "Orders by status", "entity": "Order", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "orders", "title": "Orders" }, { "fn": "sum", "field": "total", "as": "revenue", "title": "Total" } ] },
+                  { "title": "Units by product", "entity": "OrderItem", "groupBy": "product", "groupTitle": "Product",
+                    "metrics": [ { "fn": "sum", "field": "qty", "as": "units", "title": "Units" }, { "fn": "sum", "field": "line", "as": "amount", "title": "Amount" } ],
+                    "sort": { "field": "units", "dir": "desc" } },
+                  { "title": "Orders by month", "entity": "Order", "groupBy": "createdAt", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "orders", "title": "Orders" }, { "fn": "sum", "field": "total", "as": "revenue", "title": "Total" } ] } ] }
+  ]
+}

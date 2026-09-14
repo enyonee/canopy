@@ -170,7 +170,7 @@ test('resolution of @now, of a path that leads nowhere, and of a plain value', a
     app: 'res', data: { A: { name: 'text!', at: 'text', ghost: 'text' } },
     actions: [
       { name: 'stamp', confirm: 'made {created} at {nothing.deep}', after: '/A?x=1',
-        do: [{ block: 'db.createRow', entity: 'A', values: { name: 'literal', at: '@now', ghost: '@nothing.deep' } }] },
+        do: [{ block: 'db.createRow', entity: 'A', values: { name: 'literal', at: '@now', ghost: '@values.ghost' } }] },
       { name: 'quiet', do: [{ block: 'db.createRow', entity: 'A', values: { name: 'no confirm' } }] },
     ],
   }));
@@ -183,6 +183,8 @@ test('resolution of @now, of a path that leads nowhere, and of a plain value', a
     const row = rows(list.html)[0];
     assert.match(row, /\d{4}-\d{2}-\d{2}T/, '@now became a timestamp');
     assert.match(row, /literal/, 'a plain value passes through untouched');
+    assert.ok(validate({ app: 'r', data: { A: { n: 'text' } }, actions: [{ name: 'x', do: [{ block: 'db.createRow', entity: 'A', values: { n: '@nothing.deep' } }] }] })
+      .some((e) => e.path === '/actions/0/do/0/values/n' && /unknown reference/.test(e.message)), 'a reference that leads nowhere is a checker error, not a silent null');
     const quiet = await s.post('/action/quiet', {});
     assert.ok(!quiet.location.includes('ok='), 'an action without a confirmation redirects silently');
   } finally { s.close(); }

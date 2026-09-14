@@ -20,8 +20,8 @@ test('the shape of the graph itself', () => {
 });
 
 test('field specs and references are checked where they are written', () => {
-  const e = validate({ app: 'x', data: { Task: { due: 'date!' }, Log: { who: 'ref:Ghost' } } });
-  assert.ok(e.some((x) => x.path === '/data/Task/due' && /unknown type "date"/.test(x.message)));
+  const e = validate({ app: 'x', data: { Task: { due: 'datetime!' }, Log: { who: 'ref:Ghost' } } });
+  assert.ok(e.some((x) => x.path === '/data/Task/due' && /unknown type "datetime"/.test(x.message)));
   assert.ok(e.some((x) => x.path === '/data/Log/who' && /unknown entity "Ghost"/.test(x.message)));
 });
 
@@ -124,8 +124,9 @@ test('actions, blocks and their requirements', () => {
     'an action without "in" is global and valid');
 });
 
-test('events trigger only on creation of a real entity', () => {
-  assert.match(at({ events: [{ on: 'Task.updated', do: [] }] }, '/events/0/on').message, /unsupported trigger/);
+test('events trigger on created, updated and deleted of a real entity', () => {
+  assert.match(at({ events: [{ on: 'Task.exploded', do: [] }] }, '/events/0/on').message, /unsupported trigger/);
+  assert.deepEqual(errs({ events: [{ on: 'Task.updated', do: [{ block: 'db.update', set: { done: 'true' } }] }, { on: 'Task.deleted', do: [{ block: 'db.createRow', entity: 'Task', values: { title: 'gone' } }] }] }), []);
   assert.ok(paths({ events: [{ on: 'Ghost.created', do: [] }] }).includes('/events/0/on'));
   assert.deepEqual(errs({ events: [{ on: 'Task.created', do: [{ block: 'db.update', set: { done: 'true' } }] }] }), []);
   assert.ok(paths({ events: [{ on: 'Task.created', do: [{ block: 'nope' }] }] }).includes('/events/0/do/0/block'));

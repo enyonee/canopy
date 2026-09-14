@@ -47,7 +47,7 @@ test('it boots an app on the port it was given, with the db and trace it was giv
 test('an invalid graph is reported and still served', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-'));
   const file = path.join(dir, 'bad.json');
-  fs.writeFileSync(file, JSON.stringify({ app: 'b', data: { A: { x: 'date!' } } }));
+  fs.writeFileSync(file, JSON.stringify({ app: 'b', data: { A: { x: 'datetime!' } } }));
   const c = capture();
   const { app } = main([file, '--port', '0', '--db', path.join(dir, 'd.sqlite')], c.sink);
   await once(app.server, 'listening');

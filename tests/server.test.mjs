@@ -164,7 +164,7 @@ test('dashboard computes from the same rows the lists show', async () => {
 
 test('failures are contained: unknown routes 404, a broken block 500, both traced', async () => {
   assert.equal((await s.get('/Ghost')).status, 404);
-  assert.equal((await s.post('/Post/1/nonsense', {})).status, 303, 'an unknown sub-path falls through to update');
+  assert.equal((await s.post('/Post/1/nonsense', {})).status, 404, 'an unknown sub-path is not an update');
   const put = await fetch(`${s.base}/Post`, { method: 'PUT' });
   assert.equal(put.status, 404);
   const boom = await s.post('/action/boom', {});
@@ -176,14 +176,14 @@ test('failures are contained: unknown routes 404, a broken block 500, both trace
 test('an invalid graph is served as an error page, not a crash', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-bad-'));
   const file = path.join(dir, 'bad.json');
-  fs.writeFileSync(file, JSON.stringify({ app: 'bad', data: { A: { x: 'date!' } } }));
+  fs.writeFileSync(file, JSON.stringify({ app: 'bad', data: { A: { x: 'datetime!' } } }));
   const bad = await boot(file);
   try {
     assert.equal(bad.app.invalid, true);
     const r = await bad.get('/anything');
     assert.equal(r.status, 500);
     assert.match(r.html, /Graph is invalid/);
-    assert.match(r.html, /unknown type &quot;date&quot;/, 'the checker output reaches the page, escaped');
+    assert.match(r.html, /unknown type &quot;datetime&quot;/, 'the checker output reaches the page, escaped');
   } finally { bad.close(); }
 });
 

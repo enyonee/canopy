@@ -1,3 +1,5 @@
 apps/*/data.sqlite
 apps/*/trace.jsonl
-node_modules/
+apps/*/session.key
+apps/*/files/
+apps/*/.stage*.json
