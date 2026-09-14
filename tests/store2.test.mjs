@@ -43,12 +43,12 @@ test('reverse references are found, named, or refused with a hint', () => {
     B: { a: 'ref:A' }, C: { first: 'ref:A', second: 'ref:A' }, D: { n: 'text' },
   }), ':memory:');
   const a = store.insert('A', { n: 'x' });
-  store.insert('B', { a }); store.insert('C', { first: a, second: null }); store.insert('C', { first: null, second: a });
+  store.insert('B', { a }); store.insert('C', { first: a, second: null }); store.insert('C', { first: null, second: a }); store.insert('D', { n: 'z' });
   const row = store.raw('A', a);
   assert.equal(store.ctx('A', row).get(['kids']), 1);
   assert.equal(store.ctx('A', row).get(['named']), 1);
   assert.throws(() => store.ctx('A', row).get(['ambiguous']), /C references A through first and second; name one: C\.first/);
-  assert.throws(() => store.ctx('A', row).get(['none']), /D has no reference to A; add a "ref:A" field to D/);
+  assert.equal(store.ctx('A', row).get(['none']), 1, 'an entity with no reference aggregates over all its rows');
   assert.throws(() => store.childVia('Ghost', 'A'), /unknown entity "Ghost"/);
   assert.throws(() => store.childVia('C', 'A', 'nope'), /C\.nope is not a reference to A/);
   assert.throws(() => store.childVia('B', 'A', 'a') && store.childVia('D', 'A', 'n'), /D\.n is not a reference to A/);

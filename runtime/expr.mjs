@@ -151,9 +151,12 @@ export function check(ast, scope, functions = FUNCTIONS) {
       default: {
         const child = scope.children(n.entity, n.via);
         if (!n.body) return 'number';
-        const k = check(n.body, child, functions);
+        // Inside the body, "row.x" is the outer row: a correlated aggregate.
+        const inner = { field: (p) => (p[0] === 'row' && p.length > 1 ? scope.field(p.slice(1)) : child.field(p)), children: child.children };
+        const k = check(n.body, inner, functions);
         if (n.fn === 'count') return 'number';
-        if (!NUMERIC.has(k) && k !== 'any') throw new Error(`${n.fn}(${n.entity}: …) needs a number, got ${k}`);
+        if ((n.fn === 'min' || n.fn === 'max') && ['date', 'time'].includes(k)) return k;
+        if (!NUMERIC.has(k) && k !== 'any') throw new Error(`${n.fn}(${n.entity}: …) needs a number${n.fn === 'min' || n.fn === 'max' ? ' or a date' : ''}, got ${k}`);
         return k;
       }
     }
@@ -199,12 +202,13 @@ export function evaluate(ast, ctx, functions = FUNCTIONS) {
       }
       case 'call': return functions[n.fn].run(n.args.map(ev));
       default: {
-        const rows = ctx.rows(n.entity, n.via);
+        const rows = ctx.rows(n.entity, n.via).map((r) => ({ get: (p) => (p[0] === 'row' && p.length > 1 ? ctx.get(p.slice(1)) : r.get(p)), rows: r.rows }));
         if (n.fn === 'count') return n.body ? rows.filter((r) => truthy(evaluate(n.body, r, functions))).length : rows.length;
         const vals = rows.map((r) => evaluate(n.body, r, functions)).filter((v) => v !== null && v !== undefined);
         if (n.fn === 'sum') return vals.reduce((a, b) => a + b, 0);
         if (!vals.length) return null;
         if (n.fn === 'avg') return vals.reduce((a, b) => a + b, 0) / vals.length;
+        if (typeof vals[0] === 'string') return vals.reduce((a, b) => (n.fn === 'min' ? (b < a ? b : a) : (b > a ? b : a)));
         if (n.fn === 'min') return Math.min(...vals);
         return Math.max(...vals);
       }

@@ -12,7 +12,7 @@ export const checks = [
       must(!/action\/buy/.test(open.html), 'a guest is offered to buy');
       must((await login('bob@escrow.test', 'bob123')).status === 303, 'the buyer could not sign in');
       const list = await get('/Product');
-      must(/<th>Name<\/th><th>Coin<\/th><th>Quantity<\/th><th>Price<\/th><th>Seller<\/th>/.test(list.html), 'the columns lack name, price or seller');
+      must(/<th>(?:<a[^>]*>)?Name(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Coin(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Quantity(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Price(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Seller(?: [▲▼])?(?:<\/a>)?<\/th>/.test(list.html), 'the columns lack name, price or seller');
       const btc = rowWith(list.html, 'Bitcoin slice');
       must(btc && /<td>BTC<\/td><td>0\.01<\/td><td>620\.00<\/td><td><a href="\/User\/2">Sam Satoshi<\/a><\/td>/.test(btc), `the product row is wrong: ${btc}`);
       must(/action\/buy/.test(btc) && !/\/edit"/.test(btc), 'the buyer is not offered to buy, or may edit');

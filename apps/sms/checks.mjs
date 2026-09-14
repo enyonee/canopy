@@ -31,7 +31,7 @@ export const checks = [
   { task: 'View short message sending records with recipient, status and time',
     run: async ({ get, rowWith, must }) => {
       const { html } = await get('/Message');
-      must(/<th>Recipient<\/th>/.test(html) && /<th>Status<\/th>/.test(html) && /<th>Sent At<\/th>/.test(html),
+      must(/<th>(?:<a[^>]*>)?Recipient(?: [▲▼])?(?:<\/a>)?<\/th>/.test(html) && /<th>(?:<a[^>]*>)?Status(?: [▲▼])?(?:<\/a>)?<\/th>/.test(html) && /<th>(?:<a[^>]*>)?Sent At(?: [▲▼])?(?:<\/a>)?<\/th>/.test(html),
         'records table is missing recipient, status or time');
       must(rowWith(html, 'Your code is 4821'), 'the sent message is missing from the records');
       return 'columns recipient, text, status, sentAt';

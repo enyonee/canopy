@@ -14,7 +14,7 @@ export const checks = [
       must(rows(list.html).length === 4, `expected 4 customers, got ${rows(list.html).length}`);
       const alice = rowWith(list.html, 'Alice Brown');
       must(alice && /^<td>1<\/td><td>Alice Brown<\/td><td>alice@example.test<\/td><td>\+1 555 0101<\/td><td>2<\/td><td>3<\/td>/.test(alice), `Alice's row lacks id, contact details or derived counts: ${alice}`);
-      must(/<th>Id<\/th><th>Name<\/th><th>Email<\/th><th>Phone<\/th><th>Policies<\/th><th>Claims<\/th>/.test(list.html), 'the column headers are wrong');
+      must(/<th>(?:<a[^>]*>)?Id(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Name(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Email(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Phone(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Policies(?: [▲▼])?(?:<\/a>)?<\/th><th>(?:<a[^>]*>)?Claims(?: [▲▼])?(?:<\/a>)?<\/th>/.test(list.html), 'the column headers are wrong');
       const found = await get('/Customer?q=ben');
       must(rowWith(found.html, 'Ben Carter') && rows(found.html).length === 1, 'the customer search does not narrow');
       return '4 customers with id, email, phone, policy and claim counts; search narrows';

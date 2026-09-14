@@ -81,7 +81,7 @@ export function validate(graph, registry = DEFAULT) {
   // A where clause: { field: value } or { field: { gte, lte, gt, lt, ne, in, like } }.
   const checkWhere = (entity, where, path) => {
     for (const [f, cmp] of Object.entries(where || {})) {
-      if (!checkField(entity, f, `${path}/${f}`)) continue;
+      if (f !== 'id' && !checkField(entity, f, `${path}/${f}`)) continue;
       if (cmp && typeof cmp === 'object' && !Array.isArray(cmp))
         for (const op of Object.keys(cmp)) if (!CMP.includes(op)) err(`${path}/${f}/${op}`, `unknown comparison "${op}"`, `comparisons: ${CMP.join(', ')}`);
     }
@@ -96,7 +96,7 @@ export function validate(graph, registry = DEFAULT) {
       return via;
     }
     if (refs.length === 1) return refs[0].name;
-    if (!refs.length) throw new Error(`${child} has no reference to ${parent}; add a "ref:${parent}" field to ${child}`);
+    if (!refs.length) return null; // no reference: the aggregate walks every row of the entity, the body correlates with row.
     throw new Error(`${child} references ${parent} through ${refs.map((f) => f.name).join(' and ')}; name one: ${child}.${refs[0].name}`);
   };
   const fieldScope = (entity) => ({
@@ -179,17 +179,18 @@ export function validate(graph, registry = DEFAULT) {
         err(path, `derived ${f.kind} field gets a ${kind} expression`, `declare it as "${kind === 'number' ? 'int' : kind} := …" or change the expression`);
       // Dependencies on other derived fields, through hops and aggregates.
       const out = new Set();
-      const walk = (ast, e) => {
+      const walk = (ast, e, outer = null) => {
         const visit = (n) => {
           if (n.t === 'path') {
-            let cur = e;
-            for (const seg of n.p) {
+            let cur = e, segs = n.p;
+            if (outer && segs[0] === 'row' && segs.length > 1) { cur = outer; segs = segs.slice(1); }
+            for (const seg of segs) {
               const g = fields[cur]?.[seg];
               if (!g) break;
               if (g.derive) out.add(`${cur}.${seg}`);
               if (g.kind === 'ref') cur = g.target; else break;
             }
-          } else if (n.t === 'agg') { if (entities.includes(n.entity) && n.body) walk(n.body, n.entity); }
+          } else if (n.t === 'agg') { if (entities.includes(n.entity) && n.body) walk(n.body, n.entity, e); }
           else if (n.t === 'un') visit(n.a);
           else if (n.t === 'bin') { visit(n.a); visit(n.b); }
           else if (n.t === 'call') n.args.forEach(visit);
@@ -338,6 +339,7 @@ export function validate(graph, registry = DEFAULT) {
       else if (act.in !== entity) err(`/override/${key}/actions/${i}`, `action "${a}" is not bound to ${entity}`, `it needs "in": "${entity}"`);
     });
     if (ov.sort) checkField(entity, ov.sort.field, `/override/${key}/sort/field`);
+    if (ov.pageSize !== undefined && !(Number.isInteger(ov.pageSize) && ov.pageSize > 0)) err(`/override/${key}/pageSize`, 'pageSize must be a positive integer');
     Object.keys(ov.fill || {}).forEach((f) => checkField(entity, f, `/override/${key}/fill/${f}`, { stored: true }));
     checkWhere(entity, ov.where, `/override/${key}/where`);
     Object.keys(ov.labels || {}).forEach((f) => checkField(entity, f, `/override/${key}/labels/${f}`));

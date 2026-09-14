@@ -47,6 +47,9 @@ form.inline { display: inline; }
 .status { display: inline-block; border: 1px solid ${accent}; color: ${accent}; border-radius: 12px; padding: 0 10px; font-size: 14px; }
 .range { display: flex; gap: 12px; align-items: end; }
 .range label { margin-top: 0; }
+.thumb { max-height: 80px; max-width: 120px; border-radius: 4px; }
+th a { color: white; }
+.pages a { margin-right: 12px; }
 </style></head><body>
 <header><h1>${esc(graph.app)}</h1><nav>${navLinks(graph, vc)}${whoBox(graph, vc)}</nav></header>
 <main>${flash ? `<p class="flash">${esc(flash)}</p>` : ''}${body}</main></body></html>`;
@@ -159,7 +162,12 @@ export function listView(graph, store, entity, fields, rows, ctx) {
     <input type="text" id="q" name="q" value="${esc(ctx.q)}" placeholder="Search ${esc(entity.toLowerCase())}s">
     <p><button type="submit">Search</button></p></form>` : '';
 
-  const head = cols.map((c) => `<th>${esc(label(c))}</th>`).join('') + (actions.length ? '<th>Actions</th>' : '');
+  const keep = new URLSearchParams(ctx.query || '');
+  keep.delete('sort'); keep.delete('dir'); keep.delete('page');
+  const sortHref = (c) => { const q = new URLSearchParams(keep); q.set('sort', c); q.set('dir', ctx.sort === c && ctx.dir === 'asc' ? 'desc' : 'asc'); return `${path}?${q}`; };
+  const head = cols.map((c) => `<th><a href="${sortHref(c)}">${esc(label(c))}${ctx.sort === c ? (ctx.dir === 'asc' ? ' ▲' : ' ▼') : ''}</a></th>`).join('') + (actions.length ? '<th>Actions</th>' : '');
+  const pageHref = (n) => { const q = new URLSearchParams(ctx.query || ''); q.set('page', String(n)); return `${path}?${q}`; };
+  const pager = ctx.pages > 1 ? `<p class="pages">Page ${ctx.page} of ${ctx.pages} · ${ctx.page > 1 ? `<a href="${pageHref(ctx.page - 1)}">Previous</a>` : ''}${ctx.page < ctx.pages ? `<a href="${pageHref(ctx.page + 1)}">Next</a>` : ''}</p>` : '';
   const body = rows.map((r) => {
     const cells = cols.map((c) => cell(store, entity, fields, r, c, ov.labels || {})).join('');
     const btns = actions.length ? rowButtons(graph, store, entity, r, actions, vc) : '';
@@ -173,7 +181,7 @@ export function listView(graph, store, entity, fields, rows, ctx) {
     title, flash: ctx.flash, vc,
     body: `<h2>${esc(title)}</h2>${ov.intro ? `<p>${esc(ov.intro)}</p>` : ''}${searchBox}${filters}
       <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
-      <p class="muted">${rows.length} item(s)</p>
+      <p class="muted">${ctx.total ?? rows.length} item(s) · <a href="${path}.csv${ctx.query ? `?${ctx.query}` : ''}">Export CSV</a></p>${pager}
       ${canCreate ? `<p><a class="btn" href="/${entity}/new">${esc(ov.createTitle || `Add ${label(entity)}`)}</a></p>` : ''}`,
   });
 }
@@ -341,6 +349,21 @@ export function outboxView(graph, rows, flash, vc = anyone) {
 export function forbiddenPage(graph, vc = anyone, message = 'You are not allowed to do this.') {
   return page(graph, { title: 'Forbidden', vc,
     body: `<h2>Forbidden</h2><div class="card"><p class="error">${esc(message)}</p>${vc.user ? '' : '<p><a class="btn" href="/login">Login</a></p>'}</div>` });
+}
+
+// CSV: one line per row, cells quoted when they need it, formatted like the page but without HTML.
+export function csv(header, rows) {
+  const cell = (v) => { const s = v === null || v === undefined ? '' : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  return [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+// A cell's plain-text value for export: labels for references and booleans, money as 12.34.
+export function plain(store, entity, f, row, labels = {}) {
+  const v = row[f.name];
+  if (f.kind === 'ref') { const t = store.get(f.target, v); return t ? store.label(f.target, t) : ''; }
+  if (f.kind === 'bool') { const pair = labels[f.name] || ['No', 'Yes']; return v ? pair[1] : pair[0]; }
+  if (f.kind === 'money') return formatMoney(v);
+  if (f.type.secret) return '';
+  return v ?? '';
 }
 
 export function noticePage(graph, vc = anyone, title = 'Notice', message = '') {

@@ -51,7 +51,7 @@ test('a list renders a column that is not a field, and a table without actions',
   const store = new Store(graph, ':memory:');
   store.insert('A', { name: 'one' });
   const html = listView(graph, store, 'A', store.fields.A, store.list('A', {}), { q: '', where: {} });
-  assert.match(html, /<th>Ghost<\/th>/);
+  assert.match(html, /<th><a href="[^"]*sort=ghost[^"]*">Ghost<\/a><\/th>/, 'column headers sort');
   assert.ok(!/Actions/.test(html));
   assert.ok(!/Add A/.test(html));
 });

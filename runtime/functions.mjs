@@ -28,4 +28,7 @@ export const FUNCTIONS = {
   upper: { arity: 1, kind: () => 'text', run: (a) => (a[0] == null ? null : String(a[0]).toUpperCase()) },
   concat: { arity: [1, 9], kind: () => 'text', run: (a) => a.map((x) => (x == null ? '' : String(x))).join('') },
   not: { arity: 1, kind: () => 'bool', run: (a) => !truthy(a[0]) },
+  addDays: { arity: 2,
+    kind: (ks) => { if (!['date', 'any'].includes(ks[0])) throw new Error(`addDays() needs a date first, got ${ks[0]}`); needNumber('addDays', ks[1]); return 'date'; },
+    run: (a) => { const d = toDate(a[0]); if (!d || a[1] == null) return null; d.setUTCDate(d.getUTCDate() + Math.round(a[1])); return d.toISOString().slice(0, 10); } },
 };

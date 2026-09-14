@@ -40,7 +40,7 @@ test('a list with no override shows every field, offers create, and renders each
   const peer = s.insert('Thing', { name: 'peer' });
   s.insert('Thing', { name: 'row', body: 'text', n: 3, flag: 'true', kind: 'b', peer });
   const html = listView(bare, s, 'Thing', s.fields.Thing, s.list('Thing', {}), { q: '', where: {} });
-  assert.match(html, /<th>Name<\/th>/);
+  assert.match(html, /<th><a [^>]*>Name<\/a><\/th>/);
   assert.match(html, /<td>Yes<\/td>/, 'a boolean without declared labels reads Yes');
   assert.match(html, /<td>No<\/td>/);
   assert.match(html, /<a href="\/Thing\/1">peer<\/a>/, 'a reference renders as a link to the row');

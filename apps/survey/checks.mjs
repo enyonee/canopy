@@ -37,7 +37,7 @@ export const checks = [
     run: async ({ get, rowWith, must }) => {
       const { html } = await get('/Response');
       must(rowWith(html, 'Participant A'), 'submission is missing from data management');
-      must(/<th>Age<\/th>/.test(html) && /<th>Consent<\/th>/.test(html), 'data table lacks the survey fields');
+      must(/<th>(?:<a[^>]*>)?Age(?: [▲▼])?(?:<\/a>)?<\/th>/.test(html) && /<th>(?:<a[^>]*>)?Consent(?: [▲▼])?(?:<\/a>)?<\/th>/.test(html), 'data table lacks the survey fields');
       return 'submissions listed with their fields';
     } },
   { task: 'The report reflects the submitted data accurately',

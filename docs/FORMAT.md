@@ -48,6 +48,7 @@ never work around the checker.
 | `enum[a,b,c]=a` | closed set with a default; renders as a select and as a filter |
 | `ref:Entity!` | reference; renders as a select of the target's label (its first text field) |
 | `file` | an uploaded file; forms become multipart; the value renders as a download link |
+| `image` | an uploaded image; rendered inline as a thumbnail linking to the file |
 | `password!` | secret; stored as a salted hash, never rendered, blank on edit keeps the old one |
 | `money := <expression>` | derived field: computed on every read, never stored, never on forms |
 
@@ -63,9 +64,11 @@ Used in derived fields, `rules[].check`, and inside steps as `"= <expression>"`.
 - Arithmetic `+ - * /`, comparisons `= != < <= > >=`, `and or not`, parentheses.
 - Fields of the current row by name: `qty * price`. One hop through a reference: `customer.discount`.
 - Aggregates over rows that reference this one: `sum(OrderItem: qty * price)`, `count(Activity)`,
-  `count(Activity: not done)`, `avg/min/max(Child: field)`. The child must have exactly one
-  `ref` to this entity, or name it: `count(Pair.first)`.
-- Functions: `if(cond, a, b)`, `days(later, earlier)` (calendar days), `round(x, n)`, `abs(x)`,
+  `count(Activity: not done)`, `avg/min/max(Child: field)`; `min`/`max` also over dates. The child must
+  have exactly one `ref` to this entity, or name it: `count(Pair.first)`. Inside the body `row.x` is
+  the outer row — a correlated aggregate. An entity with no reference to this one aggregates over all
+  its rows, so siblings are reachable: `count(Booking: car = row.car and start <= row.end and end >= row.start)`.
+- Functions: `if(cond, a, b)`, `days(later, earlier)` (calendar days), `addDays(date, n)`, `round(x, n)`, `abs(x)`,
   `min(a, b)`, `max(a, b)`, `coalesce(a, b, …)`, `len(text)`, `lower(text)`, `upper(text)`,
   `concat(a, b, …)`.
 - Clock: `today` (date), `now` (time).
@@ -87,14 +90,15 @@ Keys are `"Entity.list"`, `"Entity.form"`, `"Entity.detail"`.
 - `filters`: `[ { "name": "Status", "field": "status" } ]` — ref, enum and bool fields get their
   options automatically; `{ "field": "createdAt", "range": true }` adds a from/to form for date,
   time, int or money fields (query params `<field>_from`, `<field>_to`)
-- `where`: a fixed filter, e.g. `{ "active": 1 }`; comparisons `{ "field": { "gte": …, "lte": …, "gt": …, "lt": …, "ne": …, "in": [...], "like": … } }`; `"@me"`, `"@today"` allowed
-- `sort`: `{ "field": "createdAt", "dir": "desc" }`
+- `where`: a fixed filter, e.g. `{ "active": 1 }` or `{ "id": "@me" }`; comparisons `{ "field": { "gte": …, "lte": …, "gt": …, "lt": …, "ne": …, "in": [...], "like": … } }`; `"@me"`, `"@today"` allowed
+- `sort`: `{ "field": "createdAt", "dir": "desc" }` — the default; every column header sorts (`?sort=&dir=`)
+- `pageSize`: rows per page (default 50); `?page=N`; the row count and a CSV link (`/Entity.csv`, same query) are under every list
 - `rowActions`: any of `"view"`, `"edit"`, `"delete"`, `"go:<transition>"`, `"<action name>"` (an action with `"in"` this entity); default `["edit", "delete"]`
 - `labels`: `{ "done": ["Open", "Done"] }` captions for a boolean
 
 `Entity.form`:
 - `title`, `intro`, `submit` (button caption), `fields` (stored fields to show), `fill` (values set silently on create, e.g. `{ "author": "@me" }`)
-- `confirm` (flash after create), `after` (path after create, `{id}` or `{field}` substituted), `afterEdit`, `confirmEdit`
+- `confirm` (flash after create), `after` (path after create, `{id}`, `{created}` or `{field}` substituted), `afterEdit`, `confirmEdit`
 - the status field of an entity with `states` is never on the form; the owner field of a role with `own` is never on the form
 
 `Entity.detail`:
@@ -103,6 +107,8 @@ Keys are `"Entity.list"`, `"Entity.form"`, `"Entity.detail"`.
 - `related`: `[ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": [...], "form": ["qty"] | false, "fill": {…}, "submit": "Add", "confirm": "…", "rowActions": ["edit", "delete"] } ]` — a child table with an inline add form
 
 ## Lists, dashboards, pages
+
+Saved lists and dashboards export too: `/list/<id>.csv`, `/dashboard/<id>.csv` (cards and grouped tables as rows).
 
 `lists`: `{ "id": "cart", "entity": "Order", "title": "Cart", "where": { "customer": "@me", "status": "cart" }, "columns": [...], "rowActions": [...], "sort": {…}, "search": [...], "create": true, "roles": ["customer"], "hidden": true }`.
 
@@ -193,6 +199,7 @@ Every successful POST answers 303 to a page with `?ok=<flash>`; validation failu
 
 ## Reading the HTML in checks
 
+- Column headers are sort links: `<th><a href="…?sort=name&dir=asc">Name</a></th>`, the active column carries ` ▲`/` ▼`; match them tolerantly, e.g. `/<th>(?:<a[^>]*>)?Name/`.
 - Table rows are `<tr class="…">…</tr>`; a cell is `<td>…</td>`; a reference renders `<a href="/Entity/3">label</a>`; money `12.50`; a status `<span class="status">Placed</span>` (capitalised); booleans `Yes`/`No` or the declared labels.
 - Detail pages are `<tr><th>Field Name</th><td>value</td></tr>`; field names are split on capitals (`createdAt` → `Created At`).
 - The flash is `<p class="flash">…</p>`; dashboard cards are `<div class="metric"><b>value</b>Title</div>`.
@@ -219,3 +226,14 @@ A name already taken by a built-in or another plugin is a load error; a plugin t
 imported makes the graph invalid. `connector.send { connector, body }` queues to any connector,
 so a plugin transport needs no block of its own. The checker knows about a plugin only what it
 declares: the graph stays closed, the plugin is trusted code, and the boundary is the file.
+
+### Shared plugins
+
+`plugins/` at the repository root holds plugins any app may list (paths are relative to the app
+directory, e.g. `"plugins": ["../../plugins/payment.mjs"]`).
+
+- `payment.mjs` — a sandbox card gateway. Connector `{ "kind": "payment", "currency": "USD" }`.
+  Block `payment.charge { connector, amount, card }`: authorises synchronously (the card must pass
+  the Luhn check; the test card `4000000000000002` is declined; a declined charge refuses the whole
+  action, rolling it back) and queues the capture to the connector, visible in `/outbox`. Exposes
+  `@authorization` (a reference string) and `@payment` (the delivery id).

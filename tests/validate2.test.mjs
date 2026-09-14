@@ -44,7 +44,7 @@ test('derived expressions are checked against their entity: kinds, names, hops, 
   assert.match(at(D({ x: 'int := title.len' }), '/data/Lead/x').message, /Lead\.title is text, cannot read \.len of it/);
   assert.match(at(D({ x: 'int := owner.ghost' }), '/data/Lead/x').message, /User has no field "ghost"/);
   assert.match(at(D({ x: 'int := count(Ghost)' }), '/data/Lead/x').message, /unknown entity "Ghost" in aggregate/);
-  assert.match(at(D({ x: 'int := count(User)' }), '/data/Lead/x').message, /User has no reference to Lead; add a "ref:Lead" field to User/);
+  assert.equal(at(D({ x: 'int := count(User)' }), '/data/Lead/x').message, undefined, 'no reference: a global aggregate');
   assert.match(at(D({ x: 'int := count(Note.body)' }), '/data/Lead/x').message, /Note\.body is not a reference to Lead/);
   assert.match(at(D({ x: 'int := sum(Note: body)' }), '/data/Lead/x').message, /sum\(Note: …\) needs a number, got text/);
   const two = { data: { ...base.data, Pair: { a: 'ref:Lead', b: 'ref:Lead' }, Lead: { ...base.data.Lead, p: 'int := count(Pair)', q: 'int := count(Pair.a)' } } };

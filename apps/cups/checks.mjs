@@ -40,7 +40,7 @@ export const checks = [
   { task: 'Inventory tracking lists current quantities of every raw material and finished product',
     run: async ({ get, rows, rowWith, must }) => {
       const raw = await get('/RawMaterial');
-      must(/<th>Stock<\/th>/.test(raw.html) && rows(raw.html).length === 4, `raw materials list has ${rows(raw.html).length} rows`);
+      must(/<th>(?:<a[^>]*>)?Stock(?: [▲▼])?(?:<\/a>)?<\/th>/.test(raw.html) && rows(raw.html).length === 4, `raw materials list has ${rows(raw.html).length} rows`);
       must(stockOf(rowWith(raw.html, 'Paperboard 210gsm')) === 1200 && /<td>kg<\/td>/.test(rowWith(raw.html, 'Paperboard 210gsm')), 'paperboard stock or unit is wrong');
       must(/<td>450<\/td>/.test(rowWith(raw.html, 'Paperboard 210gsm')), 'material used by production is not derived (300 + 150)');
       const fin = await get('/Product');

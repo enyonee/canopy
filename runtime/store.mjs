@@ -82,7 +82,7 @@ export class Store {
     }
     if (!this.fields[child]) throw new Error(`unknown entity "${child}"`);
     if (refs.length === 1) return refs[0].name;
-    if (!refs.length) throw new Error(`${child} has no reference to ${parent}; add a "ref:${parent}" field to ${child}`);
+    if (!refs.length) return null;
     throw new Error(`${child} references ${parent} through ${refs.map((f) => f.name).join(' and ')}; name one: ${child}.${refs[0].name}`);
   }
 
@@ -162,7 +162,7 @@ export class Store {
       },
       rows(child, via) {
         const link = store.childVia(child, entity, via);
-        return store.listRaw(child, { where: { [link]: row.id } }).map((r) => store.ctx(child, r, stack));
+        return store.listRaw(child, { where: link ? { [link]: row.id } : {} }).map((r) => store.ctx(child, r, stack));
       },
     };
   }
@@ -198,7 +198,7 @@ export class Store {
     const clauses = [], vals = [], later = [];
     for (const [field, cmp] of Object.entries(where)) {
       if (cmp === undefined || cmp === '') continue;
-      const f = this.field(entity, field);
+      const f = field === 'id' ? { kind: 'int', type: this.registry.fields.int } : this.field(entity, field);
       if (f?.derive) { later.push([field, cmp]); continue; }
       if (cmp === null) { clauses.push(`"${field}" IS NULL`); continue; }
       if (typeof cmp === 'object' && !Array.isArray(cmp)) {

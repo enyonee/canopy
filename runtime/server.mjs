@@ -14,7 +14,7 @@ import { flush } from './outbox.mjs';
 import { parse as parseExpr, evaluate, isExpression, stripExpression } from './expr.mjs';
 import { coerce, defaultValue, formatMoney } from './spec.mjs';
 import { listView, formView, detailView, dashboardView, staticPage, errorPage, loginView, registerView,
-  outboxView, forbiddenPage, noticePage, transitionsFor, label } from './render.mjs';
+  outboxView, forbiddenPage, noticePage, transitionsFor, label, csv, plain } from './render.mjs';
 
 const readText = (req) => new Promise((resolve) => {
   let data = '';
@@ -117,8 +117,9 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     return typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v);
   });
   // "/Order/{order}" — a path may name fields of the row it lands on; {id} is the row id.
-  const afterPath = (template, entity, id) => String(template).replace(/\{(\w+)\}/g, (_, k) => {
+  const afterPath = (template, entity, id, extra = {}) => String(template).replace(/\{(\w+)\}/g, (_, k) => {
     if (k === 'id') return String(id);
+    if (k in extra) return String(extra[k] ?? '');
     const row = store.raw(entity, id);
     return row && row[k] !== undefined && row[k] !== null ? String(row[k]) : '';
   });
@@ -247,6 +248,26 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       return send(403, forbiddenPage(graph, vc, message));
     };
     const resolveTop = makeResolve({ user, values: {} });
+    // ?sort=&dir=&page= on any list; the graph's sort is the default, 50 rows a page unless the view says otherwise.
+    const paged = (entity, rows, ov) => {
+      const size = ov.pageSize || 50;
+      const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+      const pages = Math.max(1, Math.ceil(rows.length / size));
+      return { rows: rows.slice((page - 1) * size, page * size), total: rows.length, page: Math.min(page, pages), pages };
+    };
+    const sortOf = (entity, ov) => {
+      const field = url.searchParams.get('sort');
+      if (field && (field === 'id' || store.field(entity, field))) return { field, dir: url.searchParams.get('dir') === 'desc' ? 'desc' : 'asc' };
+      return ov.sort || null;
+    };
+    const wantsCsv = parts.length > 0 && parts[parts.length - 1].endsWith('.csv');
+    if (wantsCsv) parts[parts.length - 1] = parts[parts.length - 1].slice(0, -4);
+    const sendCsv = (name, header, lines) => { res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}.csv"`, ...headers }); res.end(csv(header, lines)); };
+    const exportRows = (name, entity, rows, cols, labels) => {
+      const fields = store.fields[entity];
+      const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels) : r[c]; };
+      return sendCsv(name, cols.map(label), rows.map((r) => cols.map((c) => pick(r, c))));
+    };
 
     try {
       // --- session ----------------------------------------------------------------------------
@@ -308,6 +329,17 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         trace({ kind: 'dashboard', id: d.id, period });
         const mine = { ...d, cards: (d.cards || []).map((c) => ({ ...c, where: resolveTop(c.where || {}) })),
           tables: (d.tables || []).map((t) => ({ ...t, where: resolveTop(t.where || {}) })) };
+        if (wantsCsv) {
+          const lines = [];
+          const inPeriod = (entity, where) => { const f = d.period?.[entity]; if (!f || (!period.from && !period.to)) return where; const kind = store.field(entity, f).kind; const r = {}; if (period.from) r.gte = kind === 'time' ? `${period.from}T00:00:00` : period.from; if (period.to) r.lte = kind === 'time' ? `${period.to}T23:59:59.999Z` : period.to; return { ...where, [f]: r }; };
+          for (const c of mine.cards) { const [row] = store.aggregate(c.entity, { metrics: [{ fn: c.fn || 'count', field: c.field, as: 'v' }], where: inPeriod(c.entity, c.where) }); const f = c.field && store.field(c.entity, c.field); lines.push(['card', c.title, '', f?.kind === 'money' && c.fn !== 'count' ? formatMoney(Math.round(row?.v ?? 0)) : (row?.v ?? 0)]); }
+          for (const t of mine.tables) for (const r of store.aggregate(t.entity, { ...t, where: inPeriod(t.entity, t.where) })) {
+            const g = t.groupBy ? store.field(t.entity, t.groupBy) : null;
+            let grp = r.grp; if (g?.kind === 'ref') grp = store.label(g.target, store.get(g.target, grp)); if (g?.kind === 'bool') grp = grp ? 'Yes' : 'No';
+            for (const m of t.metrics || []) { const mf = m.field && store.field(t.entity, m.field); lines.push([t.title, m.title ?? m.as, grp ?? '', mf?.kind === 'money' && m.fn !== 'count' && r[m.as] != null ? formatMoney(Math.round(r[m.as])) : (r[m.as] ?? '')]); }
+          }
+          return sendCsv(d.id, ['Section', 'Metric', 'Group', 'Value'], lines);
+        }
         return send(200, dashboardView(graph, store, mine, flash, vc, period));
       }
       if (parts[0] === 'list') {
@@ -315,10 +347,15 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         if (!l) return send(404, errorPage(graph, `no list ${parts[1]}`));
         if (!vc.canSee(l) || !vc.can(l.entity, 'view')) return deny();
         const where = { ...resolveTop(l.where || {}), ...ownWhere(l.entity) };
-        const rows = store.list(l.entity, { where, sort: l.sort, search: l.search || [], q: url.searchParams.get('q') || '' });
         const view = { ...(graph.override?.[`${l.entity}.list`] || {}), ...l, create: l.create ?? false };
+        const sort = sortOf(l.entity, view);
+        const all = store.list(l.entity, { where, sort, search: l.search || [], q: url.searchParams.get('q') || '' });
+        const cols = view.columns || store.fields[l.entity].filter((f) => !f.type.secret).map((f) => f.name);
+        if (wantsCsv) return exportRows(l.id, l.entity, all, cols, view.labels || {});
+        const pg = paged(l.entity, all, view);
         const g = { ...graph, override: { ...graph.override, [`${l.entity}.list`]: view } };
-        return send(200, listView(g, store, l.entity, store.fields[l.entity], rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, path: `/list/${l.id}` }));
+        return send(200, listView(g, store, l.entity, store.fields[l.entity], pg.rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, path: `/list/${l.id}`,
+          query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }));
       }
       if (parts[0] === 'outbox') {
         if (!vc.outbox) return deny();
@@ -340,8 +377,11 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         if (!vc.can(entity, 'view', row)) return deny();
         const file = path.join(filesDir, path.basename(row[fieldName]));
         if (!fs.existsSync(file)) return send(404, errorPage(graph, 'file is missing on disk'));
-        res.writeHead(200, { 'content-type': 'application/octet-stream',
-          'content-disposition': `attachment; filename="${String(row[fieldName]).replace(/^\d+-/, '').replace(/"/g, '')}"` });
+        const ext = path.extname(file).slice(1).toLowerCase();
+        const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv' }[ext];
+        const inline = url.searchParams.get('inline') === '1' && mime;
+        res.writeHead(200, { 'content-type': inline ? mime : 'application/octet-stream',
+          'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${String(row[fieldName]).replace(/^\d+-/, '').replace(/"/g, '')}"` });
         return fs.createReadStream(file).pipe(res);
       }
       if (parts[0] === 'action' && req.method === 'POST') {
@@ -352,7 +392,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         let ctx;
         try { ctx = await attempt(() => runSteps(action.do, { rowEntity: null, id: null, values, user })); }
         catch (e) { trace({ kind: 'refused', action: action.name, message: e.message }); return send(400, noticePage(graph, vc, 'Not done', e.message)); }
-        return ok(action.after || '/', action.confirm ? interpolate(action.confirm, ctx) : '');
+        return ok(afterPath(action.after || '/', null, null, { created: ctx.created }), action.confirm ? interpolate(action.confirm, ctx) : '');
       }
 
       // --- entities -------------------------------------------------------------------------------
@@ -378,9 +418,12 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
           if (v !== null && v !== '') where[f.field] = v;
         }
         const q = url.searchParams.get('q') || '';
-        const rows = store.list(entity, { search: ov.search || [], q, where, sort: ov.sort });
-        trace({ kind: 'query', entity, q, where, rows: rows.length, who: user?.id ?? null });
-        return send(200, listView(graph, store, entity, fields, rows, { q, where, flash, vc, range }));
+        const sort = sortOf(entity, ov);
+        const all = store.list(entity, { search: ov.search || [], q, where, sort });
+        trace({ kind: 'query', entity, q, where, rows: all.length, who: user?.id ?? null });
+        if (wantsCsv) return exportRows(entity, entity, all, ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name), ov.labels || {});
+        const pg = paged(entity, all, ov);
+        return send(200, listView(graph, store, entity, fields, pg.rows, { q, where, flash, vc, range, query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }));
       }
       if (req.method === 'GET' && parts[1] === 'new') {
         return vc.can(entity, 'create') ? send(200, formView(graph, store, entity, fields, {}, 'new', [], vc, flash)) : deny();
@@ -418,7 +461,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
             return n;
           });
         } catch (e) { trace({ kind: 'refused', entity, message: e.message }); return send(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc)); }
-        const after = afterPath(formOv.after || `/${entity}`, entity, id);
+        const after = afterPath(formOv.after || `/${entity}`, entity, id, { created: id });
         return ok(after, formOv.confirm || `${label(entity)} saved successfully`);
       }
       const id = parts[1];
@@ -443,7 +486,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         let ctx;
         try { ctx = await attempt(() => runSteps(action.do, { rowEntity: entity, id, row, values: submitted, user })); }
         catch (e) { trace({ kind: 'refused', entity, id, action: action.name, message: e.message }); return send(400, detailView(graph, store, entity, fields, row, e.message, vc)); }
-        return ok(afterPath(action.after || `/${entity}`, entity, id), action.confirm ? interpolate(action.confirm, ctx) : '');
+        return ok(afterPath(action.after || `/${entity}`, entity, id, { created: ctx.created }), action.confirm ? interpolate(action.confirm, ctx) : '');
       }
       if (parts[2] === 'go') {
         const st = graph.states?.[entity];
@@ -466,7 +509,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
             return runSteps(t.do || [], { rowEntity: entity, id, values: submitted, user });
           });
         } catch (e) { trace({ kind: 'refused', entity, id, transition: t.name, message: e.message }); return send(400, detailView(graph, store, entity, fields, row, e.message, vc)); }
-        return ok(afterPath(t.after || `/${entity}/${id}`, entity, id), t.confirm ? interpolate(t.confirm, ctx) : `${label(entity)} is now ${t.to}`);
+        return ok(afterPath(t.after || `/${entity}/${id}`, entity, id, { created: ctx.created }), t.confirm ? interpolate(t.confirm, ctx) : `${label(entity)} is now ${t.to}`);
       }
       if (parts[2] === 'add') {
         const child = Object.keys(graph.data).find((e) => e.toLowerCase() === parts[3].toLowerCase());
