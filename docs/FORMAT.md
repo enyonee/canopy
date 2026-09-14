@@ -31,6 +31,7 @@ never work around the checker.
 | `connectors` | http and mail endpoints the app may send to |
 | `rules` | checks and uniqueness per entity |
 | `allowDestructive` | `true` lets a migration drop columns the graph no longer declares |
+| `plugins` | ES modules next to the app that add field kinds, blocks, transports and functions (see Plugins) |
 
 ## Fields (`data`)
 
@@ -134,6 +135,7 @@ Every step is `{ "block": "<name>", …parameters }`. Values may be literals, `"
 | `random.pick` | `from`, optional `weight` | picks a random row; `@picked` |
 | `check.matchRef` | `ref`, `field`, `against`, `into` | compares a field with one on a referenced row, writes 1/0 |
 | `http.send` | `connector`, `body`, optional `path` | queues a JSON request to an http connector; delivered after commit |
+| `connector.send` | `connector`, `body` | queues to any connector; its kind picks the transport (plugin transports) |
 | `mail.send` | `connector`, `to`, `subject`, optional `text` | queues a letter; `{row.field}` placeholders in subject/text |
 
 Steps run inside one transaction; a block that refuses (not enough stock, no such row) rolls
@@ -195,3 +197,25 @@ Every successful POST answers 303 to a page with `?ok=<flash>`; validation failu
 - Detail pages are `<tr><th>Field Name</th><td>value</td></tr>`; field names are split on capitals (`createdAt` → `Created At`).
 - The flash is `<p class="flash">…</p>`; dashboard cards are `<div class="metric"><b>value</b>Title</div>`.
 - Forms: `<input … name="field">`, `<select name="field">`, buttons `<button type="submit">Caption</button>`; transition forms post to `/Entity/:id/go/<name>`.
+
+## Plugins
+
+Classic code lives next to the application, never inside `app.json`. A plugin is an ES module
+listed under `"plugins": ["./plugins/loyalty.mjs"]` (paths relative to the app directory) whose
+default export registers entries in one or more of the four registries, with the same contracts
+the built-ins use. Node kinds (`roles`, `states`, …) are not extensible: they are the format.
+
+```js
+export default {
+  fields:     { percent: { sql: 'INTEGER', exprKind: 'number', numeric: true, derivable: true,
+                           def(f), coerce(raw), validate(v, f), toExpr?(v), fromExpr?(v), format(v, f, ctx), input(f, v, ctx) } },
+  functions:  { discount: { arity: 2, kind(argKinds), run(args) } },
+  blocks:     { 'loyalty.award': { summary, effects, requires, connector?, check?(step, h), exposes?(step), nested?(step), run(ctx) } },
+  transports: { log: { summary, validate(connector) → [[key, message, hint]], deliver(row, connector, opts) → { status, code, error } } },
+};
+```
+
+A name already taken by a built-in or another plugin is a load error; a plugin that cannot be
+imported makes the graph invalid. `connector.send { connector, body }` queues to any connector,
+so a plugin transport needs no block of its own. The checker knows about a plugin only what it
+declares: the graph stays closed, the plugin is trusted code, and the boundary is the file.

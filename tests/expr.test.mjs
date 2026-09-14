@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parse, check, evaluate, refs, isExpression, stripExpression } from '../runtime/expr.mjs';
+import { parse, check, evaluate, isExpression, stripExpression } from '../runtime/expr.mjs';
 
 // A scope over a tiny schema: Order { qty number, price money, name text, paid bool, when date, at time, customer ref→Customer { discount number } }
 // with children Item { qty number, price money }.
@@ -126,12 +126,6 @@ test('type errors name the operator and the offending kind', () => {
   assert.throws(() => kind('sum(Ghost: qty)'), /unknown entity "Ghost"/);
   assert.throws(() => kind('sum(Item.nope: qty)'), /Item.nope is not a reference/);
   assert.throws(() => kind('sum(Item: ghost)'), /Item has no field "ghost"/);
-});
-
-test('refs lists every path and aggregate an expression touches', () => {
-  assert.deepEqual(refs(parse('qty * price + customer.discount')), [{ path: ['qty'] }, { path: ['price'] }, { path: ['customer', 'discount'] }]);
-  assert.deepEqual(refs(parse('-sum(Item.order: qty) + if(paid, count(Item), 0)')),
-    [{ agg: 'Item', via: 'order' }, { path: ['qty'] }, { path: ['paid'] }, { agg: 'Item', via: null }]);
 });
 
 test('evaluates arithmetic, comparisons and logic with null propagation', () => {

@@ -154,7 +154,7 @@ test('uniqueness, transactions and passwords', () => {
   assert.notEqual(store.raw('U', a).password, hashed);
   const b = store.insert('U', { email: 'b@x', password: '' });
   assert.equal(store.raw('U', b).password, null);
-  assert.equal(Store.prepareValue({ kind: 'password' }, null), null);
+  assert.equal(Store.prepareValue(store.field('U', 'password'), null), null);
   assert.throws(() => store.transaction(() => { store.update('U', a, { n: 5 }); throw new Error('stop'); }), /stop/);
   assert.equal(store.raw('U', a).n, 0, 'rolled back');
   assert.equal(store.transaction(() => { store.update('U', a, { n: 7 }); return 'done'; }), 'done');

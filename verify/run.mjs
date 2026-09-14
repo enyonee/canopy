@@ -9,6 +9,7 @@ import path from 'node:path';
 import { make, startSink } from './lib.mjs';
 import { applyPatch } from '../runtime/patch.mjs';
 import { validate, formatErrors } from '../runtime/validate.mjs';
+import { loadPlugins } from '../runtime/registry.mjs';
 
 const apps = process.argv.slice(2).length ? process.argv.slice(2)
   : fs.readdirSync('apps').filter((d) => fs.existsSync(`apps/${d}/checks.mjs`));
@@ -59,7 +60,8 @@ for (const app of apps) {
     const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
     const patch = JSON.parse(fs.readFileSync(path.join(dir, change.patch), 'utf8'));
     applyPatch(graph, patch);
-    const errors = validate(graph);
+    const { registry, errors: pluginErrors } = await loadPlugins(graph, dir);
+    const errors = [...pluginErrors, ...validate(graph, registry)];
     const name = `${app} +${i + 1} ${change.title || change.patch}`;
     if (errors.length) {
       console.log(`\n=== ${name} ===\n  ✗ patch rejected by the checker:\n${formatErrors(errors)}`);

@@ -1,8 +1,8 @@
 // The checker. Every error must name the path, the problem and the way out —
 // the repair loop is where the tokens go, not the writing.
 import { parseField, isStored, exprKind } from './spec.mjs';
-import { CATALOG } from './blocks.mjs';
 import { parse as parseExpr, check as checkExpr, isExpression, stripExpression } from './expr.mjs';
+import { DEFAULT } from './registry.mjs';
 
 const near = (word, pool) => {
   const d = (a, b) => {
@@ -22,12 +22,13 @@ const FNS = ['count', 'sum', 'avg', 'min', 'max'];
 const OPS = ['view', 'create', 'edit', 'delete', '*'];
 const UNITS = ['day', 'month', 'year'];
 const TOP = ['app', 'task', 'note', 'theme', 'home', 'data', 'seed', 'identity', 'roles', 'views', 'override', 'lists',
-  'dashboards', 'pages', 'actions', 'events', 'states', 'connectors', 'rules', 'allowDestructive'];
+  'dashboards', 'pages', 'actions', 'events', 'states', 'connectors', 'rules', 'allowDestructive', 'plugins'];
 const TRIGGERS = ['created', 'updated', 'deleted'];
 const CTX_NAMES = ['me', 'now', 'today', 'created', 'delivery', 'values'];
 const CMP = ['gte', 'lte', 'gt', 'lt', 'ne', 'in', 'like'];
 
-export function validate(graph) {
+export function validate(graph, registry = DEFAULT) {
+  const CATALOG = registry.blocks;
   const errors = [];
   const err = (path, message, hint) => errors.push({ path, message, hint });
 
@@ -39,6 +40,7 @@ export function validate(graph) {
     }
   }
   if (!graph.app) err('/app', 'missing application name');
+  if (graph.plugins !== undefined && !Array.isArray(graph.plugins)) err('/plugins', 'plugins is a list of module paths', '["./plugins/loyalty.mjs"]');
   if (!graph.data || typeof graph.data !== 'object' || !Object.keys(graph.data).length) {
     err('/data', 'at least one entity is required', 'e.g. {"Task": {"title": "text!"}}');
     return errors;
@@ -50,7 +52,7 @@ export function validate(graph) {
     fields[entity] = {};
     for (const [name, raw] of Object.entries(spec)) {
       try {
-        const f = parseField(name, raw);
+        const f = parseField(name, raw, registry.fields, registry.functions);
         if (f.kind === 'ref' && !entities.includes(f.target))
           err(`/data/${entity}/${name}`, `reference to unknown entity "${f.target}"`, `known entities: ${entities.join(', ')}`);
         fields[entity][name] = f;
@@ -72,7 +74,7 @@ export function validate(graph) {
       return false;
     }
     if (stored && fields[e][f].derive) { err(path, `"${f}" is derived (:=) and cannot be written`, 'derived fields are computed on read'); return false; }
-    if (secret && fields[e][f].kind === 'password') { err(path, `"${f}" is a password and is never shown`, 'drop it from the columns'); return false; }
+    if (secret && fields[e][f].type.secret) { err(path, `"${f}" is a ${fields[e][f].kind} and is never shown`, 'drop it from the columns'); return false; }
     return true;
   };
 
@@ -136,7 +138,7 @@ export function validate(graph) {
     },
   });
   const checkExpression = (src, scope, path) => {
-    try { return checkExpr(parseExpr(src), scope); }
+    try { return checkExpr(parseExpr(src, registry.functions), scope, registry.functions); }
     catch (e) { err(path, `bad expression: ${e.message}`, `expression: ${src}`); return null; }
   };
   const checkRefPath = (v, ctxEntities, path) => {
@@ -229,7 +231,8 @@ export function validate(graph) {
         if (!name) return err(`/roles/${key}`, `roles need "${key}": the ${roles.entity} field used as ${key}`);
         if (checkField(roles.entity, name, `/roles/${key}`)) {
           const f = fields[roles.entity][name];
-          if (!kinds.includes(f.kind)) err(`/roles/${key}`, `"${name}" is ${f.kind}; ${key} must be ${kinds.join(' or ')}`);
+          const ok = key === 'password' ? f.type.secret : kinds.includes(f.kind);
+          if (!ok) err(`/roles/${key}`, `"${name}" is ${f.kind}; ${key} must be ${key === 'password' ? 'a secret (password)' : kinds.join(' or ')}`);
           else if (key === 'role') roleNames = f.options;
         }
       };
@@ -308,20 +311,16 @@ export function validate(graph) {
       if (step.where && step.entity) checkWhere(step.entity, step.where, `${p}/where`);
       if (step.where && step.block === 'db.each' && step.from) checkWhere(step.from, step.where, `${p}/where`);
       if (step.into && entity) checkField(entity, step.into, `${p}/into`, { stored: true });
-      if (step.block === 'db.adjust' && step.field && target && fields[target]?.[step.field] && !['int', 'money'].includes(fields[target][step.field].kind))
-        err(`${p}/field`, `db.adjust needs an int or money field; ${target}.${step.field} is ${fields[target][step.field].kind}`);
-      if (step.block === 'db.adjust' && step.entity && step.id === undefined) err(`${p}/id`, 'db.adjust on another entity needs "id" ("@row.product")');
-      if (step.block === 'http.send' || step.block === 'mail.send') {
-        const want = step.block.split('.')[0];
+      if (block.connector) {
         const c = graph.connectors?.[step.connector];
         if (!c) err(`${p}/connector`, `unknown connector "${step.connector}"`, `declared: ${Object.keys(graph.connectors || {}).join(', ') || '(none; add /connectors)'}`);
-        else if (c.kind !== want) err(`${p}/connector`, `connector "${step.connector}" is ${c.kind}, ${step.block} needs ${want}`);
+        else if (c.kind !== block.connector) err(`${p}/connector`, `connector "${step.connector}" is ${c.kind}, ${step.block} needs ${block.connector}`);
       }
+      if (block.check) block.check(step, { err, fields, entity, graph, path: p, checkEntity, checkField });
       for (const key of ['set', 'values', 'where', 'body', 'id', 'by', 'to', 'path'])
         if (step[key] !== undefined) checkValues(step[key], ctxEntities, `${p}/${key}`);
-      if (step.block === 'db.each') checkSteps(step.do, `${p}/do`, entity, { ...ctxEntities, each: step.from });
-      if (step.block === 'db.ensure' && step.entity) ctxEntities.found = step.entity;
-      if (step.block === 'random.pick' && step.from) ctxEntities.picked = step.from;
+      for (const sub of block.nested ? block.nested(step) : []) checkSteps(sub.steps, `${p}/${sub.path}`, entity, { ...ctxEntities, ...sub.adds });
+      if (block.exposes) Object.assign(ctxEntities, block.exposes(step));
     });
   };
 
@@ -347,7 +346,7 @@ export function validate(graph) {
       if (!checkField(entity, flt.field, `/override/${key}/filters/${i}/field`)) return;
       const f = fields[entity][flt.field];
       if (flt.range) {
-        if (!['date', 'time', 'int', 'money'].includes(f.kind)) err(`/override/${key}/filters/${i}`, `a range filter needs a date, time, int or money field; "${flt.field}" is ${f.kind}`);
+        if (!f.type.numeric && !f.type.temporal) err(`/override/${key}/filters/${i}`, `a range filter needs a date, time, int or money field; "${flt.field}" is ${f.kind}`);
         return;
       }
       if (!flt.options && !['ref', 'enum', 'bool'].includes(f.kind))
@@ -399,7 +398,7 @@ export function validate(graph) {
     checkRoles(d, p);
     for (const [e, f] of Object.entries(d.period || {})) {
       if (!checkEntity(e, `${p}/period/${e}`)) continue;
-      if (checkField(e, f, `${p}/period/${e}`) && !['date', 'time'].includes(fields[e][f].kind))
+      if (checkField(e, f, `${p}/period/${e}`) && !fields[e][f].type.temporal)
         err(`${p}/period/${e}`, `period field "${f}" must be a date or time; it is ${fields[e][f].kind}`);
     }
     (d.cards || []).forEach((c, j) => {
@@ -417,7 +416,7 @@ export function validate(graph) {
       if (t.groupUnit) {
         if (!UNITS.includes(t.groupUnit)) err(`${tp}/groupUnit`, `unknown unit "${t.groupUnit}"`, `units: ${UNITS.join(', ')}`);
         const g = t.groupBy && fields[t.entity]?.[t.groupBy];
-        if (g && !['date', 'time'].includes(g.kind)) err(`${tp}/groupUnit`, `groupUnit needs a date or time groupBy; "${t.groupBy}" is ${g.kind}`);
+        if (g && !g.type.temporal) err(`${tp}/groupUnit`, `groupUnit needs a date or time groupBy; "${t.groupBy}" is ${g.kind}`);
       }
       checkWhere(t.entity, t.where, `${tp}/where`);
       (t.metrics ?? []).forEach((m, k) => {
@@ -505,9 +504,9 @@ export function validate(graph) {
   for (const [name, c] of Object.entries(graph.connectors || {})) {
     const p = `/connectors/${name}`;
     if (!c || typeof c !== 'object') { err(p, 'connector must be an object'); continue; }
-    if (!['http', 'mail'].includes(c.kind)) err(`${p}/kind`, `unknown connector kind "${c.kind}"`, 'kinds: http, mail');
-    if (c.kind === 'http' && !/^https?:\/\//.test(String(c.url || ''))) err(`${p}/url`, 'an http connector needs "url" starting with http:// or https://');
-    if (c.method !== undefined && !['POST', 'PUT', 'PATCH', 'GET'].includes(c.method)) err(`${p}/method`, `unsupported method "${c.method}"`, 'POST, PUT, PATCH or GET');
+    const transport = registry.transports[c.kind];
+    if (!transport) { err(`${p}/kind`, `unknown connector kind "${c.kind}"`, `kinds: ${Object.keys(registry.transports).join(', ')}`); continue; }
+    for (const [key, message, hint] of transport.validate(c)) err(`${p}/${key}`, message, hint);
   }
 
   for (const [entity, list] of Object.entries(graph.rules || {})) {

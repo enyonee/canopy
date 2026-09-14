@@ -1,13 +1,15 @@
 // The catalog. A block declares its effects and requirements; the graph never
-// reaches past this list. Adding a block here is the only way the language grows.
+// reaches past this list. Adding a block — here or in a plugin — is the only way
+// the language grows. One entry is the whole life of a block:
 //
-// A block runs inside the action's transaction and sees:
-//   store, graph, entity, id, values  — the current row and the submitted form
-//   step                              — its own node in the graph
-//   resolve(obj)                      — "@row.x", "@me", "@created", "= expr" inside values
-//   text(str)                         — "{row.title}" interpolation for human text
-//   run(steps, extraCtx)              — nested steps (db.each)
-import { toMinor } from './spec.mjs';
+//   summary, effects, requires   — what the model reads in the catalog
+//   connector                    — the transport kind a "connector" parameter must have
+//   check(step, h)               — extra checker rules; h.err(path, message, hint), h.fields, h.entity
+//   exposes(step)                — names the block adds to the step context: { found: 'Entity' }
+//   nested(step)                 — step lists inside the block, each with the names it adds
+//   run(ctx)                     — the effect, inside the action's transaction; ctx has
+//     store, graph, entity, id, values, step, resolve(obj), text(str), run(steps, extra), user
+import { toMinor } from './fields.mjs';
 
 export const CATALOG = {
   'db.create': {
@@ -38,6 +40,7 @@ export const CATALOG = {
   'random.pick': {
     summary: 'pick a random row of "from" (weighted by "weight" if given) and expose it as @picked',
     effects: ['random'], requires: ['from'],
+    exposes: (step) => ({ picked: step.from }),
     run: ({ store, step }) => {
       const rows = store.list(step.from, {});
       if (!rows.length) throw new Error(`random.pick: ${step.from} is empty`);
@@ -70,6 +73,12 @@ export const CATALOG = {
   'db.adjust': {
     summary: 'add "by" (a number or "= expr") to a numeric "field" — stock, counters, balances — of the current row, or of "entity" + "id" ("@row.product"); "min" refuses below a floor',
     effects: ['db.write'], requires: ['field', 'by'],
+    check: (step, h) => {
+      const target = step.entity || h.entity;
+      const f = target && h.fields[target]?.[step.field];
+      if (f && !f.type.numeric) h.err(`${h.path}/field`, `db.adjust needs a numeric field; ${target}.${step.field} is ${f.kind}`);
+      if (step.entity && step.id === undefined) h.err(`${h.path}/id`, 'db.adjust on another entity needs "id" ("@row.product")');
+    },
     run: ({ store, entity, id, step, resolve }) => {
       const target = step.entity || entity;
       const targetId = step.id === undefined ? id : resolve({ v: step.id }).v;
@@ -88,6 +97,7 @@ export const CATALOG = {
   'db.ensure': {
     summary: 'find the first row of "entity" matching "where", or create it from where + "values"; exposes it as @found, and @made says whether it was created',
     effects: ['db.write'], requires: ['entity', 'where'],
+    exposes: (step) => ({ found: step.entity }),
     run: ({ store, step, resolve }) => {
       const where = resolve(step.where);
       const [hit] = store.list(step.entity, { where, sort: { field: 'id', dir: 'asc' } });
@@ -99,6 +109,7 @@ export const CATALOG = {
   'db.each': {
     summary: 'run the nested "do" steps once per row of "from" matching "where"; the row is @each',
     effects: ['db.read'], requires: ['from', 'do'],
+    nested: (step) => [{ steps: step.do, path: 'do', adds: { each: step.from } }],
     run: ({ store, step, resolve, run }) => {
       const rows = store.list(step.from, { where: resolve(step.where || {}), sort: { field: 'id', dir: 'asc' } });
       for (const row of rows) run(step.do, { each: row, eachEntity: step.from });
@@ -107,16 +118,24 @@ export const CATALOG = {
   },
   'http.send': {
     summary: 'queue a JSON "body" to the http "connector" (optional "path" appended to its url); delivered after commit, visible in /outbox as @delivery',
-    effects: ['http.out'], requires: ['connector', 'body'],
+    effects: ['http.out'], requires: ['connector', 'body'], connector: 'http',
     run: ({ store, graph, step, resolve }) => {
       const c = graph.connectors[step.connector];
       const target = c.url + (step.path ? resolve({ v: step.path }).v : '');
       return { delivery: store.enqueue({ kind: 'http', connector: step.connector, target, payload: resolve(step.body) }) };
     },
   },
+  'connector.send': {
+    summary: 'queue a JSON "body" to any "connector"; the connector\'s kind picks the transport (a plugin transport needs no block of its own)',
+    effects: ['out'], requires: ['connector', 'body'],
+    run: ({ store, graph, step, resolve }) => {
+      const c = graph.connectors[step.connector];
+      return { delivery: store.enqueue({ kind: c.kind, connector: step.connector, target: String(c.url || c.file || c.to || step.connector), payload: resolve(step.body) }) };
+    },
+  },
   'mail.send': {
     summary: 'queue a letter through the mail "connector": "to" (an address or "@row.email"), "subject", "text" with {row.field} placeholders',
-    effects: ['mail.out'], requires: ['connector', 'to', 'subject'],
+    effects: ['mail.out'], requires: ['connector', 'to', 'subject'], connector: 'mail',
     run: ({ store, graph, step, resolve, text }) => {
       const c = graph.connectors[step.connector];
       const to = resolve({ v: step.to }).v;
@@ -126,9 +145,9 @@ export const CATALOG = {
   },
 };
 
-export const search = (query) => {
+export const search = (query, catalog = CATALOG) => {
   const q = query.toLowerCase();
-  return Object.entries(CATALOG)
+  return Object.entries(catalog)
     .filter(([name, b]) => name.includes(q) || b.summary.toLowerCase().includes(q))
     .map(([name, b]) => `${name}(${b.requires.join(', ')}) — ${b.summary} [${b.effects.join(',')}]`);
 };

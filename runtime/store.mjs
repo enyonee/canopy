@@ -2,20 +2,22 @@
 // is the diff between the graph and the live table. Destructive steps need a marker.
 // Derived fields never touch the schema: they are computed on every read.
 import { DatabaseSync } from 'node:sqlite';
-import { parseField, sqlType, defaultValue, coerce, isStored, toMajor, toMinor, exprKind } from './spec.mjs';
+import { parseField, sqlType, defaultValue, coerce, isStored, toExpr, fromExpr, exprKind } from './spec.mjs';
 import { evaluate } from './expr.mjs';
 import { hashPassword, isHashed } from './auth.mjs';
+import { DEFAULT } from './registry.mjs';
 
 const OPS = { gte: '>=', lte: '<=', gt: '>', lt: '<', ne: '!=' };
 const UNITS = { day: '%Y-%m-%d', month: '%Y-%m', year: '%Y' };
 
 export class Store {
-  constructor(graph, file) {
+  constructor(graph, file, registry = DEFAULT) {
     this.graph = graph;
+    this.registry = registry;
     this.db = new DatabaseSync(file);
     this.fields = {};
     for (const [entity, spec] of Object.entries(graph.data)) {
-      this.fields[entity] = Object.entries(spec).map(([n, s]) => parseField(n, s));
+      this.fields[entity] = Object.entries(spec).map(([n, s]) => parseField(n, s, registry.fields, registry.functions));
     }
     this.migrations = [];
     this.migrate();
@@ -85,7 +87,7 @@ export class Store {
   }
 
   static prepareValue(f, v) {
-    if (f.kind === 'password') return v === null || v === '' || v === undefined ? null : isHashed(v) ? v : hashPassword(String(v));
+    if (f.type.secret) return v === null || v === '' || v === undefined ? null : isHashed(v) ? v : hashPassword(String(v));
     return coerce(f, v);
   }
 
@@ -108,7 +110,7 @@ export class Store {
       const f = this.field(entity, k);
       if (!f || !isStored(f)) continue;
       // An empty password on edit means "keep the old one", never "erase it".
-      if (f.kind === 'password' && (v === '' || v === undefined || v === null)) continue;
+      if (f.type.secret && (v === '' || v === undefined || v === null)) continue;
       sets.push(`"${k}"=?`); vals.push(Store.prepareValue(f, v));
     }
     if (!sets.length) return;
@@ -152,9 +154,7 @@ export class Store {
         const [head, ...rest] = path;
         const f = store.field(entity, head);
         if (!f) throw new Error(`${entity} has no field "${head}"`);
-        let v = f.derive ? store.derived(entity, row, f, stack) : row[head];
-        if (f.kind === 'money') v = toMajor(v);
-        if (f.kind === 'bool') v = Boolean(v);
+        const v = toExpr(f, f.derive ? store.derived(entity, row, f, stack) : row[head]);
         if (!rest.length) return v;
         if (f.kind !== 'ref') throw new Error(`${entity}.${head} is ${f.kind}, cannot read .${rest[0]} of it`);
         const target = store.raw(f.target, v);
@@ -181,11 +181,7 @@ export class Store {
   derived(entity, row, f, stack = []) {
     const key = `${entity}.${f.name}`;
     if (stack.includes(key)) throw new Error(`derived field ${key} depends on itself (${[...stack, key].join(' → ')})`);
-    const v = evaluate(f.derive, this.ctx(entity, row, [...stack, key]));
-    if (f.kind === 'money') return v === null || v === undefined ? null : toMinor(v);
-    if (f.kind === 'bool') return v ? 1 : 0;
-    if (f.kind === 'int') return v === null || v === undefined ? null : Math.round(v);
-    return v === undefined ? null : v;
+    return fromExpr(f, evaluate(f.derive, this.ctx(entity, row, [...stack, key]), this.registry.functions));
   }
 
   hydrate(entity, row) {
@@ -334,3 +330,4 @@ export class Store {
 }
 
 export { exprKind };
+

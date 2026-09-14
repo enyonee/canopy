@@ -75,16 +75,7 @@ function navLinks(graph, vc) {
 
 // One value, formatted by its field kind. HTML out, already escaped.
 export function fmt(store, entity, f, row, labels = {}) {
-  const v = row[f.name];
-  if (f.kind === 'bool') { const pair = labels[f.name] || ['No', 'Yes']; return esc(v ? pair[1] : pair[0]); }
-  if (f.kind === 'ref') {
-    const target = store.get(f.target, v);
-    return target ? `<a href="/${f.target}/${target.id}">${esc(store.label(f.target, target))}</a>` : '—';
-  }
-  if (f.kind === 'money') return esc(formatMoney(v));
-  if (f.kind === 'file') return v ? `<a href="/file/${entity}/${row.id}/${f.name}">${esc(String(v).replace(/^\d+-/, ''))}</a>` : '—';
-  if (f.kind === 'enum' && f.name === (store.graph.states?.[entity]?.field)) return `<span class="status">${esc(label(v ?? ''))}</span>`;
-  return esc(v);
+  return f.type.format(row[f.name], f, { esc, label, store, entity, row, labels });
 }
 
 const cell = (store, entity, fields, r, c, labels = {}) => {
@@ -126,8 +117,7 @@ function rangeForm(entity, path, filters, ctx) {
   const ranges = filters.filter((f) => f.range);
   if (!ranges.length) return '';
   const inputs = ranges.map((f) => {
-    const kind = ctx.store.field(entity, f.field)?.kind;
-    const type = kind === 'date' || kind === 'time' ? 'date' : 'number';
+    const type = ctx.store.field(entity, f.field)?.type.temporal ? 'date' : 'number';
     return `<div class="range"><div><label for="${f.field}_from">${esc(f.name || label(f.field))} from</label>
       <input type="${type}" id="${f.field}_from" name="${f.field}_from" value="${esc(ctx.range?.[`${f.field}_from`] || '')}"></div>
       <div><label for="${f.field}_to">to</label><input type="${type}" id="${f.field}_to" name="${f.field}_to" value="${esc(ctx.range?.[`${f.field}_to`] || '')}"></div></div>`;
@@ -138,7 +128,7 @@ function rangeForm(entity, path, filters, ctx) {
 export function listView(graph, store, entity, fields, rows, ctx) {
   const vc = ctx.vc || anyone;
   const ov = graph.override?.[`${entity}.list`] || {};
-  const cols = ov.columns || fields.filter((f) => f.kind !== 'password').map((f) => f.name);
+  const cols = ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name);
   const actions = ov.rowActions ?? ['edit', 'delete'];
   const doneField = fields.find((f) => f.kind === 'bool');
   const path = ctx.path || `/${entity}`;
@@ -191,28 +181,11 @@ export function listView(graph, store, entity, fields, rows, ctx) {
 export function formFields(store, entity, fields, row, only, { skip = [] } = {}) {
   const statusField = store.graph?.states?.[entity]?.field;
   return fields.filter(isStored).filter((f) => !skip.includes(f.name) && (f.name !== statusField || only?.includes(f.name)))
-    .filter((f) => (only ? only.includes(f.name) : true)).map((f) => {
-    const id = `f_${f.name}`, v = row?.[f.name];
-    if (f.kind === 'time') return '';
-    let input;
-    if (f.kind === 'longtext') input = `<textarea id="${id}" name="${f.name}" rows="4"${f.required ? ' required' : ''}>${esc(v)}</textarea>`;
-    else if (f.kind === 'bool') input = `<input type="checkbox" id="${id}" name="${f.name}"${v ? ' checked' : ''}>`;
-    else if (f.kind === 'enum') input = `<select id="${id}" name="${f.name}">` +
-      f.options.map((o) => `<option${String(v) === o ? ' selected' : ''}>${esc(o)}</option>`).join('') + '</select>';
-    else if (f.kind === 'ref') input = `<select id="${id}" name="${f.name}"><option value="">—</option>` +
-      store.list(f.target, {}).map((r) =>
-        `<option value="${r.id}"${String(v) === String(r.id) ? ' selected' : ''}>${esc(store.label(f.target, r))}</option>`).join('') + '</select>';
-    else if (f.kind === 'int') input = `<input type="number" id="${id}" name="${f.name}" value="${esc(v)}"${f.required ? ' required' : ''}>`;
-    else if (f.kind === 'money') input = `<input type="number" step="0.01" id="${id}" name="${f.name}" value="${esc(v === null || v === undefined || v === '' ? '' : typeof v === 'number' ? formatMoney(v) : v)}"${f.required ? ' required' : ''}>`;
-    else if (f.kind === 'date') input = `<input type="date" id="${id}" name="${f.name}" value="${esc(v)}"${f.required ? ' required' : ''}>`;
-    else if (f.kind === 'password') input = `<input type="password" id="${id}" name="${f.name}" value=""${f.required && !row?.id ? ' required' : ''}>`;
-    else if (f.kind === 'file') input = `<input type="file" id="${id}" name="${f.name}">${v ? `<span class="muted"> current: ${esc(String(v).replace(/^\d+-/, ''))}</span>` : ''}`;
-    else input = `<input type="text" id="${id}" name="${f.name}" value="${esc(v)}"${f.required ? ' required' : ''}>`;
-    return `<label for="${id}">${esc(label(f.name))}${f.required ? ' *' : ''}</label>${input}`;
-  }).join('');
+    .filter((f) => (only ? only.includes(f.name) : true)).filter((f) => f.type.input).map((f) =>
+      `<label for="f_${f.name}">${esc(label(f.name))}${f.required ? ' *' : ''}</label>${f.type.input(f, row?.[f.name], { esc, store, entity, row })}`).join('');
 }
 
-const enctype = (fields) => (fields.some((f) => f.kind === 'file') ? ' enctype="multipart/form-data"' : '');
+const enctype = (fields) => (fields.some((f) => f.type.upload) ? ' enctype="multipart/form-data"' : '');
 
 export function formView(graph, store, entity, fields, row, mode, errors = [], vc = anyone, flash = '') {
   const ov = graph.override?.[`${entity}.form`] || {};
@@ -242,13 +215,13 @@ function transitionForms(graph, store, entity, fields, row, vc) {
 
 export function detailView(graph, store, entity, fields, row, flash, vc = anyone) {
   const ov = graph.override?.[`${entity}.detail`] || {};
-  const rows = fields.filter((f) => f.kind !== 'password').filter((f) => !ov.fields || ov.fields.includes(f.name)).map((f) =>
+  const rows = fields.filter((f) => !f.type.secret).filter((f) => !ov.fields || ov.fields.includes(f.name)).map((f) =>
     `<tr><th>${esc(label(f.name))}</th><td>${fmt(store, entity, f, row, ov.labels || {})}</td></tr>`).join('');
 
   const related = (ov.related || []).map((rel) => {
     const kids = store.list(rel.entity, { where: { [rel.via]: row.id, ...vc.ownWhere(rel.entity) }, sort: { field: 'id', dir: 'asc' } });
     const kidFields = store.fields[rel.entity];
-    const show = rel.columns || kidFields.filter((f) => f.name !== rel.via && f.kind !== 'password').map((f) => f.name);
+    const show = rel.columns || kidFields.filter((f) => f.name !== rel.via && !f.type.secret).map((f) => f.name);
     const body = kids.map((k) => `<tr>${show.map((c) => cell(store, rel.entity, kidFields, k, c)).join('')}${
       rel.rowActions ? `<td>${rowButtons(graph, store, rel.entity, k, rel.rowActions, vc)}</td>` : ''}</tr>`).join('');
     const form = rel.form === false || !vc.can(rel.entity, 'create') ? '' : `<form class="card" method="post" action="/${entity}/${row.id}/add/${rel.entity}"${enctype(kidFields)}>

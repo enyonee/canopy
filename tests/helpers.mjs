@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
 import { serve } from '../runtime/server.mjs';
+import { loadPlugins } from '../runtime/registry.mjs';
 
 // A fake network for outgoing HTTP: records calls, answers what the test says.
 export const fakeFetch = () => {
@@ -20,7 +21,8 @@ export async function boot(graphFile = 'tests/fixtures/kitchen.json', opts = {})
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-srv-'));
   const traceFile = path.join(dir, 'trace.jsonl');
   const net = fakeFetch();
-  const app = serve({ graphFile, dbFile: path.join(dir, 'data.sqlite'), traceFile, port: 0, fetchImpl: net.fetchImpl, ...opts });
+  const { registry, errors: pluginErrors } = await loadPlugins(JSON.parse(fs.readFileSync(graphFile, 'utf8')), path.dirname(path.resolve(graphFile)));
+  const app = serve({ graphFile, dbFile: path.join(dir, 'data.sqlite'), traceFile, port: 0, fetchImpl: net.fetchImpl, registry, pluginErrors, ...opts });
   await once(app.server, 'listening');
   const base = `http://127.0.0.1:${app.server.address().port}`;
   let cookie = '';

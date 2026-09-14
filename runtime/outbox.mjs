@@ -1,32 +1,16 @@
 // The outbox. An effect that leaves the process is a row first and a request
-// second: it is committed with the transaction that caused it, then delivered.
-// Delivery never runs inside a transaction and never blocks a commit.
+// second: it is committed with the transaction that caused it, then delivered
+// by the transport registered for its kind. Delivery never runs inside a
+// transaction and never blocks a commit.
+import { DEFAULT } from './registry.mjs';
 
-const TIMEOUT_MS = 3000;
-
-export async function deliver(store, graph, row, { fetchImpl = fetch, trace = () => {} } = {}) {
+export async function deliver(store, graph, row, { fetchImpl = fetch, trace = () => {}, registry = DEFAULT } = {}) {
   const connector = graph.connectors?.[row.connector] || {};
   const patch = { attempts: (row.attempts || 0) + 1 };
+  const transport = registry.transports[row.kind];
   try {
-    if (row.kind === 'http') {
-      const res = await fetchImpl(row.target, {
-        method: connector.method || 'POST',
-        headers: { 'content-type': 'application/json', ...(connector.headers || {}) },
-        body: JSON.stringify(row.payload),
-        signal: AbortSignal.timeout(connector.timeout || TIMEOUT_MS),
-      });
-      patch.code = res.status;
-      patch.status = res.ok ? 'sent' : 'failed';
-      patch.error = res.ok ? null : `HTTP ${res.status}`;
-    } else if (row.kind === 'mail') {
-      // The stand transport: the letter is recorded, not carried. SMTP is a later connector.
-      patch.status = 'sent';
-      patch.code = null;
-      patch.error = null;
-    } else {
-      patch.status = 'failed';
-      patch.error = `unknown delivery kind "${row.kind}"`;
-    }
+    if (!transport) throw new Error(`unknown delivery kind "${row.kind}"`);
+    Object.assign(patch, await transport.deliver(row, connector, { fetchImpl }));
   } catch (e) {
     patch.status = 'failed';
     patch.error = String(e && e.message);
@@ -42,4 +26,3 @@ export async function flush(store, graph, opts) {
   for (const row of store.outbox({ status: 'queued' }).reverse()) out.push(await deliver(store, graph, row, opts));
   return out;
 }
-

@@ -1,10 +1,13 @@
 // CLI entry, importable so the tests can cover it without spawning a process.
+// Plugins named by the graph are loaded first: the checker and the server see
+// the registry the application declares.
 import path from 'node:path';
 import fs from 'node:fs';
 import { serve } from './server.mjs';
 import { validate, formatErrors } from './validate.mjs';
+import { loadPlugins } from './registry.mjs';
 
-export function main(argv, { log = console.log, err = console.error } = {}) {
+export async function main(argv, { log = console.log, err = console.error } = {}) {
   const graphFile = argv.find((a) => !a.startsWith('--'));
   const flag = (name, def) => {
     const i = argv.indexOf(`--${name}`);
@@ -12,20 +15,23 @@ export function main(argv, { log = console.log, err = console.error } = {}) {
   };
   if (!graphFile) { err('usage: run.mjs <graph.json> [--port N] [--check]'); return { code: 2 }; }
 
+  const dir = path.dirname(path.resolve(graphFile));
+  const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
+  const { registry, errors: pluginErrors } = await loadPlugins(graph, dir);
+
   if (argv.includes('--check')) {
-    const errors = validate(JSON.parse(fs.readFileSync(graphFile, 'utf8')));
-    if (!errors.length) { log(`✓ ${graphFile} is valid`); return { code: 0 }; }
+    const errors = [...pluginErrors, ...validate(graph, registry)];
+    if (!errors.length) { log(`✓ ${graphFile} is valid${registry.plugins.length ? ` (plugins: ${registry.plugins.join(', ')})` : ''}`); return { code: 0 }; }
     err(`✗ ${graphFile}\n${formatErrors(errors)}`);
     return { code: 1 };
   }
 
-  const dir = path.dirname(path.resolve(graphFile));
   const port = Number(flag('port', 8901));
   const app = serve({
     graphFile,
     dbFile: flag('db', path.join(dir, 'data.sqlite')),
     traceFile: flag('trace', path.join(dir, 'trace.jsonl')),
-    port,
+    port, registry, pluginErrors,
   });
   log(`${app.invalid ? 'invalid graph served at' : 'app running at'} http://127.0.0.1:${port}`);
   return { code: 0, app };

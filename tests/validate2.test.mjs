@@ -67,7 +67,7 @@ test('roles: the user entity, its fields, register, anonymous, the matrix, own, 
   assert.match(at({ roles: { ...roles, entity: 'Ghost' } }, '/roles/entity').message, /unknown entity/);
   assert.match(at({ roles: { ...roles, login: undefined } }, '/roles/login').message, /roles need "login"/);
   assert.match(at({ roles: { ...roles, login: 'password' } }, '/roles/login').message, /"password" is password; login must be text/);
-  assert.match(at({ roles: { ...roles, password: 'email' } }, '/roles/password').message, /must be password/);
+  assert.match(at({ roles: { ...roles, password: 'email' } }, '/roles/password').message, /must be a secret/);
   assert.match(at({ roles: { ...roles, role: 'name' } }, '/roles/role').message, /must be enum/);
   assert.match(at({ roles: { ...roles, role: 'ghost' } }, '/roles/role').message, /does not exist/);
   assert.match(at({ roles: { ...roles, register: 'boss' } }, '/roles/register').message, /"boss" is not a role/);
@@ -159,7 +159,7 @@ test('steps: references, expressions, connectors, adjust, each and ensure', () =
   assert.match(at(A([{ block: 'db.update', set: { title: '= found.n' } }]), '/actions/0/do/0/set/title').message, /Lead has no field "found"/, 'found exists only after db.ensure');
   assert.match(at(A([{ block: 'db.update', set: { title: '= row.owner.name + 1' } }]), '/actions/0/do/0/set/title').message, /"\+" needs numbers, got text/);
   assert.match(at(A([{ block: 'db.update', set: { done: '@values.done', title: ['= 1 +'] } }]), '/actions/0/do/0/set/title/0').message, /bad expression/);
-  assert.match(at(A([{ block: 'db.adjust', field: 'title', by: 1 }]), '/actions/0/do/0/field').message, /db\.adjust needs an int or money field; Lead\.title is text/);
+  assert.match(at(A([{ block: 'db.adjust', field: 'title', by: 1 }]), '/actions/0/do/0/field').message, /db\.adjust needs a numeric field; Lead\.title is text/);
   assert.match(at(A([{ block: 'db.adjust', entity: 'Note', field: 'n', by: 1 }]), '/actions/0/do/0/id').message, /needs "id"/);
   assert.match(at(A([{ block: 'db.adjust', field: 'value', by: '= ghost' }]), '/actions/0/do/0/by').message, /bad expression/);
   assert.match(at(A([{ block: 'http.send', connector: 'nope', body: {} }]), '/actions/0/do/0/connector').hint, /declared: hook, mail/);

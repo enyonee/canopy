@@ -7,8 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { validate, formatErrors } from './validate.mjs';
-import { CATALOG } from './blocks.mjs';
 import { Store } from './store.mjs';
+import { DEFAULT } from './registry.mjs';
 import { permissions, sessions, verifyPassword } from './auth.mjs';
 import { flush } from './outbox.mjs';
 import { parse as parseExpr, evaluate, isExpression, stripExpression } from './expr.mjs';
@@ -22,9 +22,10 @@ const readText = (req) => new Promise((resolve) => {
   req.on('end', () => resolve(data));
 });
 
-export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir, keyFile, fetchImpl }) {
+export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir, keyFile, fetchImpl, registry = DEFAULT, pluginErrors = [] }) {
   const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
-  const errors = validate(graph);
+  const CATALOG = registry.blocks;
+  const errors = [...pluginErrors, ...validate(graph, registry)];
   if (errors.length) {
     console.error(`graph ${graphFile} is invalid:\n${formatErrors(errors)}`);
     const server = http.createServer((_, res) => {
@@ -37,12 +38,12 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
 
   const dir = path.dirname(dbFile);
   filesDir = filesDir || path.join(dir, 'files');
-  const store = new Store(graph, dbFile);
+  const store = new Store(graph, dbFile, registry);
   store.migrations.forEach((m) => console.log(`migration: ${m}`));
   const perms = permissions(graph);
   const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key')) : null;
   const exprCache = new Map();
-  const compiled = (src) => { if (!exprCache.has(src)) exprCache.set(src, parseExpr(src)); return exprCache.get(src); };
+  const compiled = (src) => { if (!exprCache.has(src)) exprCache.set(src, parseExpr(src, registry.functions)); return exprCache.get(src); };
 
   // Seed: declared starting rows, inserted once, only while the table is empty.
   for (const [entity, rows] of Object.entries(graph.seed || {})) {
@@ -98,7 +99,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     const one = (v) => {
       if (typeof v === 'string') {
         if (v.startsWith('@')) return refValue(ctx, v.slice(1).split('.'));
-        if (isExpression(v)) return evaluate(compiled(stripExpression(v)), exprCtx(ctx));
+        if (isExpression(v)) return evaluate(compiled(stripExpression(v)), exprCtx(ctx), registry.functions);
         return v;
       }
       if (Array.isArray(v)) return v.map(one);
@@ -152,7 +153,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
   };
   const withEffects = async (fn) => {
     const out = store.transaction(fn);
-    await flush(store, graph, { fetchImpl, trace });
+    await flush(store, graph, { fetchImpl, trace, registry });
     return out;
   };
   const fireEvents = (trigger, entity, id, values, user, snapshot = null) => {
@@ -171,10 +172,9 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       if (f.derive) continue;
       const v = values[f.name];
       if (partial && (v === undefined || (f.kind === 'password' && v === ''))) continue;
-      if (f.required && (v === undefined || String(v).trim() === '')) problems.push(`${f.name} is required`);
-      if ((f.kind === 'int' || f.kind === 'money') && v !== undefined && v !== '' && Number.isNaN(Number(v))) problems.push(`${f.name} must be a number`);
-      if (f.kind === 'enum' && v && !f.options.includes(String(v))) problems.push(`${f.name} must be one of: ${f.options.join(', ')}`);
-      if (f.kind === 'date' && v && !/^\d{4}-\d{2}-\d{2}$/.test(String(v))) problems.push(`${f.name} must be a date (YYYY-MM-DD)`);
+      if (f.required && (v === undefined || String(v).trim() === '')) { problems.push(`${f.name} is required`); continue; }
+      const bad = f.type.validate(v, f);
+      if (bad) problems.push(bad);
     }
     if (problems.length) return problems;
     // Rules see the row as it would be stored: the existing row under the submitted values.
@@ -189,7 +189,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         continue;
       }
       let ok;
-      try { ok = evaluate(compiled(rule.check), store.ctx(entity, probe)); }
+      try { ok = evaluate(compiled(rule.check), store.ctx(entity, probe), registry.functions); }
       catch (e) { trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); ok = true; }
       if (!ok) problems.push(rule.message);
     }
@@ -326,7 +326,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
           const row = store.outboxGet(parts[1]);
           if (!row) return send(404, errorPage(graph, `no delivery #${parts[1]}`));
           store.outboxUpdate(row.id, { status: 'queued' });
-          await flush(store, graph, { fetchImpl, trace });
+          await flush(store, graph, { fetchImpl, trace, registry });
           return ok('/outbox', `Delivery #${row.id} retried: ${store.outboxGet(row.id).status}`);
         }
         return send(200, outboxView(graph, store.outbox(), flash, vc));
@@ -336,7 +336,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         const entity = Object.keys(graph.data).find((x) => x.toLowerCase() === e.toLowerCase());
         const row = entity && store.get(entity, id);
         const f = entity && store.field(entity, fieldName);
-        if (!row || !f || f.kind !== 'file' || !row[fieldName]) return send(404, errorPage(graph, 'no such file'));
+        if (!row || !f || !f.type.upload || !row[fieldName]) return send(404, errorPage(graph, 'no such file'));
         if (!vc.can(entity, 'view', row)) return deny();
         const file = path.join(filesDir, path.basename(row[fieldName]));
         if (!fs.existsSync(file)) return send(404, errorPage(graph, 'file is missing on disk'));

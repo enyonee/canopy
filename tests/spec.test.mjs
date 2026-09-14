@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { parseField, sqlType, defaultValue, coerce } from '../runtime/spec.mjs';
 
 test('parses every kind of field spec', () => {
-  assert.deepEqual(parseField('title', 'text!'), { name: 'title', kind: 'text', options: null, target: null, required: true, optional: false, def: null, derive: null, source: null });
+  const { type, ...title } = parseField('title', 'text!');
+  assert.deepEqual(title, { name: 'title', kind: 'text', options: null, target: null, required: true, optional: false, def: null, derive: null, source: null });
+  assert.equal(type.sql, 'TEXT', 'the field carries its kind\'s contract');
   assert.equal(parseField('notes', 'longtext').kind, 'longtext');
   assert.equal(parseField('n', 'int=3').def, '3');
   assert.equal(parseField('at', 'time=now').kind, 'time');

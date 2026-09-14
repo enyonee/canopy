@@ -150,12 +150,15 @@ test('errors are formatted so the repair loop can act on them', () => {
   assert.equal(formatErrors([]), '');
 });
 
-test('all eleven shipped graphs are valid', async () => {
+test('every shipped graph is valid, with the plugins it declares', async () => {
   const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { loadPlugins } = await import('../runtime/registry.mjs');
   const apps = fs.readdirSync('apps');
-  assert.ok(apps.length >= 11);
+  assert.ok(apps.length >= 35);
   for (const app of apps) {
     const graph = JSON.parse(fs.readFileSync(`apps/${app}/app.json`, 'utf8'));
-    assert.deepEqual(validate(graph), [], `apps/${app}/app.json must stay valid`);
+    const { registry, errors } = await loadPlugins(graph, path.resolve('apps', app));
+    assert.deepEqual([...errors, ...validate(graph, registry)], [], `apps/${app}/app.json must stay valid`);
   }
 });

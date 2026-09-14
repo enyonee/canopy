@@ -8,22 +8,22 @@ import { main } from '../runtime/cli.mjs';
 
 const capture = () => { const out = []; return { sink: { log: (m) => out.push(String(m)), err: (m) => out.push(String(m)) }, out }; };
 
-test('--check passes a valid graph and fails a broken one', () => {
+test('--check passes a valid graph and fails a broken one', async () => {
   const a = capture();
-  assert.equal(main(['apps/todo/app.json', '--check'], a.sink).code, 0);
+  assert.equal((await main(['apps/todo/app.json', '--check'], a.sink)).code, 0);
   assert.match(a.out.join('\n'), /✓ apps\/todo\/app.json is valid/);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-'));
   const file = path.join(dir, 'bad.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'b', data: { A: { x: 'text!' } }, override: { 'A.list': { columns: ['y'] } } }));
   const b = capture();
-  assert.equal(main([file, '--check'], b.sink).code, 1);
+  assert.equal((await main([file, '--check'], b.sink)).code, 1);
   assert.match(b.out.join('\n'), /field "y" does not exist on A/);
 });
 
-test('without a file it explains itself', () => {
+test('without a file it explains itself', async () => {
   const c = capture();
-  assert.equal(main(['--check'], c.sink).code, 2);
+  assert.equal((await main(['--check'], c.sink)).code, 2);
   assert.match(c.out.join('\n'), /usage: run.mjs/);
 });
 
@@ -32,7 +32,7 @@ test('it boots an app on the port it was given, with the db and trace it was giv
   const db = path.join(dir, 'x.sqlite');
   const trace = path.join(dir, 'x.jsonl');
   const c = capture();
-  const { app } = main(['tests/fixtures/kitchen.json', '--port', '0', '--db', db, '--trace', trace], c.sink);
+  const { app } = await main(['tests/fixtures/kitchen.json', '--port', '0', '--db', db, '--trace', trace], c.sink);
   await once(app.server, 'listening');
   const port = app.server.address().port;
   const r = await fetch(`http://127.0.0.1:${port}/Topic`);
@@ -49,7 +49,7 @@ test('an invalid graph is reported and still served', async () => {
   const file = path.join(dir, 'bad.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'b', data: { A: { x: 'datetime!' } } }));
   const c = capture();
-  const { app } = main([file, '--port', '0', '--db', path.join(dir, 'd.sqlite')], c.sink);
+  const { app } = await main([file, '--port', '0', '--db', path.join(dir, 'd.sqlite')], c.sink);
   await once(app.server, 'listening');
   assert.match(c.out.join('\n'), /invalid graph served at/);
   const r = await fetch(`http://127.0.0.1:${app.server.address().port}/`);

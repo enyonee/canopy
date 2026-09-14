@@ -1,22 +1,20 @@
 // The closed expression algebra. Arithmetic, field paths, aggregates over child
-// rows, a handful of functions. No calls out, no state, no way to reach past the
-// row it is evaluated on — every computation is a pure leaf by construction.
+// rows, and the scalar functions of the registry. No calls out, no state, no way
+// to reach past the row it is evaluated on — every computation is a pure leaf.
 //
 //   qty * price                      fields of the current row
 //   customer.discount                one hop through a reference
 //   sum(OrderItem: qty * price)      aggregate over rows of OrderItem that point here
 //   count(Activity.lead: done)       explicit reverse reference, optional condition
-//   if(total > 100, 0, 9.9)          conditional; days(end, start); round(x, 2)
+//   if(total > 100, 0, 9.9)          a function; days(end, start); round(x, 2)
 //   today, now                       the clock, read-only
 //
 // Scalars are number, money, text, bool, date, time, ref (an id). Money is read
 // and written in major units (12.34) here; storage in minor units is the store's
 // business, not the language's.
+import { FUNCTIONS, truthy } from './functions.mjs';
 
 const AGG = new Set(['sum', 'count', 'avg', 'min', 'max']);
-const FUNCS = {
-  if: 3, days: 2, round: [1, 2], abs: 1, min: 2, max: 2, coalesce: [2, 9], len: 1, lower: 1, upper: 1, concat: [1, 9], not: 1,
-};
 const NUMERIC = new Set(['number', 'money']);
 
 // --- tokens ------------------------------------------------------------------
@@ -49,7 +47,7 @@ const tokenize = (src) => {
 };
 
 // --- parser (precedence climbing) --------------------------------------------
-export function parse(src) {
+export function parse(src, functions = FUNCTIONS) {
   if (typeof src !== 'string' || !src.trim()) throw new Error('empty expression');
   const toks = tokenize(src);
   let p = 0;
@@ -109,9 +107,9 @@ export function parse(src) {
     expect(')');
     if (AGG.has(fn) && (fn === 'sum' || fn === 'avg' || fn === 'count'))
       throw new Error(`${fn}() aggregates rows: write ${fn}(Entity: field)`);
-    const arity = FUNCS[fn];
-    if (arity === undefined) throw new Error(`unknown function "${fn}"; known: ${Object.keys(FUNCS).join(', ')}, and sum/count/avg/min/max over an entity`);
-    const [lo, hi] = Array.isArray(arity) ? arity : [arity, arity];
+    const def = functions[fn];
+    if (!def) throw new Error(`unknown function "${fn}"; known: ${Object.keys(functions).join(', ')}, and sum/count/avg/min/max over an entity`);
+    const [lo, hi] = Array.isArray(def.arity) ? def.arity : [def.arity, def.arity];
     if (args.length < lo || args.length > hi) throw new Error(`${fn}() takes ${lo === hi ? lo : `${lo}–${hi}`} argument(s), got ${args.length}`);
     return { t: 'call', fn, args };
   };
@@ -123,7 +121,7 @@ export function parse(src) {
 
 // --- static check ------------------------------------------------------------
 // scope.field(path) -> kind, or throws; scope.children(entity, via) -> child scope, or throws.
-export function check(ast, scope) {
+export function check(ast, scope, functions = FUNCTIONS) {
   const kindOf = (n) => {
     switch (n.t) {
       case 'num': return 'number';
@@ -147,25 +145,13 @@ export function check(ast, scope) {
           if (n.op === '/' && a === 'money' && b === 'money') return 'number';
           return a === 'money' || b === 'money' ? 'money' : 'number';
         }
-        if (['and', 'or'].includes(n.op)) return 'bool';
         return 'bool';
       }
-      case 'call': {
-        const ks = n.args.map(kindOf);
-        switch (n.fn) {
-          case 'if': return ks[1] === 'any' ? ks[2] : ks[1];
-          case 'days': for (const k of [ks[0], ks[1]]) if (!['date', 'time', 'any'].includes(k)) throw new Error(`days() needs dates, got ${k}`); return 'number';
-          case 'round': case 'abs': if (!NUMERIC.has(ks[0]) && ks[0] !== 'any') throw new Error(`${n.fn}() needs a number, got ${ks[0]}`); return ks[0] === 'any' ? 'number' : ks[0];
-          case 'min': case 'max': case 'coalesce': return ks.find((k) => k !== 'any') || 'any';
-          case 'len': return 'number';
-          case 'lower': case 'upper': case 'concat': return 'text';
-          default: return 'bool'; // not
-        }
-      }
-      case 'agg': {
+      case 'call': return functions[n.fn].kind(n.args.map(kindOf));
+      default: {
         const child = scope.children(n.entity, n.via);
         if (!n.body) return 'number';
-        const k = check(n.body, child);
+        const k = check(n.body, child, functions);
         if (n.fn === 'count') return 'number';
         if (!NUMERIC.has(k) && k !== 'any') throw new Error(`${n.fn}(${n.entity}: …) needs a number, got ${k}`);
         return k;
@@ -175,24 +161,9 @@ export function check(ast, scope) {
   return kindOf(ast);
 }
 
-// Every path and aggregate the expression touches, for dependency analysis.
-export function refs(ast, out = []) {
-  if (ast.t === 'path') out.push({ path: ast.p });
-  else if (ast.t === 'agg') { out.push({ agg: ast.entity, via: ast.via }); if (ast.body) refs(ast.body, out); }
-  else if (ast.t === 'un') refs(ast.a, out);
-  else if (ast.t === 'bin') { refs(ast.a, out); refs(ast.b, out); }
-  else if (ast.t === 'call') ast.args.forEach((a) => refs(a, out));
-  return out;
-}
-
 // --- evaluation --------------------------------------------------------------
 // ctx.get(path) -> value; ctx.rows(entity, via) -> array of child ctx.
-const dayMs = 86_400_000;
-// days() counts calendar days: a timestamp is its date, the hours never make a day negative.
-const toDate = (v) => (v == null || v === '' ? null : new Date(`${String(v).slice(0, 10)}T00:00:00Z`));
-const truthy = (v) => v !== null && v !== undefined && v !== false && v !== 0 && v !== '';
-
-export function evaluate(ast, ctx) {
+export function evaluate(ast, ctx, functions = FUNCTIONS) {
   const ev = (n) => {
     switch (n.t) {
       case 'num': case 'str': case 'bool': return n.v;
@@ -226,27 +197,11 @@ export function evaluate(ast, ctx) {
           default: return a >= b;
         }
       }
-      case 'call': {
-        const args = n.args.map(ev);
-        switch (n.fn) {
-          case 'if': return truthy(args[0]) ? args[1] : args[2];
-          case 'days': { const a = toDate(args[0]), b = toDate(args[1]); return a && b ? Math.round((a - b) / dayMs) : null; }
-          case 'round': { if (args[0] == null) return null; const m = 10 ** (args[1] || 0); return Math.round(args[0] * m) / m; }
-          case 'abs': return args[0] == null ? null : Math.abs(args[0]);
-          case 'min': return args[0] == null ? args[1] : args[1] == null ? args[0] : Math.min(args[0], args[1]);
-          case 'max': return args[0] == null ? args[1] : args[1] == null ? args[0] : Math.max(args[0], args[1]);
-          case 'coalesce': return args.find((a) => a !== null && a !== undefined && a !== '') ?? null;
-          case 'len': return args[0] == null ? 0 : String(args[0]).length;
-          case 'lower': return args[0] == null ? null : String(args[0]).toLowerCase();
-          case 'upper': return args[0] == null ? null : String(args[0]).toUpperCase();
-          case 'concat': return args.map((a) => (a == null ? '' : String(a))).join('');
-          default: return !truthy(args[0]); // not
-        }
-      }
-      case 'agg': {
+      case 'call': return functions[n.fn].run(n.args.map(ev));
+      default: {
         const rows = ctx.rows(n.entity, n.via);
-        if (n.fn === 'count') return n.body ? rows.filter((r) => truthy(evaluate(n.body, r))).length : rows.length;
-        const vals = rows.map((r) => evaluate(n.body, r)).filter((v) => v !== null && v !== undefined);
+        if (n.fn === 'count') return n.body ? rows.filter((r) => truthy(evaluate(n.body, r, functions))).length : rows.length;
+        const vals = rows.map((r) => evaluate(n.body, r, functions)).filter((v) => v !== null && v !== undefined);
         if (n.fn === 'sum') return vals.reduce((a, b) => a + b, 0);
         if (!vals.length) return null;
         if (n.fn === 'avg') return vals.reduce((a, b) => a + b, 0) / vals.length;

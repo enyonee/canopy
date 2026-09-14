@@ -90,7 +90,8 @@ export const checks = [
   { task: 'Paying moves the order on; the same transition is not offered twice',
     run: async ({ get, follow, post, must, flashOf }) => {
       const r = await follow(`/Order/${annOrder}/go/pay`, {});
-      must(/Payment received/.test(flashOf(r.html)), `flash: ${flashOf(r.html)}`);
+      must(/Payment received, thank you: 100 points earned/.test(flashOf(r.html)), `flash: ${flashOf(r.html)}`);
+      must(/<th>Net<\/th><td>100\.00<\/td>/.test(r.html), 'the plugin function discount() did not produce the net amount');
       must(/status">Paid/.test(r.html), 'status is not paid');
       must(!/go\/pay"/.test(r.html) && !/go\/place"/.test(r.html), 'a spent transition is still offered');
       const again = await post(`/Order/${annOrder}/go/pay`, {});
@@ -141,7 +142,7 @@ export const checks = [
       return 'stock 2 → 0 → 2';
     } },
   { task: 'The admin signs in, ships the paid order and reads the outbox',
-    run: async ({ asGuest, login, get, follow, rowWith, rows, must }) => {
+    run: async ({ asGuest, login, get, post, follow, rowWith, rows, must }) => {
       asGuest();
       const bad = await login('admin@shop.test', 'nope');
       must(bad.status === 401 && /Wrong login or password/.test(bad.html), 'a wrong password was accepted');
@@ -158,6 +159,10 @@ export const checks = [
       must(mails.length === 3, `expected 3 letters in the outbox (two orders placed, one paid), got ${mails.length}`);
       must(hooks.length === 2 && hooks.every((h) => /status">sent<\/span> 200/.test(h)), `expected 2 delivered hooks, got ${hooks.length}: ${hooks.map((h) => /status">(\w+)/.exec(h)?.[1])}`);
       must(/Order #\d+ received/.test(outbox.html) && /ann@shop.test/.test(outbox.html), 'the confirmation letter is not recorded');
+      const customers = await get('/User');
+      must(/ann@shop.test<\/td><td>Ann<\/td><td>customer<\/td><td>0 %<\/td><td>100<\/td>/.test(customers.html), 'the plugin field kind and the awarded points are not shown');
+      const edited = await post(`/User/${/\/User\/(\d+)/.exec(rowWith(customers.html, 'ann@shop.test'))[1]}`, { discount: '150' });
+      must(edited.status === 400 && /discount must be between 0 and 100/.test(edited.html), 'the plugin validation did not fire');
       return 'wrong password 401; admin ships; outbox shows 3 letters and 2 delivered hooks';
     } },
   { task: 'The sales dashboard sums derived totals and filters by period',
