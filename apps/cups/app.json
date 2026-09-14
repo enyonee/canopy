@@ -1,0 +1,111 @@
+{
+  "app": "cups",
+  "task": "webgen-bench/000045",
+  "note": "Paper cup factory: raw materials and finished products carry a stock counter; a production run adds cups and consumes material, a sale deducts cups (db.adjust on create events). Sales history is the sales list with customer, product and date filters; reports are dashboards with a sale-date period; customer statistics groups sales per customer. 'light goldenrod' is not a CSS colour, so the background is lightgoldenrodyellow.",
+  "theme": { "background": "lightgoldenrodyellow", "accent": "olivedrab" },
+  "home": "/dashboard/inventory",
+
+  "data": {
+    "RawMaterial":   { "name": "text!", "unit": "enum[kg,roll,litre,piece]=kg", "stock": "int=0", "unitCost": "money=0", "supplier": "text",
+                       "used": "int := sum(ProductionRun: materialUsed)" },
+    "Product":       { "name": "text!", "size": "enum[4oz,8oz,12oz,16oz]=8oz", "stock": "int=0", "price": "money!",
+                       "produced": "int := sum(ProductionRun: quantity)", "sold": "int := sum(Sale: quantity)" },
+    "Customer":      { "name": "text!", "email": "text", "phone": "text", "city": "text",
+                       "purchases": "int := count(Sale)", "spent": "money := sum(Sale: total)" },
+    "ProductionRun": { "product": "ref:Product!", "material": "ref:RawMaterial!", "materialUsed": "int!", "quantity": "int!", "date": "date=today", "note": "text" },
+    "Sale":          { "customer": "ref:Customer!", "product": "ref:Product!", "quantity": "int=1", "price": "money",
+                       "total": "money := quantity * price", "date": "date=today" }
+  },
+
+  "rules": {
+    "Product":       [ { "check": "price >= 0", "message": "Price cannot be negative" } ],
+    "RawMaterial":   [ { "check": "stock >= 0", "message": "Stock cannot be negative" } ],
+    "ProductionRun": [ { "check": "quantity > 0", "message": "A run must produce at least one cup" },
+                       { "check": "materialUsed >= 0", "message": "Material used cannot be negative" } ],
+    "Sale":          [ { "check": "quantity > 0", "message": "Quantity must be at least 1" } ]
+  },
+
+  "seed": {
+    "RawMaterial":   [ { "name": "Paperboard 210gsm", "unit": "kg", "stock": 1200, "unitCost": 1.4, "supplier": "Pacific Pulp" },
+                       { "name": "PE coating film", "unit": "roll", "stock": 35, "unitCost": 22, "supplier": "Coatex" },
+                       { "name": "Food-safe ink", "unit": "litre", "stock": 60, "unitCost": 9.5, "supplier": "InkWorks" } ],
+    "Product":       [ { "name": "Hot cup 8oz", "size": "8oz", "stock": 5000, "price": 0.12 },
+                       { "name": "Cold cup 16oz", "size": "16oz", "stock": 2000, "price": 0.18 },
+                       { "name": "Espresso cup 4oz", "size": "4oz", "stock": 800, "price": 0.09 } ],
+    "Customer":      [ { "name": "Bean and Leaf", "email": "orders@beanleaf.test", "phone": "+1 555 0101", "city": "Portland" },
+                       { "name": "Metro Catering", "email": "buy@metrocatering.test", "phone": "+1 555 0102", "city": "Seattle" },
+                       { "name": "Campus Canteen", "email": "kitchen@campus.test", "phone": "+1 555 0103", "city": "Eugene" } ],
+    "ProductionRun": [ { "product": 1, "material": 1, "materialUsed": 300, "quantity": 20000, "date": "2026-01-05", "note": "Line A" },
+                       { "product": 2, "material": 1, "materialUsed": 150, "quantity": 6000, "date": "2026-02-01", "note": "Line B" },
+                       { "product": 3, "material": 2, "materialUsed": 4, "quantity": 3000, "date": "2026-02-20", "note": "Line A" } ],
+    "Sale":          [ { "customer": 1, "product": 1, "quantity": 500, "price": 0.12, "date": "2026-01-10" },
+                       { "customer": 1, "product": 2, "quantity": 100, "price": 0.18, "date": "2026-02-03" },
+                       { "customer": 2, "product": 1, "quantity": 1000, "price": 0.12, "date": "2026-02-15" },
+                       { "customer": 3, "product": 3, "quantity": 200, "price": 0.09, "date": "2026-03-01" } ]
+  },
+
+  "events": [
+    { "on": "ProductionRun.created", "do": [
+        { "block": "db.adjust", "entity": "Product", "id": "@row.product", "field": "stock", "by": "= quantity" },
+        { "block": "db.adjust", "entity": "RawMaterial", "id": "@row.material", "field": "stock", "by": "= -materialUsed", "min": 0,
+          "message": "Not enough raw material in stock for this run" } ] },
+    { "on": "Sale.created", "do": [
+        { "block": "db.update", "set": { "price": "= coalesce(price, product.price)" } },
+        { "block": "db.adjust", "entity": "Product", "id": "@row.product", "field": "stock", "by": "= -quantity", "min": 0,
+          "message": "Not enough finished products in stock" } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "RawMaterial.list":   { "title": "Raw materials", "columns": ["name", "unit", "stock", "unitCost", "supplier", "used"], "search": ["name", "supplier"],
+                            "createTitle": "Add raw material" },
+    "RawMaterial.form":   { "confirm": "Raw material added successfully" },
+    "Product.list":       { "title": "Finished products", "columns": ["name", "size", "stock", "price", "produced", "sold"], "createTitle": "Add product" },
+    "Product.form":       { "confirm": "Product saved successfully" },
+    "Customer.list":      { "title": "Customers", "columns": ["name", "email", "phone", "city", "purchases", "spent"], "search": ["name", "city"],
+                            "rowActions": ["view", "edit", "delete"], "createTitle": "Add customer" },
+    "Customer.form":      { "confirm": "Customer added successfully", "after": "/Customer/{id}" },
+    "Customer.detail":    { "related": [ { "entity": "Sale", "via": "customer", "title": "Sales history",
+                                           "columns": ["date", "product", "quantity", "price", "total"], "form": false } ] },
+    "ProductionRun.list": { "title": "Production", "columns": ["date", "product", "quantity", "material", "materialUsed", "note"],
+                            "filters": [ { "name": "Product", "field": "product" } ], "sort": { "field": "date", "dir": "desc" },
+                            "rowActions": [], "createTitle": "Record production run" },
+    "ProductionRun.form": { "title": "Record a production run", "confirm": "Production run recorded, stock updated" },
+    "Sale.list":          { "title": "Sales", "columns": ["id", "date", "customer", "product", "quantity", "price", "total"],
+                            "filters": [ { "name": "Customer", "field": "customer" }, { "name": "Product", "field": "product" },
+                                         { "name": "Sale date", "field": "date", "range": true } ],
+                            "sort": { "field": "date", "dir": "desc" }, "rowActions": [], "createTitle": "Record sale" },
+    "Sale.form":          { "title": "Record a sale", "intro": "Leave the price empty to use the product's list price.",
+                            "confirm": "Sale recorded successfully" }
+  },
+
+  "dashboards": [
+    { "id": "inventory", "title": "Inventory", "intro": "Current stock of finished products and raw materials, and what production consumed.",
+      "cards": [ { "title": "Finished cups in stock", "entity": "Product", "fn": "sum", "field": "stock" },
+                 { "title": "Raw material units in stock", "entity": "RawMaterial", "fn": "sum", "field": "stock" },
+                 { "title": "Products", "entity": "Product", "fn": "count" },
+                 { "title": "Raw materials", "entity": "RawMaterial", "fn": "count" } ],
+      "tables": [ { "title": "Production by product", "entity": "ProductionRun", "groupBy": "product", "groupTitle": "Product",
+                    "metrics": [ { "fn": "count", "as": "runs", "title": "Runs" }, { "fn": "sum", "field": "quantity", "as": "produced", "title": "Cups produced" },
+                                 { "fn": "sum", "field": "materialUsed", "as": "used", "title": "Material used" } ] },
+                  { "title": "Material consumption", "entity": "ProductionRun", "groupBy": "material", "groupTitle": "Raw material",
+                    "metrics": [ { "fn": "sum", "field": "materialUsed", "as": "used", "title": "Units used" } ] } ] },
+    { "id": "sales-report", "title": "Sales report", "intro": "Sales for a period, by product and by month.", "period": { "Sale": "date" },
+      "cards": [ { "title": "Sales", "entity": "Sale", "fn": "count" },
+                 { "title": "Cups sold", "entity": "Sale", "fn": "sum", "field": "quantity" },
+                 { "title": "Revenue", "entity": "Sale", "fn": "sum", "field": "total" } ],
+      "tables": [ { "title": "By product", "entity": "Sale", "groupBy": "product", "groupTitle": "Product",
+                    "metrics": [ { "fn": "count", "as": "sales", "title": "Sales" }, { "fn": "sum", "field": "quantity", "as": "cups", "title": "Cups" },
+                                 { "fn": "sum", "field": "total", "as": "revenue", "title": "Revenue" } ] },
+                  { "title": "By month", "entity": "Sale", "groupBy": "date", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "sales", "title": "Sales" }, { "fn": "sum", "field": "total", "as": "revenue", "title": "Revenue" } ] } ] },
+    { "id": "customers", "title": "Customer statistics", "intro": "Total sales and purchase frequency per customer.", "period": { "Sale": "date" },
+      "cards": [ { "title": "Customers", "entity": "Customer", "fn": "count" },
+                 { "title": "Sales", "entity": "Sale", "fn": "count" },
+                 { "title": "Revenue", "entity": "Sale", "fn": "sum", "field": "total" } ],
+      "tables": [ { "title": "Sales per customer", "entity": "Sale", "groupBy": "customer", "groupTitle": "Customer",
+                    "metrics": [ { "fn": "count", "as": "purchases", "title": "Purchases" }, { "fn": "sum", "field": "quantity", "as": "cups", "title": "Cups" },
+                                 { "fn": "sum", "field": "total", "as": "revenue", "title": "Total sales" } ],
+                    "sort": { "field": "revenue", "dir": "desc" } } ] }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "app": "trading",
+  "task": "webgen-bench/000041",
+  "note": "Online trading with real accounts: guests browse opportunities, traders place bids from the opportunity page (own rows, bounded by the risk limit of their account), withdraw them, read their bid history and a personal dashboard, and edit their trading account; the admin accepts or rejects bids and closes opportunities. Registration creates the trading account.",
+  "theme": { "background": "lemonchiffon", "accent": "chocolate" },
+  "home": "/Opportunity",
+
+  "data": {
+    "Trader":      { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,trader]=trader",
+                     "limit": "money := sum(Account: riskLimit)", "committed": "money := sum(Bid: if(status = 'placed', price * quantity, 0))" },
+    "Account":     { "trader": "ref:Trader!", "name": "text!", "currency": "enum[USD,EUR,GBP]=USD", "phone": "text", "riskLimit": "money=5000" },
+    "Opportunity": { "title": "text!", "kind": "enum[stock,bond,commodity,crypto]=stock", "askPrice": "money!", "quantity": "int=1", "closesAt": "date",
+                     "status": "enum[open,closed]=open", "bids": "int := count(Bid)", "bestBid": "money := max(Bid: price)" },
+    "Bid":         { "opportunity": "ref:Opportunity!", "trader": "ref:Trader!", "price": "money!", "quantity": "int=1", "total": "money := price * quantity",
+                     "status": "enum[placed,accepted,rejected,withdrawn]=placed", "placedAt": "time=now" }
+  },
+
+  "rules": {
+    "Trader": [ { "unique": "email" } ],
+    "Bid":    [ { "check": "price > 0", "message": "Price must be positive" },
+                { "check": "quantity > 0 and quantity <= opportunity.quantity", "message": "Quantity must be between 1 and the units offered" },
+                { "check": "status != 'placed' or opportunity.status = 'open'", "message": "This opportunity is closed" },
+                { "check": "status != 'placed' or trader.committed + price * quantity <= trader.limit", "message": "This bid exceeds the risk limit of your account" } ]
+  },
+
+  "roles": {
+    "entity": "Trader", "login": "email", "password": "password", "role": "role",
+    "register": "trader", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "trader": { "Opportunity": ["view"],
+                  "Bid": { "own": "trader", "can": ["view", "create", "go:withdraw"] },
+                  "Account": { "own": "trader", "can": ["view", "edit"] } },
+      "guest":  { "Opportunity": ["view"] }
+    }
+  },
+
+  "events": [
+    { "on": "Trader.created", "do": [ { "block": "db.createRow", "entity": "Account", "values": { "trader": "@row.id", "name": "Main account" } } ] }
+  ],
+
+  "seed": {
+    "Trader":      [ { "email": "admin@trading.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                     { "email": "mia@trading.test", "password": "mia123", "name": "Mia Chen" },
+                     { "email": "leo@trading.test", "password": "leo123", "name": "Leo Novak" } ],
+    "Account":     [ { "trader": 2, "name": "Main account", "currency": "USD", "phone": "+1 415 555 0100", "riskLimit": 5000 },
+                     { "trader": 3, "name": "Main account", "currency": "EUR", "phone": "+43 1 555 0200", "riskLimit": 3000 } ],
+    "Opportunity": [ { "title": "Helio Energy shares", "kind": "stock", "askPrice": 12.5, "quantity": 500, "closesAt": "2026-10-15" },
+                     { "title": "Northwind 2030 bond", "kind": "bond", "askPrice": 98, "quantity": 50, "closesAt": "2026-11-01" },
+                     { "title": "Copper futures lot", "kind": "commodity", "askPrice": 4.2, "quantity": 1000, "closesAt": "2026-10-20" },
+                     { "title": "Bitcoin block", "kind": "crypto", "askPrice": 61000, "quantity": 1, "closesAt": "2026-12-31" },
+                     { "title": "Marisol Retail shares", "kind": "stock", "askPrice": 8.75, "quantity": 300, "closesAt": "2026-08-30", "status": "closed" } ],
+    "Bid":         [ { "opportunity": 5, "trader": 2, "price": 8.5, "quantity": 100, "status": "accepted", "placedAt": "2026-08-20T10:00:00.000Z" },
+                     { "opportunity": 5, "trader": 2, "price": 8, "quantity": 50, "status": "rejected", "placedAt": "2026-08-18T15:30:00.000Z" },
+                     { "opportunity": 1, "trader": 3, "price": 12.6, "quantity": 100, "placedAt": "2026-09-10T11:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Bid": { "field": "status", "transitions": [
+      { "name": "accept", "from": ["placed"], "to": "accepted", "title": "Accept bid (trade)", "by": ["admin"],
+        "confirm": "Trade done: {row.quantity} x {row.opportunity.title} at {row.price} for {row.trader.email}" },
+      { "name": "reject", "from": ["placed"], "to": "rejected", "title": "Reject bid", "by": ["admin"] },
+      { "name": "withdraw", "from": ["placed"], "to": "withdrawn", "title": "Withdraw bid", "confirm": "Bid withdrawn" }
+    ] },
+    "Opportunity": { "field": "status", "transitions": [
+      { "name": "close", "from": ["open"], "to": "closed", "title": "Close bidding", "by": ["admin"] }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Opportunity.list":   { "title": "Opportunities", "intro": "Open an opportunity to place a bid.",
+                            "columns": ["title", "kind", "askPrice", "quantity", "closesAt", "status", "bids", "bestBid"], "search": ["title"],
+                            "filters": [ { "name": "Kind", "field": "kind" }, { "name": "Status", "field": "status" } ], "rowActions": ["view"] },
+    "Opportunity.detail": { "fields": ["title", "kind", "askPrice", "quantity", "closesAt", "status", "bids", "bestBid"],
+                            "related": [ { "entity": "Bid", "via": "opportunity", "title": "Bids", "columns": ["trader", "price", "quantity", "total", "status", "placedAt"],
+                                           "form": ["price", "quantity"], "submit": "Place bid", "confirm": "Bid placed — it is now in your bid history",
+                                           "rowActions": ["view"] } ] },
+    "Bid.list":           { "hidden": true, "create": false },
+    "Bid.detail":         { "fields": ["opportunity", "trader", "price", "quantity", "total", "status", "placedAt"] },
+    "Account.list":       { "title": "Account", "columns": ["name", "currency", "phone", "riskLimit"], "rowActions": ["view", "edit"], "create": false },
+    "Account.form":       { "title": "Account information", "fields": ["name", "currency", "phone", "riskLimit"], "submit": "Save",
+                            "afterEdit": "/Account/{id}", "confirmEdit": "Account information updated" },
+    "Account.detail":     { "fields": ["trader", "name", "currency", "phone", "riskLimit"] },
+    "Trader.list":        { "title": "Traders", "columns": ["email", "name", "role", "limit", "committed"] }
+  },
+
+  "lists": [
+    { "id": "history", "entity": "Bid", "title": "Trading history", "columns": ["opportunity", "price", "quantity", "total", "status", "placedAt"],
+      "rowActions": ["view"], "sort": { "field": "placedAt", "dir": "desc" } }
+  ],
+
+  "dashboards": [
+    { "id": "account", "title": "My dashboard", "roles": ["trader"], "period": { "Bid": "placedAt" },
+      "cards": [ { "title": "Open bids", "entity": "Bid", "fn": "count", "where": { "trader": "@me", "status": "placed" } },
+                 { "title": "Committed", "entity": "Bid", "fn": "sum", "field": "total", "where": { "trader": "@me", "status": "placed" } },
+                 { "title": "Trades won", "entity": "Bid", "fn": "count", "where": { "trader": "@me", "status": "accepted" } },
+                 { "title": "Bought", "entity": "Bid", "fn": "sum", "field": "total", "where": { "trader": "@me", "status": "accepted" } } ],
+      "tables": [ { "title": "My bids by status", "entity": "Bid", "groupBy": "status", "groupTitle": "Status", "where": { "trader": "@me" },
+                    "metrics": [ { "fn": "count", "as": "bids", "title": "Bids" }, { "fn": "sum", "field": "total", "as": "amount", "title": "Amount" } ] },
+                  { "title": "My bids by month", "entity": "Bid", "groupBy": "placedAt", "groupUnit": "month", "groupTitle": "Month", "where": { "trader": "@me" },
+                    "metrics": [ { "fn": "count", "as": "bids", "title": "Bids" }, { "fn": "sum", "field": "total", "as": "amount", "title": "Amount" } ] } ] },
+    { "id": "market", "title": "Market", "roles": ["admin"],
+      "cards": [ { "title": "Open opportunities", "entity": "Opportunity", "fn": "count", "where": { "status": "open" } },
+                 { "title": "Bids placed", "entity": "Bid", "fn": "count", "where": { "status": "placed" } },
+                 { "title": "Traded", "entity": "Bid", "fn": "sum", "field": "total", "where": { "status": "accepted" } } ],
+      "tables": [ { "title": "Bids by trader", "entity": "Bid", "groupBy": "trader", "groupTitle": "Trader",
+                    "metrics": [ { "fn": "count", "as": "bids", "title": "Bids" }, { "fn": "sum", "field": "total", "as": "amount", "title": "Amount" } ] } ] }
+  ]
+}

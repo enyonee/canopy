@@ -1,0 +1,110 @@
+{
+  "app": "domains",
+  "task": "webgen-bench/000039",
+  "note": "Domain leasing with real accounts: guests search, customers lease, renew and transfer domains (each step writes an order and mails the parties), pay their orders, and see their own domains and order history; the admin manages users, domains and a payments dashboard. Expiry dates are entered on the transition (no date arithmetic); 'only the holder' is enforced by a db.adjust floor. db.createRow is always the last step: the runtime lets its id replace the current row's id, so later steps and the confirm text would see the wrong row.",
+  "theme": { "background": "oldlace", "accent": "rosybrown" },
+  "home": "/Domain",
+
+  "data": {
+    "User":   { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,customer]=customer" },
+    "Domain": { "name": "text!", "price": "money!", "status": "enum[available,leased]=available", "holder": "ref:User", "expiresAt": "date",
+                "transferTo": "ref:User", "renewals": "int=0", "transfers": "int=0", "daysLeft": "int := days(expiresAt, today)" },
+    "Order":  { "domain": "ref:Domain!", "customer": "ref:User!", "kind": "enum[lease,renewal,transfer]=lease", "amount": "money=0",
+                "status": "enum[unpaid,paid]=unpaid", "method": "enum[card,paypal,bank]=card", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User":   [ { "unique": "email" } ],
+    "Domain": [ { "unique": "name", "message": "This domain is already listed" },
+                { "check": "expiresAt = null or expiresAt > today", "message": "The expiry date must be in the future" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "customer", "anonymous": "guest",
+    "can": {
+      "admin":    "*",
+      "customer": { "Domain": ["view", "go:lease", "go:renew", "go:transfer"],
+                    "Order": { "own": "customer", "can": ["view", "go:pay"] } },
+      "guest":    { "Domain": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":   [ { "email": "admin@domains.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                { "email": "dana@domains.test", "password": "dana123", "name": "Dana Reyes" },
+                { "email": "eli@domains.test", "password": "eli123", "name": "Eli Park" } ],
+    "Domain": [ { "name": "bright.io", "price": 12 },
+                { "name": "northwind.com", "price": 15, "status": "leased", "holder": 2, "expiresAt": "2026-10-01" },
+                { "name": "helio.dev", "price": 9 },
+                { "name": "oldlace.shop", "price": 20, "status": "leased", "holder": 3, "expiresAt": "2027-03-01" },
+                { "name": "quick.net", "price": 15 } ],
+    "Order":  [ { "domain": 2, "customer": 2, "kind": "lease", "amount": 15, "status": "paid", "method": "card", "createdAt": "2025-10-01T09:00:00.000Z" },
+                { "domain": 4, "customer": 3, "kind": "lease", "amount": 20, "status": "paid", "method": "paypal", "createdAt": "2026-03-01T09:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Domain": { "field": "status", "transitions": [
+      { "name": "lease", "from": ["available"], "to": "leased", "title": "Lease this domain", "fields": ["expiresAt"],
+        "confirm": "Leased until {values.expiresAt} — order #{created} is waiting for payment", "after": "/Domain/{id}",
+        "do": [ { "block": "db.update", "set": { "holder": "@me" } },
+                { "block": "mail.send", "connector": "mail", "to": "@row.holder.email", "subject": "Lease of {row.name} confirmed",
+                  "text": "Hello {row.holder.name}, {row.name} is leased to you until {row.expiresAt}. An order for {row.price} is waiting for payment." },
+                { "block": "db.createRow", "entity": "Order", "values": { "domain": "@row.id", "customer": "@me", "kind": "lease", "amount": "@row.price" } } ] },
+      { "name": "renew", "from": ["leased"], "to": "leased", "title": "Renew lease", "fields": ["expiresAt"],
+        "confirm": "Lease renewed until {values.expiresAt} — order #{created} is waiting for payment",
+        "do": [ { "block": "db.adjust", "field": "renewals", "by": "= if(holder = me, 1, -1)", "min": 0, "message": "Only the current holder can renew this domain" },
+                { "block": "mail.send", "connector": "mail", "to": "@row.holder.email", "subject": "{row.name} renewed until {row.expiresAt}",
+                  "text": "Hello {row.holder.name}, the lease of {row.name} now runs until {row.expiresAt}." },
+                { "block": "db.createRow", "entity": "Order", "values": { "domain": "@row.id", "customer": "@me", "kind": "renewal", "amount": "@row.price" } } ] },
+      { "name": "transfer", "from": ["leased"], "to": "leased", "title": "Transfer to another account", "fields": ["transferTo"], "after": "/list/my-domains",
+        "confirm": "Domain transferred — order #{created} records the transfer fee",
+        "do": [ { "block": "db.adjust", "field": "transfers", "by": "= if(holder = me, 1, -1)", "min": 0, "message": "Only the current holder can transfer this domain" },
+                { "block": "mail.send", "connector": "mail", "to": "@row.holder.email", "subject": "You transferred {row.name}",
+                  "text": "{row.name} now belongs to {row.transferTo.name} ({row.transferTo.email})." },
+                { "block": "mail.send", "connector": "mail", "to": "@row.transferTo.email", "subject": "{row.name} was transferred to you",
+                  "text": "{row.holder.name} transferred {row.name} to your account; the lease runs until {row.expiresAt}." },
+                { "block": "db.update", "set": { "holder": "@row.transferTo" } },
+                { "block": "db.createRow", "entity": "Order", "values": { "domain": "@row.id", "customer": "@me", "kind": "transfer", "amount": 5 } } ] }
+    ] },
+    "Order": { "field": "status", "transitions": [
+      { "name": "pay", "from": ["unpaid"], "to": "paid", "title": "Pay now", "fields": ["method"],
+        "confirm": "Order #{row.id} paid by {row.method}: {row.amount}" }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "registry@domains.test" } },
+
+  "views": "auto",
+  "override": {
+    "Domain.list":   { "title": "Domains", "intro": "Type a domain name to see whether it is available for lease.",
+                       "columns": ["name", "price", "status", "expiresAt"], "search": ["name"],
+                       "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"] },
+    "Domain.form":   { "fields": ["name", "price"] },
+    "Domain.detail": { "fields": ["name", "price", "status", "holder", "expiresAt", "daysLeft", "renewals", "transfers"] },
+    "Order.list":    { "title": "Orders", "columns": ["id", "domain", "customer", "kind", "amount", "status", "method", "createdAt"],
+                       "filters": [ { "name": "Kind", "field": "kind" }, { "name": "Status", "field": "status" } ],
+                       "create": false, "rowActions": ["view", "go:pay"] },
+    "User.list":     { "title": "Users", "columns": ["email", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "my-domains", "entity": "Domain", "title": "My domains", "roles": ["customer"], "where": { "holder": "@me" },
+      "columns": ["name", "expiresAt", "daysLeft", "renewals", "status"], "rowActions": ["view"] },
+    { "id": "expiring", "entity": "Domain", "title": "Expiring soon", "roles": ["customer"], "where": { "holder": "@me", "daysLeft": { "lte": 30 } },
+      "columns": ["name", "expiresAt", "daysLeft"], "rowActions": ["view"] }
+  ],
+
+  "dashboards": [
+    { "id": "payments", "title": "Payments", "roles": ["admin"], "period": { "Order": "createdAt" },
+      "cards": [ { "title": "Unpaid orders", "entity": "Order", "fn": "count", "where": { "status": "unpaid" } },
+                 { "title": "Revenue", "entity": "Order", "fn": "sum", "field": "amount", "where": { "status": "paid" } },
+                 { "title": "Leased domains", "entity": "Domain", "fn": "count", "where": { "status": "leased" } } ],
+      "tables": [ { "title": "Orders by kind", "entity": "Order", "groupBy": "kind", "groupTitle": "Kind",
+                    "metrics": [ { "fn": "count", "as": "orders", "title": "Orders" }, { "fn": "sum", "field": "amount", "as": "amount", "title": "Amount" } ] },
+                  { "title": "Orders by status", "entity": "Order", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "orders", "title": "Orders" }, { "fn": "sum", "field": "amount", "as": "amount", "title": "Amount" } ] },
+                  { "title": "Orders by month", "entity": "Order", "groupBy": "createdAt", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "orders", "title": "Orders" }, { "fn": "sum", "field": "amount", "as": "amount", "title": "Amount" } ] } ] }
+  ]
+}

@@ -67,7 +67,13 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
   const ROWS = { row: 'rowEntity', each: 'eachEntity', found: 'foundEntity', picked: 'pickedEntity' };
   const refValue = (ctx, pathParts) => {
     const [head, ...rest] = pathParts;
-    if (head === 'me') return ctx.user ? ctx.user.id : meId;
+    if (head === 'me') {
+      const id = ctx.user ? ctx.user.id : meId;
+      if (!rest.length) return id;
+      const ent = graph.roles?.entity || graph.identity?.entity;
+      const who = ent && store.raw(ent, id);
+      return who ? store.ctx(ent, who).get(rest) : null;
+    }
     if (head === 'now') return new Date().toISOString();
     if (head === 'today') return new Date().toISOString().slice(0, 10);
     if (head === 'values') return ctx.values?.[rest[0]];
@@ -79,17 +85,14 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     }
     return rest.length ? undefined : ctx[head];
   };
+  // The checker only lets bare names and aggregates through where a row exists.
   const exprCtx = (ctx) => ({
     get(p) {
       const [head] = p;
       if (['me', 'now', 'today', 'values', 'created', 'delivery'].includes(head) || ROWS[head]) return refValue(ctx, p);
-      if (ctx.row) return store.ctx(ctx.rowEntity, ctx.row).get(p);
-      throw new Error(`unknown name "${head}" in expression`);
+      return store.ctx(ctx.rowEntity, ctx.row).get(p);
     },
-    rows(child, via) {
-      if (!ctx.row) throw new Error(`no current row to aggregate ${child} against`);
-      return store.ctx(ctx.rowEntity, ctx.row).rows(child, via);
-    },
+    rows: (child, via) => store.ctx(ctx.rowEntity, ctx.row).rows(child, via),
   });
   const makeResolve = (ctx) => {
     const one = (v) => {
@@ -135,8 +138,10 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         resolve: makeResolve(ctx), text: (s) => interpolate(s, ctx),
         run: (sub, extra) => runSteps(sub, { ...ctx, ...extra }),
       });
-      Object.assign(ctx, out);
-      if (out.id) ctx.created = out.id;
+      // A block's "id" is the row it created, never the row the action runs on.
+      const { id: createdId, ...rest } = out;
+      Object.assign(ctx, rest);
+      if (createdId) ctx.created = createdId;
       if (out.found) ctx.foundEntity = step.entity;
       if (out.picked) ctx.pickedEntity = step.from;
       if (ctx.rowEntity && ctx.id) ctx.row = store.get(ctx.rowEntity, ctx.id) || ctx.row;
@@ -165,7 +170,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     for (const f of fields) {
       if (f.derive) continue;
       const v = values[f.name];
-      if (partial && v === undefined) continue;
+      if (partial && (v === undefined || (f.kind === 'password' && v === ''))) continue;
       if (f.required && (v === undefined || String(v).trim() === '')) problems.push(`${f.name} is required`);
       if ((f.kind === 'int' || f.kind === 'money') && v !== undefined && v !== '' && Number.isNaN(Number(v))) problems.push(`${f.name} must be a number`);
       if (f.kind === 'enum' && v && !f.options.includes(String(v))) problems.push(`${f.name} must be one of: ${f.options.join(', ')}`);
@@ -180,7 +185,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     for (const rule of graph.rules?.[entity] || []) {
       if (rule.unique !== undefined) {
         const v = values[rule.unique];
-        if (v !== undefined && v !== '' && store.exists(entity, rule.unique, v, existing?.id)) problems.push(rule.message || `${label(rule.unique)} is already taken`);
+        if (v !== undefined && v !== '' && store.exists(entity, rule.unique, v, existing?.id)) problems.push(rule.message || `${rule.unique} is already taken`);
         continue;
       }
       let ok;
@@ -226,12 +231,14 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
 
     // Who is asking.
     const user = sess ? store.get(graph.roles.entity, sess.read(req.headers.cookie)) : null;
+    const ownWhere = (entity) => { const own = perms.ownField(user, entity); return own ? { [own]: user ? user.id : -1 } : {}; };
     const role = perms.enabled ? perms.roleOf(user) : null;
     const vc = {
       user, role,
       can: (e, op, row) => perms.can(user, e, op, row),
       canSee: (item) => perms.canSee(user, item),
       ownField: (e) => perms.ownField(user, e),
+      ownWhere: (e) => ownWhere(e),
       outbox: !perms.enabled || perms.isAdmin(user),
     };
     const deny = (message) => {
@@ -239,7 +246,6 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       if (perms.enabled && !user && req.method === 'GET') return redirect(`/login?next=${encodeURIComponent(url.pathname + url.search)}`);
       return send(403, forbiddenPage(graph, vc, message));
     };
-    const ownWhere = (entity) => { const own = perms.ownField(user, entity); return own ? { [own]: user ? user.id : -1 } : {}; };
     const resolveTop = makeResolve({ user, values: {} });
 
     try {
@@ -267,9 +273,11 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         const submitted = checkboxes(entity, await parseBody(req));
         const values = { ...submitted, [graph.roles.role]: graph.roles.register };
         const problems = validateValues(entity, values);
-        if (!problems.length && store.exists(entity, graph.roles.login, values[graph.roles.login])) problems.push(`${label(graph.roles.login)} is already registered`);
+        if (!problems.length && store.exists(entity, graph.roles.login, values[graph.roles.login])) problems.push(`${graph.roles.login} is already registered`);
         if (problems.length) { trace({ kind: 'rejected', entity, problems }); return send(400, registerView(graph, store, fields, submitted, problems, vc)); }
-        const id = await withEffects(() => { const n = store.insert(entity, values); fireEvents('created', entity, n, values, null); return n; });
+        let id;
+        try { id = await attempt(() => { const n = store.insert(entity, values); fireEvents('created', entity, n, values, null); return n; }); }
+        catch (e) { trace({ kind: 'refused', entity, message: e.message }); return send(400, registerView(graph, store, fields, submitted, [e.message], vc)); }
         headers['set-cookie'] = sess.setCookie(id);
         trace({ kind: 'register', who: id });
         return ok('/', `Welcome, ${values[graph.roles.login]}`);
@@ -375,7 +383,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         return send(200, listView(graph, store, entity, fields, rows, { q, where, flash, vc, range }));
       }
       if (req.method === 'GET' && parts[1] === 'new') {
-        return vc.can(entity, 'create') ? send(200, formView(graph, store, entity, fields, {}, 'new', [], vc)) : deny();
+        return vc.can(entity, 'create') ? send(200, formView(graph, store, entity, fields, {}, 'new', [], vc, flash)) : deny();
       }
       if (req.method === 'GET' && parts.length === 2) {
         const row = store.get(entity, parts[1]);
@@ -385,7 +393,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       if (req.method === 'GET' && parts[2] === 'edit') {
         const row = store.get(entity, parts[1]);
         if (!row) return send(404, errorPage(graph, `no ${entity} #${parts[1]}`));
-        return vc.can(entity, 'edit', row) ? send(200, formView(graph, store, entity, fields, row, 'edit', [], vc)) : deny();
+        return vc.can(entity, 'edit', row) ? send(200, formView(graph, store, entity, fields, row, 'edit', [], vc, flash)) : deny();
       }
       if (req.method !== 'POST') return send(404, errorPage(graph, 'no route'));
 
@@ -401,12 +409,15 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
           trace({ kind: 'rejected', entity, problems });
           return send(400, formView(graph, store, entity, fields, submitted, 'new', problems, vc));
         }
-        const id = await withEffects(() => {
-          const n = store.insert(entity, values);
-          trace({ kind: 'create', entity, id: n, effects: ['db.write'], who: user?.id ?? null });
-          fireEvents('created', entity, n, values, user);
-          return n;
-        });
+        let id;
+        try {
+          id = await attempt(() => {
+            const n = store.insert(entity, values);
+            trace({ kind: 'create', entity, id: n, effects: ['db.write'], who: user?.id ?? null });
+            fireEvents('created', entity, n, values, user);
+            return n;
+          });
+        } catch (e) { trace({ kind: 'refused', entity, message: e.message }); return send(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc)); }
         const after = afterPath(formOv.after || `/${entity}`, entity, id);
         return ok(after, formOv.confirm || `${label(entity)} saved successfully`);
       }
@@ -416,11 +427,13 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
 
       if (parts[2] === 'delete') {
         if (!vc.can(entity, 'delete', row)) return deny();
-        await withEffects(() => {
-          store.remove(entity, id);
-          trace({ kind: 'delete', entity, id, effects: ['db.write'], who: user?.id ?? null });
-          fireEvents('deleted', entity, id, {}, user, row);
-        });
+        try {
+          await attempt(() => {
+            store.remove(entity, id);
+            trace({ kind: 'delete', entity, id, effects: ['db.write'], who: user?.id ?? null });
+            fireEvents('deleted', entity, id, {}, user, row);
+          });
+        } catch (e) { trace({ kind: 'refused', entity, id, message: e.message }); return send(400, detailView(graph, store, entity, fields, row, e.message, vc)); }
         return ok(`/${entity}`, `${label(entity)} deleted`);
       }
       if (parts[2] === 'action') {
@@ -466,11 +479,13 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         if (own) values[own] = user.id;
         const problems = validateValues(child, values);
         if (problems.length) return send(400, detailView(graph, store, entity, fields, row, problems.join('; '), vc));
-        await withEffects(() => {
-          const kid = store.insert(child, values);
-          trace({ kind: 'create', entity: child, id: kid, via: rel.via, effects: ['db.write'], who: user?.id ?? null });
-          fireEvents('created', child, kid, values, user);
-        });
+        try {
+          await attempt(() => {
+            const kid = store.insert(child, values);
+            trace({ kind: 'create', entity: child, id: kid, via: rel.via, effects: ['db.write'], who: user?.id ?? null });
+            fireEvents('created', child, kid, values, user);
+          });
+        } catch (e) { trace({ kind: 'refused', entity: child, message: e.message }); return send(400, detailView(graph, store, entity, fields, row, e.message, vc)); }
         return ok(`/${entity}/${id}`, rel.confirm || `${label(child)} added successfully`);
       }
       if (parts.length === 2) {
@@ -480,11 +495,13 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         if (own) delete submitted[own];
         const problems = validateValues(entity, submitted, { partial: true, existing: store.raw(entity, id) });
         if (problems.length) return send(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', problems, vc));
-        await withEffects(() => {
-          store.update(entity, id, submitted);
-          trace({ kind: 'update', entity, id, effects: ['db.write'], who: user?.id ?? null });
-          fireEvents('updated', entity, id, submitted, user);
-        });
+        try {
+          await attempt(() => {
+            store.update(entity, id, submitted);
+            trace({ kind: 'update', entity, id, effects: ['db.write'], who: user?.id ?? null });
+            fireEvents('updated', entity, id, submitted, user);
+          });
+        } catch (e) { trace({ kind: 'refused', entity, id, message: e.message }); return send(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', [e.message], vc)); }
         return ok(afterPath(formOv.afterEdit || `/${entity}`, entity, id), formOv.confirmEdit || `${label(entity)} updated successfully`);
       }
       return send(404, errorPage(graph, 'no route'));

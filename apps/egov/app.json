@@ -1,0 +1,157 @@
+{
+  "app": "egov",
+  "task": "webgen-bench/000047",
+  "note": "E-government office with two roles: manager (approves) and staff (applies). Infrastructure is an asset register to browse. Procurement, leave, travel permits (cadres leaving Shenzhen) and decisions are applications with status transitions decided by a manager; every decision mails the parties. The 'five powers' are the power an item of decision-making exercises (decision, execution, supervision, personnel, finance). Finance is a ledger with a period dashboard. Staff see only their own applications.",
+  "theme": { "background": "lightpink", "accent": "mediumvioletred" },
+  "home": "/page/office",
+
+  "data": {
+    "User":          { "name": "text!", "email": "text!", "password": "password!", "role": "enum[manager,staff]=staff", "department": "text", "position": "text",
+                       "leaveDays": "int := sum(LeaveRequest: if(status = 'approved', dayCount, 0))" },
+    "Asset":         { "name": "text!", "kind": "enum[building,vehicle,equipment,network]=equipment", "location": "text!",
+                       "condition": "enum[good,repair,retired]=good", "acquiredAt": "date", "value": "money=0", "custodian": "ref:User", "note": "longtext" },
+    "Procurement":   { "title": "text!", "applicant": "ref:User!", "item": "text!", "quantity": "int=1", "budget": "money!", "justification": "longtext",
+                       "status": "enum[submitted,approved,rejected,ordered]=submitted", "filedAt": "date=today", "decision": "text" },
+    "LeaveRequest":  { "employee": "ref:User!", "kind": "enum[annual,sick,personal,training]=annual", "startDate": "date!", "endDate": "date!",
+                       "dayCount": "int := days(endDate, startDate) + 1", "reason": "longtext",
+                       "status": "enum[pending,approved,rejected]=pending", "filedAt": "date=today" },
+    "TravelPermit":  { "cadre": "ref:User!", "destination": "text!", "purpose": "text!", "startDate": "date!", "endDate": "date!",
+                       "status": "enum[pending,approved,rejected]=pending", "filedAt": "date=today" },
+    "Attendance":    { "employee": "ref:User!", "date": "date=today", "status": "enum[present,late,remote,absent]=present", "note": "text" },
+    "FinanceRecord": { "title": "text!", "kind": "enum[income,expense]=expense",
+                       "category": "enum[salaries,procurement,infrastructure,services,grants,other]=other", "amount": "money!", "date": "date=today", "department": "text" },
+    "Decision":      { "title": "text!", "power": "enum[decision,execution,supervision,personnel,finance]=decision", "initiator": "ref:User!", "reviewer": "ref:User!",
+                       "summary": "longtext!", "status": "enum[draft,review,approved,rejected]=draft", "createdAt": "time=now", "decidedAt": "date", "verdict": "text" }
+  },
+
+  "rules": {
+    "User":          [ { "unique": "email" } ],
+    "Procurement":   [ { "check": "budget > 0", "message": "Budget must be positive" }, { "check": "quantity > 0", "message": "Quantity must be at least 1" } ],
+    "LeaveRequest":  [ { "check": "endDate >= startDate", "message": "The end date cannot be before the start date" } ],
+    "TravelPermit":  [ { "check": "endDate >= startDate", "message": "The end date cannot be before the start date" } ],
+    "FinanceRecord": [ { "check": "amount > 0", "message": "Amount must be positive" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": {
+      "manager": "*",
+      "staff": { "User": ["view"], "Asset": ["view"], "FinanceRecord": ["view"],
+                 "Procurement":  { "own": "applicant", "can": ["view", "create"] },
+                 "LeaveRequest": { "own": "employee", "can": ["view", "create"] },
+                 "TravelPermit": { "own": "cadre", "can": ["view", "create"] },
+                 "Attendance":   { "own": "employee", "can": ["view", "create"] },
+                 "Decision":     { "own": "initiator", "can": ["view", "create", "go:submit"] } }
+    }
+  },
+
+  "seed": {
+    "User":          [ { "name": "Chen Ming", "email": "chen@egov.test", "password": "chen123", "role": "manager", "department": "General Office", "position": "Director" },
+                       { "name": "Li Wei", "email": "li@egov.test", "password": "li123", "role": "staff", "department": "Procurement Office", "position": "Officer" },
+                       { "name": "Zhang Yan", "email": "zhang@egov.test", "password": "zhang123", "role": "staff", "department": "Infrastructure Office", "position": "Engineer" } ],
+    "Asset":         [ { "name": "Civic Center Tower B", "kind": "building", "location": "12 Shennan Road", "condition": "good", "acquiredAt": "2015-06-01", "value": 25000000, "custodian": 3, "note": "14 floors, 620 workstations" },
+                       { "name": "Service van SZ-4471", "kind": "vehicle", "location": "Motor pool", "condition": "repair", "acquiredAt": "2021-03-15", "value": 180000, "custodian": 3 },
+                       { "name": "Core switch rack", "kind": "network", "location": "Data room, floor 3", "condition": "good", "acquiredAt": "2023-09-10", "value": 96000, "custodian": 3 },
+                       { "name": "Council chamber projector", "kind": "equipment", "location": "Tower B, room 402", "condition": "good", "acquiredAt": "2024-01-20", "value": 12000, "custodian": 2 } ],
+    "Procurement":   [ { "title": "Office chairs for floor 4", "applicant": 2, "item": "Ergonomic chair", "quantity": 40, "budget": 32000, "status": "approved", "filedAt": "2026-07-10", "decision": "Within the furniture budget" },
+                       { "title": "Toner cartridges Q3", "applicant": 3, "item": "Toner cartridge", "quantity": 24, "budget": 4800, "status": "submitted", "filedAt": "2026-09-01" } ],
+    "LeaveRequest":  [ { "employee": 3, "kind": "annual", "startDate": "2026-08-11", "endDate": "2026-08-15", "reason": "Summer holiday", "status": "approved", "filedAt": "2026-08-01" } ],
+    "TravelPermit":  [ { "cadre": 3, "destination": "Guangzhou", "purpose": "Provincial infrastructure meeting", "startDate": "2026-09-25", "endDate": "2026-09-26", "filedAt": "2026-09-10" } ],
+    "Attendance":    [ { "employee": 2, "date": "2026-09-14", "status": "present" }, { "employee": 3, "date": "2026-09-14", "status": "remote", "note": "Site inspection" } ],
+    "FinanceRecord": [ { "title": "Q1 budget allocation", "kind": "income", "category": "grants", "amount": 1200000, "date": "2026-01-15", "department": "General Office" },
+                       { "title": "January salaries", "kind": "expense", "category": "salaries", "amount": 310000, "date": "2026-01-31", "department": "General Office" },
+                       { "title": "February salaries", "kind": "expense", "category": "salaries", "amount": 310000, "date": "2026-02-28", "department": "General Office" },
+                       { "title": "Tower B roof repair", "kind": "expense", "category": "infrastructure", "amount": 85000, "date": "2026-03-05", "department": "Infrastructure Office" },
+                       { "title": "Office chairs", "kind": "expense", "category": "procurement", "amount": 32000, "date": "2026-07-20", "department": "Procurement Office" } ],
+    "Decision":      [ { "title": "Adopt e-invoicing for suppliers", "power": "finance", "initiator": 1, "reviewer": 1, "summary": "Replace paper invoices with the provincial e-invoice platform from Q4.",
+                         "status": "approved", "createdAt": "2026-06-01T09:00:00.000Z", "decidedAt": "2026-06-15", "verdict": "Approved unanimously" } ]
+  },
+
+  "states": {
+    "Procurement": { "field": "status", "transitions": [
+      { "name": "approve", "from": ["submitted"], "to": "approved", "title": "Approve", "by": ["manager"], "fields": ["decision"],
+        "confirm": "Application approved, {row.applicant.name} notified",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.applicant.email", "subject": "Procurement application approved: {row.title}",
+                  "text": "Your application for {row.quantity} x {row.item} ({row.budget}) was approved. {row.decision}" } ] },
+      { "name": "reject", "from": ["submitted"], "to": "rejected", "title": "Reject", "by": ["manager"], "fields": ["decision"],
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.applicant.email", "subject": "Procurement application rejected: {row.title}", "text": "{row.decision}" } ] },
+      { "name": "order", "from": ["approved"], "to": "ordered", "title": "Mark ordered", "by": ["manager"] } ] },
+    "LeaveRequest": { "field": "status", "transitions": [
+      { "name": "approve", "from": ["pending"], "to": "approved", "title": "Approve", "by": ["manager"],
+        "confirm": "Leave approved, {row.employee.name} notified",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.employee.email", "subject": "Your leave request was approved",
+                  "text": "{row.kind} leave from {row.startDate} to {row.endDate} ({row.dayCount} days) is approved." } ] },
+      { "name": "reject", "from": ["pending"], "to": "rejected", "title": "Reject", "by": ["manager"],
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.employee.email", "subject": "Your leave request was rejected",
+                  "text": "{row.kind} leave from {row.startDate} to {row.endDate} was not approved." } ] } ] },
+    "TravelPermit": { "field": "status", "transitions": [
+      { "name": "approve", "from": ["pending"], "to": "approved", "title": "Approve", "by": ["manager"],
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.cadre.email", "subject": "Permit to leave Shenzhen approved", "text": "{row.destination}, {row.startDate} to {row.endDate}." } ] },
+      { "name": "reject", "from": ["pending"], "to": "rejected", "title": "Reject", "by": ["manager"],
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.cadre.email", "subject": "Permit to leave Shenzhen rejected", "text": "{row.destination}, {row.startDate} to {row.endDate}." } ] } ] },
+    "Decision": { "field": "status", "transitions": [
+      { "name": "submit", "from": ["draft"], "to": "review", "title": "Submit for review",
+        "confirm": "Submitted for review; the reviewer and the initiator have been notified",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.reviewer.email", "subject": "Decision awaiting your review: {row.title}", "text": "{row.summary}" },
+                { "block": "mail.send", "connector": "mail", "to": "@row.initiator.email", "subject": "Your decision was submitted for review: {row.title}", "text": "Reviewer: {row.reviewer.name}." } ] },
+      { "name": "approve", "from": ["review"], "to": "approved", "title": "Approve", "by": ["manager"], "fields": ["verdict"],
+        "do": [ { "block": "db.update", "set": { "decidedAt": "@today" } },
+                { "block": "mail.send", "connector": "mail", "to": "@row.initiator.email", "subject": "Decision approved: {row.title}", "text": "{row.verdict}" } ] },
+      { "name": "reject", "from": ["review"], "to": "rejected", "title": "Reject", "by": ["manager"], "fields": ["verdict"],
+        "do": [ { "block": "db.update", "set": { "decidedAt": "@today" } },
+                { "block": "mail.send", "connector": "mail", "to": "@row.initiator.email", "subject": "Decision rejected: {row.title}", "text": "{row.verdict}" } ] } ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "office@egov.test" } },
+
+  "views": "auto",
+  "override": {
+    "User.list":          { "title": "Personnel", "columns": ["name", "department", "position", "role", "leaveDays"] },
+    "Asset.list":         { "title": "Infrastructure", "columns": ["name", "kind", "location", "condition", "acquiredAt", "value", "custodian"],
+                            "search": ["name", "location"], "filters": [ { "name": "Kind", "field": "kind" }, { "name": "Condition", "field": "condition" } ],
+                            "rowActions": ["view", "edit"], "createTitle": "Register asset" },
+    "Procurement.list":   { "title": "Procurement", "columns": ["id", "title", "applicant", "item", "quantity", "budget", "status", "filedAt"],
+                            "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"], "createTitle": "New application" },
+    "Procurement.form":   { "title": "Procurement application", "fields": ["title", "item", "quantity", "budget", "justification"], "submit": "Submit application",
+                            "confirm": "Procurement application submitted" },
+    "LeaveRequest.list":  { "title": "Leave", "columns": ["id", "employee", "kind", "startDate", "endDate", "dayCount", "status", "filedAt"],
+                            "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"], "createTitle": "Apply for leave" },
+    "LeaveRequest.form":  { "title": "Leave application", "fields": ["kind", "startDate", "endDate", "reason"], "submit": "Submit application",
+                            "confirm": "Leave application submitted" },
+    "TravelPermit.list":  { "title": "Leaving Shenzhen", "columns": ["cadre", "destination", "purpose", "startDate", "endDate", "status"],
+                            "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"], "createTitle": "Apply for permit" },
+    "TravelPermit.form":  { "title": "Permit to leave Shenzhen", "submit": "Submit application", "confirm": "Permit application submitted" },
+    "Attendance.list":    { "columns": ["date", "employee", "status", "note"], "filters": [ { "name": "Status", "field": "status" } ], "sort": { "field": "date", "dir": "desc" } },
+    "FinanceRecord.list": { "title": "Finance", "columns": ["date", "title", "kind", "category", "amount", "department"],
+                            "filters": [ { "name": "Kind", "field": "kind" }, { "name": "Category", "field": "category" }, { "name": "Date", "field": "date", "range": true } ],
+                            "sort": { "field": "date", "dir": "desc" } },
+    "Decision.list":      { "title": "Decisions", "columns": ["id", "title", "power", "initiator", "reviewer", "status", "createdAt"],
+                            "filters": [ { "name": "Status", "field": "status" }, { "name": "Power", "field": "power" } ], "rowActions": ["view"], "createTitle": "Initiate decision" },
+    "Decision.form":      { "title": "Initiate a decision", "fields": ["title", "power", "reviewer", "summary"], "submit": "Save draft",
+                            "confirm": "Decision drafted; submit it for review from its page", "after": "/Decision/{id}" },
+    "Decision.detail":    { "fields": ["title", "power", "initiator", "reviewer", "summary", "status", "createdAt", "decidedAt", "verdict"] }
+  },
+
+  "pages": [
+    { "id": "office", "title": "Office", "heading": "E-government office",
+      "body": [ "Browse infrastructure, submit applications, follow their status and, as a manager, decide on them.",
+                "Sections: infrastructure, procurement, personnel (leave, leaving Shenzhen, attendance), finance and decision-making." ],
+      "links": [ { "label": "Infrastructure", "href": "/Asset" }, { "label": "Procurement", "href": "/Procurement" }, { "label": "Leave", "href": "/LeaveRequest" },
+                 { "label": "Leaving Shenzhen", "href": "/TravelPermit" }, { "label": "Attendance", "href": "/Attendance" }, { "label": "Personnel", "href": "/User" },
+                 { "label": "Financial reports", "href": "/dashboard/finance" }, { "label": "Decisions", "href": "/Decision" } ] }
+  ],
+
+  "dashboards": [
+    { "id": "finance", "title": "Financial reports", "intro": "Income and expenses for a period, by category, month and department.", "period": { "FinanceRecord": "date" },
+      "cards": [ { "title": "Income", "entity": "FinanceRecord", "fn": "sum", "field": "amount", "where": { "kind": "income" } },
+                 { "title": "Expenses", "entity": "FinanceRecord", "fn": "sum", "field": "amount", "where": { "kind": "expense" } },
+                 { "title": "Entries", "entity": "FinanceRecord", "fn": "count" } ],
+      "tables": [ { "title": "By category", "entity": "FinanceRecord", "groupBy": "category", "groupTitle": "Category",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Entries" }, { "fn": "sum", "field": "amount", "as": "total", "title": "Total" } ],
+                    "sort": { "field": "total", "dir": "desc" } },
+                  { "title": "By month", "entity": "FinanceRecord", "groupBy": "date", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Entries" }, { "fn": "sum", "field": "amount", "as": "total", "title": "Total" } ] },
+                  { "title": "By department", "entity": "FinanceRecord", "groupBy": "department", "groupTitle": "Department",
+                    "metrics": [ { "fn": "sum", "field": "amount", "as": "total", "title": "Total" } ], "sort": { "field": "total", "dir": "desc" } } ] }
+  ]
+}

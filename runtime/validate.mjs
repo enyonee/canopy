@@ -2,7 +2,7 @@
 // the repair loop is where the tokens go, not the writing.
 import { parseField, isStored, exprKind } from './spec.mjs';
 import { CATALOG } from './blocks.mjs';
-import { parse as parseExpr, check as checkExpr, refs as exprRefs, isExpression, stripExpression } from './expr.mjs';
+import { parse as parseExpr, check as checkExpr, isExpression, stripExpression } from './expr.mjs';
 
 const near = (word, pool) => {
   const d = (a, b) => {
@@ -25,6 +25,7 @@ const TOP = ['app', 'task', 'note', 'theme', 'home', 'data', 'seed', 'identity',
   'dashboards', 'pages', 'actions', 'events', 'states', 'connectors', 'rules', 'allowDestructive'];
 const TRIGGERS = ['created', 'updated', 'deleted'];
 const CTX_NAMES = ['me', 'now', 'today', 'created', 'delivery', 'values'];
+const CMP = ['gte', 'lte', 'gt', 'lt', 'ne', 'in', 'like'];
 
 export function validate(graph) {
   const errors = [];
@@ -63,7 +64,7 @@ export function validate(graph) {
     err(path, `unknown entity "${e}"`, n.length ? `did you mean: ${n.join(', ')}?` : `known entities: ${entities.join(', ')}`);
     return false;
   };
-  const checkField = (e, f, path, { stored = false } = {}) => {
+  const checkField = (e, f, path, { stored = false, secret = false } = {}) => {
     if (!known(e).includes(f)) {
       const n = near(f, known(e));
       err(path, `field "${f}" does not exist on ${e}`,
@@ -71,7 +72,17 @@ export function validate(graph) {
       return false;
     }
     if (stored && fields[e][f].derive) { err(path, `"${f}" is derived (:=) and cannot be written`, 'derived fields are computed on read'); return false; }
+    if (secret && fields[e][f].kind === 'password') { err(path, `"${f}" is a password and is never shown`, 'drop it from the columns'); return false; }
     return true;
+  };
+
+  // A where clause: { field: value } or { field: { gte, lte, gt, lt, ne, in, like } }.
+  const checkWhere = (entity, where, path) => {
+    for (const [f, cmp] of Object.entries(where || {})) {
+      if (!checkField(entity, f, `${path}/${f}`)) continue;
+      if (cmp && typeof cmp === 'object' && !Array.isArray(cmp))
+        for (const op of Object.keys(cmp)) if (!CMP.includes(op)) err(`${path}/${f}/${op}`, `unknown comparison "${op}"`, `comparisons: ${CMP.join(', ')}`);
+    }
   };
 
   // --- expressions -------------------------------------------------------------------
@@ -105,9 +116,14 @@ export function validate(graph) {
     },
   });
   // Inside steps, names are the row and the values around it: row.x, each.x, found.x, values.x, me…
+  const userEntity = graph.roles?.entity || graph.identity?.entity || null;
   const stepScope = (ctxEntities) => ({
     field(path) {
       const [head, ...rest] = path;
+      if (head === 'me' && rest.length) {
+        if (!userEntity) throw new Error('"me" has no fields here: declare /roles or /identity');
+        return fieldScope(userEntity).field(rest);
+      }
       if (['me', 'created', 'delivery'].includes(head)) return 'ref';
       if (head === 'values') return 'any';
       if (ctxEntities[head]) return rest.length ? fieldScope(ctxEntities[head]).field(rest) : 'ref';
@@ -125,6 +141,11 @@ export function validate(graph) {
   };
   const checkRefPath = (v, ctxEntities, path) => {
     const [head, ...rest] = v.slice(1).split('.');
+    if (head === 'me' && rest.length) {
+      if (!userEntity) return err(path, `"${v}" needs a user entity`, 'declare /roles or /identity, or use "@me"');
+      try { fieldScope(userEntity).field(rest); } catch (e) { err(path, `bad reference "${v}": ${e.message}`); }
+      return;
+    }
     if (['me', 'now', 'today', 'created', 'delivery'].includes(head)) return;
     if (head === 'values') return;
     if (!ctxEntities[head]) {
@@ -157,19 +178,16 @@ export function validate(graph) {
       // Dependencies on other derived fields, through hops and aggregates.
       const out = new Set();
       const walk = (ast, e) => {
-        for (const r of exprRefs(ast)) {
-          if (r.path) {
+        const visit = (n) => {
+          if (n.t === 'path') {
             let cur = e;
-            for (const seg of r.path) {
+            for (const seg of n.p) {
               const g = fields[cur]?.[seg];
               if (!g) break;
               if (g.derive) out.add(`${cur}.${seg}`);
               if (g.kind === 'ref') cur = g.target; else break;
             }
-          }
-        }
-        const visit = (n) => {
-          if (n.t === 'agg') { if (entities.includes(n.entity) && n.body) walk(n.body, n.entity); }
+          } else if (n.t === 'agg') { if (entities.includes(n.entity) && n.body) walk(n.body, n.entity); }
           else if (n.t === 'un') visit(n.a);
           else if (n.t === 'bin') { visit(n.a); visit(n.b); }
           else if (n.t === 'call') n.args.forEach(visit);
@@ -287,8 +305,8 @@ export function validate(graph) {
       if (step.via && step.entity) checkField(step.entity, step.via, `${p}/via`);
       if (step.set && entity) Object.keys(step.set).forEach((f) => checkField(entity, f, `${p}/set/${f}`, { stored: true }));
       if (step.values && step.entity) Object.keys(step.values).forEach((f) => checkField(step.entity, f, `${p}/values/${f}`, { stored: true }));
-      if (step.where && step.entity) Object.keys(step.where).forEach((f) => checkField(step.entity, f, `${p}/where/${f}`));
-      if (step.where && step.block === 'db.each' && step.from) Object.keys(step.where).forEach((f) => checkField(step.from, f, `${p}/where/${f}`));
+      if (step.where && step.entity) checkWhere(step.entity, step.where, `${p}/where`);
+      if (step.where && step.block === 'db.each' && step.from) checkWhere(step.from, step.where, `${p}/where`);
       if (step.into && entity) checkField(entity, step.into, `${p}/into`, { stored: true });
       if (step.block === 'db.adjust' && step.field && target && fields[target]?.[step.field] && !['int', 'money'].includes(fields[target][step.field].kind))
         err(`${p}/field`, `db.adjust needs an int or money field; ${target}.${step.field} is ${fields[target][step.field].kind}`);
@@ -312,9 +330,9 @@ export function validate(graph) {
     const [entity, kind] = key.split('.');
     if (!checkEntity(entity, `/override/${key}`)) continue;
     if (!VIEWS.includes(kind)) { err(`/override/${key}`, `unknown view "${kind}"`, `views are: ${VIEWS.join(', ')}`); continue; }
-    (ov.columns || []).forEach((f) => f === 'id' || checkField(entity, f, `/override/${key}/columns`));
+    (ov.columns || []).forEach((f) => f === 'id' || checkField(entity, f, `/override/${key}/columns`, { secret: true }));
     (ov.search || []).forEach((f) => checkField(entity, f, `/override/${key}/search`, { stored: true }));
-    (ov.fields || []).forEach((f) => checkField(entity, f, `/override/${key}/fields`, { stored: kind === 'form' }));
+    (ov.fields || []).forEach((f) => checkField(entity, f, `/override/${key}/fields`, { stored: kind === 'form', secret: kind === 'detail' }));
     (ov.actions || []).forEach((a, i) => {
       const act = (graph.actions || []).find((x) => x.name === a);
       if (!act) err(`/override/${key}/actions/${i}`, `unknown action "${a}"`, `declared in /actions: ${actionNames.join(', ') || '(none)'}`);
@@ -322,7 +340,7 @@ export function validate(graph) {
     });
     if (ov.sort) checkField(entity, ov.sort.field, `/override/${key}/sort/field`);
     Object.keys(ov.fill || {}).forEach((f) => checkField(entity, f, `/override/${key}/fill/${f}`, { stored: true }));
-    Object.keys(ov.where || {}).forEach((f) => checkField(entity, f, `/override/${key}/where/${f}`));
+    checkWhere(entity, ov.where, `/override/${key}/where`);
     Object.keys(ov.labels || {}).forEach((f) => checkField(entity, f, `/override/${key}/labels/${f}`));
     (ov.filters || []).forEach((flt, i) => {
       if (!flt.field) return err(`/override/${key}/filters/${i}`, 'filter needs a "field"');
@@ -356,7 +374,7 @@ export function validate(graph) {
         if (f.kind !== 'ref') err(`${p}/via`, `"${rel.via}" is ${f.kind}, not a reference`, `declare it as "ref:${entity}"`);
         else if (f.target !== entity) err(`${p}/via`, `"${rel.via}" points at ${f.target}, not ${entity}`);
       }
-      (rel.columns || []).forEach((c) => c === 'id' || checkField(rel.entity, c, `${p}/columns`));
+      (rel.columns || []).forEach((c) => c === 'id' || checkField(rel.entity, c, `${p}/columns`, { secret: true }));
       (rel.rowActions || []).forEach((a, k) => {
         if (['edit', 'delete', 'view'].includes(a) || (typeof a === 'string' && a.startsWith('go:') && stateNames(rel.entity).includes(a.slice(3)))) return;
         if (!(graph.actions || []).some((x) => x.name === a && x.in === rel.entity)) err(`${p}/rowActions/${k}`, `unknown action "${a}" on ${rel.entity}`, 'built-in: view, edit, delete, go:<transition>, or an action with "in" set to this entity');
@@ -370,8 +388,8 @@ export function validate(graph) {
     if (!l.id) err(`${p}/id`, 'list needs an id (it becomes /list/<id>)');
     checkRoles(l, p);
     if (!checkEntity(l.entity, `${p}/entity`)) return;
-    (l.columns || []).forEach((c) => c === 'id' || checkField(l.entity, c, `${p}/columns`));
-    Object.keys(l.where || {}).forEach((c) => checkField(l.entity, c, `${p}/where/${c}`));
+    (l.columns || []).forEach((c) => c === 'id' || checkField(l.entity, c, `${p}/columns`, { secret: true }));
+    checkWhere(l.entity, l.where, `${p}/where`);
     if (l.sort) checkField(l.entity, l.sort.field, `${p}/sort/field`);
   });
 
@@ -390,7 +408,7 @@ export function validate(graph) {
       if (c.fn && !FNS.includes(c.fn)) err(`${cp}/fn`, `unknown function "${c.fn}"`, `known: ${FNS.join(', ')}`);
       if (c.fn && c.fn !== 'count' && !c.field) err(`${cp}/field`, `"${c.fn}" needs a field`);
       if (c.field) checkField(c.entity, c.field, `${cp}/field`);
-      Object.keys(c.where || {}).forEach((f) => checkField(c.entity, f, `${cp}/where/${f}`));
+      checkWhere(c.entity, c.where, `${cp}/where`);
     });
     (d.tables || []).forEach((t, j) => {
       const tp = `${p}/tables/${j}`;
@@ -401,7 +419,7 @@ export function validate(graph) {
         const g = t.groupBy && fields[t.entity]?.[t.groupBy];
         if (g && !['date', 'time'].includes(g.kind)) err(`${tp}/groupUnit`, `groupUnit needs a date or time groupBy; "${t.groupBy}" is ${g.kind}`);
       }
-      Object.keys(t.where || {}).forEach((f) => checkField(t.entity, f, `${tp}/where/${f}`));
+      checkWhere(t.entity, t.where, `${tp}/where`);
       (t.metrics ?? []).forEach((m, k) => {
         if (!m.as) err(`${tp}/metrics/${k}/as`, 'metric needs a name in "as"');
         if (!FNS.includes(m.fn)) err(`${tp}/metrics/${k}/fn`, `unknown function "${m.fn}"`, `known: ${FNS.join(', ')}`);

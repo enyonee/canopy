@@ -10,7 +10,7 @@ const plural = (word) => /[^aeiou]y$/i.test(word) ? word.slice(0, -1) + 'ies'
   : /(s|x|z|ch|sh)$/i.test(word) ? word + 'es' : word + 's';
 export { esc, label };
 
-const anyone = { user: null, role: null, can: () => true, canSee: () => true, ownField: () => null, enabled: false };
+const anyone = { user: null, role: null, can: () => true, canSee: () => true, ownField: () => null, ownWhere: () => ({}), enabled: false };
 
 export function page(graph, { title, body, flash, vc = anyone }) {
   const bg = graph.theme?.background || 'white';
@@ -82,7 +82,6 @@ export function fmt(store, entity, f, row, labels = {}) {
     return target ? `<a href="/${f.target}/${target.id}">${esc(store.label(f.target, target))}</a>` : '—';
   }
   if (f.kind === 'money') return esc(formatMoney(v));
-  if (f.kind === 'password') return v ? '••••••' : '';
   if (f.kind === 'file') return v ? `<a href="/file/${entity}/${row.id}/${f.name}">${esc(String(v).replace(/^\d+-/, ''))}</a>` : '—';
   if (f.kind === 'enum' && f.name === (store.graph.states?.[entity]?.field)) return `<span class="status">${esc(label(v ?? ''))}</span>`;
   return esc(v);
@@ -215,7 +214,7 @@ export function formFields(store, entity, fields, row, only, { skip = [] } = {})
 
 const enctype = (fields) => (fields.some((f) => f.kind === 'file') ? ' enctype="multipart/form-data"' : '');
 
-export function formView(graph, store, entity, fields, row, mode, errors = [], vc = anyone) {
+export function formView(graph, store, entity, fields, row, mode, errors = [], vc = anyone, flash = '') {
   const ov = graph.override?.[`${entity}.form`] || {};
   const action = mode === 'new' ? `/${entity}` : `/${entity}/${row.id}`;
   const title = ov.title || (mode === 'new' ? `Add ${label(entity)}` : `Edit ${label(entity)}`);
@@ -226,7 +225,7 @@ export function formView(graph, store, entity, fields, row, mode, errors = [], v
   const own = vc.ownField(entity);
   if (own) skip.push(own);
   return page(graph, {
-    title, vc,
+    title, vc, flash,
     body: `<h2>${esc(title)}</h2>${problems}${ov.intro ? `<p>${esc(ov.intro)}</p>` : ''}
       <form class="card" method="post" action="${action}"${enctype(fields)}>${formFields(store, entity, fields, row, ov.fields, { skip })}
       <p><button type="submit">${esc(ov.submit || (mode === 'new' ? 'Submit' : 'Save'))}</button>
@@ -247,7 +246,7 @@ export function detailView(graph, store, entity, fields, row, flash, vc = anyone
     `<tr><th>${esc(label(f.name))}</th><td>${fmt(store, entity, f, row, ov.labels || {})}</td></tr>`).join('');
 
   const related = (ov.related || []).map((rel) => {
-    const kids = store.list(rel.entity, { where: { [rel.via]: row.id }, sort: { field: 'id', dir: 'asc' } });
+    const kids = store.list(rel.entity, { where: { [rel.via]: row.id, ...vc.ownWhere(rel.entity) }, sort: { field: 'id', dir: 'asc' } });
     const kidFields = store.fields[rel.entity];
     const show = rel.columns || kidFields.filter((f) => f.name !== rel.via && f.kind !== 'password').map((f) => f.name);
     const body = kids.map((k) => `<tr>${show.map((c) => cell(store, rel.entity, kidFields, k, c)).join('')}${
@@ -311,6 +310,7 @@ export function dashboardView(graph, store, dash, flash, vc = anyone, period = {
       let g = r.grp;
       if (groupField?.kind === 'ref') g = store.label(groupField.target, store.get(groupField.target, g)) || null;
       if (groupField?.kind === 'enum') g = g === null ? null : label(g);
+      if (groupField?.kind === 'bool') g = g ? 'Yes' : 'No';
       return `<tr>${t.groupBy ? `<td>${esc(g ?? '—')}</td>` : ''}${
         (t.metrics ?? []).map((m) => `<td>${esc(metricValue(store, t.entity, m.fn === 'count' ? null : m.field, r[m.as]))}</td>`).join('')}</tr>`;
     }).join('');

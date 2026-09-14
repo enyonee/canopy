@@ -1,0 +1,116 @@
+{
+  "app": "consulting",
+  "task": "webgen-bench/000040",
+  "note": "Consulting business site: services sold through a cart and a checkout that validates the card and mails a confirmation; a workshop schedule with registration straight from the row (seats taken by db.adjust); online classes, podcasts and blog posts as seeded catalogues; Home and Contact pages. The customer is the identity profile. Confirmations after db.createRow name no row field: the runtime lets the created id replace the current row's id.",
+  "theme": { "background": "lightcyan", "accent": "cadetblue" },
+  "home": "/page/home",
+
+  "data": {
+    "Customer":     { "name": "text!", "email": "text!" },
+    "Service":      { "name": "text!", "format": "enum[coaching,training,assessment]=training", "price": "money!", "about": "longtext" },
+    "Order":        { "customer": "ref:Customer!", "status": "enum[cart,paid]=cart", "address": "text", "paymentMethod": "enum[card,paypal]=card",
+                      "cardNumber": "text", "placedAt": "time=now",
+                      "items": "int := sum(OrderItem: qty)", "total": "money := sum(OrderItem: qty * price)" },
+    "OrderItem":    { "order": "ref:Order!", "service": "ref:Service!", "qty": "int=1", "price": "money", "line": "money := qty * price" },
+    "Workshop":     { "title": "text!", "topic": "text!", "speaker": "text!", "date": "date!", "location": "text", "seatsLeft": "int=20",
+                      "registered": "int := count(Registration)" },
+    "Registration": { "workshop": "ref:Workshop!", "customer": "ref:Customer!", "at": "time=now" },
+    "OnlineClass":  { "title": "text!", "instructor": "text!", "level": "enum[beginner,intermediate,advanced]=beginner", "hours": "int=2", "price": "money!" },
+    "Podcast":      { "title": "text!", "guest": "text", "minutes": "int=30", "publishedAt": "date!", "summary": "longtext" },
+    "Post":         { "title": "text!", "author": "text!", "publishedAt": "date!", "summary": "text", "body": "longtext!" }
+  },
+
+  "identity": { "entity": "Customer", "defaults": { "name": "Jordan Blake", "email": "jordan@example.test" } },
+
+  "rules": {
+    "Order":     [ { "check": "status = 'cart' or items > 0", "message": "Your cart is empty" },
+                   { "check": "cardNumber = null or len(cardNumber) = 16", "message": "Card number must have 16 digits" } ],
+    "OrderItem": [ { "check": "qty > 0", "message": "Quantity must be at least 1" } ]
+  },
+
+  "seed": {
+    "Service":     [ { "name": "Executive coaching", "format": "coaching", "price": 450, "about": "Six one-to-one sessions on leading with clarity under pressure." },
+                     { "name": "Leading remote teams", "format": "training", "price": 290, "about": "A one-day training on trust, rituals and feedback in distributed teams." },
+                     { "name": "Leadership 360 assessment", "format": "assessment", "price": 180, "about": "Structured feedback from peers, reports and managers with a debrief." },
+                     { "name": "Negotiation masterclass", "format": "training", "price": 350, "about": "Preparing, anchoring and closing business negotiations." } ],
+    "Workshop":    [ { "title": "Leading through change", "topic": "Change management", "speaker": "Dr. Amara Osei", "date": "2026-10-08", "location": "Berlin", "seatsLeft": 20 },
+                     { "title": "Coaching conversations", "topic": "Coaching skills for managers", "speaker": "Luis Ferreira", "date": "2026-10-22", "location": "Online", "seatsLeft": 12 },
+                     { "title": "Strategy for first-time managers", "topic": "Business strategy", "speaker": "Hanna Berg", "date": "2026-11-05", "location": "Amsterdam", "seatsLeft": 0 },
+                     { "title": "Giving difficult feedback", "topic": "Communication", "speaker": "Dr. Amara Osei", "date": "2026-11-19", "location": "Online", "seatsLeft": 30 } ],
+    "OnlineClass": [ { "title": "Foundations of leadership", "instructor": "Hanna Berg", "level": "beginner", "hours": 4, "price": 120 },
+                     { "title": "Delegation that works", "instructor": "Luis Ferreira", "level": "intermediate", "hours": 3, "price": 95 },
+                     { "title": "Leading a leadership team", "instructor": "Dr. Amara Osei", "level": "advanced", "hours": 6, "price": 210 } ],
+    "Podcast":     [ { "title": "Why managers avoid feedback", "guest": "Dr. Amara Osei", "minutes": 34, "publishedAt": "2026-09-01", "summary": "The habits that make feedback routine instead of rare." },
+                     { "title": "Running a remote leadership team", "guest": "Hanna Berg", "minutes": 41, "publishedAt": "2026-08-15", "summary": "Rituals, decision logs and trust across time zones." },
+                     { "title": "Negotiating your first big contract", "guest": "Luis Ferreira", "minutes": 28, "publishedAt": "2026-07-30", "summary": "Preparation beats charisma." } ],
+    "Post":        [ { "title": "Five habits of leaders who keep their teams", "author": "Hanna Berg", "publishedAt": "2026-09-05", "summary": "Retention is a leadership outcome.",
+                       "body": "Teams rarely leave companies; they leave managers. The leaders who keep their people share five habits: they set clear expectations, they give feedback weekly rather than yearly, they protect focus time, they explain the why behind decisions, and they make development plans real. None of these need a budget. All of them need discipline, which is exactly what leadership training builds." },
+                     { "title": "How to run a business training that changes behaviour", "author": "Dr. Amara Osei", "publishedAt": "2026-08-20", "summary": "Slides do not change habits; practice does.",
+                       "body": "Most business training fails on the Monday after. The content was fine; the transfer was missing. A training that changes behaviour is built around practice: short input, a realistic case, a rehearsal with feedback, and a commitment the manager reports on two weeks later. We design every workshop this way, and we measure it by what people do differently, not by how much they liked the day." },
+                     { "title": "Delegation is a leadership skill, not a time trick", "author": "Luis Ferreira", "publishedAt": "2026-07-28", "summary": "What you hand over says what you trust.",
+                       "body": "New managers delegate tasks; experienced leaders delegate outcomes. The difference is trust made explicit: a clear result, the freedom to choose the route, and a check-in that is a conversation rather than an inspection. Delegating this way grows the people you lead and frees you to do the work only you can do." } ]
+  },
+
+  "actions": [
+    { "name": "addToCart", "in": "Service", "title": "Add to cart", "after": "/list/cart", "confirm": "Added to your cart",
+      "do": [ { "block": "db.ensure", "entity": "Order", "where": { "customer": "@me", "status": "cart" } },
+              { "block": "db.createRow", "entity": "OrderItem",
+                "values": { "order": "@found.id", "service": "@row.id", "qty": "= coalesce(values.qty, 1)", "price": "@row.price" } } ] },
+    { "name": "register", "in": "Workshop", "title": "Register", "after": "/Workshop/{id}", "confirm": "You are registered — registration #{created}",
+      "do": [ { "block": "db.adjust", "field": "seatsLeft", "by": -1, "min": 0, "message": "This workshop is full" },
+              { "block": "db.createRow", "entity": "Registration", "values": { "workshop": "@row.id", "customer": "@me" } } ] }
+  ],
+
+  "states": {
+    "Order": { "field": "status", "transitions": [
+      { "name": "checkout", "from": ["cart"], "to": "paid", "title": "Checkout and pay", "fields": ["address", "paymentMethod", "cardNumber"],
+        "confirm": "Thank you, {row.customer.name} — order #{row.id} paid, total {row.total}",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.customer.email", "subject": "Order #{row.id} confirmed",
+                  "text": "Thank you, {row.customer.name}. {row.items} service(s), total {row.total}, paid by {row.paymentMethod}. Invoice address: {row.address}." } ] }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "hello@consulting.test" } },
+
+  "views": "auto",
+  "override": {
+    "Service.list":       { "title": "Services", "intro": "Leadership and business training you can buy directly.",
+                            "columns": ["name", "format", "price", "about"], "search": ["name", "about"],
+                            "filters": [ { "name": "Format", "field": "format" } ], "rowActions": ["view", "addToCart"] },
+    "Service.detail":     { "actions": ["addToCart"] },
+    "Order.list":         { "hidden": true, "create": false },
+    "Order.detail":       { "fields": ["customer", "status", "items", "total", "address", "paymentMethod", "placedAt"],
+                            "related": [ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": ["service", "qty", "price", "line"],
+                                           "form": false, "rowActions": ["delete"] } ] },
+    "OrderItem.list":     { "hidden": true },
+    "Workshop.list":      { "title": "Workshops", "intro": "Upcoming workshops — register directly from the schedule.",
+                            "columns": ["date", "title", "topic", "speaker", "location", "seatsLeft"], "sort": { "field": "date", "dir": "asc" },
+                            "rowActions": ["view", "register"] },
+    "Workshop.detail":    { "fields": ["title", "topic", "speaker", "date", "location", "seatsLeft", "registered"], "actions": ["register"],
+                            "related": [ { "entity": "Registration", "via": "workshop", "title": "Registrations", "columns": ["customer", "at"], "form": false } ] },
+    "Registration.list":  { "hidden": true },
+    "OnlineClass.list":   { "title": "Online Classes", "columns": ["title", "instructor", "level", "hours", "price"],
+                            "filters": [ { "name": "Level", "field": "level" } ], "rowActions": ["view"] },
+    "Podcast.list":       { "title": "Podcasts", "columns": ["title", "guest", "minutes", "publishedAt"], "sort": { "field": "publishedAt", "dir": "desc" }, "rowActions": ["view"] },
+    "Post.list":          { "title": "Blogs", "columns": ["title", "author", "publishedAt", "summary"], "search": ["title", "body"],
+                            "sort": { "field": "publishedAt", "dir": "desc" }, "rowActions": ["view"] },
+    "Post.detail":        { "fields": ["title", "author", "publishedAt", "summary", "body"] },
+    "Customer.list":      { "hidden": true }
+  },
+
+  "lists": [
+    { "id": "cart", "entity": "Order", "title": "Cart", "where": { "customer": "@me", "status": "cart" }, "columns": ["items", "total", "status"], "rowActions": ["view"] },
+    { "id": "my-orders", "entity": "Order", "title": "My orders", "where": { "customer": "@me", "status": "paid" },
+      "columns": ["id", "items", "total", "paymentMethod", "placedAt"], "rowActions": ["view"], "sort": { "field": "placedAt", "dir": "desc" } }
+  ],
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Leadership and business training that changes what people do",
+      "body": [ "We coach executives, train managers and run workshops on the leadership skills that keep teams: feedback, delegation, strategy and change.",
+                "Buy a service directly, register for a workshop, or start with a podcast episode and a blog post." ],
+      "links": [ { "label": "Services", "href": "/Service" }, { "label": "Workshops", "href": "/Workshop" }, { "label": "Blogs", "href": "/Post" } ] },
+    { "id": "contact", "title": "Contact", "heading": "Get in touch",
+      "body": [ "Northline Consulting, 12 Harbour street, Rotterdam.", "hello@consulting.test — +31 10 555 0100, weekdays 9 to 18." ],
+      "links": [ { "label": "Home", "href": "/page/home" }, { "label": "Services", "href": "/Service" } ] }
+  ]
+}

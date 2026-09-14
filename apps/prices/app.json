@@ -1,0 +1,75 @@
+{
+  "app": "prices",
+  "task": "webgen-bench/000036",
+  "note": "Price comparison across states: a catalogue of products by category, offers per state and supplier with price and quantity, the lowest price derived per product and the cheapest offer marked; the shopper's settings (search frequency) live on the identity profile. No automatic searching: the format has no scheduler.",
+  "theme": { "background": "seashell", "accent": "crimson" },
+  "home": "/Product",
+
+  "data": {
+    "Profile":  { "name": "text!", "email": "text!", "searchFrequency": "enum[hourly,daily,weekly]=daily", "alerts": "bool=true" },
+    "Category": { "name": "text!" },
+    "State":    { "name": "text!" },
+    "Supplier": { "name": "text!", "city": "text", "phone": "text" },
+    "Product":  { "name": "text!", "category": "ref:Category!", "about": "longtext",
+                  "lowest": "money := min(Offer: price)", "offers": "int := count(Offer)" },
+    "Offer":    { "product": "ref:Product!", "state": "ref:State!", "supplier": "ref:Supplier!", "price": "money!", "quantity": "int=0",
+                  "cheapest": "bool := price = product.lowest" }
+  },
+
+  "identity": { "entity": "Profile", "defaults": { "name": "Shopper", "email": "shopper@prices.test" } },
+
+  "rules": {
+    "Offer": [ { "check": "price > 0", "message": "Price must be positive" },
+               { "check": "quantity >= 0", "message": "Quantity cannot be negative" } ]
+  },
+
+  "seed": {
+    "Category": [ { "name": "Electronics" }, { "name": "Grocery" }, { "name": "Home" } ],
+    "State":    [ { "name": "California" }, { "name": "Texas" }, { "name": "New York" } ],
+    "Supplier": [ { "name": "Bay Traders", "city": "San Jose", "phone": "+1 408 555 0100" },
+                  { "name": "Lone Star Supply", "city": "Austin", "phone": "+1 512 555 0200" },
+                  { "name": "Empire Goods", "city": "Brooklyn", "phone": "+1 718 555 0300" },
+                  { "name": "Coastal Market", "city": "San Diego", "phone": "+1 619 555 0400" } ],
+    "Product":  [ { "name": "Wireless headphones", "category": 1, "about": "Over-ear, 30 h battery, noise cancelling" },
+                  { "name": "4K monitor", "category": 1, "about": "27 inch IPS panel, USB-C" },
+                  { "name": "Olive oil 1L", "category": 2, "about": "Extra virgin, cold pressed" },
+                  { "name": "Cotton bath towel", "category": 3, "about": "70x140 cm, 600 gsm" } ],
+    "Offer":    [ { "product": 1, "state": 1, "supplier": 1, "price": 89.99, "quantity": 40 },
+                  { "product": 1, "state": 2, "supplier": 2, "price": 79.5, "quantity": 12 },
+                  { "product": 1, "state": 3, "supplier": 3, "price": 94, "quantity": 8 },
+                  { "product": 2, "state": 1, "supplier": 1, "price": 329, "quantity": 5 },
+                  { "product": 2, "state": 3, "supplier": 3, "price": 299, "quantity": 3 },
+                  { "product": 2, "state": 2, "supplier": 2, "price": 310, "quantity": 7 },
+                  { "product": 3, "state": 2, "supplier": 2, "price": 12.4, "quantity": 100 },
+                  { "product": 3, "state": 1, "supplier": 4, "price": 9.9, "quantity": 60 },
+                  { "product": 3, "state": 3, "supplier": 3, "price": 13.5, "quantity": 30 },
+                  { "product": 4, "state": 3, "supplier": 3, "price": 18, "quantity": 25 },
+                  { "product": 4, "state": 1, "supplier": 4, "price": 15.5, "quantity": 40 } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Product.list":   { "title": "Products", "intro": "Pick a category and a price ceiling; open a product to compare its offers across states.",
+                        "columns": ["name", "category", "lowest", "offers"], "search": ["name", "about"],
+                        "filters": [ { "name": "Category", "field": "category" }, { "name": "Lowest price", "field": "lowest", "range": true } ],
+                        "rowActions": ["view"] },
+    "Product.detail": { "fields": ["name", "category", "about", "lowest", "offers"],
+                        "related": [ { "entity": "Offer", "via": "product", "title": "Offers by state",
+                                       "columns": ["state", "supplier", "price", "quantity", "cheapest"],
+                                       "form": ["state", "supplier", "price", "quantity"], "submit": "Add offer", "confirm": "Offer recorded",
+                                       "rowActions": ["view"] } ] },
+    "Offer.list":     { "title": "Price comparison", "intro": "Offers sorted by price; the lowest one for each product is marked.",
+                        "columns": ["product", "state", "supplier", "price", "quantity", "cheapest"],
+                        "filters": [ { "name": "Product", "field": "product" }, { "name": "State", "field": "state" }, { "name": "Supplier", "field": "supplier" } ],
+                        "sort": { "field": "price", "dir": "asc" }, "labels": { "cheapest": ["", "Lowest price"] }, "rowActions": ["view"] },
+    "Offer.detail":   { "fields": ["product", "state", "supplier", "price", "quantity", "cheapest"], "labels": { "cheapest": ["No", "Yes — lowest price"] } },
+    "Supplier.list":  { "title": "Suppliers", "columns": ["name", "city", "phone"], "rowActions": ["view"] },
+    "Profile.list":   { "title": "Settings", "columns": ["name", "email", "searchFrequency", "alerts"],
+                        "labels": { "alerts": ["Off", "On"] }, "rowActions": ["view", "edit"], "create": false },
+    "Profile.form":   { "title": "Search settings", "fields": ["name", "email", "searchFrequency", "alerts"], "submit": "Save settings",
+                        "afterEdit": "/Profile/{id}", "confirmEdit": "Settings saved" },
+    "Profile.detail": { "labels": { "alerts": ["Off", "On"] } },
+    "Category.list":  { "hidden": true },
+    "State.list":     { "hidden": true }
+  }
+}

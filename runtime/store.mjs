@@ -96,8 +96,9 @@ export class Store {
       cols.push(`"${f.name}"`);
       vals.push(given === undefined || given === '' ? defaultValue(f) : Store.prepareValue(f, given));
     }
-    const st = this.db.prepare(
-      `INSERT INTO "${entity.toLowerCase()}" (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
+    const st = this.db.prepare(cols.length
+      ? `INSERT INTO "${entity.toLowerCase()}" (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`
+      : `INSERT INTO "${entity.toLowerCase()}" DEFAULT VALUES`);
     return Number(st.run(...vals).lastInsertRowid);
   }
 
@@ -220,20 +221,22 @@ export class Store {
     return { clauses, vals, later };
   }
 
-  static matches(row, field, cmp) {
+  // The in-memory twin of a where clause, for derived fields: values compare in storage units.
+  static matches(row, field, cmp, f = null) {
     const v = row[field];
+    const c = (x) => (f ? coerce(f, x) : x);
     if (cmp === null) return v === null;
     if (typeof cmp === 'object' && !Array.isArray(cmp)) {
       return Object.entries(cmp).every(([op, x]) => {
         if (x === undefined || x === '' || x === null) return true;
-        if (op === 'in') return (Array.isArray(x) ? x : [x]).map(String).includes(String(v));
+        if (op === 'in') return (Array.isArray(x) ? x : [x]).map((y) => String(c(y))).includes(String(v));
         if (op === 'like') return String(v ?? '').toLowerCase().includes(String(x).toLowerCase());
-        if (op === 'gte') return v >= x; if (op === 'lte') return v <= x;
-        if (op === 'gt') return v > x; if (op === 'lt') return v < x;
-        return String(v) !== String(x);
+        if (op === 'gte') return v >= c(x); if (op === 'lte') return v <= c(x);
+        if (op === 'gt') return v > c(x); if (op === 'lt') return v < c(x);
+        return String(v) !== String(c(x));
       });
     }
-    return String(v) === String(cmp);
+    return String(v) === String(c(cmp));
   }
 
   listRaw(entity, { search = [], q = '', where = {}, sort = null } = {}) {
@@ -252,7 +255,7 @@ export class Store {
   list(entity, opts = {}) {
     let rows = this.listRaw(entity, opts).map((r) => this.hydrate(entity, r));
     const { later } = this.clauses(entity, opts.where || {});
-    for (const [field, cmp] of later) rows = rows.filter((r) => Store.matches(r, field, cmp));
+    for (const [field, cmp] of later) rows = rows.filter((r) => Store.matches(r, field, cmp, this.field(entity, field)));
     const sort = opts.sort;
     if (sort && this.field(entity, sort.field)?.derive) {
       const dir = sort.dir === 'asc' ? 1 : -1;
@@ -281,7 +284,7 @@ export class Store {
     if (groupBy) sql += ' GROUP BY grp';
     if (sort) sql += ` ORDER BY "${sort.field}" ${sort.dir === 'asc' ? 'ASC' : 'DESC'}`;
     if (limit) sql += ` LIMIT ${Number(limit)}`;
-    return this.db.prepare(sql).all(...vals);
+    return this.db.prepare(sql).all(...vals).map((r) => ({ ...r }));
   }
 
   aggregateInMemory(entity, { groupBy, groupUnit, metrics, sort, limit, where }) {

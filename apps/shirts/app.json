@@ -1,0 +1,71 @@
+{
+  "app": "shirts",
+  "task": "webgen-bench/000037",
+  "note": "Custom shirts: a design is a model, a fabric and three measurements; the 'generated design' is a derived text preview and a derived price; confirming moves the design to checkout (its own page), paying asks for shipping and card details and validates them. No real design rendering or payment gateway.",
+  "theme": { "background": "floralwhite", "accent": "darkgoldenrod" },
+  "home": "/page/home",
+
+  "data": {
+    "Model":  { "name": "text!", "price": "money!", "about": "text" },
+    "Fabric": { "name": "text!", "surcharge": "money=0", "about": "text" },
+    "Design": { "customer": "text!", "model": "ref:Model!", "fabric": "ref:Fabric!", "chest": "int!", "waist": "int!", "sleeve": "int!",
+                "status": "enum[draft,confirmed,paid,shipped]=draft", "address": "text", "cardName": "text", "cardNumber": "text", "createdAt": "time=now",
+                "preview": "text := concat(model.name, ' shirt in ', lower(fabric.name), concat(', chest ', chest, ' cm, waist ', waist, ' cm, sleeve ', sleeve, ' cm'))",
+                "price": "money := model.price + fabric.surcharge" }
+  },
+
+  "rules": {
+    "Design": [ { "check": "chest >= 70 and chest <= 160", "message": "Chest must be between 70 and 160 cm" },
+                { "check": "waist >= 60 and waist <= 150", "message": "Waist must be between 60 and 150 cm" },
+                { "check": "sleeve >= 50 and sleeve <= 80", "message": "Sleeve must be between 50 and 80 cm" },
+                { "check": "cardNumber = null or len(cardNumber) = 16", "message": "Card number must have 16 digits" } ]
+  },
+
+  "seed": {
+    "Model":  [ { "name": "Classic", "price": 55, "about": "Regular cut, straight collar" },
+                { "name": "Slim fit", "price": 60, "about": "Tapered body, narrow collar" },
+                { "name": "Oxford", "price": 65, "about": "Button-down collar, chest pocket" } ],
+    "Fabric": [ { "name": "Cotton", "surcharge": 0, "about": "Poplin, 120 gsm" },
+                { "name": "Linen", "surcharge": 15, "about": "Breathable, summer weight" },
+                { "name": "Silk", "surcharge": 40, "about": "Charmeuse, dry clean only" },
+                { "name": "Denim", "surcharge": 10, "about": "Light chambray" } ],
+    "Design": [ { "customer": "Nora Vale", "model": 1, "fabric": 2, "chest": 96, "waist": 84, "sleeve": 62, "status": "paid",
+                  "address": "4 Mill lane, Leeds", "cardName": "Nora Vale", "cardNumber": "4111111111111111", "createdAt": "2026-08-30T10:00:00.000Z" },
+                { "customer": "Tom Reed", "model": 3, "fabric": 1, "chest": 104, "waist": 92, "sleeve": 66, "createdAt": "2026-09-10T09:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Design": { "field": "status", "transitions": [
+      { "name": "confirm", "from": ["draft"], "to": "confirmed", "title": "Confirm design and go to checkout",
+        "confirm": "Design confirmed — review your order below and pay to place it", "after": "/Design/{id}" },
+      { "name": "pay", "from": ["confirmed"], "to": "paid", "title": "Pay and place order", "fields": ["address", "cardName", "cardNumber"],
+        "confirm": "Order #{row.id} confirmed — {row.price} charged to the card of {row.cardName}, shipping to {row.address}" },
+      { "name": "ship", "from": ["paid"], "to": "shipped", "title": "Mark shipped" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Design.list":   { "title": "Customize a shirt", "intro": "Choose a model and a fabric, enter your measurements and we generate the design.",
+                       "createTitle": "Design a new shirt", "columns": ["customer", "preview", "price", "status"],
+                       "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "edit"] },
+    "Design.form":   { "title": "Design your shirt", "fields": ["customer", "model", "fabric", "chest", "waist", "sleeve"], "submit": "Generate design",
+                       "after": "/Design/{id}", "confirm": "Design generated — here is your preview",
+                       "afterEdit": "/Design/{id}", "confirmEdit": "Design regenerated with the new options" },
+    "Design.detail": { "fields": ["customer", "model", "fabric", "chest", "waist", "sleeve", "preview", "price", "status", "address", "cardName", "createdAt"] },
+    "Model.list":    { "title": "Models", "columns": ["name", "price", "about"], "rowActions": ["view"] },
+    "Fabric.list":   { "title": "Fabrics", "columns": ["name", "surcharge", "about"], "rowActions": ["view"] }
+  },
+
+  "lists": [
+    { "id": "orders", "entity": "Design", "title": "Orders", "where": { "status": { "in": ["paid", "shipped"] } },
+      "columns": ["id", "customer", "preview", "price", "status", "address"], "rowActions": ["view", "go:ship"], "sort": { "field": "createdAt", "dir": "desc" } }
+  ],
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Shirts made to your measurements",
+      "body": [ "Pick a model and a fabric, type in your chest, waist and sleeve, and preview the design before you order.",
+                "Every order is confirmed by card and shipped to the address you give at checkout." ],
+      "links": [ { "label": "Design your shirt", "href": "/Design/new" }, { "label": "Models", "href": "/Model" }, { "label": "Fabrics", "href": "/Fabric" } ] }
+  ]
+}

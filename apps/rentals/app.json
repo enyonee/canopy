@@ -1,0 +1,65 @@
+{
+  "app": "rentals",
+  "task": "webgen-bench/000038",
+  "note": "Short-term apartment rentals: a searchable catalogue by city and type, bookings made from the apartment page for a date range with nights and total derived, a confirmation step that mails the guest, and the guest's own booking records. No calendar: booked dates are shown as a table on the apartment, not blocked.",
+  "theme": { "background": "linen", "accent": "maroon" },
+  "home": "/Apartment",
+
+  "data": {
+    "Guest":     { "name": "text!", "email": "text!" },
+    "Apartment": { "title": "text!", "city": "text!", "district": "text", "type": "enum[studio,one-bedroom,two-bedroom,penthouse]=one-bedroom",
+                   "nightly": "money!", "sleeps": "int=2", "about": "longtext", "bookings": "int := count(Booking)" },
+    "Booking":   { "apartment": "ref:Apartment!", "guest": "ref:Guest!", "checkIn": "date!", "checkOut": "date!",
+                   "status": "enum[requested,confirmed,cancelled]=requested", "bookedAt": "time=now",
+                   "nights": "int := days(checkOut, checkIn)", "total": "money := nights * apartment.nightly" }
+  },
+
+  "identity": { "entity": "Guest", "defaults": { "name": "Mia Ortiz", "email": "mia@rentals.test" } },
+
+  "rules": {
+    "Booking": [ { "check": "checkOut > checkIn", "message": "Check-out must be after check-in" } ]
+  },
+
+  "seed": {
+    "Guest":     [ { "name": "Mia Ortiz", "email": "mia@rentals.test" } ],
+    "Apartment": [ { "title": "Sunny loft by the river", "city": "Lisbon", "district": "Alfama", "type": "one-bedroom", "nightly": 85, "sleeps": 2, "about": "Top floor, river view, fast wifi" },
+                   { "title": "Quiet studio near Baixa", "city": "Lisbon", "district": "Baixa", "type": "studio", "nightly": 60, "sleeps": 1, "about": "Compact and central" },
+                   { "title": "Family flat with terrace", "city": "Porto", "district": "Ribeira", "type": "two-bedroom", "nightly": 120, "sleeps": 4, "about": "Two bedrooms, big terrace" },
+                   { "title": "Rooftop penthouse", "city": "Barcelona", "district": "Eixample", "type": "penthouse", "nightly": 240, "sleeps": 4, "about": "Private roof, city views" },
+                   { "title": "Cosy one-bedroom in Gracia", "city": "Barcelona", "district": "Gracia", "type": "one-bedroom", "nightly": 95, "sleeps": 2, "about": "Balcony over a quiet square" },
+                   { "title": "Harbour studio", "city": "Porto", "district": "Foz", "type": "studio", "nightly": 55, "sleeps": 2, "about": "Steps from the beach" } ],
+    "Booking":   [ { "apartment": 3, "guest": 1, "checkIn": "2026-05-02", "checkOut": "2026-05-06", "status": "confirmed", "bookedAt": "2026-04-10T10:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Booking": { "field": "status", "transitions": [
+      { "name": "confirm", "from": ["requested"], "to": "confirmed", "title": "Confirm booking",
+        "confirm": "Booking #{row.id} confirmed: {row.apartment.title}, {row.checkIn} to {row.checkOut}, {row.nights} night(s), total {row.total}",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.guest.email", "subject": "Booking #{row.id} confirmed",
+                  "text": "Hello {row.guest.name}, {row.apartment.title} in {row.apartment.city} is yours from {row.checkIn} to {row.checkOut}. Total {row.total}." } ] },
+      { "name": "cancel", "from": ["requested", "confirmed"], "to": "cancelled", "title": "Cancel booking" }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "stay@rentals.test" } },
+
+  "views": "auto",
+  "override": {
+    "Apartment.list":   { "title": "Apartments", "intro": "Search by city or neighbourhood, filter by type, open an apartment to book it.",
+                          "columns": ["title", "city", "district", "type", "nightly", "sleeps"], "search": ["title", "city", "district"],
+                          "filters": [ { "name": "Type", "field": "type" } ], "rowActions": ["view"] },
+    "Apartment.detail": { "fields": ["title", "city", "district", "type", "nightly", "sleeps", "about", "bookings"],
+                          "related": [ { "entity": "Booking", "via": "apartment", "title": "Booked dates",
+                                         "columns": ["checkIn", "checkOut", "nights", "status"],
+                                         "form": ["checkIn", "checkOut"], "fill": { "guest": "@me" }, "submit": "Book these dates",
+                                         "confirm": "Booking requested — open it below and confirm to reserve the dates", "rowActions": ["view"] } ] },
+    "Booking.list":     { "hidden": true, "create": false },
+    "Booking.detail":   { "fields": ["apartment", "guest", "checkIn", "checkOut", "nights", "total", "status", "bookedAt"] },
+    "Guest.list":       { "hidden": true }
+  },
+
+  "lists": [
+    { "id": "my-bookings", "entity": "Booking", "title": "My bookings", "where": { "guest": "@me" },
+      "columns": ["apartment", "checkIn", "checkOut", "nights", "total", "status", "bookedAt"], "rowActions": ["view"], "sort": { "field": "checkIn", "dir": "desc" } }
+  ]
+}

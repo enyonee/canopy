@@ -1,0 +1,60 @@
+{
+  "app": "v2",
+  "theme": { "background": "ivory", "accent": "teal" },
+  "data": {
+    "User":    { "email": "text!", "password": "password!", "name": "text", "role": "enum[admin,member,nobody]=member" },
+    "Project": { "name": "text!", "owner": "ref:User", "budget": "money=0", "start": "date=today",
+                 "status": "enum[draft,active,closed]=draft", "attachment": "file",
+                 "spent": "money := sum(Expense: amount)", "left": "money := budget - spent", "over": "bool := spent > budget",
+                 "age": "int := days(today, start)", "label": "text := concat(name, ' (', status, ')')" },
+    "Expense": { "project": "ref:Project!", "amount": "money!", "at": "time=now", "note": "text", "big": "bool := amount > 100" }
+  },
+  "rules": { "Expense": [ { "check": "amount > 0", "message": "Amount must be positive" } ],
+             "Project": [ { "unique": "name" }, { "check": "budget >= 0", "message": "Budget cannot be negative" } ] },
+  "roles": { "entity": "User", "login": "email", "password": "password", "role": "role", "register": "member", "anonymous": "guest",
+    "can": { "admin": "*",
+             "member": { "Project": { "own": "owner", "can": ["view", "create", "edit", "delete", "go:activate", "do:*"] }, "Expense": ["view", "create", "edit"], "*": ["do:ping", "do:boom"] },
+             "guest": { "Project": ["view"] },
+             "nobody": {} } },
+  "seed": { "User": [ { "email": "root@v2", "password": "root", "name": "Root", "role": "admin" }, { "email": "none@v2", "password": "none", "name": "None", "role": "nobody" } ] },
+  "states": { "Project": { "field": "status", "transitions": [
+      { "name": "activate", "from": ["draft"], "to": "active", "fields": ["budget"], "confirm": "{row.name} active with {row.budget}", "after": "/Project/{id}",
+        "do": [ { "block": "http.send", "connector": "hook", "body": { "project": "@row.id", "budget": "@row.budget", "owner": "@row.owner.email" } } ] },
+      { "name": "close", "from": ["active"], "to": "closed", "by": ["admin"],
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.owner.email", "subject": "Closed {row.name}", "text": "Spent {row.spent} of {row.budget}" } ] },
+      { "name": "reopen", "from": "*", "to": "draft", "by": ["admin"] },
+      { "name": "freeze", "from": ["active"], "to": "closed", "by": ["nobody"] } ] } },
+  "connectors": { "hook": { "kind": "http", "url": "http://sink.test/hook", "headers": { "x-k": "1" } }, "mail": { "kind": "mail", "from": "v2@test" } },
+  "actions": [
+    { "name": "ping", "title": "Ping", "after": "/Project", "confirm": "pinged {delivery}", "do": [ { "block": "http.send", "connector": "hook", "path": "/ping", "body": { "who": "@me", "email": "@me.email", "at": "@now", "day": "@today", "upper": "= upper(me.name)" } } ] },
+    { "name": "bump", "in": "Project", "by": ["admin"], "title": "Bump", "do": [ { "block": "db.adjust", "field": "budget", "by": 10 } ] },
+    { "name": "spend", "in": "Project", "title": "Spend", "after": "/Project/{id}", "confirm": "spent on {found.note} (new: {made})",
+      "do": [ { "block": "db.ensure", "entity": "Expense", "where": { "project": "@row.id", "note": "auto" }, "values": { "amount": "= coalesce(values.amount, count(Expense) + 5)" } },
+              { "block": "db.each", "from": "Expense", "where": { "project": "@row.id", "note": "auto" }, "do": [ { "block": "db.adjust", "entity": "Project", "id": "@each.project", "field": "budget", "by": "= -each.amount / 10" } ] } ] },
+    { "name": "drain", "in": "Project", "title": "Drain", "do": [ { "block": "db.adjust", "field": "budget", "by": "= -budget - 1", "min": 0, "message": "Budget cannot go below zero" } ] },
+    { "name": "boom", "title": "Boom", "do": [ { "block": "db.adjust", "entity": "Project", "id": 999, "field": "budget", "by": 1 } ] },
+    { "name": "clone", "in": "Project", "title": "Clone", "after": "/Project/{id}", "confirm": "expense {created} added to {row.name}, budget {row.budget}",
+      "do": [ { "block": "db.createRow", "entity": "Expense", "values": { "project": "@row.id", "amount": 1, "note": "clone" } }, { "block": "db.adjust", "field": "budget", "by": 1 } ] }
+  ],
+  "events": [
+    { "on": "Expense.created", "do": [ { "block": "http.send", "connector": "hook", "body": { "expense": "@row.id", "amount": "@row.amount", "big": "@row.big", "project": "@row.project.name" } } ] },
+    { "on": "Project.updated", "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.owner.email", "subject": "Updated {row.name}" } ] },
+    { "on": "Project.deleted", "do": [ { "block": "http.send", "connector": "hook", "path": "/deleted", "body": { "name": "@row.name" } } ] }
+  ],
+  "override": {
+    "Project.list": { "columns": ["id", "name", "owner", "budget", "spent", "left", "over", "status", "attachment", "start", "label"],
+                      "filters": [ { "field": "status" }, { "field": "start", "range": true, "name": "Started" }, { "field": "over" }, { "field": "budget", "range": true } ],
+                      "rowActions": ["view", "edit", "delete", "go:activate", "bump"], "search": ["name"], "sort": { "field": "spent", "dir": "desc" } },
+    "Project.detail": { "actions": ["spend", "drain"], "related": [ { "entity": "Expense", "via": "project", "columns": ["amount", "at", "big"], "form": ["amount", "note"], "rowActions": ["delete", "edit"] } ] },
+    "Project.form": { "after": "/Project/{id}" },
+    "Expense.form": { "afterEdit": "/Project/{project}" },
+    "Expense.list": { "hidden": true }
+  },
+  "lists": [ { "id": "mine", "entity": "Project", "title": "Mine", "roles": ["member", "admin"], "where": { "owner": "@me" }, "columns": ["name", "spent"], "sort": { "field": "left", "dir": "asc" } } ],
+  "dashboards": [ { "id": "d", "title": "D", "roles": ["admin"], "period": { "Expense": "at", "Project": "start" },
+      "cards": [ { "title": "Spent", "entity": "Expense", "fn": "sum", "field": "amount" }, { "title": "Mine", "entity": "Project", "fn": "count", "where": { "owner": "@me" } }, { "title": "Left", "entity": "Project", "fn": "sum", "field": "left" } ],
+      "tables": [ { "title": "By month", "entity": "Expense", "groupBy": "at", "groupUnit": "month", "metrics": [ { "fn": "sum", "field": "amount", "as": "s" } ] },
+                  { "title": "By over", "entity": "Project", "groupBy": "over", "metrics": [ { "fn": "count", "as": "n" }, { "fn": "sum", "field": "spent", "as": "sp" }, { "fn": "avg", "field": "left", "as": "avg" }, { "fn": "min", "field": "left", "as": "mn" }, { "fn": "max", "field": "left", "as": "mx" } ], "sort": { "field": "n", "dir": "asc" }, "limit": 5 },
+                  { "title": "By status", "entity": "Project", "groupBy": "status", "metrics": [ { "fn": "count", "as": "n" } ], "where": { "over": 0 } } ] } ],
+  "pages": [ { "id": "about", "title": "About", "roles": ["admin"], "body": ["x"] } ]
+}

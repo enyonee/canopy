@@ -1,0 +1,95 @@
+{
+  "app": "calls",
+  "task": "webgen-bench/000022",
+  "note": "Customer service call logging: clients, call logs typed and owned by the agent who took them, action and follow-up steps as a child table, open and to-do lists, a report dashboard with a period filter, and admin/agent permissions.",
+  "theme": { "background": "lightpink", "accent": "mediumvioletred" },
+  "home": "/CallLog",
+
+  "data": {
+    "User":       { "name": "text!", "email": "text!", "password": "password!", "role": "enum[admin,agent]=agent" },
+    "Client":     { "name": "text!", "company": "text", "phone": "text", "email": "text", "notes": "longtext", "createdAt": "time=now",
+                    "calls": "int := count(CallLog)", "open": "int := count(CallLog: status != 'closed')" },
+    "CallLog":    { "client": "ref:Client!", "type": "enum[inquiry,complaint,support,billing,other]=inquiry", "subject": "text!",
+                    "information": "longtext!", "additional": "longtext", "status": "enum[open,todo,closed]=open", "followUp": "date",
+                    "agent": "ref:User", "createdAt": "time=now",
+                    "steps": "int := count(ActionStep)", "pending": "int := count(ActionStep: not done)" },
+    "ActionStep": { "call": "ref:CallLog!", "kind": "enum[action,followUp]=action", "note": "text!", "due": "date", "done": "bool=false", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User":       [ { "unique": "email", "message": "A user with this email already exists" } ],
+    "ActionStep": [ { "check": "kind = 'action' or due != null", "message": "A follow-up step needs a date" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": {
+      "admin": "*",
+      "agent": { "Client": ["view", "create", "edit"], "CallLog": ["view", "create", "edit", "go:*"], "ActionStep": ["view", "create", "edit"] }
+    }
+  },
+
+  "seed": {
+    "User":       [ { "name": "Admin", "email": "admin@calls.test", "password": "admin123", "role": "admin" },
+                    { "name": "Mia", "email": "mia@calls.test", "password": "mia123", "role": "agent" },
+                    { "name": "Leo", "email": "leo@calls.test", "password": "leo123", "role": "agent" } ],
+    "Client":     [ { "name": "Acme Ltd", "company": "Acme", "phone": "+1 555 0100", "email": "ops@acme.test", "notes": "Key account" },
+                    { "name": "Globex", "company": "Globex Corp", "phone": "+1 555 0200", "email": "help@globex.test" },
+                    { "name": "Initech", "company": "Initech", "phone": "+1 555 0300", "email": "it@initech.test" } ],
+    "CallLog":    [ { "client": 1, "type": "complaint", "subject": "Late delivery", "information": "Order 4411 is three days late.", "status": "open", "agent": 2, "createdAt": "2026-08-03T10:00:00.000Z" },
+                    { "client": 2, "type": "billing", "subject": "Invoice mismatch", "information": "Invoice 778 shows a wrong quantity.", "status": "todo", "followUp": "2026-09-20", "agent": 3, "createdAt": "2026-08-15T14:30:00.000Z" },
+                    { "client": 1, "type": "support", "subject": "Password reset", "information": "Could not log in; reset link sent.", "status": "closed", "agent": 2, "createdAt": "2026-07-21T09:15:00.000Z" },
+                    { "client": 3, "type": "inquiry", "subject": "Bulk pricing", "information": "Asked for a quote on 500 units.", "additional": "Send the price list.", "status": "open", "agent": 3, "createdAt": "2026-08-28T16:00:00.000Z" } ],
+    "ActionStep": [ { "call": 2, "kind": "action", "note": "Requested a corrected invoice from billing", "due": "2026-08-16", "done": true },
+                    { "call": 2, "kind": "followUp", "note": "Call back once the invoice is reissued", "due": "2026-09-20" } ]
+  },
+
+  "states": {
+    "CallLog": { "field": "status", "transitions": [
+      { "name": "schedule", "from": ["open"], "to": "todo", "title": "Needs follow-up", "fields": ["followUp"], "confirm": "Follow-up scheduled for {row.followUp}" },
+      { "name": "close", "from": ["open", "todo"], "to": "closed", "title": "Close call", "confirm": "Call closed" },
+      { "name": "reopen", "from": ["closed"], "to": "open", "title": "Reopen" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Client.list":     { "title": "Clients", "columns": ["name", "company", "phone", "email", "calls", "open"], "search": ["name", "company", "email"],
+                         "rowActions": ["view", "edit", "delete"], "createTitle": "Client creator wizard" },
+    "Client.form":     { "title": "Client creator wizard", "intro": "Identify the client: the name we file calls under, the company, and how to reach them.",
+                         "submit": "Create client", "confirm": "Client created successfully", "confirmEdit": "Client information updated", "afterEdit": "/Client/{id}" },
+    "Client.detail":   { "related": [ { "entity": "CallLog", "via": "client", "title": "Call logs", "columns": ["subject", "type", "status", "agent", "createdAt"], "form": false, "rowActions": ["view"] } ] },
+    "CallLog.list":    { "title": "Call logs", "columns": ["id", "client", "type", "subject", "status", "agent", "followUp", "createdAt"], "search": ["subject", "information"],
+                         "filters": [ { "name": "Type", "field": "type" }, { "name": "Status", "field": "status" }, { "name": "Agent", "field": "agent" } ],
+                         "rowActions": ["view", "edit"], "createTitle": "New call log" },
+    "CallLog.form":    { "title": "New call log", "fields": ["client", "type", "subject", "information", "additional"], "fill": { "agent": "@me" },
+                         "submit": "Create call log", "confirm": "Call log created successfully", "after": "/CallLog/{id}", "confirmEdit": "Call log updated", "afterEdit": "/CallLog/{id}" },
+    "CallLog.detail":  { "fields": ["client", "type", "subject", "information", "additional", "status", "followUp", "agent", "steps", "pending", "createdAt"],
+                         "related": [ { "entity": "ActionStep", "via": "call", "title": "Action and follow-up steps", "columns": ["kind", "note", "due", "done"],
+                                        "form": ["kind", "note", "due"], "submit": "Record step", "confirm": "Step recorded successfully", "rowActions": ["edit", "delete"] } ] },
+    "ActionStep.list": { "hidden": true },
+    "ActionStep.form": { "afterEdit": "/CallLog/{call}" },
+    "User.list":       { "title": "Team", "columns": ["name", "email", "role"] }
+  },
+
+  "lists": [
+    { "id": "open", "entity": "CallLog", "title": "Open calls", "where": { "status": "open" },
+      "columns": ["id", "client", "type", "subject", "status", "agent", "createdAt"], "rowActions": ["view", "go:schedule", "go:close"] },
+    { "id": "todo", "entity": "CallLog", "title": "To-do calls", "where": { "status": "todo" }, "sort": { "field": "followUp", "dir": "asc" },
+      "columns": ["id", "client", "subject", "followUp", "pending", "agent"], "rowActions": ["view", "go:close"] }
+  ],
+
+  "dashboards": [
+    { "id": "report", "title": "Call log report", "intro": "Every call log, counted by type, status, agent and month; narrow to a period by the call date.",
+      "period": { "CallLog": "createdAt" },
+      "cards": [ { "title": "Calls", "entity": "CallLog", "fn": "count" },
+                 { "title": "Open", "entity": "CallLog", "fn": "count", "where": { "status": "open" } },
+                 { "title": "To-do", "entity": "CallLog", "fn": "count", "where": { "status": "todo" } },
+                 { "title": "Closed", "entity": "CallLog", "fn": "count", "where": { "status": "closed" } } ],
+      "tables": [ { "title": "By type", "entity": "CallLog", "groupBy": "type", "groupTitle": "Type", "metrics": [ { "fn": "count", "as": "calls", "title": "Calls" } ] },
+                  { "title": "By status", "entity": "CallLog", "groupBy": "status", "groupTitle": "Status", "metrics": [ { "fn": "count", "as": "calls", "title": "Calls" } ] },
+                  { "title": "By agent", "entity": "CallLog", "groupBy": "agent", "groupTitle": "Agent", "metrics": [ { "fn": "count", "as": "calls", "title": "Calls" } ], "sort": { "field": "calls", "dir": "desc" } },
+                  { "title": "By client", "entity": "CallLog", "groupBy": "client", "groupTitle": "Client", "metrics": [ { "fn": "count", "as": "calls", "title": "Calls" } ], "sort": { "field": "calls", "dir": "desc" } },
+                  { "title": "By month", "entity": "CallLog", "groupBy": "createdAt", "groupUnit": "month", "groupTitle": "Month", "metrics": [ { "fn": "count", "as": "calls", "title": "Calls" } ] } ] }
+  ]
+}

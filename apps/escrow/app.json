@@ -1,0 +1,94 @@
+{
+  "app": "escrow",
+  "task": "webgen-bench/000035",
+  "note": "Crypto escrow: sellers list products, a buyer opens a transaction and funds the escrow from a wallet balance (a money field debited with a floor), confirms receipt, the seller or the arbiter releases the funds; a dispute freezes the transaction until the arbiter refunds or settles. The escrow account is the sum of funded transactions on the dashboard.",
+  "theme": { "background": "lightgray", "accent": "darkred" },
+  "home": "/Product",
+
+  "data": {
+    "User":        { "name": "text!", "email": "text!", "password": "password!", "role": "enum[admin,seller,buyer]=buyer", "balance": "money=0" },
+    "Product":     { "name": "text!", "coin": "enum[BTC,ETH,USDT,SOL,LTC]=BTC", "quantity": "text!", "price": "money!", "seller": "ref:User!", "about": "text" },
+    "Transaction": { "product": "ref:Product!", "buyer": "ref:User!", "seller": "ref:User!", "amount": "money!",
+                     "status": "enum[pending,funded,confirmed,released,disputed,refunded,cancelled]=pending", "reason": "longtext", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User":    [ { "unique": "email", "message": "This email is already registered" } ],
+    "Product": [ { "check": "price > 0", "message": "Price must be positive" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "buyer", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "seller": { "Product": { "own": "seller", "can": ["view", "create", "edit", "delete"] },
+                  "Transaction": { "own": "seller", "can": ["view", "go:release"] } },
+      "buyer":  { "Product": ["view", "do:buy"],
+                  "Transaction": { "own": "buyer", "can": ["view", "go:deposit", "go:confirm", "go:dispute", "go:cancel"] } },
+      "guest":  { "Product": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":        [ { "name": "Arbiter", "email": "admin@escrow.test", "password": "admin123", "role": "admin" },
+                     { "name": "Sam Satoshi", "email": "sam@escrow.test", "password": "sam123", "role": "seller", "balance": 0 },
+                     { "name": "Vera Vitalik", "email": "vera@escrow.test", "password": "vera123", "role": "seller", "balance": 500 },
+                     { "name": "Bob Buyer", "email": "bob@escrow.test", "password": "bob123", "role": "buyer", "balance": 1000 } ],
+    "Product":     [ { "name": "Bitcoin slice", "coin": "BTC", "quantity": "0.01", "price": 620, "seller": 2, "about": "Sent within an hour of release" },
+                     { "name": "Ether bundle", "coin": "ETH", "quantity": "0.25", "price": 480, "seller": 2, "about": "Fresh from staking rewards" },
+                     { "name": "Tether pack", "coin": "USDT", "quantity": "500", "price": 500, "seller": 3, "about": "Stablecoin, same-day transfer" },
+                     { "name": "Solana starter", "coin": "SOL", "quantity": "3", "price": 390, "seller": 3, "about": "Good for a first wallet" } ],
+    "Transaction": [ { "product": 3, "buyer": 4, "seller": 3, "amount": 500, "status": "released", "createdAt": "2026-08-20T12:00:00.000Z" } ]
+  },
+
+  "actions": [
+    { "name": "buy", "in": "Product", "title": "Buy", "by": ["buyer"], "after": "/Transaction",
+      "confirm": "Transaction #{found.id} opened for {row.name}: deposit {found.amount} into escrow to fund it",
+      "do": [ { "block": "db.ensure", "entity": "Transaction", "where": { "product": "@row.id", "buyer": "@me", "status": "pending" },
+                "values": { "seller": "@row.seller", "amount": "@row.price" } } ] }
+  ],
+
+  "states": {
+    "Transaction": { "field": "status", "transitions": [
+      { "name": "deposit", "from": ["pending"], "to": "funded", "by": ["buyer"], "title": "Deposit into escrow",
+        "confirm": "{row.amount} deposited into escrow for {row.product.name}",
+        "do": [ { "block": "db.adjust", "entity": "User", "id": "@row.buyer", "field": "balance", "by": "= -row.amount", "min": 0, "message": "Insufficient wallet balance to fund the escrow" } ] },
+      { "name": "confirm", "from": ["funded"], "to": "confirmed", "by": ["buyer"], "title": "Confirm receipt", "confirm": "Receipt confirmed; the escrow can now be released to the seller" },
+      { "name": "release", "from": ["confirmed"], "to": "released", "by": ["seller", "admin"], "title": "Release funds",
+        "confirm": "{row.amount} released to {row.seller.name}",
+        "do": [ { "block": "db.adjust", "entity": "User", "id": "@row.seller", "field": "balance", "by": "= row.amount" } ] },
+      { "name": "dispute", "from": ["funded", "confirmed"], "to": "disputed", "by": ["buyer"], "title": "Open dispute", "fields": ["reason"],
+        "confirm": "Dispute opened; the arbiter will review it" },
+      { "name": "refund", "from": ["disputed"], "to": "refunded", "by": ["admin"], "title": "Resolve: refund the buyer",
+        "confirm": "{row.amount} returned to {row.buyer.name}",
+        "do": [ { "block": "db.adjust", "entity": "User", "id": "@row.buyer", "field": "balance", "by": "= row.amount" } ] },
+      { "name": "settle", "from": ["disputed"], "to": "released", "by": ["admin"], "title": "Resolve: release to the seller",
+        "confirm": "{row.amount} released to {row.seller.name}",
+        "do": [ { "block": "db.adjust", "entity": "User", "id": "@row.seller", "field": "balance", "by": "= row.amount" } ] },
+      { "name": "cancel", "from": ["pending"], "to": "cancelled", "by": ["buyer", "admin"], "title": "Cancel" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Product.list":       { "title": "Products", "columns": ["name", "coin", "quantity", "price", "seller", "about"], "search": ["name", "about"],
+                            "filters": [ { "name": "Coin", "field": "coin" } ], "rowActions": ["view", "buy", "edit", "delete"], "createTitle": "Add product" },
+    "Product.form":       { "fields": ["name", "coin", "quantity", "price", "about"], "confirm": "Product listed successfully", "confirmEdit": "Product updated" },
+    "Product.detail":     { "actions": ["buy"] },
+    "Transaction.list":   { "title": "Transactions", "columns": ["id", "product", "buyer", "seller", "amount", "status", "createdAt"],
+                            "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "go:deposit", "go:confirm", "go:release"], "create": false },
+    "Transaction.detail": { "fields": ["product", "buyer", "seller", "amount", "status", "reason", "createdAt"] },
+    "User.list":          { "title": "Users", "columns": ["name", "email", "role", "balance"] }
+  },
+
+  "dashboards": [
+    { "id": "escrow", "title": "Escrow account", "roles": ["admin", "seller", "buyer"], "intro": "Funds held by the platform and what has left it.",
+      "cards": [ { "title": "In escrow", "entity": "Transaction", "fn": "sum", "field": "amount", "where": { "status": { "in": ["funded", "confirmed", "disputed"] } } },
+                 { "title": "Released to sellers", "entity": "Transaction", "fn": "sum", "field": "amount", "where": { "status": "released" } },
+                 { "title": "Refunded", "entity": "Transaction", "fn": "sum", "field": "amount", "where": { "status": "refunded" } },
+                 { "title": "Open disputes", "entity": "Transaction", "fn": "count", "where": { "status": "disputed" } } ],
+      "tables": [ { "title": "By status", "entity": "Transaction", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "transactions", "title": "Transactions" }, { "fn": "sum", "field": "amount", "as": "amount", "title": "Amount" } ] } ] }
+  ]
+}

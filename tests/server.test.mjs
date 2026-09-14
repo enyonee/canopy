@@ -168,8 +168,12 @@ test('failures are contained: unknown routes 404, a broken block 500, both trace
   const put = await fetch(`${s.base}/Post`, { method: 'PUT' });
   assert.equal(put.status, 404);
   const boom = await s.post('/action/boom', {});
-  assert.equal(boom.status, 500);
+  assert.equal(boom.status, 400, 'a block that refuses is the application answering, not a crash');
   assert.match(boom.html, /Empty is empty/);
+  assert.ok(s.trace().some((e) => e.kind === 'refused'));
+  const broken = await fetch(`${s.base}/Post`, { method: 'POST', headers: { 'content-type': 'multipart/form-data; boundary=x' }, body: 'not a form' });
+  assert.equal(broken.status, 500, 'a body the server cannot read is a crash, traced as such');
+  assert.match(await broken.text(), /Graph is invalid|Error|error/);
   assert.ok(s.trace().some((e) => e.kind === 'error'));
 });
 
@@ -189,7 +193,7 @@ test('an invalid graph is served as an error page, not a crash', async () => {
 
 test('the trace records every effect with its kind', async () => {
   const kinds = new Set(s.trace().map((e) => e.kind));
-  for (const k of ['create', 'update', 'delete', 'query', 'step', 'event', 'rejected', 'error'])
+  for (const k of ['create', 'update', 'delete', 'query', 'step', 'event', 'rejected', 'refused', 'error'])
     assert.ok(kinds.has(k), `the trace has no "${k}" entries`);
   const step = s.trace().find((e) => e.kind === 'step' && e.block === 'db.toggle');
   assert.deepEqual(step.effects, ['db.write'], 'the trace carries the declared effects');

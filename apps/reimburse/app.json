@@ -1,0 +1,112 @@
+{
+  "app": "reimburse",
+  "task": "webgen-bench/000101",
+  "note": "Employee travel expenses: trips own flights, hotel stays (nights and amount derived) and train tickets; the trip totals are derived; a reimbursement claim is a form (its number is the reference) whose creation mails finance, and moves through approved and paid with a mail to the employee; the settlement report is a dashboard with a period filter. One employee through identity: no accounts are asked for.",
+  "theme": { "background": "white", "accent": "navy" },
+  "home": "/Trip",
+  "identity": { "entity": "Employee", "defaults": { "name": "Dana Kim", "email": "dana.kim@corp.test", "department": "Sales", "employeeNo": "E-1042" } },
+
+  "data": {
+    "Employee": { "name": "text!", "email": "text!", "department": "text", "employeeNo": "text" },
+    "Trip":     { "title": "text!", "employee": "ref:Employee!", "destination": "text!", "start": "date!", "end": "date!", "purpose": "longtext",
+                  "flights": "money := sum(Flight: amount)", "hotels": "money := sum(Hotel: amount)", "trains": "money := sum(Train: amount)",
+                  "total": "money := flights + hotels + trains" },
+    "Flight":   { "trip": "ref:Trip!", "airline": "text!", "origin": "text!", "destination": "text!", "date": "date!", "flightNo": "text", "amount": "money!" },
+    "Hotel":    { "trip": "ref:Trip!", "name": "text!", "city": "text!", "checkIn": "date!", "checkOut": "date!", "ratePerNight": "money!",
+                  "nights": "int := days(checkOut, checkIn)", "amount": "money := days(checkOut, checkIn) * ratePerNight" },
+    "Train":    { "trip": "ref:Trip!", "operator": "text!", "origin": "text!", "destination": "text!", "date": "date!", "amount": "money!" },
+    "Claim":    { "trip": "ref:Trip!", "employee": "ref:Employee!", "note": "longtext",
+                  "status": "enum[submitted,approved,rejected,paid]=submitted", "submittedAt": "time=now", "amount": "money := trip.total" }
+  },
+
+  "rules": {
+    "Trip":   [ { "check": "end >= start", "message": "The trip cannot end before it starts" } ],
+    "Flight": [ { "check": "amount > 0", "message": "Amount must be positive" } ],
+    "Train":  [ { "check": "amount > 0", "message": "Amount must be positive" } ],
+    "Hotel":  [ { "check": "checkOut > checkIn", "message": "Check-out must be after check-in" },
+                { "check": "ratePerNight > 0", "message": "Rate per night must be positive" } ]
+  },
+
+  "seed": {
+    "Trip": [
+      { "title": "Berlin sales kickoff", "employee": 1, "destination": "Berlin", "start": "2026-08-10", "end": "2026-08-13", "purpose": "Quarterly kickoff with the DACH team" },
+      { "title": "Vienna partner visit", "employee": 1, "destination": "Vienna", "start": "2026-09-01", "end": "2026-09-03", "purpose": "Contract renewal with Danube Media" } ],
+    "Flight": [
+      { "trip": 1, "airline": "Lufthansa", "origin": "MUC", "destination": "BER", "date": "2026-08-10", "flightNo": "LH1934", "amount": 189 },
+      { "trip": 1, "airline": "Lufthansa", "origin": "BER", "destination": "MUC", "date": "2026-08-13", "flightNo": "LH1941", "amount": 175 } ],
+    "Hotel": [
+      { "trip": 1, "name": "Hotel Adlon", "city": "Berlin", "checkIn": "2026-08-10", "checkOut": "2026-08-13", "ratePerNight": 160 },
+      { "trip": 2, "name": "Hotel Sacher", "city": "Vienna", "checkIn": "2026-09-01", "checkOut": "2026-09-03", "ratePerNight": 210 } ],
+    "Train": [
+      { "trip": 2, "operator": "OBB Railjet", "origin": "Munich", "destination": "Vienna", "date": "2026-09-01", "amount": 79 },
+      { "trip": 2, "operator": "OBB Railjet", "origin": "Vienna", "destination": "Munich", "date": "2026-09-03", "amount": 79 } ],
+    "Claim": [
+      { "trip": 2, "employee": 1, "note": "Partner visit, all receipts attached", "status": "approved", "submittedAt": "2026-09-05T09:00:00.000Z" } ]
+  },
+
+  "events": [
+    { "on": "Claim.created", "do": [
+        { "block": "mail.send", "connector": "mail", "to": "finance@corp.test", "subject": "Claim #{row.id} from {row.employee.name}",
+          "text": "{row.employee.name} ({row.employee.department}) claims {row.amount} for {row.trip.title}, {row.trip.destination}, {row.trip.start} to {row.trip.end}. Note: {row.note}" } ] }
+  ],
+
+  "states": {
+    "Claim": { "field": "status", "transitions": [
+      { "name": "approve", "from": ["submitted"], "to": "approved", "title": "Approve", "confirm": "Claim #{row.id} approved",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.employee.email", "subject": "Claim #{row.id} approved",
+                  "text": "Your claim for {row.trip.title} ({row.amount}) was approved and will be paid with the next run." } ] },
+      { "name": "reject", "from": ["submitted"], "to": "rejected", "title": "Reject", "confirm": "Claim #{row.id} rejected" },
+      { "name": "pay", "from": ["approved"], "to": "paid", "title": "Mark paid", "confirm": "Claim #{row.id} paid out: {row.amount}" }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "travel@corp.test" } },
+
+  "views": "auto",
+  "override": {
+    "Trip.list":   { "title": "My trips", "columns": ["title", "destination", "start", "end", "flights", "hotels", "trains", "total"],
+                     "search": ["title", "destination"], "rowActions": ["view", "edit"] },
+    "Trip.form":   { "fields": ["title", "destination", "start", "end", "purpose"], "fill": { "employee": "@me" },
+                     "confirm": "Trip created: add flights, hotels and trains to it", "after": "/Trip/{id}", "afterEdit": "/Trip/{id}" },
+    "Trip.detail": { "fields": ["title", "employee", "destination", "start", "end", "purpose", "flights", "hotels", "trains", "total"],
+                     "related": [
+                       { "entity": "Flight", "via": "trip", "title": "Flights", "columns": ["airline", "origin", "destination", "date", "flightNo", "amount"],
+                         "form": ["airline", "origin", "destination", "date", "flightNo", "amount"], "submit": "Book flight", "confirm": "Flight booked", "rowActions": ["edit", "delete"] },
+                       { "entity": "Hotel", "via": "trip", "title": "Hotels", "columns": ["name", "city", "checkIn", "checkOut", "nights", "ratePerNight", "amount"],
+                         "form": ["name", "city", "checkIn", "checkOut", "ratePerNight"], "submit": "Book hotel", "confirm": "Hotel room booked", "rowActions": ["edit", "delete"] },
+                       { "entity": "Train", "via": "trip", "title": "Trains", "columns": ["operator", "origin", "destination", "date", "amount"],
+                         "form": ["operator", "origin", "destination", "date", "amount"], "submit": "Book train", "confirm": "Train ticket booked", "rowActions": ["edit", "delete"] },
+                       { "entity": "Claim", "via": "trip", "title": "Reimbursement claims", "columns": ["id", "amount", "status", "submittedAt"],
+                         "form": ["note"], "fill": { "employee": "@me" }, "submit": "Submit reimbursement claim", "confirm": "Reimbursement claim submitted: its number is the reference", "rowActions": ["view"] } ] },
+    "Flight.list": { "title": "Flights", "columns": ["trip", "airline", "origin", "destination", "date", "flightNo", "amount"], "createTitle": "Book a flight" },
+    "Flight.form": { "title": "Book a flight", "submit": "Book flight", "confirm": "Flight booked: the ticket is on your trip", "after": "/Trip/{trip}", "afterEdit": "/Trip/{trip}" },
+    "Hotel.list":  { "title": "Hotels", "columns": ["trip", "name", "city", "checkIn", "checkOut", "nights", "ratePerNight", "amount"], "createTitle": "Book a hotel" },
+    "Hotel.form":  { "title": "Book a hotel room", "submit": "Book hotel", "confirm": "Hotel room booked: the stay is on your trip", "after": "/Trip/{trip}", "afterEdit": "/Trip/{trip}" },
+    "Train.list":  { "title": "Trains", "columns": ["trip", "operator", "origin", "destination", "date", "amount"], "createTitle": "Book a train" },
+    "Train.form":  { "title": "Book a train", "submit": "Book train", "confirm": "Train ticket booked: it is on your trip", "after": "/Trip/{trip}", "afterEdit": "/Trip/{trip}" },
+    "Claim.list":  { "title": "Reimbursement status", "columns": ["id", "trip", "amount", "status", "submittedAt"],
+                     "filters": [ { "name": "Status", "field": "status" } ], "sort": { "field": "submittedAt", "dir": "desc" },
+                     "rowActions": ["view", "go:approve", "go:pay"], "createTitle": "New reimbursement claim" },
+    "Claim.form":  { "title": "Reimbursement application", "fields": ["trip", "note"], "fill": { "employee": "@me" }, "submit": "Submit claim",
+                     "confirm": "Reimbursement claim submitted: your reference is the claim number below", "after": "/Claim/{id}" },
+    "Claim.detail": { "fields": ["trip", "employee", "amount", "note", "status", "submittedAt"] },
+    "Employee.list": { "hidden": true }
+  },
+
+  "dashboards": [
+    { "id": "settlement", "title": "Settlement report", "intro": "Travel expenses booked through the system, settled per trip. Narrow to a period with the dates.",
+      "period": { "Trip": "start", "Flight": "date", "Hotel": "checkIn", "Train": "date", "Claim": "submittedAt" },
+      "cards": [ { "title": "Flights", "entity": "Flight", "fn": "sum", "field": "amount" },
+                 { "title": "Hotels", "entity": "Hotel", "fn": "sum", "field": "amount" },
+                 { "title": "Trains", "entity": "Train", "fn": "sum", "field": "amount" },
+                 { "title": "Total expenses", "entity": "Trip", "fn": "sum", "field": "total" },
+                 { "title": "Claims", "entity": "Claim", "fn": "count" },
+                 { "title": "Approved or paid", "entity": "Claim", "fn": "sum", "field": "amount", "where": { "status": { "in": ["approved", "paid"] } } } ],
+      "tables": [ { "title": "Settlement by trip", "entity": "Trip", "groupBy": "title", "groupTitle": "Trip",
+                    "metrics": [ { "fn": "sum", "field": "flights", "as": "flights", "title": "Flights" }, { "fn": "sum", "field": "hotels", "as": "hotels", "title": "Hotels" },
+                                 { "fn": "sum", "field": "trains", "as": "trains", "title": "Trains" }, { "fn": "sum", "field": "total", "as": "total", "title": "Total" } ],
+                    "sort": { "field": "total", "dir": "desc" } },
+                  { "title": "Claims by status", "entity": "Claim", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "claims", "title": "Claims" }, { "fn": "sum", "field": "amount", "as": "amount", "title": "Amount" } ] } ] }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "app": "leads",
+  "task": "webgen-bench/000023",
+  "note": "Sales CRM: leads categorised through an editable Category table (the settings that feed the dropdown and the wording of the automated message), a status pipeline, an automated welcome letter on creation plus a one-click follow-up letter, a reports dashboard, and an advice page.",
+  "theme": { "background": "papayawhip", "accent": "darkorange" },
+  "home": "/Lead",
+
+  "data": {
+    "Category": { "name": "text!", "pitch": "longtext!", "leads": "int := count(Lead)" },
+    "Lead":     { "name": "text!", "company": "text", "email": "text!", "phone": "text", "category": "ref:Category!",
+                  "source": "enum[web,referral,event,cold]=web", "value": "money=0",
+                  "status": "enum[new,contacted,qualified,proposal,won,lost]=new", "notes": "longtext", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "Lead":     [ { "unique": "email", "message": "A lead with this email already exists" },
+                  { "check": "value >= 0", "message": "Value cannot be negative" } ],
+    "Category": [ { "unique": "name", "message": "This category already exists" } ]
+  },
+
+  "seed": {
+    "Category": [ { "name": "Enterprise", "pitch": "Thanks for your interest. Our enterprise plan includes a dedicated account manager and onboarding within two weeks." },
+                  { "name": "Small business", "pitch": "Thanks for reaching out. Small teams get started in a day with our self-serve plan and free migration help." },
+                  { "name": "Partner", "pitch": "Great to meet a potential partner. Our partner programme shares revenue and co-marketing." } ],
+    "Lead":     [ { "name": "Nora North", "company": "Northwind", "email": "nora@northwind.test", "phone": "+1 555 0100", "category": 1, "source": "referral", "value": 12000, "status": "qualified", "createdAt": "2026-07-09T09:00:00.000Z" },
+                  { "name": "Hal Helio", "company": "Helio", "email": "hal@helio.test", "category": 2, "source": "web", "value": 1800, "status": "contacted", "createdAt": "2026-08-02T11:00:00.000Z" },
+                  { "name": "Ivy Ito", "company": "Ito Partners", "email": "ivy@ito.test", "category": 3, "source": "event", "value": 6500, "status": "won", "createdAt": "2026-08-14T15:00:00.000Z" },
+                  { "name": "Omar Oak", "company": "Oakline", "email": "omar@oakline.test", "category": 2, "source": "cold", "value": 900, "status": "lost", "createdAt": "2026-08-21T10:30:00.000Z" } ]
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "sales@leads.test" } },
+
+  "events": [
+    { "on": "Lead.created", "do": [
+        { "block": "mail.send", "connector": "mail", "to": "@row.email", "subject": "Welcome, {row.name}", "text": "{row.category.pitch}" } ] }
+  ],
+
+  "actions": [
+    { "name": "message", "in": "Lead", "title": "Send message", "after": "/Lead/{id}", "confirm": "Message sent to {row.email}",
+      "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.email", "subject": "Following up, {row.name}",
+                "text": "{row.category.pitch} Reply to this message and we will take it from there." } ] }
+  ],
+
+  "states": {
+    "Lead": { "field": "status", "transitions": [
+      { "name": "contact", "from": ["new"], "to": "contacted", "title": "Mark contacted", "confirm": "Status updated: {row.name} is now contacted" },
+      { "name": "qualify", "from": ["contacted"], "to": "qualified", "title": "Qualify" },
+      { "name": "propose", "from": ["qualified"], "to": "proposal", "title": "Send proposal", "fields": ["value"] },
+      { "name": "win", "from": ["proposal"], "to": "won", "title": "Mark won" },
+      { "name": "lose", "from": ["new", "contacted", "qualified", "proposal"], "to": "lost", "title": "Mark lost" },
+      { "name": "reopen", "from": ["lost"], "to": "new", "title": "Reopen" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Lead.list":     { "title": "Leads", "columns": ["name", "company", "category", "source", "value", "status", "createdAt"], "search": ["name", "company", "email"],
+                       "filters": [ { "name": "Category", "field": "category" }, { "name": "Status", "field": "status" }, { "name": "Source", "field": "source" } ],
+                       "rowActions": ["view", "edit", "message"], "createTitle": "Add New Lead" },
+    "Lead.form":     { "title": "Add New Lead", "fields": ["name", "company", "email", "phone", "category", "source", "value", "notes"], "submit": "Add lead",
+                       "confirm": "Lead added successfully", "confirmEdit": "Lead updated", "afterEdit": "/Lead/{id}" },
+    "Lead.detail":   { "actions": ["message"] },
+    "Category.list": { "title": "Settings", "intro": "Categories organise the leads: each row is an option of the category dropdown on the lead form, and its pitch is the text of the automated message.",
+                       "columns": ["name", "pitch", "leads"], "createTitle": "Add dropdown option" },
+    "Category.form": { "title": "Category settings", "confirm": "Settings saved: the dropdown now offers the new category", "confirmEdit": "Settings saved" }
+  },
+
+  "pages": [
+    { "id": "advice", "title": "Advice", "heading": "Best practice and integration advice",
+      "body": [ "Best practice: answer a new lead within one working day; the welcome message goes out automatically, the follow-up is one click on the lead.",
+                "Best practice: keep the pipeline honest — move a lead to lost rather than leaving it in contacted for months; the reports count only what the statuses say.",
+                "Best practice: categorise every lead; the category chooses the wording of the automated message and groups the reports.",
+                "Integration advice: every letter this system sends is recorded in the outbox with its status, so a mail provider can be connected without changing the workflow.",
+                "Integration advice: import leads from web forms by posting to /Lead with name, email and category; the welcome letter fires on creation." ],
+      "links": [ { "label": "Leads", "href": "/Lead" }, { "label": "Reports", "href": "/dashboard/reports" } ] }
+  ],
+
+  "dashboards": [
+    { "id": "reports", "title": "Reports", "intro": "Pipeline and results by status, category, source and month; narrow to a period by creation date.",
+      "period": { "Lead": "createdAt" },
+      "cards": [ { "title": "Leads", "entity": "Lead", "fn": "count" },
+                 { "title": "Open pipeline", "entity": "Lead", "fn": "sum", "field": "value", "where": { "status": { "in": ["new", "contacted", "qualified", "proposal"] } } },
+                 { "title": "Won value", "entity": "Lead", "fn": "sum", "field": "value", "where": { "status": "won" } },
+                 { "title": "Lost", "entity": "Lead", "fn": "count", "where": { "status": "lost" } } ],
+      "tables": [ { "title": "By status", "entity": "Lead", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "leads", "title": "Leads" }, { "fn": "sum", "field": "value", "as": "value", "title": "Value" } ] },
+                  { "title": "By category", "entity": "Lead", "groupBy": "category", "groupTitle": "Category",
+                    "metrics": [ { "fn": "count", "as": "leads", "title": "Leads" }, { "fn": "sum", "field": "value", "as": "value", "title": "Value" } ], "sort": { "field": "value", "dir": "desc" } },
+                  { "title": "By source", "entity": "Lead", "groupBy": "source", "groupTitle": "Source", "metrics": [ { "fn": "count", "as": "leads", "title": "Leads" } ] },
+                  { "title": "By month", "entity": "Lead", "groupBy": "createdAt", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "leads", "title": "Leads" }, { "fn": "sum", "field": "value", "as": "value", "title": "Value" } ] } ] }
+  ]
+}

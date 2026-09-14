@@ -1,0 +1,94 @@
+{
+  "app": "golf",
+  "task": "webgen-bench/000100",
+  "note": "Golf travel packages: suppliers (hotel, course, flight, transport) with a rate, packages composed of suppliers with a derived base price, a CRM of customers whose preferences (room type, caddie) change every quote, requests from the homepage form, and a quote that is a Booking whose hotel/golf/flights/transport/extras lines and total are derived; confirming it mails the voucher and invoice. The homepage is the request form. No accounts are asked for, so no identity or roles.",
+  "theme": { "background": "whitesmoke", "accent": "darkcyan" },
+  "home": "/Request/new",
+
+  "data": {
+    "Supplier": { "name": "text!", "kind": "enum[hotel,golf,flight,transport]=hotel", "country": "text", "contact": "text", "rate": "money=0", "notes": "longtext" },
+    "Package":  { "name": "text!", "destination": "text!", "nights": "int=3", "rounds": "int=2",
+                  "hotel": "ref:Supplier!", "course": "ref:Supplier!", "flight": "ref:Supplier", "transport": "ref:Supplier", "about": "longtext",
+                  "price": "money := nights * hotel.rate + rounds * course.rate + coalesce(flight.rate, 0)" },
+    "Customer": { "name": "text!", "email": "text!", "phone": "text", "handicap": "int",
+                  "roomType": "enum[standard,suite]=standard", "caddie": "bool=false", "preferences": "longtext" },
+    "Request":  { "name": "text!", "email": "text!", "destination": "text!", "start": "date!", "end": "date!", "golfers": "int=2",
+                  "preferences": "longtext", "status": "enum[new,quoted,closed]=new", "receivedAt": "time=now" },
+    "Booking":  { "customer": "ref:Customer!", "package": "ref:Package!", "golfers": "int=2", "start": "date!",
+                  "status": "enum[quoted,confirmed,cancelled]=quoted", "createdAt": "time=now",
+                  "hotel": "money := golfers * package.nights * package.hotel.rate",
+                  "golf": "money := golfers * package.rounds * package.course.rate",
+                  "flights": "money := golfers * coalesce(package.flight.rate, 0)",
+                  "transport": "money := coalesce(package.transport.rate, 0)",
+                  "extras": "money := if(customer.roomType = 'suite', package.nights * package.hotel.rate * 0.5, 0) + if(customer.caddie, golfers * package.rounds * package.course.rate * 0.4, 0)",
+                  "total": "money := hotel + golf + flights + transport + extras" }
+  },
+
+  "rules": {
+    "Supplier": [ { "check": "rate >= 0", "message": "Rate cannot be negative" } ],
+    "Request":  [ { "check": "end > start", "message": "Return date must be after the departure date" },
+                  { "check": "golfers > 0", "message": "At least one golfer" } ],
+    "Booking":  [ { "check": "golfers > 0", "message": "At least one golfer" } ]
+  },
+
+  "seed": {
+    "Supplier": [
+      { "name": "Algarve Palace Hotel", "kind": "hotel", "country": "Portugal", "contact": "reservations@algarvepalace.test", "rate": 120, "notes": "Rate per room per night" },
+      { "name": "Quinta do Lago Golf", "kind": "golf", "country": "Portugal", "contact": "teetimes@quintagolf.test", "rate": 95, "notes": "Green fee per round" },
+      { "name": "Costa Brava Resort", "kind": "hotel", "country": "Spain", "contact": "stay@costabravaresort.test", "rate": 140, "notes": "Rate per room per night" },
+      { "name": "PGA Catalunya", "kind": "golf", "country": "Spain", "contact": "golf@pgacatalunya.test", "rate": 110, "notes": "Green fee per round" },
+      { "name": "Iberia Flights", "kind": "flight", "country": "Spain", "contact": "groups@iberia.test", "rate": 180, "notes": "Return fare per person" },
+      { "name": "Faro Shuttle", "kind": "transport", "country": "Portugal", "contact": "ops@faroshuttle.test", "rate": 60, "notes": "Airport transfer per group" } ],
+    "Package": [
+      { "name": "Algarve Classic", "destination": "Algarve", "nights": 4, "rounds": 3, "hotel": 1, "course": 2, "flight": 5, "transport": 6, "about": "Four nights by the sea and three rounds on the Quinta do Lago courses." },
+      { "name": "Catalunya Escape", "destination": "Costa Brava", "nights": 3, "rounds": 2, "hotel": 3, "course": 4, "flight": 5, "transport": 6, "about": "Three nights at the resort and two rounds on the Stadium course." } ],
+    "Customer": [
+      { "name": "Harry Lime", "email": "harry@example.test", "phone": "+44 7700 900100", "handicap": 12, "roomType": "standard", "caddie": false, "preferences": "Links courses, early tee times" },
+      { "name": "Nora Green", "email": "nora@example.test", "phone": "+44 7700 900200", "handicap": 24, "roomType": "suite", "caddie": true, "preferences": "Spa hotel, relaxed pace" } ],
+    "Request": [
+      { "name": "Tom Field", "email": "tom@example.test", "destination": "Algarve", "start": "2026-11-05", "end": "2026-11-10", "golfers": 4, "preferences": "Two rounds a day, twin rooms", "status": "quoted", "receivedAt": "2026-08-20T09:00:00.000Z" } ],
+    "Booking": [
+      { "customer": 1, "package": 1, "golfers": 2, "start": "2026-10-10", "status": "quoted", "createdAt": "2026-08-25T09:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Request": { "field": "status", "transitions": [
+      { "name": "quote", "from": ["new"], "to": "quoted", "title": "Mark quoted" },
+      { "name": "close", "from": ["new", "quoted"], "to": "closed", "title": "Close request" } ] },
+    "Booking": { "field": "status", "transitions": [
+      { "name": "confirm", "from": ["quoted"], "to": "confirmed", "title": "Confirm booking",
+        "confirm": "Booking #{row.id} confirmed: {row.package.name} for {row.customer.name}, total {row.total}. Voucher and invoice sent to {row.customer.email}",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.customer.email", "subject": "Voucher #{row.id}: {row.package.name}",
+                  "text": "Voucher #{row.id} for {row.customer.name}: {row.package.name} in {row.package.destination}, {row.golfers} golfer(s) from {row.start}, {row.package.nights} nights at {row.package.hotel.name}, {row.package.rounds} rounds at {row.package.course.name}. Invoice: hotel {row.hotel}, golf {row.golf}, flights {row.flights}, transport {row.transport}, extras {row.extras}, total {row.total}." } ] },
+      { "name": "cancel", "from": ["quoted", "confirmed"], "to": "cancelled", "title": "Cancel", "confirm": "Booking cancelled" } ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "bookings@fairwaytravel.test" } },
+
+  "views": "auto",
+  "override": {
+    "Request.form":    { "title": "Plan your golf trip", "intro": "Tell us where and when you want to play. We collect your preferences and send a quote within 24 hours.",
+                         "fields": ["name", "email", "destination", "start", "end", "golfers", "preferences"], "submit": "Send request",
+                         "confirm": "Thank you, your request has been received. A quote will follow within 24 hours", "after": "/Request/{id}" },
+    "Request.list":    { "title": "Requests", "columns": ["name", "email", "destination", "start", "end", "golfers", "status", "receivedAt"],
+                         "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "go:quote", "go:close"], "create": false },
+    "Package.list":    { "title": "Packages", "columns": ["name", "destination", "nights", "rounds", "hotel", "course", "price"],
+                         "search": ["name", "destination"], "rowActions": ["view", "edit"] },
+    "Package.detail":  { "related": [ { "entity": "Booking", "via": "package", "title": "Quotes and bookings",
+                                        "columns": ["id", "customer", "golfers", "start", "total", "status"], "form": false, "rowActions": ["view"] } ] },
+    "Customer.list":   { "title": "Customers (CRM)", "columns": ["name", "email", "phone", "handicap", "roomType", "caddie", "preferences"],
+                         "search": ["name", "email"], "rowActions": ["view", "edit"] },
+    "Customer.form":   { "confirm": "Customer saved", "confirmEdit": "Customer preferences updated: every quote reflects the change", "afterEdit": "/Customer/{id}" },
+    "Customer.detail": { "related": [ { "entity": "Booking", "via": "customer", "title": "Quotes and bookings",
+                                        "columns": ["id", "package", "golfers", "start", "extras", "total", "status"], "form": false, "rowActions": ["view"] } ] },
+    "Supplier.list":   { "title": "Suppliers", "columns": ["name", "kind", "country", "contact", "rate"],
+                         "search": ["name", "country"], "filters": [ { "name": "Kind", "field": "kind" } ] },
+    "Supplier.form":   { "confirm": "Supplier saved", "confirmEdit": "Supplier updated" },
+    "Booking.list":    { "title": "Quotes and bookings", "columns": ["id", "customer", "package", "golfers", "start", "total", "status"],
+                         "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "go:confirm"], "createTitle": "New quote" },
+    "Booking.form":    { "title": "Online quote", "intro": "Pick a package and a customer; the quote applies the hotel, golf, flight and transport rates and the customer preferences.",
+                         "fields": ["customer", "package", "golfers", "start"], "submit": "Generate quote",
+                         "confirm": "Quote ready: review the breakdown below and confirm to book", "after": "/Booking/{id}", "afterEdit": "/Booking/{id}" },
+    "Booking.detail":  { "fields": ["customer", "package", "golfers", "start", "hotel", "golf", "flights", "transport", "extras", "total", "status", "createdAt"] }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "app": "travel",
+  "task": "webgen-bench/000096",
+  "note": "Online travel booking: trains, flights and hotels are searched with departure/arrival city filters and a date range; a Book button (row action) creates a booking, takes a seat or a room (db.adjust) and answers with the booking number as confirmation. Paying is a transition that asks for a card (kept as a password field: hashed, never rendered; a rule wants 16 digits) and mails a receipt. Order status is the bookings list, scoped to the signed-in customer.",
+  "theme": { "background": "peachpuff", "accent": "indianred" },
+  "home": "/page/home",
+
+  "data": {
+    "User":    { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,customer]=customer" },
+    "Train":   { "number": "text!", "fromCity": "text!", "toCity": "text!", "date": "date!", "departs": "text!", "arrives": "text!", "seats": "int=0", "price": "money!" },
+    "Flight":  { "number": "text!", "airline": "text!", "fromCity": "text!", "toCity": "text!", "date": "date!", "departs": "text!", "arrives": "text!", "seats": "int=0", "price": "money!" },
+    "Hotel":   { "name": "text!", "city": "text!", "stars": "int=3", "rooms": "int=0", "pricePerNight": "money!" },
+    "Booking": { "customer": "ref:User!", "kind": "enum[train,flight,hotel]=train", "train": "ref:Train", "flight": "ref:Flight", "hotel": "ref:Hotel",
+                 "passengers": "int=1", "nights": "int=1", "amount": "money=0", "status": "enum[pending,paid,cancelled]=pending",
+                 "createdAt": "time=now", "paidAt": "time", "card": "password" }
+  },
+
+  "rules": {
+    "User":    [ { "unique": "email" } ],
+    "Booking": [ { "check": "card = null or len(card) = 16", "message": "Enter a valid 16-digit card number" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role", "register": "customer", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "customer": { "Train": ["view", "do:bookTrain"], "Flight": ["view", "do:bookFlight"], "Hotel": ["view", "do:bookHotel"],
+                    "Booking": { "own": "customer", "can": ["view", "go:pay", "go:cancel"] } },
+      "guest":    { "Train": ["view"], "Flight": ["view"], "Hotel": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":   [ { "email": "admin@travel.test", "password": "admin123", "name": "Admin", "role": "admin" } ],
+    "Train":  [ { "number": "G1", "fromCity": "Beijing", "toCity": "Shanghai", "date": "2026-10-01", "departs": "08:00", "arrives": "12:28", "seats": 50, "price": 553 },
+                { "number": "G7", "fromCity": "Beijing", "toCity": "Shanghai", "date": "2026-10-02", "departs": "09:00", "arrives": "13:30", "seats": 40, "price": 553 },
+                { "number": "D301", "fromCity": "Shanghai", "toCity": "Hangzhou", "date": "2026-10-01", "departs": "10:15", "arrives": "11:20", "seats": 80, "price": 73 },
+                { "number": "Z35", "fromCity": "Beijing", "toCity": "Guangzhou", "date": "2026-10-01", "departs": "20:05", "arrives": "17:10", "seats": 120, "price": 465 },
+                { "number": "G2", "fromCity": "Shanghai", "toCity": "Beijing", "date": "2026-10-05", "departs": "07:00", "arrives": "11:30", "seats": 45, "price": 553 } ],
+    "Flight": [ { "number": "CA1501", "airline": "Air China", "fromCity": "Beijing", "toCity": "Shanghai", "date": "2026-10-01", "departs": "07:30", "arrives": "09:45", "seats": 20, "price": 1200 },
+                { "number": "MU5102", "airline": "China Eastern", "fromCity": "Shanghai", "toCity": "Beijing", "date": "2026-10-05", "departs": "18:00", "arrives": "20:20", "seats": 15, "price": 1150 },
+                { "number": "CZ3001", "airline": "China Southern", "fromCity": "Guangzhou", "toCity": "Beijing", "date": "2026-10-03", "departs": "12:00", "arrives": "15:10", "seats": 30, "price": 980 } ],
+    "Hotel":  [ { "name": "Bund Riverside Hotel", "city": "Shanghai", "stars": 4, "rooms": 12, "pricePerNight": 680 },
+                { "name": "Jade Garden Inn", "city": "Beijing", "stars": 3, "rooms": 25, "pricePerNight": 320 },
+                { "name": "Pearl Tower Suites", "city": "Shanghai", "stars": 5, "rooms": 6, "pricePerNight": 1280 } ]
+  },
+
+  "actions": [
+    { "name": "bookTrain", "in": "Train", "title": "Book", "after": "/Booking", "confirm": "Train {row.number} booked; your confirmation number is {created}",
+      "do": [ { "block": "db.adjust", "field": "seats", "by": "= -coalesce(values.passengers, 1)", "min": 0, "message": "Not enough seats left on this train" },
+              { "block": "db.createRow", "entity": "Booking", "values": { "customer": "@me", "kind": "train", "train": "@row.id",
+                "passengers": "= coalesce(values.passengers, 1)", "amount": "= row.price * coalesce(values.passengers, 1)" } } ] },
+    { "name": "bookFlight", "in": "Flight", "title": "Book", "after": "/Booking", "confirm": "Flight {row.number} booked; your confirmation number is {created}",
+      "do": [ { "block": "db.adjust", "field": "seats", "by": "= -coalesce(values.passengers, 1)", "min": 0, "message": "Not enough seats left on this flight" },
+              { "block": "db.createRow", "entity": "Booking", "values": { "customer": "@me", "kind": "flight", "flight": "@row.id",
+                "passengers": "= coalesce(values.passengers, 1)", "amount": "= row.price * coalesce(values.passengers, 1)" } } ] },
+    { "name": "bookHotel", "in": "Hotel", "title": "Book", "after": "/Booking", "confirm": "{row.name} booked; your confirmation number is {created}",
+      "do": [ { "block": "db.adjust", "field": "rooms", "by": -1, "min": 0, "message": "No rooms left in this hotel" },
+              { "block": "db.createRow", "entity": "Booking", "values": { "customer": "@me", "kind": "hotel", "hotel": "@row.id",
+                "nights": "= coalesce(values.nights, 1)", "amount": "= row.pricePerNight * coalesce(values.nights, 1)" } } ] }
+  ],
+
+  "states": {
+    "Booking": { "field": "status", "transitions": [
+      { "name": "pay", "from": ["pending"], "to": "paid", "title": "Pay now", "fields": ["card"],
+        "confirm": "Payment of {row.amount} confirmed; a receipt was emailed to {row.customer.email}",
+        "do": [ { "block": "db.update", "set": { "paidAt": "@now" } },
+                { "block": "mail.send", "connector": "mail", "to": "@row.customer.email", "subject": "Receipt for booking #{row.id}",
+                  "text": "We received {row.amount} for your {row.kind} booking #{row.id}. Thank you for travelling with us, {row.customer.name}." } ] },
+      { "name": "cancel", "from": ["pending", "paid"], "to": "cancelled", "title": "Cancel booking", "confirm": "Booking #{row.id} cancelled" }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "bookings@travel.test" } },
+
+  "views": "auto",
+  "override": {
+    "User.list":      { "title": "Customers", "columns": ["email", "name", "role"] },
+    "Train.list":     { "title": "Trains", "columns": ["number", "fromCity", "toCity", "date", "departs", "arrives", "seats", "price"],
+                        "filters": [ { "name": "From", "field": "fromCity", "options": [ { "label": "All" }, { "label": "Beijing", "eq": "Beijing" }, { "label": "Shanghai", "eq": "Shanghai" }, { "label": "Guangzhou", "eq": "Guangzhou" } ] },
+                                     { "name": "To", "field": "toCity", "options": [ { "label": "All" }, { "label": "Beijing", "eq": "Beijing" }, { "label": "Shanghai", "eq": "Shanghai" }, { "label": "Hangzhou", "eq": "Hangzhou" }, { "label": "Guangzhou", "eq": "Guangzhou" } ] },
+                                     { "name": "Date", "field": "date", "range": true } ],
+                        "sort": { "field": "date", "dir": "asc" }, "rowActions": ["view", "bookTrain"] },
+    "Train.detail":   { "actions": ["bookTrain"] },
+    "Flight.list":    { "title": "Flights", "columns": ["number", "airline", "fromCity", "toCity", "date", "departs", "arrives", "seats", "price"],
+                        "filters": [ { "name": "From", "field": "fromCity", "options": [ { "label": "All" }, { "label": "Beijing", "eq": "Beijing" }, { "label": "Shanghai", "eq": "Shanghai" }, { "label": "Guangzhou", "eq": "Guangzhou" } ] },
+                                     { "name": "To", "field": "toCity", "options": [ { "label": "All" }, { "label": "Beijing", "eq": "Beijing" }, { "label": "Shanghai", "eq": "Shanghai" } ] },
+                                     { "name": "Date", "field": "date", "range": true } ],
+                        "sort": { "field": "date", "dir": "asc" }, "rowActions": ["view", "bookFlight"] },
+    "Flight.detail":  { "actions": ["bookFlight"] },
+    "Hotel.list":     { "title": "Hotels", "columns": ["name", "city", "stars", "rooms", "pricePerNight"], "search": ["name", "city"],
+                        "filters": [ { "name": "City", "field": "city", "options": [ { "label": "All" }, { "label": "Beijing", "eq": "Beijing" }, { "label": "Shanghai", "eq": "Shanghai" } ] } ],
+                        "rowActions": ["view", "bookHotel"] },
+    "Hotel.detail":   { "actions": ["bookHotel"] },
+    "Booking.list":   { "title": "Order status", "columns": ["id", "kind", "train", "flight", "hotel", "passengers", "nights", "amount", "status", "createdAt"],
+                        "filters": [ { "name": "Status", "field": "status" } ], "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "Booking.detail": { "fields": ["customer", "kind", "train", "flight", "hotel", "passengers", "nights", "amount", "status", "createdAt", "paidAt"] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Book trains, flights and hotels",
+      "body": [ "Search by departure and arrival city and by date, book with one click, pay by card and follow every order's status.",
+                "Sign in or register to book; searching is open to everyone." ],
+      "links": [ { "label": "Trains", "href": "/Train" }, { "label": "Flights", "href": "/Flight" }, { "label": "Hotels", "href": "/Hotel" }, { "label": "Order status", "href": "/Booking" } ] }
+  ]
+}

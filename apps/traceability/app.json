@@ -1,0 +1,116 @@
+{
+  "app": "traceability",
+  "task": "webgen-bench/000044",
+  "note": "Supply chain traceability: a product is registered under a unique code; every status transition (ship, store, deliver, sell) asks for the location and records a checkpoint, so the circulation path is the list of checkpoints and the current status/location/time live on the product. Verification compares an entered code with the registered one (check.matchRef) and shows the registered source. Statistics is a dashboard with a registration-period filter.",
+  "theme": { "background": "mistyrose", "accent": "firebrick" },
+  "home": "/Product",
+
+  "data": {
+    "Producer":     { "name": "text!", "country": "text!", "certified": "bool=true", "products": "int := count(Product)" },
+    "Product":      { "code": "text!", "name": "text!", "producer": "ref:Producer!", "origin": "text!",
+                      "category": "enum[food,textile,electronics,pharma]=food",
+                      "status": "enum[registered,shipped,stored,delivered,sold]=registered", "location": "text",
+                      "registeredAt": "time=now", "updatedAt": "time=now", "checkpoints": "int := count(Checkpoint)" },
+    "Checkpoint":   { "product": "ref:Product!", "location": "text!", "stage": "enum[registered,shipped,stored,delivered,sold]=registered",
+                      "at": "time=now", "note": "text" },
+    "Verification": { "code": "text!", "product": "ref:Product!", "authentic": "bool=false", "checkedAt": "time=now",
+                      "producerName": "text := product.producer.name", "origin": "text := product.origin" }
+  },
+
+  "rules": {
+    "Product": [ { "unique": "code", "message": "This product ID is already registered" } ]
+  },
+
+  "seed": {
+    "Producer": [ { "name": "Green Valley Farms", "country": "USA" },
+                  { "name": "Nordic Textiles", "country": "Sweden" },
+                  { "name": "Shenzhen Circuits", "country": "China", "certified": false } ],
+    "Product":  [ { "code": "TRC-0001", "name": "Organic almonds 1kg", "producer": 1, "origin": "Salinas, California", "category": "food",
+                    "status": "delivered", "location": "Fresh Mart, Seattle", "registeredAt": "2026-07-02T08:00:00.000Z", "updatedAt": "2026-07-12T15:00:00.000Z" },
+                  { "code": "TRC-0002", "name": "Merino wool scarf", "producer": 2, "origin": "Gothenburg", "category": "textile",
+                    "status": "shipped", "location": "Hamburg port", "registeredAt": "2026-08-10T08:00:00.000Z", "updatedAt": "2026-08-14T09:00:00.000Z" },
+                  { "code": "TRC-0003", "name": "Smart thermostat T2", "producer": 3, "origin": "Shenzhen plant 4", "category": "electronics",
+                    "status": "registered", "location": "Shenzhen plant 4", "registeredAt": "2026-08-28T08:00:00.000Z", "updatedAt": "2026-08-28T08:00:00.000Z" },
+                  { "code": "TRC-0004", "name": "Organic honey 500g", "producer": 1, "origin": "Salinas, California", "category": "food",
+                    "status": "sold", "location": "Fresh Mart, Seattle", "registeredAt": "2026-06-15T08:00:00.000Z", "updatedAt": "2026-07-01T11:00:00.000Z" } ],
+    "Checkpoint": [ { "product": 1, "stage": "registered", "location": "Salinas, California", "at": "2026-07-02T08:00:00.000Z", "note": "Registered by producer" },
+                    { "product": 1, "stage": "shipped", "location": "Port of Oakland", "at": "2026-07-05T10:00:00.000Z" },
+                    { "product": 1, "stage": "stored", "location": "Tacoma warehouse", "at": "2026-07-09T14:00:00.000Z" },
+                    { "product": 1, "stage": "delivered", "location": "Fresh Mart, Seattle", "at": "2026-07-12T15:00:00.000Z" },
+                    { "product": 2, "stage": "registered", "location": "Gothenburg", "at": "2026-08-10T08:00:00.000Z", "note": "Registered by producer" },
+                    { "product": 2, "stage": "shipped", "location": "Hamburg port", "at": "2026-08-14T09:00:00.000Z" },
+                    { "product": 3, "stage": "registered", "location": "Shenzhen plant 4", "at": "2026-08-28T08:00:00.000Z", "note": "Registered by producer" },
+                    { "product": 4, "stage": "registered", "location": "Salinas, California", "at": "2026-06-15T08:00:00.000Z", "note": "Registered by producer" },
+                    { "product": 4, "stage": "shipped", "location": "Port of Oakland", "at": "2026-06-18T10:00:00.000Z" },
+                    { "product": 4, "stage": "delivered", "location": "Fresh Mart, Seattle", "at": "2026-06-24T15:00:00.000Z" },
+                    { "product": 4, "stage": "sold", "location": "Fresh Mart, Seattle", "at": "2026-07-01T11:00:00.000Z" } ],
+    "Verification": [ { "code": "TRC-0001", "product": 1, "authentic": true, "checkedAt": "2026-08-01T12:00:00.000Z" } ]
+  },
+
+  "events": [
+    { "on": "Product.created", "do": [
+        { "block": "db.update", "set": { "location": "@row.origin" } },
+        { "block": "db.createRow", "entity": "Checkpoint", "values": { "product": "@row.id", "location": "@row.origin", "stage": "registered", "note": "Registered by producer" } } ] },
+    { "on": "Verification.created", "do": [
+        { "block": "check.matchRef", "ref": "product", "field": "code", "against": "code", "into": "authentic" } ] }
+  ],
+
+  "states": {
+    "Product": { "field": "status", "transitions": [
+      { "name": "ship", "from": ["registered", "stored"], "to": "shipped", "title": "Ship", "fields": ["location"],
+        "do": [ { "block": "db.update", "set": { "updatedAt": "@now" } },
+                { "block": "db.createRow", "entity": "Checkpoint", "values": { "product": "@row.id", "location": "@row.location", "stage": "shipped" } } ] },
+      { "name": "store", "from": ["shipped"], "to": "stored", "title": "Receive at warehouse", "fields": ["location"],
+        "do": [ { "block": "db.update", "set": { "updatedAt": "@now" } },
+                { "block": "db.createRow", "entity": "Checkpoint", "values": { "product": "@row.id", "location": "@row.location", "stage": "stored" } } ] },
+      { "name": "deliver", "from": ["shipped", "stored"], "to": "delivered", "title": "Deliver to retailer", "fields": ["location"],
+        "do": [ { "block": "db.update", "set": { "updatedAt": "@now" } },
+                { "block": "db.createRow", "entity": "Checkpoint", "values": { "product": "@row.id", "location": "@row.location", "stage": "delivered" } } ] },
+      { "name": "sell", "from": ["delivered"], "to": "sold", "title": "Mark sold", "fields": ["location"],
+        "do": [ { "block": "db.update", "set": { "updatedAt": "@now" } },
+                { "block": "db.createRow", "entity": "Checkpoint", "values": { "product": "@row.id", "location": "@row.location", "stage": "sold" } } ] }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Producer.list":      { "columns": ["name", "country", "certified", "products"] },
+    "Product.list":       { "title": "Products", "columns": ["code", "name", "producer", "category", "status", "location", "checkpoints"],
+                            "search": ["code", "name"], "filters": [ { "name": "Status", "field": "status" }, { "name": "Producer", "field": "producer" } ],
+                            "rowActions": ["view", "edit"], "createTitle": "Register product" },
+    "Product.form":       { "title": "Register a product", "fields": ["code", "name", "producer", "origin", "category"], "submit": "Register",
+                            "confirm": "Product registered successfully; its product ID is shown below", "after": "/Product/{id}" },
+    "Product.detail":     { "fields": ["code", "name", "producer", "origin", "category", "status", "location", "registeredAt", "updatedAt", "checkpoints"],
+                            "related": [ { "entity": "Checkpoint", "via": "product", "title": "Circulation path", "columns": ["stage", "location", "at", "note"], "form": false } ] },
+    "Checkpoint.list":    { "hidden": true },
+    "Verification.list":  { "title": "Verify", "columns": ["code", "product", "authentic", "producerName", "origin", "checkedAt"],
+                            "labels": { "authentic": ["Not authentic", "Authentic"] }, "rowActions": ["view"], "createTitle": "Verify a product" },
+    "Verification.form":  { "title": "Verify authenticity", "fields": ["code", "product"], "submit": "Verify",
+                            "confirm": "Verification complete", "after": "/Verification/{id}" },
+    "Verification.detail": { "fields": ["code", "product", "authentic", "producerName", "origin", "checkedAt"],
+                             "labels": { "authentic": ["Not authentic", "Authentic"] } }
+  },
+
+  "lists": [
+    { "id": "track", "entity": "Product", "title": "Track", "search": ["code"],
+      "columns": ["code", "name", "status", "location", "checkpoints"], "rowActions": ["view"] }
+  ],
+
+  "dashboards": [
+    { "id": "stats", "title": "Statistics", "intro": "Supply chain operations at a glance.", "period": { "Product": "registeredAt" },
+      "cards": [ { "title": "Products tracked", "entity": "Product", "fn": "count" },
+                 { "title": "In circulation", "entity": "Product", "fn": "count", "where": { "status": { "in": ["shipped", "stored"] } } },
+                 { "title": "Delivered or sold", "entity": "Product", "fn": "count", "where": { "status": { "in": ["delivered", "sold"] } } },
+                 { "title": "Checkpoints recorded", "entity": "Checkpoint", "fn": "count" },
+                 { "title": "Verifications", "entity": "Verification", "fn": "count" },
+                 { "title": "Confirmed authentic", "entity": "Verification", "fn": "count", "where": { "authentic": 1 } } ],
+      "tables": [ { "title": "Products by status", "entity": "Product", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Products" } ] },
+                  { "title": "Products by producer", "entity": "Product", "groupBy": "producer", "groupTitle": "Producer",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Products" } ], "sort": { "field": "n", "dir": "desc" } },
+                  { "title": "Checkpoints by stage", "entity": "Checkpoint", "groupBy": "stage", "groupTitle": "Stage",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Checkpoints" } ] },
+                  { "title": "Registrations by month", "entity": "Product", "groupBy": "registeredAt", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Products" } ] } ] }
+  ]
+}

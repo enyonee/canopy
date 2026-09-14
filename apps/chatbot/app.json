@@ -1,0 +1,57 @@
+{
+  "app": "chatbot",
+  "task": "webgen-bench/000024",
+  "note": "Support chatbot as a conversation of messages: the visitor types into the conversation, an event matches the text against the Answer table (the typed text must be contained in a known question) and links the reply; unmatched text gets the derived fallback reply. Products and orders back the 'help me order' guidance.",
+  "theme": { "background": "snow", "accent": "dimgray" },
+  "home": "/Chat/1",
+
+  "data": {
+    "Chat":    { "title": "text!", "startedAt": "time=now", "messages": "int := count(Message)" },
+    "Answer":  { "question": "text!", "reply": "longtext!" },
+    "Message": { "chat": "ref:Chat!", "text": "text!", "answer": "ref:Answer",
+                 "reply": "text := coalesce(answer.reply, 'Sorry, I did not understand that. Could you rephrase or ask another question?')",
+                 "sentAt": "time=now" },
+    "Product": { "name": "text!", "price": "money!", "about": "text" },
+    "Order":   { "product": "ref:Product!", "qty": "int=1", "customer": "text!", "placedAt": "time=now", "total": "money := qty * product.price" }
+  },
+
+  "rules": { "Order": [ { "check": "qty > 0", "message": "Quantity must be at least 1" } ] },
+
+  "seed": {
+    "Chat":    [ { "title": "Support chat" } ],
+    "Answer":  [ { "question": "What are your frequently asked questions?",
+                   "reply": "Here are our frequently asked questions: 1) How can I return a product? 2) I need help with placing an order. 3) What products do you sell? 4) How long does delivery take? 5) What payment methods do you accept? Type any of them and I will answer." },
+                 { "question": "I need help with placing an order",
+                   "reply": "Happy to help you place an order: 1) open Products and pick what you want, 2) open Orders and press Add Order, 3) choose the product, the quantity and your name, 4) press Place order. You will see a confirmation and the order appears in Orders." },
+                 { "question": "How can I return a product?",
+                   "reply": "To return a product: 1) open Orders and note your order number, 2) within 30 days of delivery email returns@example.test with that number, 3) pack the item in its original packaging, 4) we send a prepaid label; the refund arrives 5 days after the parcel reaches us." },
+                 { "question": "What products do you sell?",
+                   "reply": "We sell wireless earbuds, a smart kettle and a desk lamp; the Products page shows current prices and details." },
+                 { "question": "How long does delivery take?", "reply": "Standard delivery takes 3 to 5 working days; express delivery is next day." },
+                 { "question": "What payment methods do you accept?", "reply": "We accept card, PayPal and bank transfer." } ],
+    "Product": [ { "name": "Wireless earbuds", "price": 59.9, "about": "Bluetooth 5.3, 24 h battery" },
+                 { "name": "Smart kettle", "price": 89, "about": "1.7 l, app controlled" },
+                 { "name": "Desk lamp", "price": 24.5, "about": "LED, three colour temperatures" } ]
+  },
+
+  "events": [
+    { "on": "Message.created", "do": [
+        { "block": "db.each", "from": "Answer", "where": { "question": { "like": "@row.text" } },
+          "do": [ { "block": "db.update", "set": { "answer": "@each.id" } } ] } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Chat.list":    { "title": "Conversations", "columns": ["title", "messages", "startedAt"], "rowActions": ["view"], "createTitle": "New conversation" },
+    "Chat.form":    { "confirm": "Conversation started: ask me anything", "after": "/Chat/{id}" },
+    "Chat.detail":  { "fields": ["title", "messages", "startedAt"],
+                      "related": [ { "entity": "Message", "via": "chat", "title": "Conversation", "columns": ["text", "reply", "sentAt"],
+                                     "form": ["text"], "submit": "Send", "confirm": "Message sent" } ] },
+    "Message.list": { "hidden": true },
+    "Answer.list":  { "title": "FAQ", "columns": ["question", "reply"], "search": ["question", "reply"] },
+    "Product.list": { "title": "Products", "columns": ["name", "price", "about"], "rowActions": ["view"] },
+    "Order.list":   { "title": "Orders", "columns": ["id", "product", "qty", "customer", "total", "placedAt"], "rowActions": ["view"] },
+    "Order.form":   { "title": "Place an order", "intro": "Choose the product, the quantity and your name.", "submit": "Place order",
+                      "confirm": "Order placed successfully. Thank you!" }
+  }
+}

@@ -13,8 +13,9 @@ import { validate, formatErrors } from '../runtime/validate.mjs';
 const apps = process.argv.slice(2).length ? process.argv.slice(2)
   : fs.readdirSync('apps').filter((d) => fs.existsSync(`apps/${d}/checks.mjs`));
 
-const sink = await startSink(8999);
-let port = 8910, totalOk = 0, totalAll = 0;
+// AG_SINK_PORT / AG_PORT let several runs share a machine (graphs point their http connectors at the sink port).
+const sink = await startSink(Number(process.env.AG_SINK_PORT || 8999));
+let port = Number(process.env.AG_PORT || 8910), totalOk = 0, totalAll = 0;
 const summary = [];
 
 const boot = (graphFile, p) => {

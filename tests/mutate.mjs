@@ -13,14 +13,14 @@ const MUTATIONS = [
     replace: 'const n = 0;' },
   { name: 'an unchecked box on create falls back to the declared default (defect found by drivers)',
     file: 'runtime/server.mjs',
-    find: "          for (const f of fields) if (f.kind === 'bool' && submitted[f.name] === undefined) submitted[f.name] = 'false';\n          const values",
-    replace: "          const values" },
+    find: "    for (const f of store.fields[entity]) if (f.kind === 'bool' && submitted[f.name] === undefined) submitted[f.name] = 'false';",
+    replace: "" },
   { name: 'a boolean ignores its declared labels (regression found by todo)', file: 'runtime/render.mjs',
-    find: "    const pair = labels[c] || ['No', 'Yes'];", replace: "    const pair = ['No', 'Yes'];" },
+    find: "  if (f.kind === 'bool') { const pair = labels[f.name] || ['No', 'Yes'];", replace: "  if (f.kind === 'bool') { const pair = ['No', 'Yes'];" },
 
   // Storage
   { name: 'list ignores the declared filters', file: 'runtime/store.mjs',
-    find: '      clauses.push(`"${field}"=?`);\n      vals.push(coerce(this.field(entity, field), cmp));',
+    find: '      clauses.push(`"${field}"=?`);\n      vals.push(coerce(f, cmp));',
     replace: '      void field; void cmp;' },
   { name: 'search matches everything', file: 'runtime/store.mjs',
     find: "      clauses.push('(' + search.map((f) => `LOWER(\"${f}\") LIKE ?`).join(' OR ') + ')');",
@@ -28,10 +28,10 @@ const MUTATIONS = [
   { name: 'sort direction is inverted', file: 'runtime/store.mjs',
     find: "sort.dir === 'asc' ? 'ASC' : 'DESC'", replace: "sort.dir === 'asc' ? 'DESC' : 'ASC'" },
   { name: 'aggregate ignores the grouping', file: 'runtime/store.mjs',
-    find: "    if (groupBy) sql += ` GROUP BY \"${groupBy}\"`;", replace: "    if (false) sql += '';" },
+    find: "    if (groupBy) sql += ' GROUP BY grp';", replace: "    if (false) sql += '';" },
   { name: 'insert ignores declared defaults', file: 'runtime/store.mjs',
-    find: "      vals.push(given === undefined || given === '' ? defaultValue(f) : coerce(f, given));",
-    replace: "      vals.push(given === undefined || given === '' ? null : coerce(f, given));" },
+    find: "      vals.push(given === undefined || given === '' ? defaultValue(f) : Store.prepareValue(f, given));",
+    replace: "      vals.push(given === undefined || given === '' ? null : Store.prepareValue(f, given));" },
   { name: 'a removed field is dropped silently', file: 'runtime/store.mjs',
     find: "      if (orphan.length && !this.graph.allowDestructive) {", replace: "      if (false) {" },
 
@@ -40,12 +40,12 @@ const MUTATIONS = [
     find: "      if (!block) {", replace: "      if (false) {" },
     // (the following lines still run; the point is that the error is never raised)
   { name: 'unknown fields in a view are accepted', file: 'runtime/validate.mjs',
-    find: "    if (known(e).includes(f)) return true;", replace: "    if (true) return true;" },
+    find: "    if (!known(e).includes(f)) {", replace: "    if (false) {" },
   { name: 'a related section may point anywhere', file: 'runtime/validate.mjs',
     find: "        else if (f.target !== entity) err(`${p}/via`, `\"${rel.via}\" points at ${f.target}, not ${entity}`);",
     replace: "        else if (false) err(`${p}/via`, 'x');" },
   { name: 'block requirements are not enforced', file: 'runtime/validate.mjs',
-    find: "        if (step[req] === undefined) err(`${path}/${j}`, `block \"${step.block}\" requires \"${req}\"`, block.summary);",
+    find: "        if (step[req] === undefined) err(p, `block \"${step.block}\" requires \"${req}\"`, block.summary);",
     replace: "        void req;" },
   { name: 'suggestions are dropped from error hints', file: 'runtime/validate.mjs',
     find: "      n.length ? `did you mean: ${n.join(', ')}? or add it to /data/${e}` : `known fields: ${known(e).join(', ')}`);",
@@ -56,23 +56,23 @@ const MUTATIONS = [
     find: "      if (f.required && (v === undefined || String(v).trim() === '')) problems.push(`${f.name} is required`);",
     replace: "      void v;" },
   { name: 'a number field accepts letters', file: 'runtime/server.mjs',
-    find: "      if (f.kind === 'int' && v !== undefined && v !== '' && Number.isNaN(Number(v))) problems.push(`${f.name} must be a number`);",
+    find: "      if ((f.kind === 'int' || f.kind === 'money') && v !== undefined && v !== '' && Number.isNaN(Number(v))) problems.push(`${f.name} must be a number`);",
     replace: "      void 0;" },
   { name: 'an enum accepts values outside its set', file: 'runtime/server.mjs',
     find: "      if (f.kind === 'enum' && v && !f.options.includes(String(v))) problems.push(`${f.name} must be one of: ${f.options.join(', ')}`);",
     replace: "      void 0;" },
   { name: 'events never fire', file: 'runtime/server.mjs',
-    find: "      runSteps(ev.do, { entity, id, values });", replace: "      void ev;" },
+    find: "      runSteps(ev.do, { rowEntity: entity, id, row: snapshot, values, user });", replace: "      void ev;" },
   { name: 'identity resolves to nothing', file: 'runtime/server.mjs',
-    find: "      if (path === 'me') return meId;", replace: "      if (path === 'me') return null;" },
+    find: "      const id = ctx.user ? ctx.user.id : meId;", replace: "      const id = null;" },
   { name: 'seed rows are inserted on every boot', file: 'runtime/server.mjs',
     find: "    if (store.count(entity)) continue;", replace: "    if (false) continue;" },
   { name: 'the confirmation never reaches the page', file: 'runtime/server.mjs',
     find: "    const ok = (to, msg) => redirect(msg ? `${to}${to.includes('?') ? '&' : '?'}ok=${encodeURIComponent(msg)}` : to);",
     replace: "    const ok = (to) => redirect(to);" },
   { name: 'a rejected form is stored anyway', file: 'runtime/server.mjs',
-    find: "            return send(400, formView(graph, store, entity, fields, submitted, 'new', problems));",
-    replace: "            void problems;" },
+    find: "          return send(400, formView(graph, store, entity, fields, submitted, 'new', problems, vc));",
+    replace: "          void problems;" },
 
   // Blocks
   { name: 'toggle only ever sets, never clears', file: 'runtime/blocks.mjs',
@@ -90,26 +90,149 @@ const MUTATIONS = [
     find: "const esc = (s) => String(s ?? '').replace(/[&<>\"']/g, (c) =>",
     replace: "const esc = (s) => String(s ?? '').replace(/[\\u0000]/g, (c) =>" },
   { name: 'a reference renders as its raw id', file: 'runtime/render.mjs',
-    find: "    return `<td>${row ? `<a href=\"/${f.target}/${row.id}\">${esc(store.label(f.target, row))}</a>` : '—'}</td>`;",
-    replace: "    return `<td>${esc(v)}</td>`;" },
+    find: "    return target ? `<a href=\"/${f.target}/${target.id}\">${esc(store.label(f.target, target))}</a>` : '—';",
+    replace: "    return esc(v);" },
   { name: 'appending to an array overwrites its first item', file: 'runtime/patch.mjs',
     find: "    else if (last === '-' && Array.isArray(node)) node.push(op.value);",
     replace: "    else if (last === '-' && Array.isArray(node)) node[0] = op.value;" },
+  // --- v2: roles, sessions, ownership ---
+  { name: 'a wrong password logs in', file: 'runtime/auth.mjs',
+    find: "  return probe.length === known.length && crypto.timingSafeEqual(probe, known);", replace: "  return true;" },
+  { name: 'a forged session token is accepted', file: 'runtime/auth.mjs',
+    find: "    if (mac.length !== expect.length || !crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(expect))) return null;", replace: "" },
+  { name: 'every password hashes with the same salt', file: 'runtime/auth.mjs',
+    find: "  const salt = crypto.randomBytes(8).toString('hex');", replace: "  const salt = 'abcd';" },
+  { name: '"own" rows are not enforced', file: 'runtime/auth.mjs',
+    find: "      if (e.own && row && op !== 'create') return user ? String(row[e.own]) === String(user.id) : false;", replace: "" },
+  { name: 'the go:* and do:* wildcards stop matching', file: 'runtime/auth.mjs',
+    find: "    || (op.includes(':') && ops.includes(`${op.split(':')[0]}:*`));", replace: "    || false;" },
+  { name: 'a role-gated list is visible to everyone', file: 'runtime/auth.mjs',
+    find: "      return Boolean(role) && item.roles.includes(role);", replace: "      return true;" },
+  { name: 'the owner is not filled from the session on create', file: 'runtime/server.mjs',
+    find: "        const own = perms.ownField(user, entity);\n        if (own) values[own] = user.id;\n        const problems = validateValues(entity, values);",
+    replace: "        const problems = validateValues(entity, values);" },
+  { name: 'a list shows other people\'s rows', file: 'runtime/server.mjs',
+    find: "        const where = { ...resolveTop(ov.where || {}), ...ownWhere(entity) };", replace: "        const where = { ...resolveTop(ov.where || {}) };" },
+  { name: 'the login form accepts any password', file: 'runtime/server.mjs',
+    find: "        if (!found || !verifyPassword(body.password, found[graph.roles.password])) {", replace: "        if (!found) {" },
+  { name: 'a download skips the permission check', file: 'runtime/server.mjs',
+    find: "        if (!vc.can(entity, 'view', row)) return deny();\n        const file = path.join(filesDir, path.basename(row[fieldName]));",
+    replace: "        const file = path.join(filesDir, path.basename(row[fieldName]));" },
+  { name: 'entities a role cannot view stay in the menu', file: 'runtime/render.mjs',
+    find: "    if (ov.hidden || !vc.can(entity, 'view')) continue;", replace: "    if (ov.hidden) continue;" },
+
+  // --- v2: rules, transitions, actions, effects ---
+  { name: 'a failing check rule is ignored', file: 'runtime/server.mjs',
+    find: "      if (!ok) problems.push(rule.message);", replace: "      void ok;" },
+  { name: 'a unique rule never fires', file: 'runtime/server.mjs',
+    find: "        if (v !== undefined && v !== '' && store.exists(entity, rule.unique, v, existing?.id)) problems.push(rule.message || `${rule.unique} is already taken`);", replace: "        void v;" },
+  { name: 'uniqueness collides with the row itself', file: 'runtime/store.mjs',
+    find: "    const row = this.db.prepare(`SELECT id FROM \"${entity.toLowerCase()}\" WHERE \"${field}\"=? AND id!=?`).get(v, Number(excludeId ?? 0));",
+    replace: "    const row = this.db.prepare(`SELECT id FROM \"${entity.toLowerCase()}\" WHERE \"${field}\"=?`).get(v);" },
+  { name: 'a transition ignores the status it starts from', file: 'runtime/render.mjs',
+    find: "    if (from && !from.includes(row[st.field])) return false;", replace: "" },
+  { name: 'a transition ignores who may take it', file: 'runtime/render.mjs',
+    find: "    if (t.by && !t.by.includes(vc.role)) return false;", replace: "" },
+  { name: 'the fields a transition asks for are optional', file: 'runtime/server.mjs',
+    find: "        for (const f of t.fields || []) if (values[f] === undefined || String(values[f]).trim() === '') problems.push(`${f} is required`);", replace: "" },
+  { name: 'a refused block commits what it did before failing', file: 'runtime/store.mjs',
+    find: "    catch (e) { this.db.exec('ROLLBACK'); throw e; }", replace: "    catch (e) { this.db.exec('COMMIT'); throw e; }" },
+  { name: 'the outbox is never flushed after a commit', file: 'runtime/server.mjs',
+    find: "    const out = store.transaction(fn);\n    await flush(store, graph, { fetchImpl, trace });\n    return out;", replace: "    return store.transaction(fn);" },
+  { name: 'a non-2xx answer counts as delivered', file: 'runtime/outbox.mjs',
+    find: "      patch.status = res.ok ? 'sent' : 'failed';", replace: "      patch.status = 'sent';" },
+  { name: 'attempts are never counted', file: 'runtime/outbox.mjs',
+    find: "  const patch = { attempts: (row.attempts || 0) + 1 };", replace: "  const patch = { attempts: 1 };" },
+  { name: 'updated events never fire', file: 'runtime/server.mjs',
+    find: "          fireEvents('updated', entity, id, submitted, user);", replace: "" },
+  { name: 'db.adjust ignores its floor', file: 'runtime/blocks.mjs',
+    find: "      if (step.min !== undefined && next < step.min) throw new Error(step.message || `${target}.${step.field} cannot go below ${step.min}`);", replace: "" },
+  { name: 'db.adjust moves money in minor units', file: 'runtime/blocks.mjs',
+    find: "      if (f.kind === 'money') by = toMinor(by);", replace: "" },
+  { name: 'db.ensure always creates', file: 'runtime/blocks.mjs',
+    find: "      if (hit) return { found: hit, made: false };", replace: "" },
+  { name: 'db.each ignores its where', file: 'runtime/blocks.mjs',
+    find: "      const rows = store.list(step.from, { where: resolve(step.where || {}), sort: { field: 'id', dir: 'asc' } });",
+    replace: "      const rows = store.list(step.from, { sort: { field: 'id', dir: 'asc' } });" },
+  { name: 'an empty upload replaces the stored file', file: 'runtime/server.mjs',
+    find: "        if (!v.size) continue;\n", replace: "" },
+  { name: 'the flash is lost on the home redirect', file: 'runtime/server.mjs',
+    find: "        const keep = (to) => (flash ? `${to}${to.includes('?') ? '&' : '?'}ok=${encodeURIComponent(flash)}` : to);", replace: "        const keep = (to) => to;" },
+
+  { name: 'a created row replaces the row the action runs on', file: 'runtime/server.mjs',
+    find: "      const { id: createdId, ...rest } = out;\n      Object.assign(ctx, rest);", replace: "      const createdId = out.id;\n      Object.assign(ctx, out);" },
+
+  { name: 'a related table shows rows the viewer does not own', file: 'runtime/render.mjs',
+    find: "where: { [rel.via]: row.id, ...vc.ownWhere(rel.entity) }", replace: "where: { [rel.via]: row.id }" },
+  { name: '@me.field ignores the field', file: 'runtime/server.mjs',
+    find: "      if (!rest.length) return id;\n      const ent = graph.roles?.entity || graph.identity?.entity;", replace: "      return id;\n      const ent = graph.roles?.entity || graph.identity?.entity;" },
+  { name: 'a form landed on loses the flash', file: 'runtime/server.mjs',
+    find: "send(200, formView(graph, store, entity, fields, {}, 'new', [], vc, flash))", replace: "send(200, formView(graph, store, entity, fields, {}, 'new', [], vc))" },
+  { name: 'aggregate bodies are resolved against the outer entity', file: 'runtime/validate.mjs',
+    find: "          } else if (n.t === 'agg') { if (entities.includes(n.entity) && n.body) walk(n.body, n.entity); }", replace: "          } else if (n.t === 'agg') { if (entities.includes(n.entity) && n.body) walk(n.body, e); }" },
+
+  { name: 'a refusal inside a created event is a crash', file: 'runtime/server.mjs',
+    find: "        } catch (e) { trace({ kind: 'refused', entity, message: e.message }); return send(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc)); }",
+    replace: "        } catch (e) { throw e; }" },
+
+  // --- v2: expressions, money, derived fields ---
+  { name: 'a comparison forgets the additive level', file: 'runtime/expr.mjs',
+    find: "  const cmp = () => {\n    const a = add();", replace: "  const cmp = () => {\n    const a = mul();" },
+  { name: 'null poisons arithmetic instead of propagating', file: 'runtime/expr.mjs',
+    find: "        if (a == null || b == null) return n.op === '<' || n.op === '<=' || n.op === '>' || n.op === '>=' ? false : null;", replace: "" },
+  { name: 'days() counts hours', file: 'runtime/expr.mjs',
+    find: "const toDate = (v) => (v == null || v === '' ? null : new Date(`${String(v).slice(0, 10)}T00:00:00Z`));",
+    replace: "const toDate = (v) => (v == null || v === '' ? null : new Date(String(v).length === 10 ? `${v}T00:00:00Z` : v));" },
+  { name: 'a sum counts nulls as zero rows', file: 'runtime/expr.mjs',
+    find: "        const vals = rows.map((r) => evaluate(n.body, r)).filter((v) => v !== null && v !== undefined);", replace: "        const vals = rows.map((r) => evaluate(n.body, r));" },
+  { name: 'money is stored in major units', file: 'runtime/spec.mjs',
+    find: "export const toMinor = (v) => (v === '' || v === undefined || v === null || Number.isNaN(Number(v)) ? null : Math.round(Number(v) * 100));",
+    replace: "export const toMinor = (v) => (v === '' || v === undefined || v === null || Number.isNaN(Number(v)) ? null : Number(v));" },
+  { name: 'an expression reads money in minor units', file: 'runtime/store.mjs',
+    find: "        if (f.kind === 'money') v = toMajor(v);", replace: "" },
+  { name: 'derived fields are not computed on read', file: 'runtime/store.mjs',
+    find: "    for (const f of this.fields[entity]) if (f.derive) out[f.name] = this.derived(entity, row, f);", replace: "" },
+  { name: 'a range on a derived field compares in the wrong units', file: 'runtime/store.mjs',
+    find: "    const c = (x) => (f ? coerce(f, x) : x);", replace: "    const c = (x) => x;" },
+  { name: 'gte means gt', file: 'runtime/store.mjs',
+    find: "const OPS = { gte: '>=', lte: '<=', gt: '>', lt: '<', ne: '!=' };", replace: "const OPS = { gte: '>', lte: '<=', gt: '>', lt: '<', ne: '!=' };" },
+  { name: 'month buckets are whole dates', file: 'runtime/store.mjs',
+    find: "const UNITS = { day: '%Y-%m-%d', month: '%Y-%m', year: '%Y' };", replace: "const UNITS = { day: '%Y-%m-%d', month: '%Y-%m-%d', year: '%Y' };" },
+  { name: 'a password column passes the checker', file: 'runtime/validate.mjs',
+    find: "    if (secret && fields[e][f].kind === 'password') { err(path, `\"${f}\" is a password and is never shown`, 'drop it from the columns'); return false; }", replace: "" },
+  { name: 'money renders in minor units', file: 'runtime/spec.mjs',
+    find: "export const formatMoney = (v) => (v === null || v === undefined ? '' : (v / 100).toFixed(2));", replace: "export const formatMoney = (v) => (v === null || v === undefined ? '' : String(v));" },
+
+  // --- v2: the checker ---
+  { name: 'unreachable statuses pass the checker', file: 'runtime/validate.mjs',
+    find: "    if (dead.length) err(`${p}/transitions`, `no transition leads to: ${dead.join(', ')}`, `add a transition \"to\" each, or drop it from ${entity}.${st.field}`);", replace: "" },
+  { name: 'unknown operations pass the role matrix', file: 'runtime/validate.mjs',
+    find: "    err(path, `unknown operation \"${op}\"`,", replace: "    return err(null, `unknown operation \"${op}\"`," },
+  { name: 'a derived cycle passes the checker', file: 'runtime/validate.mjs',
+    find: "    if (c) { err(`/data/${key.replace('.', '/')}`, `derived fields depend on each other: ${c.join(' → ')}`, 'one of them has to be stored'); break; }", replace: "" },
+  { name: 'bad expressions pass the checker', file: 'runtime/validate.mjs',
+    find: "    catch (e) { err(path, `bad expression: ${e.message}`, `expression: ${src}`); return null; }", replace: "    catch (e) { return null; }" },
+  { name: 'unknown top-level nodes pass the checker', file: 'runtime/validate.mjs',
+    find: "    if (!TOP.includes(k)) {", replace: "    if (false) {" },
+  { name: 'an unknown @reference passes the checker', file: 'runtime/validate.mjs',
+    find: "      return err(path, `unknown reference \"${v}\"`,", replace: "      return void err(null, `unknown reference \"${v}\"`," },
 ];
 
 const run = () => {
-  try { execFileSync('node', ['--no-warnings', '--test', 'tests/spec.test.mjs', 'tests/blocks.test.mjs',
-    'tests/store.test.mjs', 'tests/validate.test.mjs', 'tests/server.test.mjs', 'tests/patch.test.mjs',
-    'tests/cli.test.mjs', 'tests/render.test.mjs', 'tests/props.test.mjs', 'tests/edges.test.mjs'],
+  const files = fs.readdirSync('tests').filter((f) => f.endsWith('.test.mjs')).map((f) => `tests/${f}`);
+  try { execFileSync('node', ['--no-warnings', '--test', ...files],
     // A mutated runtime can hang a test instead of failing it; a hang is a detection too.
-    { stdio: 'pipe', timeout: 60_000, killSignal: 'SIGKILL' }); return true; } catch { return false; }
+    { stdio: 'pipe', timeout: 120_000, killSignal: 'SIGKILL' }); return true; } catch { return false; }
 };
 
 if (!run()) { console.error('the suite is red before any mutation — fix that first'); process.exit(2); }
 
+// An optional argument narrows the run to mutations whose name contains it.
+const only = process.argv[2] || '';
 let killed = 0;
 const survivors = [];
-for (const m of MUTATIONS) {
+const chosen = MUTATIONS.filter((m) => m.name.includes(only));
+for (const m of chosen) {
   const original = fs.readFileSync(m.file, 'utf8');
   if (!original.includes(m.find)) {
     console.log(`? ${m.name}\n    the mutation no longer applies to ${m.file} — update it`);
@@ -123,7 +246,7 @@ for (const m of MUTATIONS) {
   else { killed++; console.log(`✓ killed    ${m.name}`); }
 }
 
-console.log(`\n${killed}/${MUTATIONS.length} мутаций убито`);
+console.log(`\n${killed}/${chosen.length} мутаций убито`);
 if (survivors.length) {
   console.log('\nвыжили (значит, эти утверждения ничем не проверены):');
   for (const s of survivors) console.log(`  • ${s}`);

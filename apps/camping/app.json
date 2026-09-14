@@ -1,0 +1,81 @@
+{
+  "app": "camping",
+  "task": "webgen-bench/000097",
+  "note": "Travel and camping portal for Europe: countries hold attractions and campsites (one Place entity with a kind), a booking is a form with the required guest details that becomes a confirmed reservation through a paid transition (mail confirmation), reviews with a 1..5 rating live under the place and feed its derived rating. No accounts are asked for, so no identity or roles.",
+  "theme": { "background": "lightpink", "accent": "mediumvioletred" },
+  "home": "/Place",
+
+  "data": {
+    "Country": { "name": "text!", "places": "int := count(Place)" },
+    "Place":   { "name": "text!", "kind": "enum[attraction,campsite]=attraction", "country": "ref:Country!", "city": "text!",
+                 "about": "longtext", "price": "money=0",
+                 "rating": "int := avg(Review: stars)", "reviews": "int := count(Review)" },
+    "Booking": { "place": "ref:Place!", "name": "text!", "email": "text!", "date": "date!", "time": "text!",
+                 "guests": "int=1", "nights": "int=1",
+                 "status": "enum[requested,confirmed,cancelled]=requested", "paymentMethod": "enum[card,paypal,cash]=card",
+                 "location": "text := concat(place.city, ', ', place.country.name)",
+                 "total": "money := nights * guests * place.price" },
+    "Review":  { "place": "ref:Place!", "author": "text!", "stars": "int=5", "text": "longtext!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "Review":  [ { "check": "stars >= 1 and stars <= 5", "message": "Rating must be between 1 and 5" } ],
+    "Booking": [ { "check": "guests > 0", "message": "At least one guest is needed" },
+                 { "check": "nights > 0", "message": "At least one night or day is needed" } ]
+  },
+
+  "seed": {
+    "Country": [ { "name": "France" }, { "name": "Italy" }, { "name": "Germany" }, { "name": "Spain" } ],
+    "Place": [
+      { "name": "Eiffel Tower", "kind": "attraction", "country": 1, "city": "Paris", "price": 25, "about": "Wrought-iron tower on the Champ de Mars with three visitor levels." },
+      { "name": "Louvre Museum", "kind": "attraction", "country": 1, "city": "Paris", "price": 17, "about": "The largest art museum in the world, home of the Mona Lisa." },
+      { "name": "Camping Bois de Boulogne", "kind": "campsite", "country": 1, "city": "Paris", "price": 30, "about": "Riverside pitches in the western park of Paris, shuttle to the metro." },
+      { "name": "Colosseum", "kind": "attraction", "country": 2, "city": "Rome", "price": 18, "about": "The Flavian amphitheatre, the largest ever built." },
+      { "name": "Camping Tuscany Hills", "kind": "campsite", "country": 2, "city": "Siena, Tuscany", "price": 28, "about": "Terraced pitches among olive groves, pool and pizzeria." },
+      { "name": "Neuschwanstein Castle", "kind": "attraction", "country": 3, "city": "Fussen, Bavaria", "price": 15, "about": "The nineteenth-century hilltop castle of King Ludwig II." },
+      { "name": "Camping Bavaria Alpine", "kind": "campsite", "country": 3, "city": "Garmisch, Bavaria", "price": 24, "about": "Alpine meadow pitches below the Zugspitze, open all year." },
+      { "name": "Sagrada Familia", "kind": "attraction", "country": 4, "city": "Barcelona", "price": 26, "about": "Gaudi's unfinished basilica, under construction since 1882." },
+      { "name": "Camping Costa Brava", "kind": "campsite", "country": 4, "city": "Girona", "price": 22, "about": "Pine-shaded pitches two hundred metres from the beach." } ],
+    "Review": [
+      { "place": 7, "author": "Petra Vogel", "stars": 5, "text": "Wonderful views and spotless showers.", "createdAt": "2026-07-02T10:00:00.000Z" },
+      { "place": 7, "author": "Luca Bianchi", "stars": 3, "text": "Great location, but the pitches are small.", "createdAt": "2026-07-19T10:00:00.000Z" },
+      { "place": 1, "author": "Aiko Sato", "stars": 5, "text": "Book the summit in advance; the sunset is worth it.", "createdAt": "2026-08-01T10:00:00.000Z" } ],
+    "Booking": [
+      { "place": 4, "name": "Nils Berg", "email": "nils@example.test", "date": "2026-09-20", "time": "09:00", "guests": 2, "nights": 1, "status": "confirmed", "paymentMethod": "card" } ]
+  },
+
+  "states": {
+    "Booking": { "field": "status", "transitions": [
+      { "name": "confirm", "from": ["requested"], "to": "confirmed", "title": "Confirm and pay", "fields": ["paymentMethod"],
+        "confirm": "Booking #{row.id} confirmed: {row.place.name}, {row.location} on {row.date} at {row.time}, total {row.total}",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.email", "subject": "Booking #{row.id} confirmed",
+                  "text": "Dear {row.name}, your booking of {row.place.name} ({row.location}) on {row.date} at {row.time} for {row.guests} guest(s) is confirmed. Total {row.total}, paid by {row.paymentMethod}." } ] },
+      { "name": "cancel", "from": ["requested", "confirmed"], "to": "cancelled", "title": "Cancel booking", "confirm": "Booking cancelled" }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "bookings@eurocamp.test" } },
+
+  "views": "auto",
+  "override": {
+    "Place.list":     { "title": "Explore Europe", "intro": "Tourist attractions and campsites across the continent. Search by name or city, or open a country section.",
+                        "columns": ["name", "kind", "country", "city", "price", "rating", "reviews"],
+                        "search": ["name", "city", "about"],
+                        "filters": [ { "name": "Country", "field": "country" }, { "name": "Kind", "field": "kind" } ],
+                        "rowActions": ["view"] },
+    "Place.detail":   { "fields": ["name", "kind", "country", "city", "about", "price", "rating", "reviews"],
+                        "related": [ { "entity": "Review", "via": "place", "title": "Reviews", "columns": ["author", "stars", "text", "createdAt"],
+                                       "form": ["author", "stars", "text"], "submit": "Post review",
+                                       "confirm": "Review published, thank you for sharing your visit" } ] },
+    "Country.list":   { "title": "Countries", "columns": ["name", "places"], "rowActions": ["view"] },
+    "Country.detail": { "related": [ { "entity": "Place", "via": "country", "title": "Attractions and campsites",
+                                       "columns": ["name", "kind", "city", "price", "rating"], "form": false, "rowActions": ["view"] } ] },
+    "Booking.list":   { "title": "Bookings", "columns": ["id", "place", "location", "name", "date", "time", "status", "total"],
+                        "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"], "createTitle": "New booking" },
+    "Booking.form":   { "title": "Book a visit or a stay", "fields": ["place", "name", "email", "date", "time", "guests", "nights"],
+                        "submit": "Request booking", "confirm": "Booking received: check the details below and confirm to complete it",
+                        "after": "/Booking/{id}", "afterEdit": "/Booking/{id}" },
+    "Booking.detail": { "fields": ["place", "location", "name", "email", "date", "time", "guests", "nights", "total", "status", "paymentMethod"] },
+    "Review.list":    { "hidden": true }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "app": "cars",
+  "task": "webgen-bench/000098",
+  "note": "Car rental platform: a fleet with a price per day and a count of units, a booking with pick-up and return dates and times whose length and cost are derived, a summary page with Edit and a paid transition that takes a unit and mails a confirmation. Availability is a units counter, not a per-date calendar (see NOTES.md). One fake customer through identity: no accounts are asked for.",
+  "theme": { "background": "papayawhip", "accent": "darkorange" },
+  "home": "/Car",
+  "identity": { "entity": "Customer", "defaults": { "name": "Alex Doe", "email": "alex@example.test", "phone": "+1 555 0100", "licence": "D1234567" } },
+
+  "data": {
+    "Customer": { "name": "text!", "email": "text!", "phone": "text", "licence": "text" },
+    "Car":      { "name": "text!", "type": "enum[economy,compact,suv,luxury,van]=economy", "seats": "int=5",
+                  "transmission": "enum[manual,automatic]=automatic", "pricePerDay": "money!", "units": "int=1", "about": "longtext" },
+    "Booking":  { "car": "ref:Car!", "customer": "ref:Customer!", "start": "date!", "end": "date!",
+                  "pickupTime": "enum[08:00,10:00,12:00,14:00,16:00,18:00]=10:00", "returnTime": "enum[08:00,10:00,12:00,14:00,16:00,18:00]=10:00",
+                  "status": "enum[draft,paid,returned,cancelled]=draft", "paymentMethod": "enum[card,paypal,bank]=card", "createdAt": "time=now",
+                  "carType": "text := car.type", "available": "bool := car.units > 0",
+                  "days": "int := days(end, start)", "total": "money := days(end, start) * car.pricePerDay" }
+  },
+
+  "rules": {
+    "Car":     [ { "check": "pricePerDay > 0", "message": "Price per day must be positive" },
+                 { "check": "units >= 0", "message": "Units cannot be negative" } ],
+    "Booking": [ { "check": "end > start", "message": "Return date must be after the pick-up date" } ]
+  },
+
+  "seed": {
+    "Car": [
+      { "name": "Fiat 500", "type": "economy", "seats": 4, "transmission": "manual", "pricePerDay": 29, "units": 3, "about": "City car, 1.0 petrol, air conditioning." },
+      { "name": "VW Golf", "type": "compact", "seats": 5, "transmission": "automatic", "pricePerDay": 45, "units": 2, "about": "Compact hatchback with navigation." },
+      { "name": "Toyota RAV4", "type": "suv", "seats": 5, "transmission": "automatic", "pricePerDay": 69, "units": 1, "about": "Hybrid SUV, all-wheel drive." },
+      { "name": "BMW 5 Series", "type": "luxury", "seats": 5, "transmission": "automatic", "pricePerDay": 120, "units": 1, "about": "Executive saloon, leather interior." },
+      { "name": "Ford Transit", "type": "van", "seats": 9, "transmission": "manual", "pricePerDay": 85, "units": 0, "about": "Nine-seat minibus. Every unit is currently out on rental." },
+      { "name": "Range Rover", "type": "suv", "seats": 7, "transmission": "automatic", "pricePerDay": 150, "units": 2, "about": "Full-size luxury SUV." } ],
+    "Booking": [
+      { "car": 2, "customer": 1, "start": "2026-08-01", "end": "2026-08-04", "pickupTime": "10:00", "returnTime": "10:00",
+        "status": "paid", "paymentMethod": "card", "createdAt": "2026-07-20T10:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Booking": { "field": "status", "transitions": [
+      { "name": "pay", "from": ["draft"], "to": "paid", "title": "Proceed to payment", "fields": ["paymentMethod"],
+        "confirm": "Booking #{row.id} paid by {row.paymentMethod}: {row.car.name}, {row.start} to {row.end}, {row.days} day(s), total {row.total}",
+        "do": [ { "block": "db.adjust", "entity": "Car", "id": "@row.car", "field": "units", "by": -1, "min": 0,
+                  "message": "No unit of this car is left; choose another car" },
+                { "block": "mail.send", "connector": "mail", "to": "@row.customer.email", "subject": "Booking #{row.id} confirmed",
+                  "text": "Dear {row.customer.name}, your {row.car.name} is booked from {row.start} {row.pickupTime} to {row.end} {row.returnTime}. {row.days} day(s), total {row.total}, paid by {row.paymentMethod}. Your booking reference is #{row.id}." } ] },
+      { "name": "complete", "from": ["paid"], "to": "returned", "title": "Mark returned", "confirm": "Car returned, thank you",
+        "do": [ { "block": "db.adjust", "entity": "Car", "id": "@row.car", "field": "units", "by": 1 } ] },
+      { "name": "cancel", "from": ["paid"], "to": "cancelled", "title": "Cancel booking", "confirm": "Booking cancelled, the car is available again",
+        "do": [ { "block": "db.adjust", "entity": "Car", "id": "@row.car", "field": "units", "by": 1 } ] }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "rentals@drivefree.test" } },
+
+  "views": "auto",
+  "override": {
+    "Car.list":       { "title": "Cars", "intro": "Browse the fleet, then book a car for your dates.",
+                        "columns": ["name", "type", "seats", "transmission", "pricePerDay", "units"],
+                        "search": ["name", "about"],
+                        "filters": [ { "name": "Type", "field": "type" }, { "name": "Transmission", "field": "transmission" } ],
+                        "rowActions": ["view"] },
+    "Booking.list":   { "title": "My bookings", "columns": ["id", "car", "carType", "start", "end", "days", "total", "status"],
+                        "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "go:cancel"], "createTitle": "New booking" },
+    "Booking.form":   { "title": "Book a car", "fields": ["car", "start", "end", "pickupTime", "returnTime"], "fill": { "customer": "@me" },
+                        "submit": "Continue to summary", "confirm": "Draft booking saved: check the summary below, then proceed to payment",
+                        "after": "/Booking/{id}", "afterEdit": "/Booking/{id}", "confirmEdit": "Booking details updated" },
+    "Booking.detail": { "fields": ["car", "carType", "available", "start", "end", "pickupTime", "returnTime", "days", "total", "status", "paymentMethod", "customer", "createdAt"] },
+    "Customer.list":  { "hidden": true }
+  }
+}

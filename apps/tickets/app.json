@@ -1,0 +1,87 @@
+{
+  "app": "tickets",
+  "task": "webgen-bench/000099",
+  "note": "Bus and railway ticket booking: real accounts (register, login), trips with a mode, a price and a seats counter, a booking owned by the traveller that takes seats when paid (db.adjust refuses overbooking) and mails a confirmation; booking history and a tickets list per traveller; the admin manages trips and sees the outbox. Seat maps, SMS, a payment provider and printing are outside the format (see NOTES.md).",
+  "theme": { "background": "snow", "accent": "dimgray" },
+  "home": "/Trip",
+
+  "data": {
+    "User":    { "email": "text!", "password": "password!", "name": "text!", "phone": "text", "role": "enum[admin,traveller]=traveller" },
+    "Trip":    { "route": "text := concat(origin, ' to ', destination)", "mode": "enum[bus,train]=bus", "operator": "text!",
+                 "origin": "text!", "destination": "text!", "date": "date!", "departure": "text!", "arrival": "text",
+                 "price": "money!", "seats": "int=40" },
+    "Booking": { "trip": "ref:Trip!", "traveller": "ref:User!", "passenger": "text!", "qty": "int=1",
+                 "status": "enum[reserved,paid,cancelled]=reserved", "paymentMethod": "enum[card,paypal]=card", "bookedAt": "time=now",
+                 "total": "money := qty * trip.price" }
+  },
+
+  "rules": {
+    "User":    [ { "unique": "email", "message": "This email is already registered" } ],
+    "Trip":    [ { "check": "seats >= 0", "message": "Seats cannot be negative" } ],
+    "Booking": [ { "check": "qty > 0", "message": "Book at least one seat" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "traveller", "anonymous": "guest",
+    "can": {
+      "admin":     "*",
+      "traveller": { "Trip": ["view"], "Booking": { "own": "traveller", "can": ["view", "create", "go:pay", "go:cancel"] } },
+      "guest":     { "Trip": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [ { "email": "admin@tickets.test", "password": "admin123", "name": "Admin", "role": "admin" },
+              { "email": "lena@tickets.test", "password": "lena123", "name": "Lena Berg", "phone": "+49 151 000", "role": "traveller" } ],
+    "Trip": [
+      { "mode": "bus", "operator": "FlixBus", "origin": "Berlin", "destination": "Munich", "date": "2026-10-05", "departure": "08:15", "arrival": "14:30", "price": 19, "seats": 40 },
+      { "mode": "train", "operator": "DB ICE", "origin": "Berlin", "destination": "Munich", "date": "2026-10-05", "departure": "09:00", "arrival": "13:00", "price": 59, "seats": 119 },
+      { "mode": "bus", "operator": "FlixBus", "origin": "Munich", "destination": "Vienna", "date": "2026-10-06", "departure": "07:30", "arrival": "12:45", "price": 24, "seats": 2 },
+      { "mode": "train", "operator": "OBB Railjet", "origin": "Munich", "destination": "Vienna", "date": "2026-10-06", "departure": "10:20", "arrival": "14:20", "price": 45, "seats": 80 },
+      { "mode": "bus", "operator": "Eurolines", "origin": "Paris", "destination": "Brussels", "date": "2026-10-07", "departure": "06:00", "arrival": "10:00", "price": 15, "seats": 50 },
+      { "mode": "train", "operator": "Eurostar", "origin": "Paris", "destination": "London", "date": "2026-10-07", "departure": "11:00", "arrival": "13:30", "price": 89, "seats": 200 } ],
+    "Booking": [
+      { "trip": 2, "traveller": 2, "passenger": "Lena Berg", "qty": 1, "status": "paid", "paymentMethod": "card", "bookedAt": "2026-09-01T09:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Booking": { "field": "status", "transitions": [
+      { "name": "pay", "from": ["reserved"], "to": "paid", "title": "Pay now", "fields": ["paymentMethod"],
+        "confirm": "Payment received: booking #{row.id} confirmed, {row.qty} seat(s) on {row.trip.route}",
+        "do": [ { "block": "db.adjust", "entity": "Trip", "id": "@row.trip", "field": "seats", "by": "= -row.qty", "min": 0,
+                  "message": "Not enough seats left on this trip" },
+                { "block": "mail.send", "connector": "mail", "to": "@row.traveller.email",
+                  "subject": "Ticket #{row.id}: {row.trip.route} on {row.trip.date}",
+                  "text": "Passenger {row.passenger}, {row.qty} seat(s) on the {row.trip.mode} {row.trip.route} ({row.trip.operator}), departing {row.trip.date} at {row.trip.departure}. Total {row.total} paid by {row.paymentMethod}. Booking reference #{row.id}." } ] },
+      { "name": "cancel", "from": ["paid"], "to": "cancelled", "title": "Cancel booking", "confirm": "Booking cancelled, seats released",
+        "do": [ { "block": "db.adjust", "entity": "Trip", "id": "@row.trip", "field": "seats", "by": "= row.qty" } ] }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "tickets@railbus.test" } },
+
+  "views": "auto",
+  "override": {
+    "Trip.list":      { "title": "Search trips", "intro": "Search by city or operator; seats are the places still free.",
+                        "columns": ["route", "mode", "operator", "date", "departure", "arrival", "price", "seats"],
+                        "search": ["origin", "destination", "operator"],
+                        "filters": [ { "name": "Mode", "field": "mode" } ],
+                        "sort": { "field": "date", "dir": "asc" }, "rowActions": ["view", "edit"] },
+    "Trip.form":      { "fields": ["mode", "operator", "origin", "destination", "date", "departure", "arrival", "price", "seats"] },
+    "Booking.list":   { "title": "Bookings", "columns": ["id", "trip", "passenger", "qty", "total", "status", "bookedAt"],
+                        "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"], "createTitle": "Book seats" },
+    "Booking.form":   { "title": "Book seats", "fields": ["trip", "passenger", "qty"], "submit": "Reserve",
+                        "confirm": "Reservation created: pay to confirm your seats", "after": "/Booking/{id}" },
+    "Booking.detail": { "fields": ["trip", "passenger", "qty", "total", "status", "paymentMethod", "traveller", "bookedAt"] },
+    "User.list":      { "title": "Users", "columns": ["email", "name", "phone", "role"] }
+  },
+
+  "lists": [
+    { "id": "history", "entity": "Booking", "title": "Booking history", "roles": ["traveller", "admin"],
+      "where": { "status": { "in": ["paid", "cancelled"] } }, "sort": { "field": "bookedAt", "dir": "desc" },
+      "columns": ["id", "trip", "passenger", "qty", "total", "paymentMethod", "status", "bookedAt"], "rowActions": ["view"] },
+    { "id": "tickets", "entity": "Booking", "title": "My tickets", "roles": ["traveller", "admin"],
+      "where": { "status": "paid" }, "columns": ["id", "trip", "passenger", "qty", "total"], "rowActions": ["view"] }
+  ]
+}

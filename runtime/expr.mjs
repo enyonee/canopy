@@ -159,10 +159,8 @@ export function check(ast, scope) {
           case 'min': case 'max': case 'coalesce': return ks.find((k) => k !== 'any') || 'any';
           case 'len': return 'number';
           case 'lower': case 'upper': case 'concat': return 'text';
-          case 'not': return 'bool';
+          default: return 'bool'; // not
         }
-        /* c8 ignore next */
-        throw new Error(`unknown function "${n.fn}"`);
       }
       case 'agg': {
         const child = scope.children(n.entity, n.via);
@@ -170,11 +168,9 @@ export function check(ast, scope) {
         const k = check(n.body, child);
         if (n.fn === 'count') return 'number';
         if (!NUMERIC.has(k) && k !== 'any') throw new Error(`${n.fn}(${n.entity}: …) needs a number, got ${k}`);
-        return n.fn === 'avg' && k === 'number' ? 'number' : k;
+        return k;
       }
     }
-    /* c8 ignore next */
-    throw new Error(`bad node ${n.t}`);
   };
   return kindOf(ast);
 }
@@ -227,10 +223,8 @@ export function evaluate(ast, ctx) {
           case '<': return a < b;
           case '<=': return a <= b;
           case '>': return a > b;
-          case '>=': return a >= b;
+          default: return a >= b;
         }
-        /* c8 ignore next */
-        throw new Error(`bad operator ${n.op}`);
       }
       case 'call': {
         const args = n.args.map(ev);
@@ -246,10 +240,8 @@ export function evaluate(ast, ctx) {
           case 'lower': return args[0] == null ? null : String(args[0]).toLowerCase();
           case 'upper': return args[0] == null ? null : String(args[0]).toUpperCase();
           case 'concat': return args.map((a) => (a == null ? '' : String(a))).join('');
-          case 'not': return !truthy(args[0]);
+          default: return !truthy(args[0]); // not
         }
-        /* c8 ignore next */
-        throw new Error(`bad function ${n.fn}`);
       }
       case 'agg': {
         const rows = ctx.rows(n.entity, n.via);
@@ -262,8 +254,6 @@ export function evaluate(ast, ctx) {
         return Math.max(...vals);
       }
     }
-    /* c8 ignore next */
-    throw new Error(`bad node ${n.t}`);
   };
   return ev(ast);
 }

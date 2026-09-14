@@ -68,7 +68,7 @@ export const CATALOG = {
   },
   // --- added for the CRM / shop class: money, stock, carts, and effects that leave the process ---
   'db.adjust': {
-    summary: 'add "by" (a number or "= expr") to numeric "field" of a row: the current one, or "entity" + "id" ("@row.product")',
+    summary: 'add "by" (a number or "= expr") to a numeric "field" — stock, counters, balances — of the current row, or of "entity" + "id" ("@row.product"); "min" refuses below a floor',
     effects: ['db.write'], requires: ['field', 'by'],
     run: ({ store, entity, id, step, resolve }) => {
       const target = step.entity || entity;
@@ -86,14 +86,14 @@ export const CATALOG = {
     },
   },
   'db.ensure': {
-    summary: 'find the first row of "entity" matching "where", or create it from where + "values"; exposes it as @found',
+    summary: 'find the first row of "entity" matching "where", or create it from where + "values"; exposes it as @found, and @made says whether it was created',
     effects: ['db.write'], requires: ['entity', 'where'],
     run: ({ store, step, resolve }) => {
       const where = resolve(step.where);
       const [hit] = store.list(step.entity, { where, sort: { field: 'id', dir: 'asc' } });
-      if (hit) return { found: hit, created: false };
+      if (hit) return { found: hit, made: false };
       const id = store.insert(step.entity, { ...where, ...resolve(step.values || {}) });
-      return { found: store.get(step.entity, id), created: true };
+      return { found: store.get(step.entity, id), made: true };
     },
   },
   'db.each': {

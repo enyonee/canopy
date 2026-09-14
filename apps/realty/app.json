@@ -1,0 +1,48 @@
+{
+  "app": "realty",
+  "task": "webgen-bench/000034",
+  "note": "Real estate listings: one Property entity with a search box over title, description and address, type and listing filters, a price range, a photo attachment, and a details page.",
+  "theme": { "background": "aliceblue", "accent": "steelblue" },
+  "home": "/Property",
+
+  "data": {
+    "Property": { "title": "text!", "address": "text!", "type": "enum[apartment,house,condo,land]=apartment", "listing": "enum[sale,rent]=sale",
+                  "price": "money!", "bedrooms": "int=1", "bathrooms": "int=1", "area": "int", "yearBuilt": "int", "description": "longtext",
+                  "photo": "file", "listedAt": "date=today" }
+  },
+
+  "rules": {
+    "Property": [ { "check": "price > 0", "message": "Price must be positive" },
+                  { "check": "bedrooms >= 0 and bathrooms >= 0", "message": "Rooms cannot be negative" } ]
+  },
+
+  "seed": {
+    "Property": [
+      { "title": "Sunny 3-bedroom apartment in Midtown", "address": "12 Oak ave, Midtown", "type": "apartment", "listing": "sale", "price": 275000, "bedrooms": 3, "bathrooms": 2, "area": 110, "yearBuilt": 2005,
+        "description": "Bright 3-bedroom apartment with a balcony, parquet floors and a renovated kitchen. Features: lift, parking space, storage room.", "listedAt": "2026-09-10" },
+      { "title": "Cosy one-bedroom studio", "address": "4 Pine st, Old town", "type": "apartment", "listing": "rent", "price": 1200, "bedrooms": 1, "bathrooms": 1, "area": 45, "yearBuilt": 1998,
+        "description": "Furnished studio two minutes from the station. Features: bills included, washing machine.", "listedAt": "2026-09-08" },
+      { "title": "Family house with garden", "address": "88 Maple rd, Northside", "type": "house", "listing": "sale", "price": 450000, "bedrooms": 4, "bathrooms": 3, "area": 220, "yearBuilt": 1990,
+        "description": "Detached house with a south-facing garden and a double garage. Features: fireplace, solar panels.", "listedAt": "2026-09-05" },
+      { "title": "Renovated 3-bedroom apartment near the park", "address": "7 Birch ln, Parkside", "type": "apartment", "listing": "sale", "price": 235000, "bedrooms": 3, "bathrooms": 1, "area": 95, "yearBuilt": 1975,
+        "description": "Fully renovated 3-bedroom apartment overlooking the park. Features: new windows, underfloor heating.", "listedAt": "2026-09-02" },
+      { "title": "Downtown condo with river view", "address": "1 Harbour sq, Downtown", "type": "condo", "listing": "sale", "price": 320000, "bedrooms": 2, "bathrooms": 2, "area": 80, "yearBuilt": 2018,
+        "description": "Two-bedroom condo on the 12th floor. Features: gym, concierge, river view.", "listedAt": "2026-08-28" },
+      { "title": "Building plot on the hill", "address": "Hill rd, lot 5, Westfield", "type": "land", "listing": "sale", "price": 150000, "bedrooms": 0, "bathrooms": 0, "area": 900,
+        "description": "Plot with planning permission for a detached house. Features: road access, utilities at the boundary.", "listedAt": "2026-08-20" },
+      { "title": "3-bedroom apartment for rent", "address": "22 Cedar st, Eastgate", "type": "apartment", "listing": "rent", "price": 1800, "bedrooms": 3, "bathrooms": 2, "area": 100, "yearBuilt": 2010,
+        "description": "Furnished 3-bedroom apartment with two balconies. Features: pets allowed, parking.", "listedAt": "2026-08-15" }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Property.list":   { "title": "Property Listings", "intro": "Homes for sale and for rent. Search by words in the title, description or address; filter by type, listing and price.",
+                         "columns": ["title", "address", "type", "listing", "price", "bedrooms", "bathrooms", "area"],
+                         "search": ["title", "description", "address"],
+                         "filters": [ { "name": "Type", "field": "type" }, { "name": "Listing", "field": "listing" }, { "name": "Price", "field": "price", "range": true } ],
+                         "sort": { "field": "listedAt", "dir": "desc" }, "rowActions": ["view", "edit", "delete"], "createTitle": "List a property" },
+    "Property.form":   { "confirm": "Property listed successfully", "after": "/Property/{id}", "confirmEdit": "Property updated", "afterEdit": "/Property/{id}" },
+    "Property.detail": { "fields": ["title", "address", "type", "listing", "price", "bedrooms", "bathrooms", "area", "yearBuilt", "description", "photo", "listedAt"] }
+  }
+}

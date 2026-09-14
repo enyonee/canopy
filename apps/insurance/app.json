@@ -1,0 +1,101 @@
+{
+  "app": "insurance",
+  "task": "webgen-bench/000025",
+  "note": "Insurance back office: customers with their policies and claim history, policies with a status lifecycle, claims with a review pipeline whose customer is copied from the policy by an event, and a reports dashboard with breakdowns and a period filter.",
+  "theme": { "background": "whitesmoke", "accent": "darkcyan" },
+  "home": "/Customer",
+
+  "data": {
+    "Customer": { "name": "text!", "email": "text!", "phone": "text", "address": "text", "birthDate": "date",
+                  "policies": "int := count(Policy)", "claims": "int := count(Claim)", "premiums": "money := sum(Policy: premium)" },
+    "Policy":   { "number": "text!", "customer": "ref:Customer!", "type": "enum[auto,home,life,health]=auto", "coverage": "money!", "premium": "money!",
+                  "startDate": "date=today", "endDate": "date!", "status": "enum[active,expired,cancelled]=active",
+                  "claims": "int := count(Claim)", "claimed": "money := sum(Claim: amount)", "daysLeft": "int := days(endDate, today)" },
+    "Claim":    { "number": "text!", "policy": "ref:Policy!", "customer": "ref:Customer", "amount": "money!", "filedAt": "date=today",
+                  "description": "longtext", "status": "enum[filed,review,approved,rejected,paid]=filed" }
+  },
+
+  "rules": {
+    "Customer": [ { "unique": "email", "message": "A customer with this email already exists" } ],
+    "Policy":   [ { "unique": "number", "message": "This policy number is already used" },
+                  { "check": "coverage > 0 and premium > 0", "message": "Coverage and premium must be positive" } ],
+    "Claim":    [ { "unique": "number", "message": "This claim number is already used" },
+                  { "check": "amount > 0", "message": "Claim amount must be positive" } ]
+  },
+
+  "seed": {
+    "Customer": [ { "name": "Alice Brown", "email": "alice@example.test", "phone": "+1 555 0101", "address": "1 Elm st, Springfield", "birthDate": "1985-04-12" },
+                  { "name": "Ben Carter", "email": "ben@example.test", "phone": "+1 555 0102", "address": "2 Oak ave, Springfield", "birthDate": "1978-11-30" },
+                  { "name": "Chloe Dunn", "email": "chloe@example.test", "phone": "+1 555 0103", "address": "3 Pine rd, Shelbyville", "birthDate": "1992-02-05" },
+                  { "name": "Dev Ellis", "email": "dev@example.test", "phone": "+1 555 0104", "address": "4 Birch ln, Shelbyville", "birthDate": "1969-07-19" } ],
+    "Policy":   [ { "number": "POL-1001", "customer": 1, "type": "auto", "coverage": 25000, "premium": 640, "startDate": "2026-01-15", "endDate": "2027-01-14", "status": "active" },
+                  { "number": "POL-1002", "customer": 1, "type": "home", "coverage": 300000, "premium": 1200, "startDate": "2026-01-01", "endDate": "2026-12-31", "status": "active" },
+                  { "number": "POL-1003", "customer": 2, "type": "life", "coverage": 500000, "premium": 2400, "startDate": "2026-03-01", "endDate": "2046-03-01", "status": "active" },
+                  { "number": "POL-1004", "customer": 3, "type": "health", "coverage": 100000, "premium": 980, "startDate": "2025-07-01", "endDate": "2026-06-30", "status": "expired" },
+                  { "number": "POL-1005", "customer": 4, "type": "auto", "coverage": 18000, "premium": 520, "startDate": "2025-12-01", "endDate": "2026-11-30", "status": "cancelled" } ],
+    "Claim":    [ { "number": "CLM-2001", "policy": 1, "customer": 1, "amount": 3200, "filedAt": "2026-07-08", "description": "Rear bumper after a parking collision", "status": "paid" },
+                  { "number": "CLM-2002", "policy": 2, "customer": 1, "amount": 1500, "filedAt": "2026-08-19", "description": "Water damage in the kitchen", "status": "review" },
+                  { "number": "CLM-2003", "policy": 4, "customer": 3, "amount": 800, "filedAt": "2026-08-02", "description": "Dental treatment", "status": "rejected" },
+                  { "number": "CLM-2004", "policy": 1, "customer": 1, "amount": 950, "filedAt": "2026-08-25", "description": "Windscreen replacement", "status": "filed" } ]
+  },
+
+  "events": [
+    { "on": "Claim.created", "do": [ { "block": "db.update", "set": { "customer": "@row.policy.customer" } } ] },
+    { "on": "Claim.updated", "do": [ { "block": "db.update", "set": { "customer": "@row.policy.customer" } } ] }
+  ],
+
+  "states": {
+    "Policy": { "field": "status", "transitions": [
+      { "name": "cancel", "from": ["active"], "to": "cancelled", "title": "Cancel policy" },
+      { "name": "expire", "from": ["active"], "to": "expired", "title": "Mark expired" },
+      { "name": "renew", "from": ["expired", "cancelled"], "to": "active", "title": "Renew", "fields": ["endDate"], "confirm": "Policy {row.number} renewed until {row.endDate}" }
+    ] },
+    "Claim": { "field": "status", "transitions": [
+      { "name": "review", "from": ["filed"], "to": "review", "title": "Start review" },
+      { "name": "approve", "from": ["review"], "to": "approved", "title": "Approve" },
+      { "name": "reject", "from": ["review"], "to": "rejected", "title": "Reject" },
+      { "name": "pay", "from": ["approved"], "to": "paid", "title": "Pay out", "confirm": "Claim {row.number} paid: {row.amount}" },
+      { "name": "reopen", "from": ["rejected"], "to": "review", "title": "Reopen" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Customer.list":   { "title": "Customers", "columns": ["id", "name", "email", "phone", "policies", "claims"], "search": ["name", "email", "phone"], "rowActions": ["view", "edit", "delete"] },
+    "Customer.form":   { "confirm": "Customer saved", "after": "/Customer/{id}", "afterEdit": "/Customer/{id}" },
+    "Customer.detail": { "fields": ["name", "email", "phone", "address", "birthDate", "policies", "claims", "premiums"],
+                         "related": [ { "entity": "Policy", "via": "customer", "title": "Policies", "columns": ["number", "type", "coverage", "premium", "endDate", "status"],
+                                        "form": ["number", "type", "coverage", "premium", "endDate"], "submit": "Add policy", "confirm": "Policy added", "rowActions": ["view"] },
+                                      { "entity": "Claim", "via": "customer", "title": "Claim history", "columns": ["number", "policy", "amount", "filedAt", "status"], "form": false, "rowActions": ["view"] } ] },
+    "Policy.list":     { "title": "Policies", "columns": ["number", "customer", "type", "coverage", "premium", "endDate", "status"], "search": ["number"],
+                         "filters": [ { "name": "Type", "field": "type" }, { "name": "Status", "field": "status" }, { "name": "Customer", "field": "customer" } ],
+                         "sort": { "field": "number", "dir": "asc" }, "rowActions": ["view", "edit"] },
+    "Policy.form":     { "confirm": "Policy saved", "after": "/Policy/{id}", "afterEdit": "/Policy/{id}" },
+    "Policy.detail":   { "fields": ["number", "customer", "type", "coverage", "premium", "startDate", "endDate", "daysLeft", "status", "claims", "claimed"],
+                         "related": [ { "entity": "Claim", "via": "policy", "title": "Claims", "columns": ["number", "amount", "filedAt", "status"],
+                                        "form": ["number", "amount", "filedAt", "description"], "submit": "File claim", "confirm": "Claim filed", "rowActions": ["view"] } ] },
+    "Claim.list":      { "title": "Claims", "columns": ["number", "policy", "customer", "amount", "filedAt", "status"], "search": ["number", "description"],
+                         "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "edit"] },
+    "Claim.form":      { "fields": ["number", "policy", "amount", "filedAt", "description"], "confirm": "Claim filed successfully", "after": "/Claim/{id}", "afterEdit": "/Claim/{id}" }
+  },
+
+  "dashboards": [
+    { "id": "reports", "title": "Reports", "intro": "Data analysis: portfolio totals and breakdowns by type, status and month; narrow the claim figures to a period by filing date.",
+      "period": { "Claim": "filedAt" },
+      "cards": [ { "title": "Customers", "entity": "Customer", "fn": "count" },
+                 { "title": "Active policies", "entity": "Policy", "fn": "count", "where": { "status": "active" } },
+                 { "title": "Annual premiums", "entity": "Policy", "fn": "sum", "field": "premium", "where": { "status": "active" } },
+                 { "title": "Claims", "entity": "Claim", "fn": "count" },
+                 { "title": "Claims amount", "entity": "Claim", "fn": "sum", "field": "amount" },
+                 { "title": "Paid out", "entity": "Claim", "fn": "sum", "field": "amount", "where": { "status": "paid" } } ],
+      "tables": [ { "title": "Policies by type", "entity": "Policy", "groupBy": "type", "groupTitle": "Type",
+                    "metrics": [ { "fn": "count", "as": "policies", "title": "Policies" }, { "fn": "sum", "field": "coverage", "as": "coverage", "title": "Coverage" }, { "fn": "sum", "field": "premium", "as": "premium", "title": "Premium" } ] },
+                  { "title": "Policies by status", "entity": "Policy", "groupBy": "status", "groupTitle": "Status", "metrics": [ { "fn": "count", "as": "policies", "title": "Policies" } ] },
+                  { "title": "Claims by status", "entity": "Claim", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "claims", "title": "Claims" }, { "fn": "sum", "field": "amount", "as": "amount", "title": "Amount" } ] },
+                  { "title": "Claims by month", "entity": "Claim", "groupBy": "filedAt", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "claims", "title": "Claims" }, { "fn": "sum", "field": "amount", "as": "amount", "title": "Amount" } ] },
+                  { "title": "Claims by customer", "entity": "Claim", "groupBy": "customer", "groupTitle": "Customer",
+                    "metrics": [ { "fn": "count", "as": "claims", "title": "Claims" }, { "fn": "sum", "field": "amount", "as": "amount", "title": "Amount" } ], "sort": { "field": "amount", "dir": "desc" } } ] }
+  ]
+}

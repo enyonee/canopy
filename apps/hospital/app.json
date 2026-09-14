@@ -1,0 +1,172 @@
+{
+  "app": "hospital",
+  "task": "webgen-bench/000046",
+  "note": "Hospital management with two roles: admin (superiors, finance) and staff (employees). Patient electronic files carry fees, lab results and surgeries as related tables. Paying a fee is a transition that writes an income entry into the ledger; the financial, inventory and patient reports are dashboards with a period filter. Pharmacy stock moves through stock movements (db.adjust on create). A daily report mails the chosen superior. Claims are created as submitted and decided by the admin.",
+  "theme": { "background": "peachpuff", "accent": "indianred" },
+  "home": "/Patient",
+
+  "data": {
+    "User":          { "name": "text!", "email": "text!", "password": "password!", "role": "enum[admin,staff]=staff", "position": "text" },
+    "Patient":       { "name": "text!", "visitDate": "date=today", "diagnosis": "text!", "comments": "longtext", "phone": "text",
+                       "due": "money := sum(Fee: if(status = 'unpaid', amount, 0))", "tests": "int := count(LabTest)" },
+    "Fee":           { "patient": "ref:Patient!", "service": "text!", "amount": "money!", "status": "enum[unpaid,paid]=unpaid",
+                       "date": "date=today", "method": "enum[cash,card,insurance]=cash" },
+    "Transaction":   { "category": "text!", "kind": "enum[income,expense]=income", "amount": "money!", "date": "date=today",
+                       "patient": "ref:Patient", "note": "text" },
+    "DailyReport":   { "author": "ref:User!", "superior": "ref:User!", "date": "date=today", "activities": "longtext!", "hours": "int=8" },
+    "Medicine":      { "name": "text!", "dosageForm": "enum[tablet,capsule,syrup,injection]=tablet", "stock": "int=0", "reorderLevel": "int=20", "expiry": "date" },
+    "StockMovement": { "medicine": "ref:Medicine!", "kind": "enum[in,out]=in", "quantity": "int!", "date": "date=today", "reason": "text", "recordedBy": "ref:User" },
+    "Claim":         { "patient": "ref:Patient!", "insurer": "text!", "amount": "money!", "status": "enum[submitted,approved,rejected]=submitted",
+                       "filedAt": "date=today", "note": "text" },
+    "LabTest":       { "patient": "ref:Patient!", "test": "text!", "result": "text", "date": "date=today", "technician": "ref:User" },
+    "Surgery":       { "patient": "ref:Patient!", "procedure": "text!", "room": "enum[main,minor]=main", "date": "date!", "startTime": "text!",
+                       "surgeon": "ref:User!", "status": "enum[scheduled,done,cancelled]=scheduled", "note": "text" }
+  },
+
+  "rules": {
+    "User":          [ { "unique": "email" } ],
+    "Fee":           [ { "check": "amount > 0", "message": "Amount must be positive" } ],
+    "Transaction":   [ { "check": "amount > 0", "message": "Amount must be positive" } ],
+    "StockMovement": [ { "check": "quantity > 0", "message": "Quantity must be at least 1" } ],
+    "Claim":         [ { "check": "amount > 0", "message": "Amount must be positive" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": {
+      "admin": "*",
+      "staff": { "User": ["view"], "Patient": ["view", "create", "edit"], "Fee": ["view", "create", "go:pay"], "Transaction": ["view"],
+                 "DailyReport": { "own": "author", "can": ["view", "create"] },
+                 "Medicine": ["view", "create", "edit"], "StockMovement": ["view", "create"],
+                 "Claim": ["view", "create"], "LabTest": ["view", "create", "edit"], "Surgery": ["view", "create", "edit", "go:*"] }
+    }
+  },
+
+  "seed": {
+    "User":          [ { "name": "Dr. Helen Park", "email": "admin@hospital.test", "password": "admin123", "role": "admin", "position": "Medical director" },
+                       { "name": "Nina Ortiz", "email": "nina@hospital.test", "password": "nina123", "role": "staff", "position": "Nurse" },
+                       { "name": "Dr. Omar Reyes", "email": "omar@hospital.test", "password": "omar123", "role": "staff", "position": "Surgeon" } ],
+    "Patient":       [ { "name": "Maria Santos", "visitDate": "2026-08-03", "diagnosis": "Type 2 diabetes", "comments": "Follow-up in three months", "phone": "+1 555 0201" },
+                       { "name": "James Okoro", "visitDate": "2026-08-21", "diagnosis": "Fractured wrist", "comments": "Cast applied", "phone": "+1 555 0202" },
+                       { "name": "Aiko Tanaka", "visitDate": "2026-09-02", "diagnosis": "Hypertension", "comments": "Started medication", "phone": "+1 555 0203" } ],
+    "Fee":           [ { "patient": 1, "service": "Consultation", "amount": 150, "status": "unpaid", "date": "2026-08-03" },
+                       { "patient": 2, "service": "X-ray", "amount": 220, "status": "paid", "date": "2026-08-21", "method": "card" },
+                       { "patient": 3, "service": "Consultation", "amount": 150, "status": "unpaid", "date": "2026-09-02" } ],
+    "Transaction":   [ { "category": "Government grant", "kind": "income", "amount": 5000, "date": "2026-07-15" },
+                       { "category": "Utilities", "kind": "expense", "amount": 600, "date": "2026-07-20" },
+                       { "category": "Medicine purchase", "kind": "expense", "amount": 1400, "date": "2026-08-05" },
+                       { "category": "Patient fee", "kind": "income", "amount": 220, "date": "2026-08-21", "patient": 2, "note": "X-ray (card)" },
+                       { "category": "Salaries", "kind": "expense", "amount": 9000, "date": "2026-08-31" } ],
+    "DailyReport":   [ { "author": 2, "superior": 1, "date": "2026-09-10", "activities": "Ward rounds and vitals for 14 patients", "hours": 8 } ],
+    "Medicine":      [ { "name": "Amoxicillin 500mg", "dosageForm": "capsule", "stock": 120, "reorderLevel": 20, "expiry": "2027-03-01" },
+                       { "name": "Paracetamol 500mg", "dosageForm": "tablet", "stock": 300, "reorderLevel": 50, "expiry": "2027-01-15" },
+                       { "name": "Insulin glargine", "dosageForm": "injection", "stock": 30, "reorderLevel": 10, "expiry": "2026-12-01" } ],
+    "StockMovement": [ { "medicine": 1, "kind": "in", "quantity": 200, "date": "2026-08-05", "reason": "Supplier delivery", "recordedBy": 1 },
+                       { "medicine": 1, "kind": "out", "quantity": 80, "date": "2026-08-20", "reason": "Ward dispensing", "recordedBy": 2 },
+                       { "medicine": 2, "kind": "out", "quantity": 100, "date": "2026-08-22", "reason": "Pharmacy sales", "recordedBy": 2 },
+                       { "medicine": 3, "kind": "in", "quantity": 30, "date": "2026-09-01", "reason": "Supplier delivery", "recordedBy": 1 } ],
+    "Claim":         [ { "patient": 2, "insurer": "MedSecure", "amount": 220, "status": "approved", "filedAt": "2026-08-22", "note": "X-ray and cast" } ],
+    "LabTest":       [ { "patient": 1, "test": "HbA1c", "result": "7.2 %", "date": "2026-08-03", "technician": 2 },
+                       { "patient": 3, "test": "Lipid panel", "result": "LDL 3.1 mmol/L", "date": "2026-09-02", "technician": 2 } ],
+    "Surgery":       [ { "patient": 2, "procedure": "Wrist fixation", "room": "main", "date": "2026-08-23", "startTime": "10:00", "surgeon": 3, "status": "done" } ]
+  },
+
+  "events": [
+    { "on": "DailyReport.created", "do": [
+        { "block": "mail.send", "connector": "mail", "to": "@row.superior.email", "subject": "Daily report from {row.author.name} for {row.date}",
+          "text": "{row.activities} ({row.hours} h)" } ] },
+    { "on": "StockMovement.created", "do": [
+        { "block": "db.adjust", "entity": "Medicine", "id": "@row.medicine", "field": "stock", "by": "= if(kind = 'in', quantity, -quantity)", "min": 0,
+          "message": "Not enough stock of this medicine" } ] }
+  ],
+
+  "states": {
+    "Fee": { "field": "status", "transitions": [
+      { "name": "pay", "from": ["unpaid"], "to": "paid", "title": "Collect payment", "fields": ["method"],
+        "confirm": "Payment of {row.amount} received from {row.patient.name}",
+        "do": [ { "block": "db.createRow", "entity": "Transaction", "values": { "category": "Patient fee", "kind": "income", "amount": "@row.amount",
+                  "date": "@today", "patient": "@row.patient", "note": "= concat(service, ' (', method, ')')" } } ] } ] },
+    "Claim": { "field": "status", "transitions": [
+      { "name": "approve", "from": ["submitted"], "to": "approved", "title": "Approve", "by": ["admin"] },
+      { "name": "reject", "from": ["submitted"], "to": "rejected", "title": "Reject", "by": ["admin"], "fields": ["note"] } ] },
+    "Surgery": { "field": "status", "transitions": [
+      { "name": "complete", "from": ["scheduled"], "to": "done", "title": "Mark done" },
+      { "name": "cancel", "from": ["scheduled"], "to": "cancelled", "title": "Cancel" } ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "reports@hospital.test" } },
+
+  "views": "auto",
+  "override": {
+    "User.list":          { "title": "Employees", "columns": ["name", "email", "role", "position"] },
+    "Patient.list":       { "title": "Patients", "columns": ["name", "visitDate", "diagnosis", "due", "tests"], "search": ["name", "diagnosis"],
+                            "rowActions": ["view", "edit"], "createTitle": "New patient file" },
+    "Patient.form":       { "title": "Patient electronic file", "fields": ["name", "visitDate", "diagnosis", "comments", "phone"],
+                            "confirm": "Patient file saved", "after": "/Patient/{id}" },
+    "Patient.detail":     { "fields": ["name", "visitDate", "diagnosis", "comments", "phone", "due", "tests"],
+                            "related": [ { "entity": "Fee", "via": "patient", "title": "Fees", "columns": ["service", "amount", "status", "date", "method"],
+                                           "form": ["service", "amount"], "submit": "Add fee", "confirm": "Fee added", "rowActions": ["view"] },
+                                         { "entity": "LabTest", "via": "patient", "title": "Laboratory results", "columns": ["test", "result", "date", "technician"],
+                                           "form": ["test", "result"], "fill": { "technician": "@me" }, "submit": "Record result", "confirm": "Test result recorded",
+                                           "rowActions": ["edit"] },
+                                         { "entity": "Surgery", "via": "patient", "title": "Surgeries", "columns": ["procedure", "room", "date", "startTime", "surgeon", "status"], "form": false } ] },
+    "Fee.list":           { "title": "Patient fees", "columns": ["patient", "service", "amount", "status", "date", "method"],
+                            "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"], "createTitle": "Add fee" },
+    "Fee.form":           { "confirm": "Fee recorded", "after": "/Fee/{id}" },
+    "Transaction.list":   { "title": "Finances", "columns": ["date", "kind", "category", "amount", "patient", "note"],
+                            "filters": [ { "name": "Kind", "field": "kind" }, { "name": "Date", "field": "date", "range": true } ],
+                            "sort": { "field": "date", "dir": "desc" }, "createTitle": "Add entry" },
+    "DailyReport.list":   { "title": "Daily reports", "columns": ["date", "author", "superior", "hours", "activities"], "rowActions": ["view"],
+                            "createTitle": "Submit daily report" },
+    "DailyReport.form":   { "title": "Submit a daily report", "fields": ["superior", "date", "activities", "hours"], "submit": "Submit report",
+                            "confirm": "Daily report submitted; your superior has been notified" },
+    "Medicine.list":      { "title": "Pharmacy", "columns": ["name", "dosageForm", "stock", "reorderLevel", "expiry"], "search": ["name"],
+                            "rowActions": ["view", "edit"], "createTitle": "Add medicine" },
+    "Medicine.detail":    { "related": [ { "entity": "StockMovement", "via": "medicine", "title": "Stock movements",
+                                           "columns": ["date", "kind", "quantity", "reason", "recordedBy"], "form": ["kind", "quantity", "reason"],
+                                           "fill": { "recordedBy": "@me" }, "submit": "Update stock", "confirm": "Stock updated" } ] },
+    "StockMovement.list": { "title": "Stock movements", "columns": ["date", "medicine", "kind", "quantity", "reason", "recordedBy"],
+                            "filters": [ { "name": "Medicine", "field": "medicine" }, { "name": "Date", "field": "date", "range": true } ],
+                            "create": false, "rowActions": [] },
+    "Claim.list":         { "title": "Claims", "columns": ["id", "patient", "insurer", "amount", "status", "filedAt", "note"],
+                            "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "go:approve"], "createTitle": "Formulate claim" },
+    "Claim.form":         { "title": "Formulate a claim", "submit": "Submit claim", "confirm": "Claim submitted" },
+    "LabTest.list":       { "title": "Laboratory", "columns": ["patient", "test", "result", "date", "technician"],
+                            "filters": [ { "name": "Patient", "field": "patient" } ], "search": ["test"], "createTitle": "Record test" },
+    "LabTest.form":       { "fill": { "technician": "@me" }, "confirm": "Test result recorded" },
+    "Surgery.list":       { "title": "Theater schedule", "columns": ["date", "startTime", "room", "patient", "procedure", "surgeon", "status"],
+                            "filters": [ { "name": "Date", "field": "date", "range": true }, { "name": "Room", "field": "room" }, { "name": "Surgeon", "field": "surgeon" } ],
+                            "sort": { "field": "date", "dir": "asc" }, "rowActions": ["view", "edit"], "createTitle": "Schedule surgery" },
+    "Surgery.form":       { "title": "Schedule a surgery", "fields": ["patient", "procedure", "room", "date", "startTime", "surgeon", "note"], "confirm": "Surgery scheduled" }
+  },
+
+  "dashboards": [
+    { "id": "finance", "title": "Financial report", "roles": ["admin"], "intro": "Income and expenses for a period.", "period": { "Transaction": "date" },
+      "cards": [ { "title": "Income", "entity": "Transaction", "fn": "sum", "field": "amount", "where": { "kind": "income" } },
+                 { "title": "Expenses", "entity": "Transaction", "fn": "sum", "field": "amount", "where": { "kind": "expense" } },
+                 { "title": "Entries", "entity": "Transaction", "fn": "count" },
+                 { "title": "Unpaid fees", "entity": "Fee", "fn": "sum", "field": "amount", "where": { "status": "unpaid" } } ],
+      "tables": [ { "title": "By category", "entity": "Transaction", "groupBy": "category", "groupTitle": "Category",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Entries" }, { "fn": "sum", "field": "amount", "as": "total", "title": "Total" } ],
+                    "sort": { "field": "total", "dir": "desc" } },
+                  { "title": "By month", "entity": "Transaction", "groupBy": "date", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Entries" }, { "fn": "sum", "field": "amount", "as": "total", "title": "Total" } ] } ] },
+    { "id": "inventory-report", "title": "Inventory report", "intro": "Pharmacy stock levels and movements for a period.", "period": { "StockMovement": "date" },
+      "cards": [ { "title": "Units received", "entity": "StockMovement", "fn": "sum", "field": "quantity", "where": { "kind": "in" } },
+                 { "title": "Units dispensed", "entity": "StockMovement", "fn": "sum", "field": "quantity", "where": { "kind": "out" } },
+                 { "title": "Units in stock", "entity": "Medicine", "fn": "sum", "field": "stock" },
+                 { "title": "Medicines", "entity": "Medicine", "fn": "count" } ],
+      "tables": [ { "title": "Received by medicine", "entity": "StockMovement", "groupBy": "medicine", "groupTitle": "Medicine", "where": { "kind": "in" },
+                    "metrics": [ { "fn": "sum", "field": "quantity", "as": "units", "title": "Units" } ] },
+                  { "title": "Dispensed by medicine", "entity": "StockMovement", "groupBy": "medicine", "groupTitle": "Medicine", "where": { "kind": "out" },
+                    "metrics": [ { "fn": "sum", "field": "quantity", "as": "units", "title": "Units" } ] } ] },
+    { "id": "patient-report", "title": "Patient report", "intro": "Visits for a period, by diagnosis and by month.", "period": { "Patient": "visitDate" },
+      "cards": [ { "title": "Patients", "entity": "Patient", "fn": "count" },
+                 { "title": "Lab tests", "entity": "LabTest", "fn": "count" },
+                 { "title": "Surgeries", "entity": "Surgery", "fn": "count" } ],
+      "tables": [ { "title": "By diagnosis", "entity": "Patient", "groupBy": "diagnosis", "groupTitle": "Diagnosis",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Patients" } ] },
+                  { "title": "Visits by month", "entity": "Patient", "groupBy": "visitDate", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Visits" } ] } ] }
+  ]
+}
