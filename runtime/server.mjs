@@ -12,7 +12,7 @@ import { Store } from './store.mjs';
 import { permissions, sessions, verifyPassword } from './auth.mjs';
 import { flush } from './outbox.mjs';
 import { parse as parseExpr, evaluate, isExpression, stripExpression } from './expr.mjs';
-import { coerce, formatMoney } from './spec.mjs';
+import { coerce, defaultValue, formatMoney } from './spec.mjs';
 import { listView, formView, detailView, dashboardView, staticPage, errorPage, loginView, registerView,
   outboxView, forbiddenPage, noticePage, transitionsFor, label } from './render.mjs';
 
@@ -174,8 +174,9 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     if (problems.length) return problems;
     // Rules see the row as it would be stored: the existing row under the submitted values.
     const probe = { id: existing?.id ?? 0, ...(existing || {}) };
-    for (const f of fields) if (!f.derive && values[f.name] !== undefined) probe[f.name] = coerce(f, values[f.name]);
-    for (const f of fields) if (!f.derive && probe[f.name] === undefined) probe[f.name] = coerce(f, values[f.name]);
+    const asStored = (f, v) => (v === '' || v === undefined ? defaultValue(f) : coerce(f, v));
+    for (const f of fields) if (!f.derive && values[f.name] !== undefined) probe[f.name] = asStored(f, values[f.name]);
+    for (const f of fields) if (!f.derive && probe[f.name] === undefined) probe[f.name] = asStored(f, values[f.name]);
     for (const rule of graph.rules?.[entity] || []) {
       if (rule.unique !== undefined) {
         const v = values[rule.unique];
@@ -297,7 +298,9 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         if (!vc.canSee(d)) return deny();
         const period = { from: url.searchParams.get('from') || '', to: url.searchParams.get('to') || '' };
         trace({ kind: 'dashboard', id: d.id, period });
-        return send(200, dashboardView(graph, store, d, flash, vc, period));
+        const mine = { ...d, cards: (d.cards || []).map((c) => ({ ...c, where: resolveTop(c.where || {}) })),
+          tables: (d.tables || []).map((t) => ({ ...t, where: resolveTop(t.where || {}) })) };
+        return send(200, dashboardView(graph, store, mine, flash, vc, period));
       }
       if (parts[0] === 'list') {
         const l = (graph.lists || []).find((x) => x.id === parts[1]);
@@ -440,7 +443,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         const values = {};
         for (const f of t.fields || []) if (submitted[f] !== undefined) values[f] = submitted[f];
         const problems = validateValues(entity, { ...values, [st.field]: t.to }, { partial: true, existing: row });
-        for (const f of t.fields || []) { const spec = store.field(entity, f); if (spec.required && !values[f]) problems.push(`${label(f)} is required`); }
+        for (const f of t.fields || []) if (values[f] === undefined || String(values[f]).trim() === '') problems.push(`${f} is required`);
         if (problems.length) return send(400, detailView(graph, store, entity, fields, row, problems.join('; '), vc));
         let ctx;
         try {

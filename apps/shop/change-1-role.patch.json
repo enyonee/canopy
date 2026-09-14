@@ -1,0 +1,43 @@
+[
+  {
+    "op": "replace",
+    "path": "/data/User/role",
+    "value": "enum[admin,customer,support]=customer"
+  },
+  {
+    "op": "add",
+    "path": "/roles/can/support",
+    "value": {
+      "Order": [
+        "view",
+        "go:ship",
+        "go:deliver"
+      ],
+      "OrderItem": [
+        "view"
+      ],
+      "Product": [
+        "view"
+      ],
+      "User": [
+        "view"
+      ]
+    }
+  },
+  {
+    "op": "replace",
+    "path": "/states/Order/transitions/2/by",
+    "value": [
+      "admin",
+      "support"
+    ]
+  },
+  {
+    "op": "replace",
+    "path": "/states/Order/transitions/3/by",
+    "value": [
+      "admin",
+      "support"
+    ]
+  }
+]

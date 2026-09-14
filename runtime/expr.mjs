@@ -192,7 +192,8 @@ export function refs(ast, out = []) {
 // --- evaluation --------------------------------------------------------------
 // ctx.get(path) -> value; ctx.rows(entity, via) -> array of child ctx.
 const dayMs = 86_400_000;
-const toDate = (v) => (v == null || v === '' ? null : new Date(String(v).length === 10 ? `${v}T00:00:00Z` : v));
+// days() counts calendar days: a timestamp is its date, the hours never make a day negative.
+const toDate = (v) => (v == null || v === '' ? null : new Date(`${String(v).slice(0, 10)}T00:00:00Z`));
 const truthy = (v) => v !== null && v !== undefined && v !== false && v !== 0 && v !== '';
 
 export function evaluate(ast, ctx) {

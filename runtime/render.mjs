@@ -190,7 +190,9 @@ export function listView(graph, store, entity, fields, rows, ctx) {
 }
 
 export function formFields(store, entity, fields, row, only, { skip = [] } = {}) {
-  return fields.filter(isStored).filter((f) => !skip.includes(f.name)).filter((f) => (only ? only.includes(f.name) : true)).map((f) => {
+  const statusField = store.graph?.states?.[entity]?.field;
+  return fields.filter(isStored).filter((f) => !skip.includes(f.name) && (f.name !== statusField || only?.includes(f.name)))
+    .filter((f) => (only ? only.includes(f.name) : true)).map((f) => {
     const id = `f_${f.name}`, v = row?.[f.name];
     if (f.kind === 'time') return '';
     let input;

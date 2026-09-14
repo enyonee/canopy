@@ -1,0 +1,58 @@
+[
+  {
+    "op": "add",
+    "path": "/dashboards/-",
+    "value": {
+      "id": "customers",
+      "title": "Customers report",
+      "roles": [
+        "admin",
+        "support"
+      ],
+      "period": {
+        "Order": "createdAt"
+      },
+      "tables": [
+        {
+          "title": "Orders by customer",
+          "entity": "Order",
+          "groupBy": "customer",
+          "groupTitle": "Customer",
+          "where": {
+            "status": {
+              "in": [
+                "placed",
+                "paid",
+                "shipped",
+                "delivered"
+              ]
+            }
+          },
+          "metrics": [
+            {
+              "fn": "count",
+              "as": "orders",
+              "title": "Orders"
+            },
+            {
+              "fn": "sum",
+              "field": "total",
+              "as": "spent",
+              "title": "Spent"
+            },
+            {
+              "fn": "avg",
+              "field": "total",
+              "as": "average",
+              "title": "Average"
+            }
+          ],
+          "sort": {
+            "field": "spent",
+            "dir": "desc"
+          }
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "op": "add",
+    "path": "/data/Activity/minutes",
+    "value": "int=30"
+  },
+  {
+    "op": "add",
+    "path": "/dashboards/-",
+    "value": {
+      "id": "activity",
+      "title": "Activity report",
+      "roles": [
+        "admin"
+      ],
+      "period": {
+        "Activity": "due"
+      },
+      "cards": [
+        {
+          "title": "Activities",
+          "entity": "Activity",
+          "fn": "count"
+        },
+        {
+          "title": "Minutes",
+          "entity": "Activity",
+          "fn": "sum",
+          "field": "minutes"
+        }
+      ],
+      "tables": [
+        {
+          "title": "By owner",
+          "entity": "Activity",
+          "groupBy": "owner",
+          "groupTitle": "Owner",
+          "metrics": [
+            {
+              "fn": "count",
+              "as": "n",
+              "title": "Activities"
+            },
+            {
+              "fn": "sum",
+              "field": "minutes",
+              "as": "minutes",
+              "title": "Minutes"
+            }
+          ]
+        },
+        {
+          "title": "By kind",
+          "entity": "Activity",
+          "groupBy": "kind",
+          "groupTitle": "Kind",
+          "metrics": [
+            {
+              "fn": "count",
+              "as": "n",
+              "title": "Activities"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

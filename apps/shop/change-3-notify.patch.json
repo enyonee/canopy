@@ -1,0 +1,35 @@
+[
+  {
+    "op": "add",
+    "path": "/connectors/analytics",
+    "value": {
+      "kind": "http",
+      "url": "http://127.0.0.1:8999/hooks/analytics",
+      "method": "POST",
+      "headers": {
+        "x-source": "shop"
+      }
+    }
+  },
+  {
+    "op": "add",
+    "path": "/events",
+    "value": [
+      {
+        "on": "Product.created",
+        "do": [
+          {
+            "block": "http.send",
+            "connector": "analytics",
+            "body": {
+              "event": "product.created",
+              "product": "@row.id",
+              "name": "@row.name",
+              "price": "@row.price"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

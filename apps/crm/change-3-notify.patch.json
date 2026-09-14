@@ -1,0 +1,30 @@
+[
+  {
+    "op": "add",
+    "path": "/connectors/calendar",
+    "value": {
+      "kind": "http",
+      "url": "http://127.0.0.1:8999/hooks/calendar"
+    }
+  },
+  {
+    "op": "add",
+    "path": "/events/-",
+    "value": {
+      "on": "Activity.created",
+      "do": [
+        {
+          "block": "http.send",
+          "connector": "calendar",
+          "body": {
+            "event": "activity.created",
+            "lead": "@row.lead.title",
+            "kind": "@row.kind",
+            "due": "@row.due",
+            "owner": "@row.owner.email"
+          }
+        }
+      ]
+    }
+  }
+]

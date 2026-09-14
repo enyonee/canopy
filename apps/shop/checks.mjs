@@ -177,3 +177,67 @@ export const checks = [
   navCheck(3),
   colorCheck('seashell', 'darkslateblue'),
 ];
+
+// The three changes of the experiment template, applied as patches on the same database.
+const retryId = (html) => { const m = /\/outbox\/(\d+)\/retry/.exec(html); return m ? m[1] : null; };
+export const changes = [
+  { title: 'second role with reduced access', patch: 'change-1-role.patch.json', checks: [
+    { task: 'The admin creates a support user; support sees orders, ships, but edits nothing and sees no admin surface',
+      run: async ({ login, post, get, follow, rows, must, asGuest }) => {
+        await login('admin@shop.test', 'admin123');
+        const made = await post('/User', { email: 'sam@shop.test', password: 'sam123', name: 'Sam', role: 'support' });
+        must(made.status === 303, `creating the support user returned ${made.status}: ${made.html.slice(0, 200)}`);
+        asGuest();
+        const r = await login('sam@shop.test', 'sam123');
+        must(r.status === 303, 'support could not log in');
+        const orders = await get('/Order');
+        must(rows(orders.html).length === 2, `support sees ${rows(orders.html).length} orders`);
+        const shipped = rows(orders.html).find((x) => /status">Shipped/.test(x));
+        const id = /\/Order\/(\d+)"/.exec(shipped)[1];
+        const delivered = await follow(`/Order/${id}/go/deliver`, {});
+        must(/status">Delivered/.test(delivered.html), 'support could not mark delivered');
+        must((await get('/Product/1/edit')).status === 403, 'support opened the product editor');
+        must((await post('/Product/1', { name: 'Hacked' })).status === 403, 'support edited a product');
+        must((await get('/dashboard/sales')).status === 403, 'support opened the sales dashboard');
+        must((await get('/outbox')).status === 403, 'support opened the outbox');
+        const users = await get('/User');
+        must(users.status === 200 && !/href="\/User\/new"/.test(users.html), 'support cannot list customers, or is offered to add one');
+        return 'support: orders and customers read-only, deliver allowed, edit/dashboard/outbox 403';
+      } },
+  ] },
+  { title: 'summary per customer for a period', patch: 'change-2-period.patch.json', checks: [
+    { task: 'The customers report groups delivered orders by customer and narrows to a period',
+      run: async ({ login, get, rows, must }) => {
+        await login('admin@shop.test', 'admin123');
+        const d = await get('/dashboard/customers');
+        must(d.status === 200, `report returned ${d.status}`);
+        must(/ann@shop.test<\/td><td>1<\/td><td>100\.00<\/td><td>100\.00<\/td>/.test(d.html), 'ann\'s row is wrong');
+        must(!/bob@shop.test/.test(d.html), 'a cancelled order counts as spending');
+        const empty = await get('/dashboard/customers?from=2000-01-01&to=2000-12-31');
+        must(rows(empty.html).length === 0, 'the period filter does not exclude');
+        return 'ann: 1 order, spent 100.00; cancelled excluded; period filter';
+      } },
+  ] },
+  { title: 'HTTP notification with delivery status', patch: 'change-3-notify.patch.json', checks: [
+    { task: 'A new product notifies analytics; a failed delivery is visible and can be retried',
+      run: async ({ login, follow, get, post, rows, must, sink, flashOf }) => {
+        await login('admin@shop.test', 'admin123');
+        sink.clear();
+        await follow('/Product', { name: 'Green mug', category: 1, price: '9.9', stock: 3 });
+        const hit = sink.received.find((h) => h.path === '/hooks/analytics');
+        must(hit && hit.headers['x-source'] === 'shop' && hit.body.event === 'product.created' && hit.body.name === 'Green mug' && hit.body.price === 9.9,
+          `analytics got ${JSON.stringify(sink.received.map((h) => [h.path, h.body]))}`);
+        sink.state.failing = true;
+        await follow('/Product', { name: 'Broken mug', category: 1, price: '1', stock: 1 });
+        sink.state.failing = false;
+        let outbox = await get('/outbox');
+        const top = rows(outbox.html)[0];
+        must(/status">failed<\/span> 500/.test(top) && /HTTP 500/.test(top), `the failed delivery is not shown as failed: ${top.slice(0, 300)}`);
+        const r = await follow(`/outbox/${retryId(top)}/retry`, {});
+        must(/retried: sent/.test(flashOf(r.html)), `retry flash: ${flashOf(r.html)}`);
+        outbox = await get('/outbox');
+        must(/status">sent<\/span> 200/.test(rows(outbox.html)[0]), 'the retried delivery is not sent');
+        return 'delivered with header; failure recorded as failed/500; retry → sent';
+      } },
+  ] },
+];

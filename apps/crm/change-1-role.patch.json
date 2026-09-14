@@ -1,0 +1,25 @@
+[
+  {
+    "op": "replace",
+    "path": "/data/User/role",
+    "value": "enum[admin,sales,viewer]=sales"
+  },
+  {
+    "op": "add",
+    "path": "/roles/can/viewer",
+    "value": {
+      "Company": [
+        "view"
+      ],
+      "Contact": [
+        "view"
+      ],
+      "Lead": [
+        "view"
+      ],
+      "Activity": [
+        "view"
+      ]
+    }
+  }
+]

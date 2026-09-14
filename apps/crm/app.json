@@ -1,0 +1,117 @@
+{
+  "app": "crm",
+  "note": "Reference app for the CRM class: companies, contacts, leads owned by sales people with a status pipeline, activities with due dates, derived counts and pipeline value, an admin dashboard by status/owner/month with a period filter, mail to the contact and a webhook to an external system on new and won leads.",
+  "theme": { "background": "aliceblue", "accent": "darkslategray" },
+  "home": "/Lead",
+
+  "data": {
+    "User":     { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,sales]=sales" },
+    "Company":  { "name": "text!", "industry": "enum[software,retail,finance,other]=other", "website": "text",
+                  "leads": "int := count(Lead)", "pipeline": "money := sum(Lead: value)" },
+    "Contact":  { "name": "text!", "email": "text!", "phone": "text", "company": "ref:Company" },
+    "Lead":     { "title": "text!", "company": "ref:Company", "contact": "ref:Contact", "owner": "ref:User!", "value": "money=0",
+                  "source": "enum[web,referral,event,cold]=web", "status": "enum[new,contacted,qualified,won,lost]=new",
+                  "createdAt": "time=now", "closedAt": "date",
+                  "activities": "int := count(Activity)", "open": "int := count(Activity: not done)", "age": "int := days(today, createdAt)" },
+    "Activity": { "lead": "ref:Lead!", "kind": "enum[call,meeting,email,note]=call", "note": "longtext!", "due": "date", "done": "bool=false", "owner": "ref:User" }
+  },
+
+  "rules": {
+    "Lead":     [ { "check": "value >= 0", "message": "Value cannot be negative" } ],
+    "Contact":  [ { "unique": "email", "message": "A contact with this email already exists" } ],
+    "Activity": [ { "check": "kind = 'note' or due != null", "message": "Calls, meetings and emails need a due date" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": {
+      "admin": "*",
+      "sales": { "Company": ["view", "create", "edit"], "Contact": ["view", "create", "edit"],
+                 "Lead": { "own": "owner", "can": ["view", "create", "edit", "go:*"] },
+                 "Activity": { "own": "owner", "can": ["view", "create", "edit", "delete"] } }
+    }
+  },
+
+  "seed": {
+    "User":    [ { "email": "admin@crm.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                 { "email": "alice@crm.test", "password": "alice123", "name": "Alice", "role": "sales" },
+                 { "email": "bob@crm.test", "password": "bob123", "name": "Bob", "role": "sales" } ],
+    "Company": [ { "name": "Northwind", "industry": "retail", "website": "northwind.test" },
+                 { "name": "Helio", "industry": "software", "website": "helio.test" } ],
+    "Contact": [ { "name": "Nora North", "email": "nora@northwind.test", "phone": "+1 555 0100", "company": 1 },
+                 { "name": "Hal Helio", "email": "hal@helio.test", "phone": "+1 555 0200", "company": 2 } ],
+    "Lead":    [ { "title": "Northwind renewal", "company": 1, "contact": 1, "owner": 3, "value": 800, "source": "referral", "status": "contacted", "createdAt": "2026-01-12T09:00:00.000Z" },
+                 { "title": "Helio pilot", "company": 2, "contact": 2, "owner": 3, "value": 2400, "source": "event", "status": "won", "createdAt": "2026-01-20T09:00:00.000Z", "closedAt": "2026-02-02" } ]
+  },
+
+  "events": [
+    { "on": "Lead.created", "do": [
+        { "block": "http.send", "connector": "crmHook", "body": { "event": "lead.created", "lead": "@row.id", "title": "@row.title", "owner": "@row.owner.email", "value": "@row.value" } } ] }
+  ],
+
+  "states": {
+    "Lead": { "field": "status", "transitions": [
+      { "name": "contact", "from": ["new"], "to": "contacted", "title": "Mark contacted",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.contact.email", "subject": "Following up on {row.title}", "text": "Hello {row.contact.name}, {row.owner.name} will be in touch." } ] },
+      { "name": "qualify", "from": ["contacted"], "to": "qualified", "title": "Qualify" },
+      { "name": "win", "from": ["qualified"], "to": "won", "title": "Mark won", "fields": ["closedAt"],
+        "confirm": "Deal won: {row.title} for {row.value}",
+        "do": [ { "block": "http.send", "connector": "crmHook", "body": { "event": "lead.won", "lead": "@row.id", "title": "@row.title", "value": "@row.value", "owner": "@row.owner.email", "closedAt": "@row.closedAt" } },
+                { "block": "mail.send", "connector": "mail", "to": "@row.contact.email", "subject": "Welcome aboard, {row.contact.name}", "text": "{row.title} is confirmed." } ] },
+      { "name": "lose", "from": ["new", "contacted", "qualified"], "to": "lost", "title": "Mark lost", "fields": ["closedAt"] },
+      { "name": "reopen", "from": ["lost"], "to": "new", "title": "Reopen" }
+    ] }
+  },
+
+  "connectors": {
+    "crmHook": { "kind": "http", "url": "http://127.0.0.1:8999/hooks/crm" },
+    "mail":    { "kind": "mail", "from": "sales@crm.test" }
+  },
+
+  "views": "auto",
+  "override": {
+    "Lead.list":     { "title": "Leads", "columns": ["title", "company", "owner", "value", "status", "age", "open"],
+                       "search": ["title"], "filters": [ { "name": "Status", "field": "status" }, { "name": "Owner", "field": "owner" } ],
+                       "rowActions": ["view", "edit", "go:contact"] },
+    "Lead.form":     { "fields": ["title", "company", "contact", "owner", "value", "source"], "confirm": "Lead saved", "afterEdit": "/Lead/{id}" },
+    "Lead.detail":   { "related": [ { "entity": "Activity", "via": "lead", "title": "Activities", "columns": ["kind", "note", "due", "done", "owner"],
+                                      "form": ["kind", "note", "due"], "fill": { "owner": "@me" }, "submit": "Log activity", "confirm": "Activity logged",
+                                      "rowActions": ["edit", "delete"] } ] },
+    "Company.list":  { "columns": ["name", "industry", "website", "leads", "pipeline"], "search": ["name"] },
+    "Company.detail": { "related": [ { "entity": "Contact", "via": "company", "title": "Contacts", "columns": ["name", "email", "phone"], "form": ["name", "email", "phone"] },
+                                     { "entity": "Lead", "via": "company", "title": "Leads", "columns": ["title", "owner", "value", "status"], "form": false } ] },
+    "Contact.list":  { "columns": ["name", "email", "phone", "company"], "search": ["name", "email"] },
+    "Activity.list": { "title": "Activities", "columns": ["lead", "kind", "note", "due", "done", "owner"],
+                       "filters": [ { "name": "Done", "field": "done" } ], "labels": { "done": ["Open", "Done"] }, "create": false },
+    "Activity.form": { "afterEdit": "/Lead/{lead}" },
+    "User.list":     { "title": "Team", "columns": ["email", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "my-leads", "entity": "Lead", "title": "My leads", "where": { "owner": "@me" },
+      "columns": ["title", "company", "value", "status", "age"], "rowActions": ["view", "edit"], "create": true },
+    { "id": "due", "entity": "Activity", "title": "Due today", "where": { "done": 0, "due": { "lte": "@today" } },
+      "columns": ["lead", "kind", "note", "due", "owner"], "rowActions": ["edit"] }
+  ],
+
+  "dashboards": [
+    { "id": "pipeline", "title": "Pipeline", "roles": ["admin"], "period": { "Lead": "createdAt" },
+      "cards": [ { "title": "Open leads", "entity": "Lead", "fn": "count", "where": { "status": { "in": ["new", "contacted", "qualified"] } } },
+                 { "title": "Pipeline value", "entity": "Lead", "fn": "sum", "field": "value", "where": { "status": { "in": ["new", "contacted", "qualified"] } } },
+                 { "title": "Won value", "entity": "Lead", "fn": "sum", "field": "value", "where": { "status": "won" } },
+                 { "title": "Leads", "entity": "Lead", "fn": "count" } ],
+      "tables": [ { "title": "By status", "entity": "Lead", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "leads", "title": "Leads" }, { "fn": "sum", "field": "value", "as": "value", "title": "Value" } ] },
+                  { "title": "By owner", "entity": "Lead", "groupBy": "owner", "groupTitle": "Owner",
+                    "metrics": [ { "fn": "count", "as": "leads", "title": "Leads" }, { "fn": "sum", "field": "value", "as": "value", "title": "Value" } ],
+                    "sort": { "field": "value", "dir": "desc" } },
+                  { "title": "By month", "entity": "Lead", "groupBy": "createdAt", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "leads", "title": "Leads" }, { "fn": "sum", "field": "value", "as": "value", "title": "Value" } ] },
+                  { "title": "By source", "entity": "Lead", "groupBy": "source", "groupTitle": "Source",
+                    "metrics": [ { "fn": "count", "as": "leads", "title": "Leads" } ] } ] },
+    { "id": "mine", "title": "My numbers", "roles": ["sales"],
+      "cards": [ { "title": "My open leads", "entity": "Lead", "fn": "count", "where": { "owner": "@me", "status": { "in": ["new", "contacted", "qualified"] } } },
+                 { "title": "My pipeline", "entity": "Lead", "fn": "sum", "field": "value", "where": { "owner": "@me", "status": { "in": ["new", "contacted", "qualified"] } } },
+                 { "title": "My won", "entity": "Lead", "fn": "sum", "field": "value", "where": { "owner": "@me", "status": "won" } } ] }
+  ]
+}
