@@ -1,0 +1,5 @@
+[
+  { "op": "replace", "path": "/data/User/role", "value": "enum[admin,member,moderator]=member" },
+  { "op": "add", "path": "/roles/can/moderator",
+    "value": { "Question": ["view", "delete"], "Answer": ["view", "delete"], "User": ["view"] } }
+]

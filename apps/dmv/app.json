@@ -1,0 +1,118 @@
+{
+  "app": "dmv",
+  "task": "webgen-bench/000062",
+  "note": "DMV practice tests: guests browse the question bank; students pick questions into a personal practice set, start simulated exams that cover the whole bank, answer every question through the exam page and submit for a score; each answer is graded against the question on creation, and the error analysis list shows the wrong answers with the expected letter and the explanation. The admin manages the bank and reads the statistics dashboard.",
+  "theme": { "background": "floralwhite", "accent": "darkgoldenrod" },
+  "home": "/Question",
+
+  "data": {
+    "User":     { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,student]=student" },
+    "Topic":    { "name": "text!", "about": "text", "questions": "int := count(Question)" },
+    "Question": { "text": "text!", "topic": "ref:Topic!", "optionA": "text!", "optionB": "text!", "optionC": "text!",
+                  "answer": "enum[A,B,C]=A", "explanation": "longtext!",
+                  "attempts": "int := count(Answer)", "missed": "int := count(Answer: not correct)" },
+    "Pick":     { "question": "ref:Question!", "student": "ref:User!", "pickedAt": "time=now" },
+    "Exam":     { "student": "ref:User!", "startedAt": "time=now", "status": "enum[open,submitted]=open",
+                  "questions": "int := count(Question)", "answered": "int := count(Answer)",
+                  "correct": "int := count(Answer: correct)", "wrong": "int := count(Answer: not correct)",
+                  "score": "int := coalesce(round(100 * count(Answer: correct) / count(Answer), 0), 0)" },
+    "Answer":   { "exam": "ref:Exam!", "question": "ref:Question!", "student": "ref:User!", "choice": "enum[A,B,C]=A",
+                  "correct": "bool=false", "answeredAt": "time=now",
+                  "expected": "text := question.answer", "explanation": "text := question.explanation" }
+  },
+
+  "rules": {
+    "User":   [ { "unique": "email" } ],
+    "Exam":   [ { "check": "status != 'submitted' or answered >= questions", "message": "Answer every question before submitting the exam" } ],
+    "Answer": [ { "check": "exam.status != 'submitted'", "message": "This exam is already submitted; start a new exam to keep practising" },
+                { "check": "count(Answer: exam = row.exam and question = row.question) = 0", "message": "You already answered this question in this exam" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "student", "anonymous": "guest",
+    "can": {
+      "admin":   "*",
+      "student": { "Topic": ["view"], "Question": ["view", "do:select"],
+                   "Pick":   { "own": "student", "can": ["view", "create", "delete"] },
+                   "Exam":   { "own": "student", "can": ["view", "create", "go:submit"] },
+                   "Answer": { "own": "student", "can": ["view", "create"] } },
+      "guest":   { "Topic": ["view"], "Question": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":  [ { "email": "admin@dmv.test", "password": "admin123", "name": "Admin", "role": "admin" },
+               { "email": "sam@dmv.test", "password": "sam123", "name": "Sam Rider" } ],
+    "Topic": [ { "name": "Road signs", "about": "Shapes, colours and meanings" },
+               { "name": "Rules of the road", "about": "Right of way, speed and turns" },
+               { "name": "Safety", "about": "Belts, distances and weather" } ],
+    "Question": [
+      { "text": "What does an octagonal red sign mean?", "topic": 1, "optionA": "Stop", "optionB": "Yield", "optionC": "No entry", "answer": "A",
+        "explanation": "The octagon is reserved for STOP: come to a complete stop before the line." },
+      { "text": "A triangular sign pointing down tells you to", "topic": 1, "optionA": "Stop", "optionB": "Yield to other traffic", "optionC": "Speed up", "answer": "B",
+        "explanation": "The inverted triangle means YIELD: slow down and give way." },
+      { "text": "At a four-way stop, who goes first?", "topic": 2, "optionA": "The largest vehicle", "optionB": "The vehicle on the left", "optionC": "The vehicle that stopped first", "answer": "C",
+        "explanation": "First to stop, first to go; on a tie the vehicle on the right goes first." },
+      { "text": "The speed limit in a residential area, unless posted, is usually", "topic": 2, "optionA": "25 mph", "optionB": "45 mph", "optionC": "65 mph", "answer": "A",
+        "explanation": "Residential streets default to 25 mph in most states." },
+      { "text": "In heavy rain you should", "topic": 3, "optionA": "Use high beams", "optionB": "Increase your following distance", "optionC": "Drive on the shoulder", "answer": "B",
+        "explanation": "Wet roads double the stopping distance; leave at least four seconds." } ]
+  },
+
+  "actions": [
+    { "name": "select", "in": "Question", "title": "Add to my practice set", "after": "/list/my-practice",
+      "confirm": "Selected for practice: {row.text}",
+      "do": [ { "block": "db.ensure", "entity": "Pick", "where": { "question": "@row.id", "student": "@me" } } ] }
+  ],
+
+  "events": [
+    { "on": "Answer.created",
+      "do": [ { "block": "check.matchRef", "ref": "question", "field": "choice", "against": "answer", "into": "correct" } ] }
+  ],
+
+  "states": {
+    "Exam": { "field": "status", "transitions": [
+      { "name": "submit", "from": ["open"], "to": "submitted", "title": "Submit exam", "after": "/Exam/{id}",
+        "confirm": "Exam submitted — your score is {row.score}% ({row.correct} of {row.answered} correct)" } ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Question.list":   { "title": "Question bank", "intro": "Browse the bank, search by keyword, filter by topic and add questions to your practice set.",
+                         "columns": ["text", "topic", "optionA", "optionB", "optionC"], "search": ["text", "optionA", "optionB", "optionC"],
+                         "filters": [ { "name": "Topic", "field": "topic" } ], "rowActions": ["view", "select", "edit", "delete"] },
+    "Question.detail": { "actions": ["select"] },
+    "Topic.list":      { "hidden": true },
+    "Pick.list":       { "hidden": true },
+    "Exam.list":       { "title": "Simulated exams", "columns": ["id", "student", "startedAt", "status", "answered", "correct", "score"],
+                         "rowActions": ["view"], "createTitle": "Start a simulated exam" },
+    "Exam.form":       { "title": "Start a simulated exam", "intro": "The exam covers every question in the bank. Answer each one on the exam page, then submit to get your score.",
+                         "fields": [], "submit": "Start exam", "confirm": "Exam started — answer every question, then submit", "after": "/Exam/{id}" },
+    "Exam.detail":     { "fields": ["student", "startedAt", "status", "questions", "answered", "correct", "wrong", "score"],
+                         "related": [ { "entity": "Answer", "via": "exam", "title": "Answers", "columns": ["question", "choice", "correct", "answeredAt"],
+                                        "form": ["question", "choice"], "submit": "Answer", "confirm": "Answer recorded" } ] },
+    "Answer.list":     { "title": "Answers", "columns": ["exam", "student", "question", "choice", "correct", "expected"],
+                         "labels": { "correct": ["Wrong", "Correct"] }, "create": false, "rowActions": [] },
+    "User.list":       { "title": "Users", "columns": ["email", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "my-practice", "entity": "Pick", "title": "My practice set", "roles": ["student"], "where": { "student": "@me" },
+      "columns": ["question", "pickedAt"], "rowActions": ["delete"] },
+    { "id": "my-errors", "entity": "Answer", "title": "Error analysis", "roles": ["student"], "where": { "student": "@me", "correct": 0 },
+      "columns": ["exam", "question", "choice", "expected", "explanation"], "rowActions": [] }
+  ],
+
+  "dashboards": [
+    { "id": "stats", "title": "Statistics", "roles": ["admin"],
+      "cards": [ { "title": "Questions", "entity": "Question", "fn": "count" },
+                 { "title": "Exams submitted", "entity": "Exam", "fn": "count", "where": { "status": "submitted" } },
+                 { "title": "Answers", "entity": "Answer", "fn": "count" },
+                 { "title": "Wrong answers", "entity": "Answer", "fn": "count", "where": { "correct": 0 } } ],
+      "tables": [ { "title": "Most missed questions", "entity": "Answer", "groupBy": "question", "groupTitle": "Question", "where": { "correct": 0 },
+                    "metrics": [ { "fn": "count", "as": "missed", "title": "Missed" } ], "sort": { "field": "missed", "dir": "desc" } },
+                  { "title": "Scores by student", "entity": "Exam", "groupBy": "student", "groupTitle": "Student", "where": { "status": "submitted" },
+                    "metrics": [ { "fn": "count", "as": "exams", "title": "Exams" }, { "fn": "avg", "field": "score", "as": "average", "title": "Average score" } ] } ] }
+  ]
+}

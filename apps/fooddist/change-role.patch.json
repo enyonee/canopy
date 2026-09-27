@@ -1,0 +1,9 @@
+[
+  { "op": "replace", "path": "/data/User/role", "value": "enum[admin,member,coordinator]=member" },
+  { "op": "add", "path": "/roles/can/coordinator",
+    "value": { "Donation": ["view", "create", "edit"],
+               "Application": ["view", "go:approve", "go:deliver", "go:reject"],
+               "Opportunity": ["view", "create", "edit"],
+               "Signup": ["view"],
+               "Profile": ["view"] } }
+]

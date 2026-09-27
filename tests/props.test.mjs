@@ -66,7 +66,10 @@ test('growing a graph never loses rows and always fills the new default', () => 
     const entity = Object.keys(graph.data)[0];
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ag-grow-')), 'd.sqlite');
     const before = new Store(graph, file);
-    for (let k = 0; k < 3; k++) before.insert(entity, { name: `row ${k}` });
+    // "text!" fields with no default are required: give every one a value, or the
+    // store's own required check (correctly) refuses the row.
+    const required = Object.entries(graph.data[entity]).filter(([n, spec]) => n !== 'name' && spec === 'text!').map(([n]) => n);
+    for (let k = 0; k < 3; k++) before.insert(entity, { name: `row ${k}`, ...Object.fromEntries(required.map((n) => [n, `v${k}`])) });
     const grown = { ...graph, data: { ...graph.data, [entity]: { ...graph.data[entity], added: 'enum[x,y]=x' } } };
     const after = new Store(grown, file);
     const rows = after.list(entity, {});
@@ -88,11 +91,15 @@ test('a stored row reads back exactly what was declared or sent, for every kind'
   const data = { A: {} };
   KINDS.forEach((k, i) => { data.A[`f${i}`] = k; });
   const store = new Store({ app: 'x', data }, ':memory:');
-  const id = store.insert('A', {});
+  // "text!" has no default and is required: the store refuses to fill it in
+  // silently, so the round trip is of a given value, not of a default.
+  const given = {};
+  KINDS.forEach((k, i) => { if (k === 'text!') given[`f${i}`] = `required ${i}`; });
+  const id = store.insert('A', given);
   const row = store.get('A', id);
   KINDS.forEach((k, i) => {
     const f = parseField(`f${i}`, k);
-    const expected = defaultValue(f);
+    const expected = k === 'text!' ? given[`f${i}`] : defaultValue(f);
     if (f.kind === 'time') assert.match(row[`f${i}`], /^\d{4}-/);
     else assert.equal(row[`f${i}`], expected, `${k} did not round-trip`);
   });
@@ -104,17 +111,18 @@ test('the trace of a run replays to the same state', async () => {
     const app = serve({ graphFile: 'tests/fixtures/kitchen.json', dbFile: path.join(folder, 'd.sqlite'),
       traceFile: path.join(folder, 't.jsonl'), port: 0 });
     await once(app.server, 'listening');
-    const base = `http://127.0.0.1:${app.server.address().port}`;
-    const post = (p, b) => fetch(base + p, { method: 'POST', redirect: 'manual',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(b).toString() }).then((r) => r.text());
-    await post('/Post', { title: 'one', topic: '1', rank: '2', mood: 'calm' });
-    await post('/Post', { title: 'two', topic: '2', rank: '1', mood: 'loud' });
-    await post('/Post/1/action/pin', {});
-    const rows = app.store.list('Post', { sort: { field: 'title', dir: 'asc' } })
-      .map((r) => ({ title: r.title, topic: r.topic, pinned: r.pinned, rank: r.rank }));
-    const kinds = fs.readFileSync(path.join(folder, 't.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l).kind);
-    app.server.closeAllConnections(); app.server.close();
-    return { rows, kinds };  // closed above; a throw before this point closes it in the caller's finally
+    try {
+      const base = `http://127.0.0.1:${app.server.address().port}`;
+      const post = (p, b) => fetch(base + p, { method: 'POST', redirect: 'manual',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(b).toString() }).then((r) => r.text());
+      await post('/Post', { title: 'one', topic: '1', rank: '2', mood: 'calm' });
+      await post('/Post', { title: 'two', topic: '2', rank: '1', mood: 'loud' });
+      await post('/Post/1/action/pin', {});
+      const rows = app.store.list('Post', { sort: { field: 'title', dir: 'asc' } })
+        .map((r) => ({ title: r.title, topic: r.topic, pinned: r.pinned, rank: r.rank }));
+      const kinds = fs.readFileSync(path.join(folder, 't.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l).kind);
+      return { rows, kinds };
+    } finally { app.server.closeAllConnections(); app.server.close(); }
   };
   const a = await run(fs.mkdtempSync(path.join(dir, 'a-')));
   const b = await run(fs.mkdtempSync(path.join(dir, 'b-')));

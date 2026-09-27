@@ -12,7 +12,7 @@
 // Scalars are number, money, text, bool, date, time, ref (an id). Money is read
 // and written in major units (12.34) here; storage in minor units is the store's
 // business, not the language's.
-import { FUNCTIONS, truthy } from './functions.mjs';
+import { FUNCTIONS, truthy, family } from './functions.mjs';
 
 const AGG = new Set(['sum', 'count', 'avg', 'min', 'max']);
 const NUMERIC = new Set(['number', 'money']);
@@ -125,7 +125,12 @@ export function check(ast, scope, functions = FUNCTIONS) {
   const kindOf = (n) => {
     switch (n.t) {
       case 'num': return 'number';
-      case 'str': return 'text';
+      // A literal that is written like a date is a date: "when > '2026-01-01'" and
+      // days('2026-03-31', x) are legal, and mean what they read as.
+      case 'str':
+        if (/^\d{4}-\d{2}-\d{2}$/.test(n.v)) return 'date';
+        if (/^\d{4}-\d{2}-\d{2}T/.test(n.v)) return 'time';
+        return 'text';
       case 'bool': return 'bool';
       case 'null': return 'any';
       case 'path':
@@ -145,6 +150,11 @@ export function check(ast, scope, functions = FUNCTIONS) {
           if (n.op === '/' && a === 'money' && b === 'money') return 'number';
           return a === 'money' || b === 'money' ? 'money' : 'number';
         }
+        if (['and', 'or'].includes(n.op)) return 'bool';
+        // Comparisons are closed too: numbers meet numbers, dates meet dates, text meets text.
+        const fa = family(a), fb = family(b);
+        if (fa && fb && fa !== fb && !(['=', '!='].includes(n.op) && (fa === 'bool' || fb === 'bool')))
+          throw new Error(`"${n.op}" compares ${a} with ${b}; they are different kinds`);
         return 'bool';
       }
       case 'call': return functions[n.fn].kind(n.args.map(kindOf));
@@ -167,13 +177,19 @@ export function check(ast, scope, functions = FUNCTIONS) {
 // --- evaluation --------------------------------------------------------------
 // ctx.get(path) -> value; ctx.rows(entity, via) -> array of child ctx.
 export function evaluate(ast, ctx, functions = FUNCTIONS) {
+  // One clock per evaluation: "now = now" is a tautology, and an expression cannot
+  // straddle midnight halfway through.
+  const clock = ctx.clock || new Date();
+  // Money reaches the algebra in major units, so sums of cents pick up binary dust:
+  // 10.10 + 20.20 must be 30.30, not 30.299999999999997.
+  const exact = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1e6) / 1e6 : x);
   const ev = (n) => {
     switch (n.t) {
       case 'num': case 'str': case 'bool': return n.v;
       case 'null': return null;
       case 'path':
-        if (n.p.length === 1 && n.p[0] === 'today') return new Date().toISOString().slice(0, 10);
-        if (n.p.length === 1 && n.p[0] === 'now') return new Date().toISOString();
+        if (n.p.length === 1 && n.p[0] === 'today') return clock.toISOString().slice(0, 10);
+        if (n.p.length === 1 && n.p[0] === 'now') return clock.toISOString();
         return ctx.get(n.p);
       case 'un': {
         const a = ev(n.a);
@@ -190,8 +206,8 @@ export function evaluate(ast, ctx, functions = FUNCTIONS) {
         }
         if (a == null || b == null) return n.op === '<' || n.op === '<=' || n.op === '>' || n.op === '>=' ? false : null;
         switch (n.op) {
-          case '+': return a + b;
-          case '-': return a - b;
+          case '+': return exact(a + b);
+          case '-': return exact(a - b);
           case '*': return a * b;
           case '/': return b === 0 ? null : a / b;
           case '<': return a < b;
@@ -202,12 +218,12 @@ export function evaluate(ast, ctx, functions = FUNCTIONS) {
       }
       case 'call': return functions[n.fn].run(n.args.map(ev));
       default: {
-        const rows = ctx.rows(n.entity, n.via).map((r) => ({ get: (p) => (p[0] === 'row' && p.length > 1 ? ctx.get(p.slice(1)) : r.get(p)), rows: r.rows }));
+        const rows = ctx.rows(n.entity, n.via).map((r) => ({ get: (p) => (p[0] === 'row' && p.length > 1 ? ctx.get(p.slice(1)) : r.get(p)), rows: r.rows, clock }));
         if (n.fn === 'count') return n.body ? rows.filter((r) => truthy(evaluate(n.body, r, functions))).length : rows.length;
         const vals = rows.map((r) => evaluate(n.body, r, functions)).filter((v) => v !== null && v !== undefined);
-        if (n.fn === 'sum') return vals.reduce((a, b) => a + b, 0);
+        if (n.fn === 'sum') return exact(vals.reduce((a, b) => a + b, 0));
         if (!vals.length) return null;
-        if (n.fn === 'avg') return vals.reduce((a, b) => a + b, 0) / vals.length;
+        if (n.fn === 'avg') return exact(vals.reduce((a, b) => a + b, 0) / vals.length);
         if (typeof vals[0] === 'string') return vals.reduce((a, b) => (n.fn === 'min' ? (b < a ? b : a) : (b > a ? b : a)));
         if (n.fn === 'min') return Math.min(...vals);
         return Math.max(...vals);

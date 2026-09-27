@@ -226,7 +226,9 @@ export function detailView(graph, store, entity, fields, row, flash, vc = anyone
   const rows = fields.filter((f) => !f.type.secret).filter((f) => !ov.fields || ov.fields.includes(f.name)).map((f) =>
     `<tr><th>${esc(label(f.name))}</th><td>${fmt(store, entity, f, row, ov.labels || {})}</td></tr>`).join('');
 
-  const related = (ov.related || []).map((rel) => {
+  // A child table is a read of another entity: the viewer needs "view" on it, not only
+  // on the parent row it hangs under.
+  const related = (ov.related || []).filter((rel) => vc.can(rel.entity, 'view')).map((rel) => {
     const kids = store.list(rel.entity, { where: { [rel.via]: row.id, ...vc.ownWhere(rel.entity) }, sort: { field: 'id', dir: 'asc' } });
     const kidFields = store.fields[rel.entity];
     const show = rel.columns || kidFields.filter((f) => f.name !== rel.via && !f.type.secret).map((f) => f.name);

@@ -1,0 +1,8 @@
+[
+  { "op": "replace", "path": "/data/User/role", "value": "enum[admin,member,editor]=member" },
+  { "op": "add", "path": "/roles/can/editor",
+    "value": { "Topic": ["view"],
+               "Article": ["view", "go:publish", "go:retract"],
+               "Solution": ["view", "do:verify"],
+               "Comment": ["view", "delete"] } }
+]

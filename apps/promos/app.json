@@ -1,0 +1,201 @@
+{
+  "app": "promos",
+  "task": "webgen-bench/000027",
+  "note": "A community deals board: members share promotions with a merchant, a discount rate, a code and an expiry date, everyone browses, searches and reads the comments, members vote and comment, and the admin runs the backend — users, the whole promotion board with its expire/remove/relist transitions, the site settings and the management dashboard.",
+  "theme": { "background": "ivory", "accent": "forestgreen" },
+  "home": "/page/home",
+
+  "data": {
+    "User":      { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member",
+                   "joinedAt": "date=today", "shared": "int := count(Promotion)", "comments": "int := count(Comment)" },
+    "Category":  { "name": "text!", "about": "text", "promotions": "int := count(Promotion)" },
+    "Promotion": { "title": "text!", "merchant": "text!", "category": "ref:Category!", "description": "longtext!",
+                   "tags": "text", "discount": "int=10", "code": "text", "expiresAt": "date!",
+                   "author": "ref:User", "createdAt": "time=now", "votes": "int=0",
+                   "status": "enum[live,expired,removed]=live",
+                   "offer": "text := concat(discount, '% off at ', merchant)",
+                   "daysLeft": "int := days(expiresAt, today)",
+                   "comments": "int := count(Comment)" },
+    "Comment":   { "promotion": "ref:Promotion!", "author": "ref:User", "body": "longtext!", "createdAt": "time=now" },
+    "Setting":   { "name": "text!", "value": "text!", "about": "text" }
+  },
+
+  "rules": {
+    "User":      [ { "unique": "email", "message": "This email is already registered" } ],
+    "Category":  [ { "unique": "name", "message": "This category already exists" } ],
+    "Promotion": [ { "check": "len(title) >= 10", "message": "The title needs at least 10 characters" },
+                   { "check": "discount >= 5 and discount <= 90", "message": "Discount must be between 5 and 90 percent" },
+                   { "check": "expiresAt >= today", "message": "The expiry date must not be in the past" } ],
+    "Setting":   [ { "unique": "name", "message": "This setting already exists" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Promotion": ["view", "create", "do:upvote"], "Comment": ["view", "create"], "Category": ["view"] },
+      "guest":  { "Promotion": ["view"], "Comment": ["view"], "Category": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@deals.test", "password": "admin123", "name": "Ada Admin", "role": "admin", "joinedAt": "2026-01-15" },
+      { "email": "dana@deals.test", "password": "dana123", "name": "Dana Deal", "role": "member", "joinedAt": "2026-03-02" },
+      { "email": "marco@deals.test", "password": "marco123", "name": "Marco Saver", "role": "member", "joinedAt": "2026-05-20" }
+    ],
+    "Category": [
+      { "name": "Electronics", "about": "Gadgets, computers and audio" },
+      { "name": "Groceries", "about": "Supermarkets and food delivery" },
+      { "name": "Travel", "about": "Flights, hotels and city breaks" },
+      { "name": "Fashion", "about": "Clothing and footwear" },
+      { "name": "Home", "about": "Kitchen, furniture and appliances" }
+    ],
+    "Promotion": [
+      { "title": "Wireless headphones at half price", "merchant": "SoundHub", "category": 1,
+        "description": "Over-ear Bluetooth headphones with noise cancelling, the best electronics deal of the month.",
+        "tags": "electronics audio headphones", "discount": 50, "code": "SOUND50", "expiresAt": "2026-12-20",
+        "author": 2, "createdAt": "2026-09-01T09:00:00.000Z", "votes": 12 },
+      { "title": "Laptop clearance weekend", "merchant": "ByteMart", "category": 1,
+        "description": "Last year models of every laptop in the electronics department, stock is limited.",
+        "tags": "electronics laptops computers", "discount": 25, "code": "BYTE25", "expiresAt": "2026-11-30",
+        "author": 3, "createdAt": "2026-09-03T10:00:00.000Z", "votes": 7 },
+      { "title": "Smart TV bundle with a soundbar", "merchant": "ByteMart", "category": 1,
+        "description": "A 55 inch screen and a soundbar sold together, electronics club members get free delivery.",
+        "tags": "electronics television", "discount": 30, "code": "TVBUNDLE", "expiresAt": "2026-10-31",
+        "author": 3, "createdAt": "2026-09-05T11:00:00.000Z", "votes": 4 },
+      { "title": "Buy one get one on fresh pasta", "merchant": "FreshCart", "category": 2,
+        "description": "Every fresh pasta pack is two for one at the chilled counter until the end of the month.",
+        "tags": "groceries pasta food", "discount": 50, "code": "PASTA2", "expiresAt": "2026-10-15",
+        "author": 2, "createdAt": "2026-09-07T12:00:00.000Z", "votes": 3 },
+      { "title": "Weekend city breaks are a fifth off", "merchant": "Voyago", "category": 3,
+        "description": "Two nights in twelve European cities, breakfast included, booking window is short.",
+        "tags": "travel hotels weekend", "discount": 20, "code": "CITY20", "expiresAt": "2026-12-01",
+        "author": 3, "createdAt": "2026-09-09T13:00:00.000Z", "votes": 9 },
+      { "title": "Winter coats for the whole family", "merchant": "Northline", "category": 4,
+        "description": "Padded coats and parkas from the previous season, sizes from XS to XXL.",
+        "tags": "fashion coats winter", "discount": 40, "code": "WARM40", "expiresAt": "2026-11-10",
+        "author": 2, "createdAt": "2026-09-11T14:00:00.000Z", "votes": 5 },
+      { "title": "Espresso machine with a free grinder", "merchant": "HomeNest", "category": 5,
+        "description": "A pump espresso machine bundled with a burr grinder, two year guarantee.",
+        "tags": "home kitchen coffee", "discount": 35, "code": "BREW35", "expiresAt": "2026-10-20",
+        "author": 3, "createdAt": "2026-09-13T15:00:00.000Z", "votes": 2 },
+      { "title": "Summer sandals at half price", "merchant": "Northline", "category": 4,
+        "description": "End of season sandals, the offer ran out in August and is kept for the archive.",
+        "tags": "fashion shoes summer", "discount": 50, "code": "SUN50", "expiresAt": "2026-08-31",
+        "author": 2, "createdAt": "2026-08-01T08:00:00.000Z", "votes": 1, "status": "expired" }
+    ],
+    "Comment": [
+      { "promotion": 1, "author": 3, "body": "Worked for me, the code applies at the last step of the basket.", "createdAt": "2026-09-02T09:30:00.000Z" },
+      { "promotion": 1, "author": 2, "body": "Stock was gone in my town, order online instead.", "createdAt": "2026-09-04T09:30:00.000Z" },
+      { "promotion": 5, "author": 2, "body": "The twenty percent is off the room only, not the breakfast.", "createdAt": "2026-09-10T09:30:00.000Z" }
+    ],
+    "Setting": [
+      { "name": "siteName", "value": "Community Deals", "about": "Shown wherever the site names itself" },
+      { "name": "postingRules", "value": "A promotion needs a merchant, a real discount and an expiry date", "about": "Read by members before they share" },
+      { "name": "contactEmail", "value": "team@deals.test", "about": "Where members write about a wrong promotion" }
+    ]
+  },
+
+  "actions": [
+    { "name": "upvote", "in": "Promotion", "title": "Vote up", "after": "/Promotion/{id}",
+      "confirm": "Thanks, your vote for {row.title} is counted",
+      "do": [ { "block": "db.adjust", "field": "votes", "by": 1 } ] }
+  ],
+
+  "states": {
+    "Promotion": { "field": "status", "transitions": [
+      { "name": "expire", "from": ["live"], "to": "expired", "title": "Mark expired", "after": "/Promotion/{id}",
+        "confirm": "{row.title} is marked expired" },
+      { "name": "remove", "from": ["live", "expired"], "to": "removed", "title": "Remove from the board", "after": "/Promotion/{id}",
+        "confirm": "{row.title} is removed from the board" },
+      { "name": "relist", "from": ["expired", "removed"], "to": "live", "title": "Put back on the board", "fields": ["expiresAt"],
+        "after": "/Promotion/{id}", "confirm": "{row.title} is live again until {row.expiresAt}" }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "board@deals.test" } },
+
+  "events": [
+    { "on": "Promotion.created",
+      "do": [ { "block": "mail.send", "connector": "mail", "to": "moderation@deals.test",
+                "subject": "New promotion: {row.title}",
+                "text": "{row.merchant} — {row.discount}% off, code {row.code}, expires {row.expiresAt}." } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Promotion.list":   { "title": "Browse Promotions", "intro": "Every promotion the community shares: the merchant, the discount rate, the code and the day it expires. Search by word, filter by category.",
+                          "columns": ["title", "merchant", "category", "description", "discount", "code", "expiresAt", "daysLeft", "votes"],
+                          "search": ["title", "description", "merchant", "tags"],
+                          "filters": [ { "name": "Category", "field": "category" }, { "name": "Discount", "field": "discount", "range": true } ],
+                          "where": { "status": "live" }, "sort": { "field": "createdAt", "dir": "desc" },
+                          "rowActions": ["view", "upvote"], "createTitle": "Share a promotion" },
+    "Promotion.form":   { "title": "Share a promotion", "intro": "Fill in every detail so the next member can use the offer.",
+                          "fields": ["title", "merchant", "category", "description", "tags", "discount", "code", "expiresAt"],
+                          "fill": { "author": "@me" }, "submit": "Share promotion",
+                          "confirm": "Your promotion is on the board", "after": "/Promotion/{id}",
+                          "confirmEdit": "Promotion updated", "afterEdit": "/Promotion/{id}" },
+    "Promotion.detail": { "fields": ["title", "merchant", "category", "offer", "description", "tags", "discount", "code", "expiresAt", "daysLeft", "status", "votes", "comments", "author", "createdAt"],
+                          "actions": ["upvote"],
+                          "related": [ { "entity": "Comment", "via": "promotion", "title": "Comments",
+                                         "columns": ["body", "author", "createdAt"], "form": ["body"],
+                                         "fill": { "author": "@me" }, "submit": "Post comment",
+                                         "confirm": "Your comment is posted", "rowActions": ["delete"] } ] },
+    "Comment.list":     { "hidden": true, "title": "Comments", "columns": ["promotion", "author", "body", "createdAt"],
+                          "create": false, "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["delete"] },
+    "Category.list":    { "title": "Categories", "columns": ["name", "about", "promotions"], "rowActions": ["view"] },
+    "Category.detail":  { "related": [ { "entity": "Promotion", "via": "category", "title": "Promotions in this category",
+                                         "columns": ["title", "merchant", "discount", "expiresAt", "status"], "form": false,
+                                         "rowActions": ["view"] } ] },
+    "User.list":        { "title": "Users", "columns": ["email", "name", "role", "joinedAt", "shared", "comments"] },
+    "User.detail":      { "fields": ["email", "name", "role", "joinedAt", "shared", "comments"] },
+    "Setting.list":     { "title": "Site Settings", "columns": ["name", "value", "about"], "rowActions": ["edit", "delete"] },
+    "Setting.form":     { "confirmEdit": "Setting saved", "afterEdit": "/Setting" }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Community Deals",
+      "body": [ "Members share the promotions and discount codes they find; everyone may browse, search and read the comments.",
+                "Every promotion carries its merchant, its discount rate, its code and the day it expires." ],
+      "links": [ { "label": "Browse Promotions", "href": "/Promotion" },
+                 { "label": "Share Promotion", "href": "/Promotion/new" },
+                 { "label": "Search", "href": "/Promotion?q=electronics" },
+                 { "label": "Top deals", "href": "/list/top-deals" } ] }
+  ],
+
+  "lists": [
+    { "id": "top-deals", "entity": "Promotion", "title": "Top deals",
+      "where": { "status": "live", "discount": { "gte": 30 } },
+      "columns": ["title", "merchant", "discount", "expiresAt", "votes"],
+      "sort": { "field": "votes", "dir": "desc" }, "rowActions": ["view"] },
+    { "id": "my-promotions", "entity": "Promotion", "title": "My promotions", "roles": ["member"],
+      "where": { "author": "@me" }, "columns": ["title", "merchant", "discount", "expiresAt", "status", "votes"],
+      "rowActions": ["view", "edit"] },
+    { "id": "board", "entity": "Promotion", "title": "Whole board", "roles": ["admin"],
+      "columns": ["title", "merchant", "category", "discount", "expiresAt", "status", "votes", "author"],
+      "sort": { "field": "createdAt", "dir": "desc" },
+      "rowActions": ["view", "go:expire", "go:remove", "go:relist", "edit", "delete"] }
+  ],
+
+  "dashboards": [
+    { "id": "manage", "title": "Management", "roles": ["admin"], "period": { "Promotion": "createdAt" },
+      "intro": "The board at a glance: what was shared, by whom and in which category.",
+      "cards": [ { "title": "Promotions", "entity": "Promotion", "fn": "count" },
+                 { "title": "Live promotions", "entity": "Promotion", "fn": "count", "where": { "status": "live" } },
+                 { "title": "Average discount", "entity": "Promotion", "fn": "avg", "field": "discount" },
+                 { "title": "Members", "entity": "User", "fn": "count", "where": { "role": "member" } } ],
+      "tables": [ { "title": "By category", "entity": "Promotion", "groupBy": "category", "groupTitle": "Category",
+                    "metrics": [ { "fn": "count", "as": "shared", "title": "Promotions" },
+                                 { "fn": "avg", "field": "discount", "as": "avgDiscount", "title": "Average discount" },
+                                 { "fn": "sum", "field": "votes", "as": "votes", "title": "Votes" } ],
+                    "sort": { "field": "shared", "dir": "desc" } },
+                  { "title": "By status", "entity": "Promotion", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "shared", "title": "Promotions" } ] },
+                  { "title": "By member", "entity": "Promotion", "groupBy": "author", "groupTitle": "Member",
+                    "metrics": [ { "fn": "count", "as": "shared", "title": "Promotions" },
+                                 { "fn": "sum", "field": "votes", "as": "votes", "title": "Votes" } ],
+                    "sort": { "field": "shared", "dir": "desc" } } ] }
+  ]
+}

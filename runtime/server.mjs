@@ -41,22 +41,50 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
   const store = new Store(graph, dbFile, registry);
   store.migrations.forEach((m) => console.log(`migration: ${m}`));
   const perms = permissions(graph);
-  const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key')) : null;
+  const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key'), store) : null;
   const exprCache = new Map();
   const compiled = (src) => { if (!exprCache.has(src)) exprCache.set(src, parseExpr(src, registry.functions)); return exprCache.get(src); };
 
-  // Seed: declared starting rows, inserted once, only while the table is empty.
-  for (const [entity, rows] of Object.entries(graph.seed || {})) {
-    if (store.count(entity)) continue;
-    for (const row of rows) store.insert(entity, row);
-    console.log(`seed: ${rows.length} row(s) into ${entity}`);
-  }
-
   // Identity: one declared row stands for the current user. No login in the scaffold.
+  // Created before seed data: a seed row (e.g. a booking for the one fake customer)
+  // may reference it.
   let meId = null;
   if (graph.identity) {
     const rows = store.list(graph.identity.entity, {});
     meId = rows.length ? rows[rows.length - 1].id : store.insert(graph.identity.entity, graph.identity.defaults || {});
+  }
+
+  // Seed: declared starting rows, inserted once per entity, only while it is empty.
+  // Entities seed in reference order (topological over ref: fields) so a row may
+  // point at a row seeded earlier. A self-reference — or a cycle between two seeded
+  // entities that no order can resolve — is inserted with that reference blank, then
+  // patched once every row it could point at exists; a reference the seed truly
+  // cannot produce still fails with the store's own "there is no X #N".
+  const seedEntities = Object.keys(graph.seed || {});
+  const remaining = new Set(seedEntities.filter((e) => !store.count(e)));
+  const refFields = (e) => store.fields[e].filter((f) => f.kind === 'ref');
+  const seedOne = (entity) => {
+    const rows = graph.seed[entity];
+    const selfFields = refFields(entity).filter((f) => f.target === entity).map((f) => f.name);
+    const ids = rows.map((row) => {
+      if (!selfFields.length) return store.insert(entity, row);
+      const rest = { ...row };
+      for (const f of selfFields) delete rest[f];
+      return store.insert(entity, rest);
+    });
+    rows.forEach((row, i) => {
+      const patch = Object.fromEntries(selfFields.filter((f) => row[f] !== undefined).map((f) => [f, row[f]]));
+      if (Object.keys(patch).length) store.update(entity, ids[i], patch);
+    });
+    console.log(`seed: ${rows.length} row(s) into ${entity}`);
+  };
+  while (remaining.size) {
+    // Ready: every non-self reference either targets an entity already seeded,
+    // or an entity outside this seed batch (already there, or the checker's problem).
+    const ready = [...remaining].find((e) => refFields(e).every((f) => f.target === e || !remaining.has(f.target)));
+    const next = ready || [...remaining][0]; // an unresolved cycle: best effort, in declared order
+    seedOne(next);
+    remaining.delete(next);
   }
 
   const trace = (event) => {
@@ -190,19 +218,48 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         continue;
       }
       let ok;
-      try { ok = evaluate(compiled(rule.check), store.ctx(entity, probe), registry.functions); }
+      // A rule checks the candidate row before it is stored: "probe" still holds the
+      // plain submitted value of any password field, never the hash a real row has.
+      try { ok = evaluate(compiled(rule.check), store.ctx(entity, probe, [], { allowSecret: true }), registry.functions); }
       catch (e) { trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); ok = true; }
       if (!ok) problems.push(rule.message);
     }
     return problems;
   };
+  // What a client may set on this entity through a form. The form's declared field
+  // list is not a rendering hint: a field the form does not offer is not writable.
+  // Two fields are never writable whatever the form says — the status of an entity with
+  // states (transitions own it) and the role field for a user who only reaches the row
+  // because they own it (otherwise editing your profile promotes you to admin).
+  const writable = (entity, user, allow = null) => {
+    const statusField = graph.states?.[entity]?.field;
+    const own = perms.ownField(user, entity);
+    const roleField = graph.roles?.entity === entity ? graph.roles.role : null;
+    const banned = new Set([statusField, own].filter(Boolean));
+    if (roleField && (own || !perms.can(user, entity, 'edit'))) banned.add(roleField);
+    return { allow: allow ? new Set(allow) : null, banned };
+  };
+  const onlyWritable = (entity, user, submitted, allow = null) => {
+    const { allow: list, banned } = writable(entity, user, allow);
+    for (const k of Object.keys(submitted)) {
+      if (banned.has(k) || (list && !list.has(k))) delete submitted[k];
+    }
+    return submitted;
+  };
   const checkboxes = (entity, submitted) => {
     // An unchecked checkbox sends nothing. On a form submit that means false,
     // not "field absent, apply the declared default".
-    for (const f of store.fields[entity]) if (f.kind === 'bool' && submitted[f.name] === undefined) submitted[f.name] = 'false';
+    const shown = graph.override?.[`${entity}.form`]?.fields;
+    for (const f of store.fields[entity]) {
+      if (f.kind !== 'bool' || submitted[f.name] !== undefined) continue;
+      if (shown && !shown.includes(f.name)) continue;
+      submitted[f.name] = 'false';
+    }
     return submitted;
   };
 
+  const MAX_UPLOAD = Number(process.env.AG_MAX_UPLOAD || 8 * 1024 * 1024);
+  class TooBig extends Error {}
   const parseBody = async (req) => {
     const ct = req.headers['content-type'] || '';
     if (ct.startsWith('multipart/form-data')) {
@@ -211,6 +268,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       for (const [k, v] of fd.entries()) {
         if (typeof v === 'string') { out[k] = v; continue; }
         if (!v.size) continue;
+        if (v.size > MAX_UPLOAD) throw new TooBig(`${v.name || 'file'} is larger than ${Math.round(MAX_UPLOAD / 1024 / 1024)} MB`);
         fs.mkdirSync(filesDir, { recursive: true });
         const name = `${Date.now()}-${String(v.name || 'file').replace(/[^\w.-]/g, '_')}`;
         fs.writeFileSync(path.join(filesDir, name), Buffer.from(await v.arrayBuffer()));
@@ -229,6 +287,8 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     const send = (code, html) => { res.writeHead(code, { 'content-type': 'text/html; charset=utf-8', ...headers }); res.end(html); };
     const redirect = (to) => { res.writeHead(303, { location: to, ...headers }); res.end(); };
     const ok = (to, msg) => redirect(msg ? `${to}${to.includes('?') ? '&' : '?'}ok=${encodeURIComponent(msg)}` : to);
+    // "//evil.test" and "/\evil.test" are links off this site; only a single-slash path stays.
+    const safeNext = (to) => (typeof to === 'string' && /^\/(?![/\\])[^\s\x00-\x1f]*$/.test(to) ? to : '/');
 
     // Who is asking.
     const user = sess ? store.get(graph.roles.entity, sess.read(req.headers.cookie)) : null;
@@ -247,13 +307,16 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       if (perms.enabled && !user && req.method === 'GET') return redirect(`/login?next=${encodeURIComponent(url.pathname + url.search)}`);
       return send(403, forbiddenPage(graph, vc, message));
     };
+    let bodyOnce = null;
+    const body = () => (bodyOnce ??= parseBody(req));
     const resolveTop = makeResolve({ user, values: {} });
     // ?sort=&dir=&page= on any list; the graph's sort is the default, 50 rows a page unless the view says otherwise.
     const paged = (entity, rows, ov) => {
       const size = ov.pageSize || 50;
       const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
       const pages = Math.max(1, Math.ceil(rows.length / size));
-      return { rows: rows.slice((page - 1) * size, page * size), total: rows.length, page: Math.min(page, pages), pages };
+      const at = Math.min(page, pages);
+      return { rows: rows.slice((at - 1) * size, at * size), total: rows.length, page: at, pages };
     };
     const sortOf = (entity, ov) => {
       const field = url.searchParams.get('sort');
@@ -273,17 +336,18 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       // --- session ----------------------------------------------------------------------------
       if (sess && parts[0] === 'login' && parts.length === 1) {
         if (req.method === 'GET') return send(200, loginView(graph, { next: url.searchParams.get('next') || '' }, vc));
-        const body = await parseBody(req);
-        const [found] = store.list(graph.roles.entity, { where: { [graph.roles.login]: body.login || '' } });
-        if (!found || !verifyPassword(body.password, found[graph.roles.password])) {
-          trace({ kind: 'login', ok: false, login: body.login || '' });
-          return send(401, loginView(graph, { error: 'Wrong login or password', next: body.next || '', login: body.login || '' }, vc));
+        const form = await parseBody(req);
+        const [found] = store.list(graph.roles.entity, { where: { [graph.roles.login]: form.login || '' } });
+        if (!found || !verifyPassword(form.password, found[graph.roles.password])) {
+          trace({ kind: 'login', ok: false, login: form.login || '' });
+          return send(401, loginView(graph, { error: 'Wrong login or password', next: form.next || '', login: form.login || '' }, vc));
         }
-        headers['set-cookie'] = sess.setCookie(found.id);
+        headers['set-cookie'] = sess.setCookie(sess.start(found.id));
         trace({ kind: 'login', ok: true, who: found.id });
-        return ok(body.next && body.next.startsWith('/') ? body.next : '/', `Welcome, ${found[graph.roles.login]}`);
+        return ok(safeNext(form.next), `Welcome, ${found[graph.roles.login]}`);
       }
       if (sess && parts[0] === 'logout' && req.method === 'POST') {
+        sess.end(req.headers.cookie);
         headers['set-cookie'] = sess.clearCookie();
         trace({ kind: 'logout', who: user?.id ?? null });
         return ok('/', 'Signed out');
@@ -292,6 +356,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         const entity = graph.roles.entity, fields = store.fields[entity];
         if (req.method === 'GET') return send(200, registerView(graph, store, fields, {}, [], vc));
         const submitted = checkboxes(entity, await parseBody(req));
+        delete submitted[graph.roles.role];
         const values = { ...submitted, [graph.roles.role]: graph.roles.register };
         const problems = validateValues(entity, values);
         if (!problems.length && store.exists(entity, graph.roles.login, values[graph.roles.login])) problems.push(`${graph.roles.login} is already registered`);
@@ -299,7 +364,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         let id;
         try { id = await attempt(() => { const n = store.insert(entity, values); fireEvents('created', entity, n, values, null); return n; }); }
         catch (e) { trace({ kind: 'refused', entity, message: e.message }); return send(400, registerView(graph, store, fields, submitted, [e.message], vc)); }
-        headers['set-cookie'] = sess.setCookie(id);
+        headers['set-cookie'] = sess.setCookie(sess.start(id));
         trace({ kind: 'register', who: id });
         return ok('/', `Welcome, ${values[graph.roles.login]}`);
       }
@@ -327,8 +392,10 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         if (!vc.canSee(d)) return deny();
         const period = { from: url.searchParams.get('from') || '', to: url.searchParams.get('to') || '' };
         trace({ kind: 'dashboard', id: d.id, period });
-        const mine = { ...d, cards: (d.cards || []).map((c) => ({ ...c, where: resolveTop(c.where || {}) })),
-          tables: (d.tables || []).map((t) => ({ ...t, where: resolveTop(t.where || {}) })) };
+        // A card is a read like any other: an own-scoped role counts its own rows, and a
+        // card over an entity the role may not view is not on its dashboard at all.
+        const scoped = (x) => ({ ...x, where: { ...resolveTop(x.where || {}), ...ownWhere(x.entity) } });
+        const mine = { ...d, cards: (d.cards || []).map(scoped), tables: (d.tables || []).map(scoped) };
         if (wantsCsv) {
           const lines = [];
           const inPeriod = (entity, where) => { const f = d.period?.[entity]; if (!f || (!period.from && !period.to)) return where; const kind = store.field(entity, f).kind; const r = {}; if (period.from) r.gte = kind === 'time' ? `${period.from}T00:00:00` : period.from; if (period.to) r.lte = kind === 'time' ? `${period.to}T23:59:59.999Z` : period.to; return { ...where, [f]: r }; };
@@ -371,9 +438,11 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       if (parts[0] === 'file' && parts.length === 4) {
         const [, e, id, fieldName] = parts;
         const entity = Object.keys(graph.data).find((x) => x.toLowerCase() === e.toLowerCase());
-        const row = entity && store.get(entity, id);
         const f = entity && store.field(entity, fieldName);
-        if (!row || !f || !f.type.upload || !row[fieldName]) return send(404, errorPage(graph, 'no such file'));
+        if (!entity || !f || !f.type.upload) return send(404, errorPage(graph, 'no such file'));
+        if (!vc.can(entity, 'view')) return deny();
+        const row = store.get(entity, id);
+        if (!row || !row[fieldName]) return send(404, errorPage(graph, 'no such file'));
         if (!vc.can(entity, 'view', row)) return deny();
         const file = path.join(filesDir, path.basename(row[fieldName]));
         if (!fs.existsSync(file)) return send(404, errorPage(graph, 'file is missing on disk'));
@@ -381,14 +450,14 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv' }[ext];
         const inline = url.searchParams.get('inline') === '1' && mime;
         res.writeHead(200, { 'content-type': inline ? mime : 'application/octet-stream',
-          'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${String(row[fieldName]).replace(/^\d+-/, '').replace(/"/g, '')}"` });
+          'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${String(row[fieldName]).replace(/^\d+-/, '').replace(/"/g, '')}"`, ...headers });
         return fs.createReadStream(file).pipe(res);
       }
       if (parts[0] === 'action' && req.method === 'POST') {
         const action = (graph.actions || []).find((a) => a.name === parts[1] && !a.in);
         if (!action) return send(404, errorPage(graph, `no global action ${parts[1]}`));
         if (action.by ? !action.by.includes(role) : perms.enabled && !vc.can('*', `do:${action.name}`)) return deny();
-        const values = await parseBody(req);
+        const values = await body();
         let ctx;
         try { ctx = await attempt(() => runSteps(action.do, { rowEntity: null, id: null, values, user })); }
         catch (e) { trace({ kind: 'refused', action: action.name, message: e.message }); return send(400, noticePage(graph, vc, 'Not done', e.message)); }
@@ -404,7 +473,9 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
 
       if (req.method === 'GET' && parts.length === 1) {
         if (!vc.can(entity, 'view')) return deny();
-        const where = { ...resolveTop(ov.where || {}), ...ownWhere(entity) };
+        // own-scoping is applied once, after the filters below: a filter may narrow
+        // the row set, never widen it back out from under an own-scoped role.
+        const where = { ...resolveTop(ov.where || {}) };
         const range = {};
         for (const f of ov.filters || []) {
           if (f.range) {
@@ -417,6 +488,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
           const v = url.searchParams.get(f.field);
           if (v !== null && v !== '') where[f.field] = v;
         }
+        Object.assign(where, ownWhere(entity));   // a filter may narrow the row set, never widen it
         const q = url.searchParams.get('q') || '';
         const sort = sortOf(entity, ov);
         const all = store.list(entity, { search: ov.search || [], q, where, sort });
@@ -440,9 +512,9 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       }
       if (req.method !== 'POST') return send(404, errorPage(graph, 'no route'));
 
-      const submitted = await parseBody(req);
       if (parts.length === 1) {
         if (!vc.can(entity, 'create')) return deny();
+        const submitted = onlyWritable(entity, user, await body(), formOv.fields);
         checkboxes(entity, submitted);
         const values = { ...submitted, ...resolveTop(formOv.fill || {}) };
         const own = perms.ownField(user, entity);
@@ -480,9 +552,12 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         return ok(`/${entity}`, `${label(entity)} deleted`);
       }
       if (parts[2] === 'action') {
-        const action = graph.actions?.find((a) => a.name === parts[3]);
-        if (!action) return send(404, errorPage(graph, `no action ${parts[3]}`));
-        if (action.by ? !action.by.includes(role) : !vc.can(entity, `do:${action.name}`, row)) return deny();
+        const action = graph.actions?.find((a) => a.name === parts[3] && a.in === entity);
+        if (!action) return send(404, errorPage(graph, `no action ${parts[3]} on ${entity}`));
+        // "by" names the roles; it never lifts the row scope an own-grant put there.
+        const mayRun = action.by ? action.by.includes(role) && perms.ownOk(user, entity, row) : vc.can(entity, `do:${action.name}`, row);
+        if (!mayRun) return deny();
+        const submitted = await body();
         let ctx;
         try { ctx = await attempt(() => runSteps(action.do, { rowEntity: entity, id, row, values: submitted, user })); }
         catch (e) { trace({ kind: 'refused', entity, id, action: action.name, message: e.message }); return send(400, detailView(graph, store, entity, fields, row, e.message, vc)); }
@@ -496,6 +571,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
           if (!vc.can(entity, `go:${t.name}`, row) || (t.by && !t.by.includes(role))) return deny();
           return send(409, forbiddenPage(graph, vc, `${label(entity)} is ${row[st.field]}; "${t.title || label(t.name)}" is not available from here.`));
         }
+        const submitted = await body();
         const values = {};
         for (const f of t.fields || []) if (submitted[f] !== undefined) values[f] = submitted[f];
         const problems = validateValues(entity, { ...values, [st.field]: t.to }, { partial: true, existing: row });
@@ -516,6 +592,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
         const rel = (graph.override?.[`${entity}.detail`]?.related || []).find((r) => r.entity === child);
         if (!rel) return send(404, errorPage(graph, `no related ${parts[3]} on ${entity}`));
         if (!vc.can(entity, 'view', row) || !vc.can(child, 'create')) return deny();
+        const submitted = onlyWritable(child, user, await body(), rel.form || null);
         checkboxes(child, submitted);
         const values = { ...submitted, [rel.via]: id, ...resolveTop(rel.fill || {}) };
         const own = perms.ownField(user, child);
@@ -533,9 +610,8 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       }
       if (parts.length === 2) {
         if (!vc.can(entity, 'edit', row)) return deny();
+        const submitted = onlyWritable(entity, user, await body(), formOv.fields);
         checkboxes(entity, submitted);
-        const own = perms.ownField(user, entity);
-        if (own) delete submitted[own];
         const problems = validateValues(entity, submitted, { partial: true, existing: store.raw(entity, id) });
         if (problems.length) return send(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', problems, vc));
         try {
@@ -549,8 +625,10 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
       }
       return send(404, errorPage(graph, 'no route'));
     } catch (e) {
-      trace({ kind: 'error', message: String(e && e.message) });
-      return send(500, errorPage(graph, String(e && e.stack)));
+      if (e instanceof TooBig) { trace({ kind: 'refused', message: e.message }); return send(413, noticePage(graph, vc, 'Too large', e.message)); }
+      trace({ kind: 'error', message: String(e && e.message), stack: String(e && e.stack) });
+      console.error(e && e.stack);
+      return send(500, errorPage(graph, String(e && e.message)));
     }
   });
 

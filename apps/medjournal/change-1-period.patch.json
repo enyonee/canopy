@@ -1,0 +1,16 @@
+[
+  { "op": "add", "path": "/data/Article/pages", "value": "int=12" },
+  { "op": "add", "path": "/dashboards", "value": [
+    { "id": "editorial", "title": "Editorial report", "roles": ["admin"], "period": { "Article": "publishedAt" },
+      "intro": "Articles and printed pages per section, author and month.",
+      "cards": [ { "title": "Articles", "entity": "Article", "fn": "count" },
+                 { "title": "Pages", "entity": "Article", "fn": "sum", "field": "pages" },
+                 { "title": "Longest article", "entity": "Article", "fn": "max", "field": "pages" } ],
+      "tables": [ { "title": "By section", "entity": "Article", "groupBy": "section", "groupTitle": "Section",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Articles" }, { "fn": "sum", "field": "pages", "as": "pages", "title": "Pages" } ],
+                    "sort": { "field": "n", "dir": "desc" } },
+                  { "title": "By author", "entity": "Article", "groupBy": "author", "groupTitle": "Author",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Articles" }, { "fn": "sum", "field": "pages", "as": "pages", "title": "Pages" } ] },
+                  { "title": "By month", "entity": "Article", "groupBy": "publishedAt", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Articles" }, { "fn": "sum", "field": "pages", "as": "pages", "title": "Pages" } ] } ] } ] }
+]

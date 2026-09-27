@@ -51,7 +51,8 @@ test('db.each runs the nested steps once per matching row, oldest first, and rep
   const store = fresh();
   const o = store.insert('Order', { customer: 'ann' });
   const other = store.insert('Order', { customer: 'bob' });
-  store.insert('Item', { order: o, product: 1, qty: 2 }); store.insert('Item', { order: other, product: 1, qty: 9 }); store.insert('Item', { order: o, product: 1, qty: 3 });
+  const prod = store.insert('Product', { name: 'Widget' });
+  store.insert('Item', { order: o, product: prod, qty: 2 }); store.insert('Item', { order: other, product: prod, qty: 9 }); store.insert('Item', { order: o, product: prod, qty: 3 });
   const seen = [];
   const out = CATALOG['db.each'].run(ctx(store, { step: { from: 'Item', where: { order: o }, do: ['nested'] }, run: (steps, extra) => seen.push([steps, extra.each.qty, extra.eachEntity]) }));
   assert.deepEqual(out, { count: 2 });

@@ -1,0 +1,131 @@
+{
+  "app": "fooddist",
+  "task": "webgen-bench/000082",
+  "note": "Food distribution: donations with kind, quantity and expiry; members apply for a distribution and follow their applications; volunteer opportunities with sign-ups; each member owns a profile row with their contact details (created by an event on registration, so the role field can stay on the admin's user form).",
+  "theme": { "background": "azure", "accent": "midnightblue" },
+  "home": "/Donation",
+
+  "data": {
+    "User":        { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member" },
+    "Profile":     { "user": "ref:User!", "phone": "text", "address": "text", "dietary": "text",
+                     "applications": "int := count(Application: applicant = row.user)" },
+    "Donation":    { "food": "text!", "donor": "text!", "kind": "enum[produce,bakery,dairy,canned,meals]=produce",
+                     "quantity": "int!", "unit": "enum[kg,boxes,portions,litres]=kg", "expires": "date!", "location": "text",
+                     "status": "enum[available,claimed,distributed]=available",
+                     "daysLeft": "int := days(expires, today)", "requests": "int := count(Application)" },
+    "Application": { "donation": "ref:Donation!", "applicant": "ref:User!", "household": "int=1", "note": "longtext",
+                     "status": "enum[submitted,approved,delivered,rejected]=submitted", "createdAt": "time=now" },
+    "Opportunity": { "title": "text!", "description": "longtext!", "requirements": "longtext", "date": "date!", "location": "text",
+                     "slots": "int=5", "volunteers": "int := count(Signup)", "open": "int := slots - count(Signup)" },
+    "Signup":      { "opportunity": "ref:Opportunity!", "volunteer": "ref:User!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User":        [ { "unique": "email", "message": "This email is already registered" } ],
+    "Donation":    [ { "check": "quantity > 0", "message": "Quantity must be at least 1" } ],
+    "Application": [ { "check": "household > 0", "message": "Household size must be at least 1" } ],
+    "Signup":      [ { "check": "opportunity.open > 0", "message": "No open slots left for this opportunity" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Donation": ["view"], "Opportunity": ["view", "do:volunteer"],
+                  "Application": { "own": "applicant", "can": ["view", "create"] },
+                  "Signup": { "own": "volunteer", "can": ["view", "delete"] },
+                  "Profile": { "own": "user", "can": ["view", "edit"] } },
+      "guest":  { "Donation": ["view"], "Opportunity": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":        [ { "email": "admin@food.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                     { "email": "mia@food.test", "password": "mia123", "name": "Mia", "role": "member" } ],
+    "Profile":     [ { "user": 1, "phone": "+1 555 0100", "address": "1 Depot rd" },
+                     { "user": 2, "phone": "+1 555 0101", "address": "4 Pine st", "dietary": "vegetarian" } ],
+    "Donation":    [ { "food": "Apples", "donor": "Green Farm", "kind": "produce", "quantity": 40, "unit": "kg", "expires": "2026-09-30", "location": "North depot" },
+                     { "food": "Bread loaves", "donor": "Corner Bakery", "kind": "bakery", "quantity": 25, "unit": "boxes", "expires": "2026-09-16", "location": "North depot" },
+                     { "food": "Milk", "donor": "Dairy Co", "kind": "dairy", "quantity": 60, "unit": "litres", "expires": "2026-09-20", "location": "South depot" },
+                     { "food": "Canned beans", "donor": "City Market", "kind": "canned", "quantity": 120, "unit": "boxes", "expires": "2027-03-01", "location": "South depot" },
+                     { "food": "Hot meals", "donor": "Soup Kitchen", "kind": "meals", "quantity": 80, "unit": "portions", "expires": "2026-09-14", "location": "Community hall", "status": "claimed" } ],
+    "Application": [ { "donation": 5, "applicant": 2, "household": 4, "note": "Family of four", "status": "approved", "createdAt": "2026-09-10T10:00:00.000Z" } ],
+    "Opportunity": [ { "title": "Warehouse sorting", "description": "Sort incoming donations by kind and expiry date.", "requirements": "Able to lift 15 kg; closed shoes.", "date": "2026-09-20", "location": "North depot", "slots": 6 },
+                     { "title": "Delivery driver", "description": "Drive the van on the Saturday distribution round.", "requirements": "Valid driving licence, 2 years of experience.", "date": "2026-09-27", "location": "South depot", "slots": 2 },
+                     { "title": "Front desk", "description": "Welcome families and check their applications.", "requirements": "Friendly, basic computer skills.", "date": "2026-09-21", "location": "Community hall", "slots": 3 } ],
+    "Signup":      [ { "opportunity": 1, "volunteer": 2 } ]
+  },
+
+  "events": [
+    { "on": "User.created", "do": [ { "block": "db.createRow", "entity": "Profile", "values": { "user": "@row.id" } } ] }
+  ],
+
+  "actions": [
+    { "name": "volunteer", "in": "Opportunity", "title": "Volunteer for this", "by": ["member", "admin"],
+      "after": "/Opportunity/{id}", "confirm": "You signed up for {row.title}",
+      "do": [ { "block": "db.createRow", "entity": "Signup", "values": { "opportunity": "@row.id", "volunteer": "@me" } } ] }
+  ],
+
+  "states": {
+    "Application": { "field": "status", "transitions": [
+      { "name": "approve", "from": ["submitted"], "to": "approved", "title": "Approve" },
+      { "name": "deliver", "from": ["approved"], "to": "delivered", "title": "Mark delivered" },
+      { "name": "reject", "from": ["submitted", "approved"], "to": "rejected", "title": "Reject" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Donation.list":     { "title": "Food donations", "intro": "Donations currently available for distribution.",
+                           "columns": ["food", "kind", "quantity", "unit", "expires", "daysLeft", "donor", "location"],
+                           "search": ["food", "donor"], "filters": [ { "name": "Kind", "field": "kind" } ],
+                           "where": { "status": "available" }, "sort": { "field": "expires", "dir": "asc" },
+                           "rowActions": ["view", "edit", "delete"], "create": false },
+    "Donation.detail":   { "fields": ["food", "donor", "kind", "quantity", "unit", "expires", "daysLeft", "location", "status", "requests"] },
+    "Application.list":  { "title": "Applications", "createTitle": "Apply for food",
+                           "columns": ["donation", "applicant", "household", "status", "createdAt"],
+                           "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "go:approve", "go:reject"] },
+    "Application.form":  { "title": "Apply for a food distribution", "fields": ["donation", "household", "note"], "submit": "Submit application",
+                           "confirm": "Application submitted — we will contact you", "after": "/list/my-applications" },
+    "Application.detail": { "fields": ["donation", "applicant", "household", "note", "status", "createdAt"] },
+    "Opportunity.list":  { "title": "Volunteer", "intro": "Current volunteer opportunities.",
+                           "columns": ["title", "date", "location", "slots", "volunteers", "open"], "rowActions": ["view", "edit"] },
+    "Opportunity.detail": { "fields": ["title", "description", "requirements", "date", "location", "slots", "volunteers", "open"], "actions": ["volunteer"],
+                            "related": [ { "entity": "Signup", "via": "opportunity", "title": "Volunteers", "columns": ["volunteer", "createdAt"], "form": false, "rowActions": ["delete"] } ] },
+    "Signup.list":       { "hidden": true },
+    "Profile.list":      { "hidden": true },
+    "Profile.form":      { "title": "Account details", "fields": ["phone", "address", "dietary"], "afterEdit": "/list/account", "confirmEdit": "Account updated" },
+    "Profile.detail":    { "fields": ["user", "phone", "address", "dietary", "applications"] },
+    "User.list":         { "title": "Users", "columns": ["email", "name", "role"] },
+    "User.form":         { "fields": ["email", "password", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "my-applications", "entity": "Application", "title": "My applications", "roles": ["member"],
+      "where": { "applicant": "@me" }, "columns": ["donation", "household", "status", "createdAt"], "rowActions": ["view"], "create": true },
+    { "id": "account", "entity": "Profile", "title": "My account", "roles": ["member"],
+      "where": { "user": "@me" }, "columns": ["user", "phone", "address", "dietary", "applications"], "rowActions": ["view", "edit"] },
+    { "id": "all-donations", "entity": "Donation", "title": "All donations", "roles": ["admin"],
+      "columns": ["food", "kind", "quantity", "unit", "expires", "status", "requests"], "rowActions": ["view", "edit", "delete"], "create": true,
+      "filters": [ { "name": "Status", "field": "status" } ] }
+  ],
+
+  "dashboards": [
+    { "id": "overview", "title": "Overview", "roles": ["admin"],
+      "cards": [ { "title": "Available donations", "entity": "Donation", "fn": "count", "where": { "status": "available" } },
+                 { "title": "Submitted applications", "entity": "Application", "fn": "count", "where": { "status": "submitted" } },
+                 { "title": "Volunteer sign-ups", "entity": "Signup", "fn": "count" } ],
+      "tables": [ { "title": "Applications by status", "entity": "Application", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Applications" }, { "fn": "sum", "field": "household", "as": "people", "title": "People" } ] },
+                  { "title": "Stock by kind", "entity": "Donation", "groupBy": "kind", "groupTitle": "Kind", "where": { "status": "available" },
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Donations" }, { "fn": "sum", "field": "quantity", "as": "qty", "title": "Quantity" } ] } ] }
+  ],
+
+  "pages": [
+    { "id": "about", "title": "How it works", "heading": "Food for everyone",
+      "body": [ "Donors bring surplus food to our depots; families apply for a distribution and pick it up.",
+                "Volunteers keep the depots running — sign up for an opportunity that fits you." ],
+      "links": [ { "label": "Browse donations", "href": "/Donation" }, { "label": "Volunteer", "href": "/Opportunity" } ] }
+  ]
+}

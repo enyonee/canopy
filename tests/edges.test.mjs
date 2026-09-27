@@ -106,9 +106,35 @@ test('seed and identity happen once, not on every boot', async () => {
   const profiles = first.store.count('Profile');
   first.server.close();
   const second = await open();
-  assert.equal(second.store.count('Topic'), topics, 'seed rows are not duplicated');
-  assert.equal(second.store.count('Profile'), profiles, 'the identity row is reused');
-  second.server.close();
+  // finally: a failing assertion must not leave the second server listening — that
+  // hangs the whole file (the event loop never drains), not just this one test.
+  try {
+    assert.equal(second.store.count('Topic'), topics, 'seed rows are not duplicated');
+    assert.equal(second.store.count('Profile'), profiles, 'the identity row is reused');
+  } finally { second.server.close(); }
+});
+
+test('seed order: identity before seed, and a self-reference patched once every row exists', async () => {
+  const graph = {
+    app: 'x', identity: { entity: 'Customer', defaults: { name: 'Alex' } },
+    data: { Customer: { name: 'text!' }, User: { name: 'text!', manager: 'ref:User' },
+      Order: { customer: 'ref:Customer!', item: 'text!' } },
+    // Order seeds before Customer is ever declared in /seed at all: only the identity
+    // row (created before seeding) makes "customer: 1" resolvable. Ada and Bo manage
+    // each other: neither self-reference exists yet when its own row is inserted.
+    seed: { User: [{ name: 'Ada', manager: 2 }, { name: 'Bo', manager: 1 }], Order: [{ customer: 1, item: 'widget' }] },
+  };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-seedorder-'));
+  const app = serve({ graphFile: (() => { const f = path.join(dir, 'app.json'); fs.writeFileSync(f, JSON.stringify(graph)); return f; })(),
+    dbFile: path.join(dir, 'd.sqlite'), traceFile: null, port: 0 });
+  await once(app.server, 'listening');
+  // finally: a failing assertion must not leave the server listening — that hangs
+  // the whole file (the event loop never drains), not just this one test.
+  try {
+    assert.equal(app.store.count('Order'), 1, 'the order referencing the identity customer was seeded');
+    const users = app.store.list('User', { sort: { field: 'id', dir: 'asc' } });
+    assert.deepEqual(users.map((u) => u.manager), ['2', '1'], 'Ada and Bo each manage the other, patched in after both rows exist');
+  } finally { app.server.close(); }
 });
 
 test('an app that declares nothing beyond its data still works end to end', async () => {

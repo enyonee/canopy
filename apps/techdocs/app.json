@@ -1,0 +1,179 @@
+{
+  "app": "techdocs",
+  "task": "webgen-bench/000030",
+  "note": "A technical library: articles grouped by topic, verified solutions underneath each article, and a discussion thread where readers talk to each other. Guests read everything; members post solutions and comments; the admin writes articles and moves them through draft → review → published.",
+  "theme": { "background": "lavender", "accent": "indigo" },
+  "home": "/Article",
+
+  "data": {
+    "Topic":    { "name": "text!", "description": "text",
+                  "articles": "int := count(Article)" },
+    "Article":  { "title": "text!", "topic": "ref:Topic!", "summary": "text!", "body": "longtext!",
+                  "author": "ref:User", "status": "enum[draft,review,published]=draft",
+                  "publishedAt": "date=today", "createdAt": "time=now",
+                  "solutions": "int := count(Solution)",
+                  "verifiedSolutions": "int := count(Solution: verified)",
+                  "comments": "int := count(Comment)",
+                  "topScore": "int := max(Solution: score)" },
+    "Solution": { "article": "ref:Article!", "headline": "text!", "steps": "longtext!", "author": "ref:User",
+                  "verified": "bool=false", "score": "int=0", "createdAt": "time=now" },
+    "Comment":  { "article": "ref:Article!", "body": "longtext!", "author": "ref:User", "createdAt": "time=now" },
+    "User":     { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member" }
+  },
+
+  "rules": {
+    "User":     [ { "unique": "email", "message": "This email is already registered" } ],
+    "Article":  [ { "unique": "title", "message": "An article with this title already exists" },
+                  { "check": "len(title) >= 10", "message": "The article title needs at least 10 characters" } ],
+    "Solution": [ { "check": "len(steps) >= 20", "message": "A solution needs at least 20 characters of detail" } ],
+    "Comment":  [ { "check": "len(body) >= 5", "message": "A comment needs at least 5 characters" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Topic": ["view"], "Article": ["view"],
+                  "Solution": ["view", "create", "do:upvote"],
+                  "Comment": ["view", "create"] },
+      "guest":  { "Topic": ["view"], "Article": ["view"], "Solution": ["view"], "Comment": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@techdocs.test", "password": "admin123", "name": "Admin", "role": "admin" },
+      { "email": "rita@techdocs.test", "password": "rita123", "name": "Rita", "role": "member" }
+    ],
+    "Topic": [
+      { "name": "Containers", "description": "Runtimes, images and orchestration." },
+      { "name": "Databases", "description": "Storage engines, query plans and vacuuming." },
+      { "name": "Networking", "description": "Packets, tunnels and the layers between them." },
+      { "name": "Frontend", "description": "Bundles, rendering and the browser." }
+    ],
+    "Article": [
+      { "title": "Zero-downtime Kubernetes rollouts", "topic": 1, "author": 1, "status": "published", "publishedAt": "2026-08-12", "createdAt": "2026-08-10T09:00:00.000Z",
+        "summary": "Rolling updates that never drop a request: readiness gates, surge limits and disruption budgets.",
+        "body": "A Deployment reports Progressing long before the new pods answer traffic. Set maxSurge to 1 and maxUnavailable to 0 so the old ReplicaSet keeps serving while the new one warms up, and point readinessProbe at an endpoint that touches the database pool rather than at a static handler. Add a PodDisruptionBudget so a node drain cannot take the last healthy replica." },
+      { "title": "Tuning PostgreSQL autovacuum on write-heavy tables", "topic": 2, "author": 1, "status": "published", "publishedAt": "2026-08-20", "createdAt": "2026-08-18T09:00:00.000Z",
+        "summary": "Why the default scale factor starves a large table and how to size it per table.",
+        "body": "The default autovacuum_vacuum_scale_factor of 0.2 means a table is vacuumed once a fifth of its rows are dead. On a table of four hundred million rows that is eighty million dead tuples before anything happens, and the index bloat is already permanent. Set the factor per table and raise autovacuum_vacuum_cost_limit so the worker is not throttled to a crawl." },
+      { "title": "Diagnosing TCP retransmissions with tcpdump", "topic": 3, "author": 2, "status": "published", "publishedAt": "2026-08-28", "createdAt": "2026-08-26T09:00:00.000Z",
+        "summary": "Reading a capture well enough to tell loss apart from a blocked discovery path.",
+        "body": "Capture on both ends and align the sequence numbers. Repeated segments with the same sequence and a growing gap are loss; a single large segment that is never acknowledged, with ICMP silently dropped, is a blocked path MTU discovery. In the second case the fix is not the network card but an MSS clamp on the tunnel." },
+      { "title": "Cutting bundle size with route-level code splitting", "topic": 4, "author": 2, "status": "published", "publishedAt": "2026-09-02", "createdAt": "2026-09-01T09:00:00.000Z",
+        "summary": "One dynamic import per route turns a single megabyte payload into a first screen.",
+        "body": "Measure before you split: a treemap of the bundle usually shows one date library and one icon set carrying half the weight. Replace the barrel imports, then wrap each route component in a dynamic import so the router loads a chunk on navigation instead of shipping every screen to the first visitor." },
+      { "title": "Rootless containers: what breaks and why", "topic": 1, "author": 1, "status": "published", "publishedAt": "2026-09-08", "createdAt": "2026-09-06T09:00:00.000Z",
+        "summary": "User namespaces, subuid ranges and the four things that stop working without root.",
+        "body": "Without root the runtime maps the host user onto uid 0 inside the container through a user namespace. Ports below 1024 need a sysctl, overlayfs needs either fuse-overlayfs or a recent kernel, and a build that chowns to an arbitrary uid fails unless the subuid range is wide enough. None of that is a bug in the image." },
+      { "title": "Sharding strategies for time-series data", "topic": 2, "author": 1, "status": "draft", "publishedAt": "2026-09-14", "createdAt": "2026-09-14T09:00:00.000Z",
+        "summary": "A draft comparing time-based partitions with hash sharding on the series key.",
+        "body": "Time-based partitions make retention a DROP TABLE, hash sharding spreads the write hot spot. Draft: benchmarks pending." },
+      { "title": "Connection pooling without a pooler", "topic": 2, "author": 1, "status": "review", "publishedAt": "2026-09-15", "createdAt": "2026-09-15T09:00:00.000Z",
+        "summary": "What an application-side pool can and cannot replace when pgbouncer is not an option.",
+        "body": "An application-side pool bounds connections per process, not per cluster. With twenty processes of ten connections each the database still sees two hundred. The honest answer is to bound the process count first and only then the pool size." }
+    ],
+    "Solution": [
+      { "article": 1, "headline": "Gate the rollout on a real readiness probe", "author": 1, "verified": true, "score": 4, "createdAt": "2026-08-13T10:00:00.000Z",
+        "steps": "Point readinessProbe at /healthz, have that handler check out a connection from the database pool, and set maxSurge 1 with maxUnavailable 0. Then watch the ReplicaSet history rather than the Deployment status, which goes green while the new pod is still crash-looping." },
+      { "article": 1, "headline": "Drain connections with a preStop hook", "author": 2, "verified": false, "score": 1, "createdAt": "2026-08-14T11:00:00.000Z",
+        "steps": "Add a preStop sleep of ten seconds so the endpoint controller removes the pod from the service before the process exits. Without it the ingress keeps routing to a socket that is already closed." },
+      { "article": 2, "headline": "Lower the scale factor per table", "author": 2, "verified": true, "score": 3, "createdAt": "2026-08-21T10:00:00.000Z",
+        "steps": "ALTER TABLE events SET (autovacuum_vacuum_scale_factor = 0.01, autovacuum_vacuum_threshold = 5000) so the worker runs on one percent of the table instead of twenty, and raise the cost limit so it finishes inside the write window." },
+      { "article": 3, "headline": "Clamp the MSS on the tunnel interface", "author": 1, "verified": false, "score": 2, "createdAt": "2026-08-29T10:00:00.000Z",
+        "steps": "Discovery is blocked because the firewall drops ICMP fragmentation-needed. Clamp the MSS to 1400 on the tunnel interface and the stalled transfers complete on the first attempt." },
+      { "article": 5, "headline": "Map the subuid ranges before the build", "author": 2, "verified": false, "score": 0, "createdAt": "2026-09-09T10:00:00.000Z",
+        "steps": "Give the build user 65536 subuids and subgids in /etc/subuid and /etc/subgid, then restart the runtime so it re-reads them; otherwise the user namespace cannot be created at all." }
+    ],
+    "Comment": [
+      { "article": 1, "author": 2, "body": "The preStop hook was the piece we were missing all along.", "createdAt": "2026-08-14T12:00:00.000Z" },
+      { "article": 1, "author": 1, "body": "Does this still hold with a service mesh sidecar in front?", "createdAt": "2026-08-15T08:00:00.000Z" },
+      { "article": 2, "author": 2, "body": "We hit exactly this on a four hundred gigabyte table.", "createdAt": "2026-08-22T08:00:00.000Z" },
+      { "article": 3, "author": 1, "body": "Check the concentrator too, it rewrites the MSS back.", "createdAt": "2026-08-30T08:00:00.000Z" }
+    ]
+  },
+
+  "actions": [
+    { "name": "upvote", "in": "Solution", "title": "This worked", "after": "/Article/{article}", "confirm": "Thanks — your feedback was recorded",
+      "do": [ { "block": "db.adjust", "field": "score", "by": 1 } ] },
+    { "name": "verify", "in": "Solution", "title": "Mark verified", "altTitle": "Withdraw verification",
+      "after": "/Article/{article}", "confirm": "{row.headline} — verification updated",
+      "do": [ { "block": "db.toggle", "field": "verified" } ] }
+  ],
+
+  "states": {
+    "Article": { "field": "status", "transitions": [
+      { "name": "submit", "from": ["draft"], "to": "review", "title": "Send for review", "confirm": "{row.title} is waiting for review" },
+      { "name": "publish", "from": ["review"], "to": "published", "title": "Publish", "confirm": "{row.title} is published",
+        "do": [ { "block": "db.update", "set": { "publishedAt": "@today" } } ] },
+      { "name": "retract", "from": ["published"], "to": "draft", "title": "Unpublish", "confirm": "{row.title} is back to draft" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Topic.list":      { "title": "Topics", "columns": ["name", "description", "articles"], "rowActions": ["view"] },
+    "Topic.detail":    { "fields": ["name", "description", "articles"],
+                         "related": [ { "entity": "Article", "via": "topic", "title": "Articles in this topic",
+                                        "columns": ["title", "status", "solutions", "publishedAt"], "form": false, "rowActions": ["view"] } ] },
+    "Article.list":    { "title": "Technical articles", "intro": "Published write-ups, each with the solutions readers have confirmed.",
+                         "columns": ["title", "topic", "solutions", "verifiedSolutions", "comments", "publishedAt"],
+                         "search": ["title", "summary", "body"],
+                         "filters": [ { "name": "Topic", "field": "topic" } ],
+                         "where": { "status": "published" }, "sort": { "field": "publishedAt", "dir": "desc" },
+                         "rowActions": ["view"], "createTitle": "Write an article" },
+    "Article.form":    { "title": "Write an article", "fields": ["title", "topic", "summary", "body"], "fill": { "author": "@me" },
+                         "submit": "Save article", "confirm": "Saved as a draft", "after": "/Article/{id}" },
+    "Article.detail":  { "fields": ["title", "topic", "summary", "body", "author", "status", "publishedAt", "solutions", "verifiedSolutions", "topScore", "comments"],
+                         "related": [ { "entity": "Solution", "via": "article", "title": "Solutions",
+                                        "columns": ["headline", "steps", "author", "verified", "score"],
+                                        "form": ["headline", "steps"], "fill": { "author": "@me" },
+                                        "submit": "Post solution", "confirm": "Your solution has been posted",
+                                        "rowActions": ["upvote", "verify", "delete"] },
+                                      { "entity": "Comment", "via": "article", "title": "Discussion",
+                                        "columns": ["body", "author", "createdAt"],
+                                        "form": ["body"], "fill": { "author": "@me" },
+                                        "submit": "Post comment", "confirm": "Your comment has been posted",
+                                        "rowActions": ["delete"] } ] },
+    "Solution.list":   { "title": "Solutions", "intro": "Every solution on the site, newest first.",
+                         "columns": ["headline", "article", "author", "verified", "score"],
+                         "search": ["headline", "steps"],
+                         "filters": [ { "name": "Verified", "field": "verified" } ],
+                         "sort": { "field": "createdAt", "dir": "desc" },
+                         "rowActions": ["view"], "create": false },
+    "Solution.detail": { "fields": ["headline", "article", "steps", "author", "verified", "score", "createdAt"], "actions": ["upvote", "verify"] },
+    "Comment.list":    { "hidden": true, "title": "Comments", "columns": ["article", "body", "author", "createdAt"], "rowActions": ["delete"], "create": false },
+    "User.list":       { "title": "Users", "columns": ["email", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "all-articles", "entity": "Article", "title": "Editorial queue", "roles": ["admin"],
+      "columns": ["title", "topic", "status", "author", "publishedAt"],
+      "search": ["title", "summary"], "sort": { "field": "createdAt", "dir": "desc" },
+      "rowActions": ["view", "go:submit", "go:publish", "go:retract", "edit", "delete"], "create": true }
+  ],
+
+  "dashboards": [
+    { "id": "library", "title": "Library", "roles": ["admin"],
+      "cards": [ { "title": "Published articles", "entity": "Article", "fn": "count", "where": { "status": "published" } },
+                 { "title": "Solutions", "entity": "Solution", "fn": "count" },
+                 { "title": "Verified solutions", "entity": "Solution", "fn": "count", "where": { "verified": 1 } },
+                 { "title": "Comments", "entity": "Comment", "fn": "count" } ],
+      "tables": [ { "title": "Articles by topic", "entity": "Article", "groupBy": "topic", "groupTitle": "Topic",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Articles" } ] },
+                  { "title": "Articles by status", "entity": "Article", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Articles" } ] },
+                  { "title": "Score by article", "entity": "Solution", "groupBy": "article", "groupTitle": "Article",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Solutions" }, { "fn": "sum", "field": "score", "as": "score", "title": "Score" } ],
+                    "sort": { "field": "score", "dir": "desc" }, "limit": 10 } ] }
+  ],
+
+  "pages": [
+    { "id": "about", "title": "About this library", "heading": "Technical articles and the solutions that worked",
+      "body": [ "Every article is a write-up of one problem. Underneath it sits the list of solutions readers have actually applied, with the confirmed ones marked verified.",
+                "Register to post a solution or to join the discussion under an article. Reading needs no account." ],
+      "links": [ { "label": "Technical articles", "href": "/Article" }, { "label": "Solutions", "href": "/Solution" }, { "label": "Topics", "href": "/Topic" } ] }
+  ]
+}

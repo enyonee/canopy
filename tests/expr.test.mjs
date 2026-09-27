@@ -186,7 +186,7 @@ test('evaluates every function', () => {
   assert.equal(ev("coalesce(n, '', 'x')"), 'x', 'empty text is not a value');
   assert.equal(ev('coalesce(n, n)'), null);
   assert.equal(ev('len(name)'), 3);
-  assert.equal(ev('len(n)'), 0);
+  assert.equal(ev('len(n)'), null, 'null propagates through len like every other function');
   assert.equal(ev('lower(name)'), 'mug');
   assert.equal(ev('lower(n)'), null);
   assert.equal(ev('upper(name)'), 'MUG');

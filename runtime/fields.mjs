@@ -16,9 +16,22 @@
 //   format(v, f, ctx) safe HTML for a cell; ctx: { esc, store, entity, row, labels, label }
 //   input(f, v, ctx)  the form control, or null when the kind never appears on forms
 const today = () => new Date().toISOString().slice(0, 10);
+// "2026-02-31" has the shape of a date and is not one: the calendar must agree.
+const isCalendarDate = (v) => {
+  const s = String(v);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
 const numberOrNull = (raw) => (raw === '' || raw === undefined || raw === null ? null : Number(raw));
 
-export const toMinor = (v) => (v === '' || v === undefined || v === null || Number.isNaN(Number(v)) ? null : Math.round(Number(v) * 100));
+// Half a cent rounds away from zero, so a refund mirrors the charge it reverses;
+// the toFixed hop keeps 1.005 from landing a cent low through binary double dust.
+export const toMinor = (v) => {
+  if (v === '' || v === undefined || v === null || Number.isNaN(Number(v))) return null;
+  const n = Number(v);
+  return Math.sign(n) * Math.round(Number((Math.abs(n) * 100).toFixed(6)));
+};
 export const toMajor = (v) => (v === null || v === undefined ? null : v / 100);
 export const formatMoney = (v) => (v === null || v === undefined ? '' : (v / 100).toFixed(2));
 
@@ -39,8 +52,12 @@ export const FIELDS = {
     format: (v, f, { esc, labels }) => { const pair = labels?.[f.name] || ['No', 'Yes']; return esc(v ? pair[1] : pair[0]); },
     input: (f, v) => `<input type="checkbox" id="f_${f.name}" name="${f.name}"${v ? ' checked' : ''}>` },
   int: { sql: 'INTEGER', exprKind: 'number', numeric: true, derivable: true,
-    def: (f) => Number(f.def), coerce: numberOrNull,
-    validate: (v, f) => (v !== undefined && v !== '' && Number.isNaN(Number(v)) ? `${f.name} must be a number` : null),
+    def: (f) => Number(f.def), coerce: (raw) => { const n = numberOrNull(raw); return n === null ? null : Math.round(n); },
+    validate: (v, f) => {
+      if (v === undefined || v === '' || v === null) return null;
+      if (Number.isNaN(Number(v))) return `${f.name} must be a number`;
+      return Number.isInteger(Number(v)) ? null : `${f.name} must be a whole number`;
+    },
     fromExpr: (v) => (v === null || v === undefined ? null : Math.round(v)),
     format: (v, f, { esc }) => esc(v), input: textInput('number') },
   money: { sql: 'INTEGER', exprKind: 'money', numeric: true, derivable: true,
@@ -51,11 +68,12 @@ export const FIELDS = {
     input: (f, v, { esc }) => `<input type="number" step="0.01" id="f_${f.name}" name="${f.name}" value="${esc(v === null || v === undefined || v === '' ? '' : typeof v === 'number' ? formatMoney(v) : v)}"${f.required ? ' required' : ''}>` },
   date: { sql: 'TEXT', exprKind: 'date', temporal: true, derivable: true,
     def: (f) => (f.def === 'today' ? today() : f.def), coerce: (raw) => (raw === undefined ? null : String(raw)),
-    validate: (v, f) => (v && !/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? `${f.name} must be a date (YYYY-MM-DD)` : null),
+    validate: (v, f) => (v && !isCalendarDate(v) ? `${f.name} must be a real date (YYYY-MM-DD)` : null),
     format: (v, f, { esc }) => esc(v), input: textInput('date') },
   time: { sql: 'TEXT', exprKind: 'time', temporal: true, derivable: true,
     def: (f) => (f.def === 'now' ? new Date().toISOString() : f.def), coerce: (raw) => (raw === undefined ? null : String(raw)),
-    validate: () => null, format: (v, f, { esc }) => esc(v), input: null },
+    validate: (v, f) => (v && Number.isNaN(new Date(String(v)).getTime()) ? `${f.name} must be a timestamp` : null),
+    format: (v, f, { esc }) => esc(v), input: null },
   enum: { sql: 'TEXT', exprKind: 'text', derivable: false, structural: true,
     def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)),
     validate: (v, f) => (v && !f.options.includes(String(v)) ? `${f.name} must be one of: ${f.options.join(', ')}` : null),
@@ -64,7 +82,7 @@ export const FIELDS = {
     input: (f, v, { esc }) => `<select id="f_${f.name}" name="${f.name}">` + f.options.map((o) => `<option${String(v) === o ? ' selected' : ''}>${esc(o)}</option>`).join('') + '</select>' },
   ref: { sql: 'TEXT', exprKind: 'ref', derivable: false, structural: true,
     def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)),
-    validate: () => null,
+    validate: (v, f, store) => (v && store && !store.raw(f.target, v) ? `${f.name}: there is no ${f.target} #${v}` : null),
     format: (v, f, { esc, store }) => { const target = store.get(f.target, v); return target ? `<a href="/${f.target}/${target.id}">${esc(store.label(f.target, target))}</a>` : '—'; },
     input: (f, v, { esc, store }) => `<select id="f_${f.name}" name="${f.name}"><option value="">—</option>` + store.list(f.target, {}).map((r) =>
       `<option value="${r.id}"${String(v) === String(r.id) ? ' selected' : ''}>${esc(store.label(f.target, r))}</option>`).join('') + '</select>' },

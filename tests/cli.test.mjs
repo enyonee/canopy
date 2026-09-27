@@ -34,14 +34,15 @@ test('it boots an app on the port it was given, with the db and trace it was giv
   const c = capture();
   const { app } = await main(['tests/fixtures/kitchen.json', '--port', '0', '--db', db, '--trace', trace], c.sink);
   await once(app.server, 'listening');
-  const port = app.server.address().port;
-  const r = await fetch(`http://127.0.0.1:${port}/Topic`);
-  assert.equal(r.status, 200);
-  await r.text();
-  assert.ok(fs.existsSync(db), 'the database went where it was told');
-  assert.ok(fs.readFileSync(trace, 'utf8').includes('"kind":"query"'), 'the trace went where it was told');
-  assert.match(c.out.join('\n'), /app running at/);
-  app.server.closeAllConnections(); app.server.close();
+  try {
+    const port = app.server.address().port;
+    const r = await fetch(`http://127.0.0.1:${port}/Topic`);
+    assert.equal(r.status, 200);
+    await r.text();
+    assert.ok(fs.existsSync(db), 'the database went where it was told');
+    assert.ok(fs.readFileSync(trace, 'utf8').includes('"kind":"query"'), 'the trace went where it was told');
+    assert.match(c.out.join('\n'), /app running at/);
+  } finally { app.server.closeAllConnections(); app.server.close(); }
 });
 
 test('an invalid graph is reported and still served', async () => {
@@ -51,9 +52,10 @@ test('an invalid graph is reported and still served', async () => {
   const c = capture();
   const { app } = await main([file, '--port', '0', '--db', path.join(dir, 'd.sqlite')], c.sink);
   await once(app.server, 'listening');
-  assert.match(c.out.join('\n'), /invalid graph served at/);
-  const r = await fetch(`http://127.0.0.1:${app.server.address().port}/`);
-  assert.equal(r.status, 500);
-  await r.text();
-  app.server.closeAllConnections(); app.server.close();
+  try {
+    assert.match(c.out.join('\n'), /invalid graph served at/);
+    const r = await fetch(`http://127.0.0.1:${app.server.address().port}/`);
+    assert.equal(r.status, 500);
+    await r.text();
+  } finally { app.server.closeAllConnections(); app.server.close(); }
 });

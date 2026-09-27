@@ -1,0 +1,112 @@
+{
+  "app": "mailer",
+  "task": "webgen-bench/000042",
+  "note": "An email sending platform: recipients are a managed entity, a draft email collects recipients and attachments as child rows, sending is a transition that queues one letter per recipient through the mail connector, and templates compose a new draft with one action.",
+  "theme": { "background": "cornsilk", "accent": "peru" },
+  "home": "/Email",
+
+  "data": {
+    "User":      { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,sender]=sender" },
+    "Recipient": { "name": "text!", "email": "text!", "company": "text", "list": "enum[customers,partners,staff]=customers",
+                   "active": "bool=true", "letters": "int := count(EmailRecipient)" },
+    "Template":  { "name": "text!", "subject": "text!", "body": "longtext!", "createdAt": "time=now",
+                   "used": "int := count(Email)" },
+    "Email":     { "subject": "text!", "body": "longtext!", "template": "ref:Template", "owner": "ref:User!",
+                   "status": "enum[draft,sent]=draft", "createdAt": "time=now", "sentAt": "time",
+                   "recipients": "int := count(EmailRecipient)", "files": "int := count(Attachment)" },
+    "EmailRecipient": { "email": "ref:Email!", "recipient": "ref:Recipient!",
+                        "address": "text := recipient.email" },
+    "Attachment": { "email": "ref:Email!", "name": "text!", "file": "file!" }
+  },
+
+  "rules": {
+    "User":      [ { "unique": "email" } ],
+    "Recipient": [ { "unique": "email", "message": "This address is already in the recipient list" },
+                   { "check": "len(email) > 4", "message": "An email address is required" } ],
+    "Email":     [ { "check": "len(subject) >= 3", "message": "The subject must be at least 3 characters" } ],
+    "Template":  [ { "unique": "name", "message": "A template with this name already exists" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": {
+      "admin": "*",
+      "sender": { "Email": { "own": "owner", "can": ["view", "create", "edit", "delete", "go:send"] },
+                  "EmailRecipient": ["view", "create", "delete"],
+                  "Attachment": ["view", "create", "delete"],
+                  "Recipient": ["view", "create", "edit"],
+                  "Template": ["view", "create", "edit", "do:compose"] }
+    }
+  },
+
+  "seed": {
+    "User": [ { "email": "admin@mailer.test", "password": "admin123", "name": "Admin", "role": "admin" },
+              { "email": "sam@mailer.test", "password": "sam123", "name": "Sam Sender", "role": "sender" } ],
+    "Recipient": [ { "name": "Ada Byron", "email": "ada@clients.test", "company": "Analytical Ltd", "list": "customers" },
+                   { "name": "Grace Hopper", "email": "grace@partners.test", "company": "Navy Yard", "list": "partners" },
+                   { "name": "Alan Turing", "email": "alan@staff.test", "company": "Bletchley", "list": "staff" },
+                   { "name": "Old Contact", "email": "old@clients.test", "company": "Gone Ltd", "list": "customers", "active": false } ],
+    "Template": [ { "name": "Monthly newsletter", "subject": "What shipped in {month}", "body": "Hello,\n\nHere is what we shipped this month.\n\nThe team", "createdAt": "2026-02-01T09:00:00.000Z" },
+                  { "name": "Invoice reminder", "subject": "Your invoice is due", "body": "Hello,\n\nA friendly reminder about the invoice attached.\n\nAccounts", "createdAt": "2026-02-10T09:00:00.000Z" } ]
+  },
+
+  "connectors": {
+    "mail": { "kind": "mail", "from": "platform@mailer.test" }
+  },
+
+  "actions": [
+    { "name": "compose", "in": "Template", "title": "Compose from template", "after": "/Email/{created}",
+      "confirm": "Draft started from {row.name}",
+      "do": [ { "block": "db.createRow", "entity": "Email",
+                "values": { "subject": "@row.subject", "body": "@row.body", "template": "@row.id", "owner": "@me" } } ] }
+  ],
+
+  "states": {
+    "Email": { "field": "status", "transitions": [
+      { "name": "send", "from": ["draft"], "to": "sent", "title": "Send email",
+        "confirm": "Sent to {row.recipients} recipient(s)", "after": "/Email/{id}",
+        "do": [ { "block": "db.update", "set": { "sentAt": "@now" } },
+                { "block": "db.each", "from": "EmailRecipient", "where": { "email": "@row.id" },
+                  "do": [ { "block": "mail.send", "connector": "mail", "to": "@each.recipient.email",
+                            "subject": "{row.subject}", "text": "{row.body}" } ] } ] }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Email.list":       { "title": "Emails", "columns": ["subject", "status", "recipients", "files", "owner", "createdAt"],
+                          "search": ["subject", "body"], "filters": [ { "name": "Status", "field": "status" } ],
+                          "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view", "edit", "delete"],
+                          "createTitle": "Compose email" },
+    "Email.form":       { "title": "Compose email", "intro": "Write the letter, then add recipients and attachments on its page.",
+                          "fields": ["subject", "body", "template"], "submit": "Save draft", "fill": { "owner": "@me" },
+                          "confirm": "Draft saved", "after": "/Email/{id}", "confirmEdit": "Draft updated", "afterEdit": "/Email/{id}" },
+    "Email.detail":     { "fields": ["subject", "body", "status", "template", "recipients", "files", "owner", "createdAt", "sentAt"],
+                          "related": [ { "entity": "EmailRecipient", "via": "email", "title": "Recipients",
+                                         "columns": ["recipient", "address"], "form": ["recipient"], "submit": "Add recipient",
+                                         "confirm": "Recipient added", "rowActions": ["delete"] },
+                                       { "entity": "Attachment", "via": "email", "title": "Attachments",
+                                         "columns": ["name", "file"], "form": ["name", "file"], "submit": "Upload",
+                                         "confirm": "Attachment uploaded", "rowActions": ["delete"] } ] },
+    "Recipient.list":   { "title": "Recipients", "intro": "The address book every email picks from.",
+                          "columns": ["name", "email", "company", "list", "letters", "active"],
+                          "search": ["name", "email", "company"], "filters": [ { "name": "List", "field": "list" } ],
+                          "rowActions": ["view", "edit", "delete"], "createTitle": "New recipient" },
+    "Template.list":    { "title": "Templates", "columns": ["name", "subject", "used", "createdAt"], "search": ["name", "subject", "body"],
+                          "rowActions": ["view", "compose", "edit", "delete"], "createTitle": "New template" },
+    "Template.form":    { "fields": ["name", "subject", "body"], "submit": "Save template", "confirm": "Template saved",
+                          "after": "/Template/{id}", "confirmEdit": "Template updated", "afterEdit": "/Template/{id}" },
+    "Template.detail":  { "fields": ["name", "subject", "body", "used", "createdAt"], "actions": ["compose"] },
+    "EmailRecipient.list": { "hidden": true },
+    "Attachment.list":  { "hidden": true },
+    "User.list":        { "title": "Users", "columns": ["email", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "sent", "entity": "Email", "title": "Sent", "where": { "status": "sent" },
+      "columns": ["subject", "recipients", "files", "owner", "sentAt"], "sort": { "field": "sentAt", "dir": "desc" },
+      "rowActions": ["view"], "search": ["subject"] },
+    { "id": "drafts", "entity": "Email", "title": "Drafts", "where": { "status": "draft" },
+      "columns": ["subject", "recipients", "files", "createdAt"], "rowActions": ["view", "edit"], "create": true }
+  ]
+}

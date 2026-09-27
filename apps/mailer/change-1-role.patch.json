@@ -1,0 +1,9 @@
+[
+  { "op": "replace", "path": "/data/User/role", "value": "enum[admin,sender,assistant]=sender" },
+  { "op": "add", "path": "/roles/can/assistant",
+    "value": { "Email": { "own": "owner", "can": ["view", "create", "edit", "delete"] },
+               "EmailRecipient": ["view", "create", "delete"],
+               "Attachment": ["view", "create", "delete"],
+               "Recipient": ["view"],
+               "Template": ["view"] } }
+]

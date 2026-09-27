@@ -19,28 +19,46 @@ test('passwords are salted hashes that verify only against their own plain text'
   assert.equal(verifyPassword('x', `scrypt$${h.split('$')[1]}$abcd`), false, 'a hash of the wrong length never verifies');
 });
 
-test('sessions sign and verify, keep their key on disk, and read the cookie header', () => {
+test('sessions are rows: the cookie carries an opaque id, logout ends it, a broken cookie is not a crash', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-auth-'));
   const keyFile = path.join(dir, 'session.key');
-  const a = sessions(keyFile);
+  const rows = new Map();
+  const store = {
+    sessionSet: (sid, user) => rows.set(sid, user),
+    sessionUser: (sid) => (rows.has(sid) ? rows.get(sid) : null),
+    sessionEnd: (sid) => rows.delete(sid),
+  };
+  const a = sessions(keyFile, store);
   assert.ok(fs.existsSync(keyFile), 'the key is written next to the database');
-  const token = a.sign(7);
-  assert.equal(a.verify(token), 7);
+  const token = a.start(7);
+  assert.equal(a.verify(token), token.split('.')[0], 'the token is a signed session id');
+  assert.notEqual(token.split('.')[0], '7', 'the cookie never carries the user id');
+  assert.notEqual(a.start(7), token, 'two logins of the same user are two sessions');
+  const cookie = `x=1; ag_session=${encodeURIComponent(token)}; y=2`;
+  assert.equal(a.read(cookie), 7);
   assert.equal(a.verify('7.deadbeef'), null, 'a forged signature is rejected');
   assert.equal(a.verify('7'), null);
   assert.equal(a.verify(''), null);
   assert.equal(a.verify(null), null);
   assert.equal(a.verify(`${token}0`), null, 'a signature of the wrong length is rejected');
-  const b = sessions(keyFile);
-  assert.equal(b.verify(token), 7, 'a restart with the same key keeps sessions valid');
-  assert.equal(a.read(`x=1; ag_session=${encodeURIComponent(token)}; y=2`), 7);
-  assert.equal(a.read('x=1'), null);
+  assert.equal(a.read('x=1'), null, 'no cookie, no session');
   assert.equal(a.read(undefined), null);
-  assert.match(a.setCookie(7), /^ag_session=.+; Path=\/; HttpOnly; SameSite=Lax$/);
+  assert.equal(a.read('ag_session=%ZZ'), null, 'a malformed escape is a wrong cookie, not a throw');
+  assert.equal(a.token('ag_session=%ZZ'), null);
+  const b = sessions(keyFile, store);
+  assert.equal(b.read(cookie), 7, 'a restart with the same key keeps live sessions valid');
+  a.end(cookie);
+  assert.equal(a.read(cookie), null, 'signing out ends the session for that very token');
+  assert.equal(b.read(cookie), null, 'and for every other process sharing the store');
+  assert.match(a.setCookie(token), /^ag_session=.+; Path=\/; HttpOnly; SameSite=Lax$/);
   assert.match(a.clearCookie(), /Max-Age=0/);
-  const c = sessions(null);
-  assert.equal(c.verify(c.sign(1)), 1, 'without a key file the key lives in memory');
+  assert.match(a.clearCookie(), /SameSite=Lax/);
+  const c = sessions(null, store);
+  const own = c.start(1);
+  assert.equal(c.verify(own), own.split('.')[0], 'without a key file the key lives in memory');
   assert.equal(c.verify(token), null, 'and differs from every other instance');
+  assert.equal(c.read(`ag_session=${encodeURIComponent(token)}`), null, "another instance's cookie is not read");
+  c.end('ag_session=nope');
 });
 
 const graph = {

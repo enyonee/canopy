@@ -143,6 +143,27 @@ test('identity, seed and page buttons', () => {
     actions: [{ name: 'a', in: 'Task', do: [{ block: 'db.delete' }] }] }, '/pages/0/actions/0').message, /bound to Task/);
 });
 
+test('a seeded reference must resolve on a fresh table: self, identity, another seeded entity, or nothing', () => {
+  const refData = { A: { name: 'text!' }, B: { a: 'ref:A!', self: 'ref:B' } };
+  // B.a points at A, which the seed never touches at all: unproducible.
+  const gone = validate({ app: 'x', data: refData, seed: { B: [{ a: 3 }] } }).find((e) => e.path === '/seed/B/0/a');
+  assert.match(gone.message, /B\.a seeds a reference to A #3, but the seed produces no A row\(s\)/);
+  assert.match(gone.hint, /add "A" to \/seed, or point at a row that already exists/);
+  // A is seeded, but with fewer rows than the id asked for: producible, just short.
+  const short = validate({ app: 'x', data: refData, seed: { A: [{ name: 'x' }], B: [{ a: 2 }] } }).find((e) => e.path === '/seed/B/0/a');
+  assert.match(short.message, /produces only 1 A row\(s\)/);
+  assert.match(short.hint, /use an id from 1 to 1/);
+  // A self-reference is producible up to the entity's own seeded row count.
+  assert.deepEqual(validate({ app: 'x', data: refData, seed: { B: [{}, { self: 2 }] } }).filter((e) => e.path.startsWith('/seed/B/1')), []);
+  assert.match(validate({ app: 'x', data: refData, seed: { B: [{ self: 2 }] } }).find((e) => e.path === '/seed/B/0/self').message, /produces only 1 B row\(s\)/);
+  // The /identity row is exactly one row, seeded before everything else.
+  const withIdentity = { app: 'x', data: refData, identity: { entity: 'A' }, seed: { B: [{ a: 1 }] } };
+  assert.deepEqual(validate(withIdentity).filter((e) => e.path === '/seed/B/0/a'), []);
+  assert.match(validate({ ...withIdentity, seed: { B: [{ a: 2 }] } }).find((e) => e.path === '/seed/B/0/a').message, /produces only 1 A row\(s\)/);
+  // A non-id-shaped or blank value is left for the store to judge at boot.
+  assert.deepEqual(validate({ app: 'x', data: refData, seed: { B: [{ a: '' }, { a: 0 }] } }).filter((e) => e.path.startsWith('/seed/B')), []);
+});
+
 test('errors are formatted so the repair loop can act on them', () => {
   const text = formatErrors(validate({ app: 'x', data: { Task: { title: 'text!' } }, override: { 'Task.list': { columns: ['titel'] } } }));
   assert.match(text, /✗ \/override\/Task.list\/columns: field "titel" does not exist on Task/);

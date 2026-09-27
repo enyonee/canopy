@@ -1,0 +1,62 @@
+{
+  "app": "tools",
+  "task": "webgen-bench/000077",
+  "note": "Tool information site for engineers: a searchable, filterable catalogue with a detail page per tool; registered members rate and comment under the tool; the admin curates tools and categories.",
+  "theme": { "background": "ivory", "accent": "forestgreen" },
+  "home": "/Tool",
+
+  "data": {
+    "User":     { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member", "reviews": "int := count(Review)" },
+    "Category": { "name": "text!", "tools": "int := count(Tool)" },
+    "Tool":     { "name": "text!", "category": "ref:Category!", "description": "longtext!", "function": "text!", "price": "money=0",
+                  "brand": "text", "reviews": "int := count(Review)", "rating": "int := round(avg(Review: rating), 0)" },
+    "Review":   { "tool": "ref:Tool!", "author": "ref:User!", "rating": "int=5", "comment": "longtext!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User":   [ { "unique": "email", "message": "This email is already registered" } ],
+    "Tool":   [ { "check": "price >= 0", "message": "Price cannot be negative" } ],
+    "Review": [ { "check": "rating >= 1 and rating <= 5", "message": "Rating must be between 1 and 5" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Tool": ["view"], "Category": ["view"], "Review": ["view", "create"] },
+      "guest":  { "Tool": ["view"], "Category": ["view"], "Review": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":     [ { "email": "admin@tools.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                  { "email": "eve@tools.test", "password": "eve123", "name": "Eve Engineer", "role": "member" } ],
+    "Category": [ { "name": "Hand tools" }, { "name": "Power tools" }, { "name": "Measuring" } ],
+    "Tool":     [ { "name": "Cordless drill", "category": 2, "description": "18 V brushless drill driver with two batteries.", "function": "Drilling and driving screws", "price": 129.9, "brand": "Makita" },
+                  { "name": "Torque wrench", "category": 1, "description": "Click-type torque wrench, 20-200 Nm, 1/2 inch drive.", "function": "Tightening bolts to a set torque", "price": 64.5, "brand": "Wera" },
+                  { "name": "Digital caliper", "category": 3, "description": "150 mm stainless caliper, 0.01 mm resolution.", "function": "Measuring lengths and diameters", "price": 24, "brand": "Mitutoyo" },
+                  { "name": "Angle grinder", "category": 2, "description": "125 mm grinder, 1100 W, restart protection.", "function": "Cutting and grinding metal", "price": 79, "brand": "Bosch" } ],
+    "Review":   [ { "tool": 1, "author": 2, "rating": 5, "comment": "Plenty of torque, batteries last a full day.", "createdAt": "2026-08-20T10:00:00.000Z" },
+                  { "tool": 3, "author": 2, "rating": 4, "comment": "Accurate, but the battery door is flimsy.", "createdAt": "2026-08-22T10:00:00.000Z" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Tool.list":     { "title": "Tools", "intro": "Search by name or purpose, filter by category, open a tool for details and reviews.",
+                       "columns": ["name", "category", "function", "price", "rating", "reviews"],
+                       "search": ["name", "description", "function", "brand"],
+                       "filters": [ { "name": "Category", "field": "category" } ],
+                       "rowActions": ["view", "edit", "delete"] },
+    "Tool.form":     { "confirm": "Tool saved", "after": "/Tool/{id}" },
+    "Tool.detail":   { "fields": ["name", "category", "brand", "description", "function", "price", "rating", "reviews"],
+                       "related": [ { "entity": "Review", "via": "tool", "title": "Comments and ratings", "columns": ["author", "rating", "comment", "createdAt"],
+                                      "form": ["rating", "comment"], "fill": { "author": "@me" }, "submit": "Post review", "confirm": "Thanks, your review is posted",
+                                      "rowActions": ["delete"] } ] },
+    "Category.list": { "title": "Categories", "columns": ["name", "tools"], "rowActions": ["view", "edit", "delete"] },
+    "Review.list":   { "title": "Reviews", "columns": ["tool", "author", "rating", "comment", "createdAt"], "create": false,
+                       "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["delete"] },
+    "Review.form":   { "afterEdit": "/Tool/{tool}" },
+    "User.list":     { "title": "Users", "columns": ["email", "name", "role", "reviews"] }
+  }
+}

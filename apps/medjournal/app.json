@@ -1,0 +1,73 @@
+{
+  "app": "medjournal",
+  "task": "webgen-bench/000086",
+  "note": "A medical journal: readers browse and search articles by section and download the PDF; authors register, submit articles and manage their own account (each account row is owned by itself through a self-reference filled on creation); the admin edits everything.",
+  "theme": { "background": "seashell", "accent": "crimson" },
+  "home": "/Article",
+
+  "data": {
+    "User":    { "email": "text!", "password": "password!", "name": "text!", "affiliation": "text", "bio": "longtext",
+                 "self": "ref:User", "role": "enum[admin,author]=author" },
+    "Section": { "name": "text!", "about": "text", "articles": "int := count(Article)" },
+    "Article": { "title": "text!", "section": "ref:Section!", "author": "ref:User!", "abstract": "longtext!", "keywords": "text",
+                 "publishedAt": "date=today", "pdf": "file" }
+  },
+
+  "rules": {
+    "User":    [ { "unique": "email", "message": "This email is already registered" } ],
+    "Article": [ { "check": "len(abstract) >= 20", "message": "The abstract needs at least 20 characters" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "author", "anonymous": "reader",
+    "can": {
+      "admin":  "*",
+      "author": { "Article": ["view", "create"], "Section": ["view"], "User": { "own": "self", "can": ["view", "edit"] } },
+      "reader": { "Article": ["view"], "Section": ["view"] }
+    }
+  },
+
+  "events": [
+    { "on": "User.created", "do": [ { "block": "db.update", "set": { "self": "@row.id" } } ] }
+  ],
+
+  "seed": {
+    "User":    [ { "email": "editor@medjournal.test", "password": "editor123", "name": "Managing Editor", "affiliation": "Journal office", "self": 1, "role": "admin" },
+                 { "email": "lee@medjournal.test", "password": "lee123", "name": "Dr. Lee", "affiliation": "City Hospital", "bio": "Endocrinologist.", "self": 2, "role": "author" } ],
+    "Section": [ { "name": "Cardiology", "about": "Heart and vessels" }, { "name": "Endocrinology", "about": "Hormones and metabolism" }, { "name": "Neurology", "about": "Brain and nerves" } ],
+    "Article": [ { "title": "Statins after a first myocardial infarction", "section": 1, "author": 2, "keywords": "statin, infarction, secondary prevention",
+                   "abstract": "A cohort of 1,200 patients followed for five years after a first infarction.", "publishedAt": "2026-02-10" },
+                 { "title": "Insulin pumps versus multiple daily injections", "section": 2, "author": 2, "keywords": "insulin, type 1 diabetes, pump",
+                   "abstract": "A randomised comparison of glycaemic control in adolescents with type 1 diabetes.", "publishedAt": "2026-03-05" },
+                 { "title": "Fasting insulin as a predictor of metabolic syndrome", "section": 2, "author": 2, "keywords": "insulin resistance, metabolic syndrome",
+                   "abstract": "Fasting insulin levels predicted the syndrome better than body mass index in this cross-sectional study.", "publishedAt": "2026-04-18" },
+                 { "title": "Migraine prophylaxis with CGRP antibodies", "section": 3, "author": 2, "keywords": "migraine, CGRP, prophylaxis",
+                   "abstract": "Monthly antibody injections halved migraine days in a placebo-controlled trial.", "publishedAt": "2026-05-22" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Article.list":   { "title": "Articles", "intro": "Search by title, abstract or keyword; filter by section.",
+                        "columns": ["title", "section", "author", "publishedAt", "pdf"], "search": ["title", "abstract", "keywords"],
+                        "filters": [ { "name": "Section", "field": "section" }, { "name": "Published", "field": "publishedAt", "range": true } ],
+                        "sort": { "field": "publishedAt", "dir": "desc" }, "rowActions": ["view"], "createTitle": "Submit an article" },
+    "Article.form":   { "title": "Submit an article", "fields": ["title", "section", "abstract", "keywords", "publishedAt", "pdf"],
+                        "fill": { "author": "@me" }, "submit": "Publish", "confirm": "Article published", "after": "/Article/{id}" },
+    "Article.detail": { "fields": ["title", "section", "author", "abstract", "keywords", "publishedAt", "pdf"] },
+    "Section.list":   { "title": "Sections", "columns": ["name", "about", "articles"], "rowActions": ["view"] },
+    "Section.detail": { "fields": ["name", "about", "articles"],
+                        "related": [ { "entity": "Article", "via": "section", "title": "Articles in this section", "columns": ["title", "author", "publishedAt"], "form": false, "rowActions": ["view"] } ] },
+    "User.list":      { "title": "Account", "columns": ["email", "name", "affiliation", "role"], "rowActions": ["view", "edit"], "create": false },
+    "User.form":      { "title": "Account settings", "fields": ["email", "password", "name", "affiliation", "bio"], "submit": "Save changes",
+                        "afterEdit": "/User/{id}", "confirmEdit": "Profile updated" },
+    "User.detail":    { "fields": ["email", "name", "affiliation", "bio", "role"] }
+  },
+
+  "pages": [
+    { "id": "about", "title": "About", "heading": "About the journal",
+      "body": [ "An open-access journal of clinical medicine. Every article is peer reviewed and published with its full-text PDF.",
+                "Authors register for an account, submit articles from their account and keep their profile up to date." ],
+      "links": [ { "label": "Browse articles", "href": "/Article" }, { "label": "Sections", "href": "/Section" } ] }
+  ]
+}

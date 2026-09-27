@@ -1,0 +1,44 @@
+{
+  "app": "calc",
+  "task": "webgen-bench/000078",
+  "note": "A computing-task site: every calculation is a row whose result is a derived field computed by the app's own arithmetic plugin (calc/isValid). The calculation type widens the grammar; an expression that does not parse is refused by a rule. The home page links to the calculator and the history.",
+  "theme": { "background": "mintcream", "accent": "teal" },
+  "home": "/page/home",
+  "plugins": ["./plugins/arith.mjs"],
+
+  "data": {
+    "Calculation": { "expression": "text!", "kind": "enum[basic,scientific,percentage]=basic", "note": "text",
+                     "createdAt": "time=now", "result": "text := calc(expression, kind)", "length": "int := len(expression)" }
+  },
+
+  "rules": {
+    "Calculation": [ { "check": "isValid(expression, kind)", "message": "Invalid expression: use numbers, + - * / and parentheses, e.g. 2 + 2 (scientific adds ^ sqrt() pi, percentage adds %)" } ]
+  },
+
+  "seed": {
+    "Calculation": [ { "expression": "7 * 6", "kind": "basic", "note": "warm-up", "createdAt": "2026-03-02T09:00:00.000Z" },
+                     { "expression": "(1 + 2) * 3", "kind": "basic", "createdAt": "2026-03-02T09:05:00.000Z" },
+                     { "expression": "2 ^ 8", "kind": "scientific", "note": "byte", "createdAt": "2026-03-03T11:00:00.000Z" },
+                     { "expression": "sqrt(144) + pi", "kind": "scientific", "createdAt": "2026-03-04T11:30:00.000Z" },
+                     { "expression": "15% * 200", "kind": "percentage", "note": "tip", "createdAt": "2026-03-05T18:00:00.000Z" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Calculation.list":   { "title": "History", "intro": "Every calculation with its type and result.",
+                            "columns": ["expression", "kind", "result", "note", "createdAt"], "search": ["expression", "note"],
+                            "filters": [ { "name": "Type", "field": "kind" } ], "sort": { "field": "createdAt", "dir": "desc" },
+                            "rowActions": ["view", "edit", "delete"], "createTitle": "New calculation" },
+    "Calculation.form":   { "title": "Calculator", "intro": "Type an expression, pick the calculation type and press Calculate.",
+                            "fields": ["expression", "kind", "note"], "submit": "Calculate", "confirm": "Calculated", "after": "/Calculation/{id}",
+                            "confirmEdit": "Recalculated", "afterEdit": "/Calculation/{id}" },
+    "Calculation.detail": { "fields": ["expression", "kind", "result", "note", "createdAt"] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Computing tasks",
+      "body": [ "Enter a mathematical expression, choose the calculation type and execute it; the result is shown on the results screen and kept in the history.",
+                "Basic arithmetic: numbers, + - * / and parentheses. Scientific: adds ^, sqrt(), abs(), sin(), cos(), log(), pi and e. Percentage: adds a postfix % (15% = 0.15)." ],
+      "links": [ { "label": "Open the calculator", "href": "/Calculation/new" }, { "label": "History", "href": "/Calculation" } ] }
+  ]
+}

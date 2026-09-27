@@ -1,0 +1,61 @@
+{
+  "app": "qna",
+  "task": "webgen-bench/000033",
+  "note": "A Q&A site: members post questions, answer them under the question and rate answers with up/down votes; guests read everything; the admin manages users.",
+  "theme": { "background": "beige", "accent": "saddlebrown" },
+  "home": "/Question",
+
+  "data": {
+    "User":     { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member" },
+    "Question": { "title": "text!", "body": "longtext!", "author": "ref:User", "createdAt": "time=now",
+                  "answers": "int := count(Answer)", "bestRating": "int := max(Answer: rating)" },
+    "Answer":   { "question": "ref:Question!", "body": "longtext!", "author": "ref:User", "createdAt": "time=now", "rating": "int=0" }
+  },
+
+  "rules": {
+    "User":     [ { "unique": "email", "message": "This email is already registered" } ],
+    "Question": [ { "check": "len(title) >= 5", "message": "The title needs at least 5 characters" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Question": ["view", "create"], "Answer": ["view", "create", "do:upvote", "do:downvote"] },
+      "guest":  { "Question": ["view"], "Answer": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":     [ { "email": "admin@qna.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                  { "email": "dana@qna.test", "password": "dana123", "name": "Dana", "role": "member" } ],
+    "Question": [ { "title": "How do I center a div?", "body": "Flexbox or grid, what is the modern way?", "author": 2, "createdAt": "2026-08-01T09:00:00.000Z" },
+                  { "title": "What is a closure?", "body": "I keep hearing the word but never got a clear definition.", "author": 2, "createdAt": "2026-08-03T10:30:00.000Z" } ],
+    "Answer":   [ { "question": 1, "body": "Use display: grid; place-items: center on the parent.", "author": 1, "rating": 3 },
+                  { "question": 1, "body": "Flexbox: justify-content and align-items both center.", "author": 2, "rating": 1 },
+                  { "question": 2, "body": "A function that remembers the variables of the scope it was created in.", "author": 1, "rating": 2 } ]
+  },
+
+  "actions": [
+    { "name": "upvote", "in": "Answer", "title": "Helpful", "after": "/Question/{question}", "confirm": "Thanks for rating",
+      "do": [ { "block": "db.adjust", "field": "rating", "by": 1 } ] },
+    { "name": "downvote", "in": "Answer", "title": "Not helpful", "after": "/Question/{question}", "confirm": "Thanks for rating",
+      "do": [ { "block": "db.adjust", "field": "rating", "by": -1 } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Question.list":   { "title": "Questions", "columns": ["title", "author", "answers", "bestRating", "createdAt"],
+                         "search": ["title", "body"], "sort": { "field": "createdAt", "dir": "desc" },
+                         "rowActions": ["view"], "createTitle": "Ask a question" },
+    "Question.form":   { "title": "Ask a question", "fields": ["title", "body"], "fill": { "author": "@me" }, "submit": "Post question",
+                         "confirm": "Your question has been posted", "after": "/Question/{id}" },
+    "Question.detail": { "fields": ["title", "body", "author", "createdAt", "answers", "bestRating"],
+                         "related": [ { "entity": "Answer", "via": "question", "title": "Answers", "columns": ["body", "author", "rating", "createdAt"],
+                                        "form": ["body"], "fill": { "author": "@me" }, "submit": "Post answer", "confirm": "Your answer has been posted",
+                                        "rowActions": ["upvote", "downvote", "delete"] } ] },
+    "Answer.list":     { "hidden": true, "title": "Answers", "columns": ["question", "body", "author", "rating"], "rowActions": ["delete"], "create": false },
+    "User.list":       { "title": "Users", "columns": ["email", "name", "role"] }
+  }
+}

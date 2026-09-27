@@ -1,0 +1,5 @@
+[
+  { "op": "replace", "path": "/data/User/role", "value": "enum[admin,member,editor]=member" },
+  { "op": "add", "path": "/roles/can/editor",
+    "value": { "Tool": ["view", "create", "edit"], "Category": ["view", "create"], "Review": ["view", "delete"], "User": ["view"] } }
+]

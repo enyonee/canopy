@@ -18,27 +18,46 @@ export const verifyPassword = (plain, stored) => {
   return probe.length === known.length && crypto.timingSafeEqual(probe, known);
 };
 
-// --- sessions: a signed cookie, the key lives next to the database -----------------
-export function sessions(keyFile) {
+// --- sessions: a signed cookie over a session row, the key lives next to the database -----------
+// The cookie carries an opaque session id, never the user id: a token is revocable
+// (logout deletes the row), does not survive a password change, and two logins of the
+// same user are two different tokens.
+export function sessions(keyFile, store = null) {
   let key;
   if (keyFile && fs.existsSync(keyFile)) key = fs.readFileSync(keyFile, 'utf8').trim();
   else { key = crypto.randomBytes(24).toString('hex'); if (keyFile) fs.writeFileSync(keyFile, key); }
-  const sign = (id) => { const body = String(id); return `${body}.${crypto.createHmac('sha256', key).update(body).digest('hex')}`; };
+  const mac = (body) => crypto.createHmac('sha256', key).update(body).digest('hex');
+  const sign = (sid) => { const body = String(sid); return `${body}.${mac(body)}`; };
   const verify = (token) => {
     if (!token) return null;
-    const [body, mac] = String(token).split('.');
-    if (!body || !mac) return null;
-    const expect = crypto.createHmac('sha256', key).update(body).digest('hex');
-    if (mac.length !== expect.length || !crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(expect))) return null;
-    return Number(body);
+    const [body, sig] = String(token).split('.');
+    if (!body || !sig) return null;
+    const expect = mac(body);
+    if (sig.length !== expect.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
+    return body;
+  };
+  // A cookie header is client input: a broken escape is a wrong cookie, never a crash.
+  const token = (cookieHeader) => {
+    const m = /(?:^|;\s*)ag_session=([^;]+)/.exec(cookieHeader || '');
+    if (!m) return null;
+    try { return decodeURIComponent(m[1]); } catch { return null; }
+  };
+  const start = (userId) => {
+    const sid = crypto.randomBytes(16).toString('hex');
+    store.sessionSet(sid, userId);
+    return sign(sid);
   };
   const read = (cookieHeader) => {
-    const m = /(?:^|;\s*)ag_session=([^;]+)/.exec(cookieHeader || '');
-    return m ? verify(decodeURIComponent(m[1])) : null;
+    const sid = verify(token(cookieHeader));
+    return sid ? store.sessionUser(sid) : null;
   };
-  const setCookie = (id) => `ag_session=${encodeURIComponent(sign(id))}; Path=/; HttpOnly; SameSite=Lax`;
-  const clearCookie = () => 'ag_session=; Path=/; HttpOnly; Max-Age=0';
-  return { sign, verify, read, setCookie, clearCookie };
+  const end = (cookieHeader) => {
+    const sid = verify(token(cookieHeader));
+    if (sid) store.sessionEnd(sid);
+  };
+  const setCookie = (tok) => `ag_session=${encodeURIComponent(tok)}; Path=/; HttpOnly; SameSite=Lax`;
+  const clearCookie = () => 'ag_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+  return { sign, verify, token, start, read, end, setCookie, clearCookie };
 }
 
 // --- the permission matrix --------------------------------------------------------
@@ -72,6 +91,14 @@ export function permissions(graph) {
       if (!e || !opAllowed(e.ops, op)) return false;
       if (e.own && row && op !== 'create') return user ? String(row[e.own]) === String(user.id) : false;
       return true;
+    },
+    // Does this row belong to the user, when the role is own-scoped? A "by"-gated
+    // action still may not reach another user's row.
+    ownOk(user, entity, row) {
+      if (!spec || !row) return true;
+      const e = entitySpec(roleOf(user), entity);
+      if (!e?.own) return true;
+      return user ? String(row[e.own]) === String(user.id) : false;
     },
     // The reference field that scopes this role to its own rows, if any.
     ownField(user, entity) {

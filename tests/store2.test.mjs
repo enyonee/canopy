@@ -60,6 +60,23 @@ test('reverse references are found, named, or refused with a hint', () => {
   assert.equal(store.fieldAt('A', ['n', 'deeper']), null, 'a text field has no fields');
 });
 
+test('a secret field is unreadable in expressions, except a rule checking the row\'s own not-yet-hashed value', () => {
+  const store = new Store(G({ User: { email: 'text!', password: 'password!' } }), ':memory:');
+  const id = store.insert('User', { email: 'ann@x.test', password: 'secret1' });
+  const row = store.raw('User', id);
+  assert.throws(() => store.ctx('User', row).get(['password']), /User\.password is secret; expressions cannot read it/);
+  // A rule on the candidate row (not yet hashed) may read it...
+  const probe = { ...row, password: 'abc' };
+  assert.equal(store.ctx('User', probe, [], { allowSecret: true }).get(['password']), 'abc');
+  // ...but the exemption never follows a hop to another row's real, hashed field.
+  const withRef = new Store(G({ User: { email: 'text!', password: 'password!' },
+    Post: { author: 'ref:User' } }), ':memory:');
+  const u = withRef.insert('User', { email: 'ann@x.test', password: 'secret1' });
+  const p = withRef.insert('Post', { author: u });
+  assert.throws(() => withRef.ctx('Post', withRef.raw('Post', p), [], { allowSecret: true }).get(['author', 'password']),
+    /User\.password is secret; expressions cannot read it/);
+});
+
 test('a derived field that depends on itself is refused at read time', () => {
   const store = new Store(G({ A: { x: 'int := y + 1', y: 'int := x + 1' } }), ':memory:');
   const a = store.insert('A', {});
@@ -103,6 +120,8 @@ test('where clauses: ranges, sets, likes, null, and the same on derived fields i
   assert.deepEqual(store.list('Order', { sort: { field: 'total', dir: 'desc' } }).map((r) => r.id), [dear, cheap, bare]);
   assert.deepEqual(store.list('Order', { sort: { field: 'total', dir: 'asc' } }).map((r) => r.id), [bare, cheap, dear]);
   assert.equal(store.count('Order', { big: 1 }), 1);
+  // the same unknown-op refusal on a derived field: filtered in memory, not SQL
+  assert.throws(() => ids({ where: { total: { between: 5 } } }), /unknown comparison "between"; known: gte, lte, gt, lt, ne, in, like/);
 });
 
 test('aggregation: month buckets in SQL, derived metrics in memory, sort and limit in both', () => {

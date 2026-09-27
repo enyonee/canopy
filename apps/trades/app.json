@@ -1,0 +1,199 @@
+{
+  "app": "trades",
+  "task": "webgen-bench/000052",
+  "note": "A blue-collar job site: employers post trade jobs with requirements and contact details, workers browse and search them, keep an own profile with skills, qualifications and a photo, and apply with one button; the employer follows the candidates through shortlist, hire and decline.",
+  "theme": { "background": "ivory", "accent": "forestgreen" },
+  "home": "/Job",
+
+  "data": {
+    "User":        { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,worker,employer]=worker" },
+    "Profile":     { "headline": "text", "user": "ref:User!", "fullName": "text := user.name", "email": "text := user.email",
+                     "trade": "enum[construction,plumbing,electrical,welding,carpentry,hvac,painting]=construction",
+                     "phone": "text", "city": "text", "skills": "longtext", "qualifications": "longtext", "photo": "image",
+                     "years": "int=0", "available": "bool=true",
+                     "applications": "int := count(Application: worker = row.user)" },
+    "Job":         { "title": "text!", "company": "text!", "employer": "ref:User!",
+                     "trade": "enum[construction,plumbing,electrical,welding,carpentry,hvac,painting]=construction",
+                     "location": "text!", "description": "longtext!", "requirements": "longtext!",
+                     "contactName": "text!", "contactEmail": "text!", "contactPhone": "text",
+                     "payRate": "money!", "payUnit": "enum[hour,day,week]=hour",
+                     "postedAt": "date=today", "status": "enum[open,filled,closed]=open",
+                     "applicants": "int := count(Application)" },
+    "Application": { "job": "ref:Job!", "worker": "ref:User!", "employer": "ref:User", "message": "longtext",
+                     "status": "enum[submitted,shortlisted,hired,declined]=submitted", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User":    [ { "unique": "email", "message": "This email is already registered" } ],
+    "Profile": [ { "unique": "user", "message": "This user already has a profile" },
+                 { "check": "years >= 0", "message": "Years of experience cannot be negative" } ],
+    "Job":     [ { "check": "payRate > 0", "message": "Pay rate must be greater than zero" },
+                 { "check": "len(description) >= 20", "message": "The job description needs at least 20 characters" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "worker", "anonymous": "guest",
+    "can": {
+      "admin":    "*",
+      "worker":   { "Job": ["view", "do:apply"],
+                    "Profile": { "own": "user", "can": ["view", "edit"] },
+                    "Application": { "own": "worker", "can": ["view"] } },
+      "employer": { "Job": { "own": "employer", "can": ["view", "create", "edit", "delete"] },
+                    "Profile": ["view"],
+                    "Application": { "own": "employer", "can": ["view", "go:shortlist", "go:hire", "go:decline"] } },
+      "guest":    { "Job": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@trades.test", "password": "admin123", "name": "Site Admin", "role": "admin" },
+      { "email": "marco@trades.test", "password": "marco123", "name": "Marco Diaz", "role": "worker" },
+      { "email": "lena@trades.test", "password": "lena123", "name": "Lena Hart", "role": "worker" },
+      { "email": "buildright@trades.test", "password": "build123", "name": "BuildRight Construction", "role": "employer" },
+      { "email": "pipeworks@trades.test", "password": "pipe123", "name": "Pipeworks Ltd", "role": "employer" }
+    ],
+    "Profile": [
+      { "headline": "Journeyman electrician, 8 years on site", "user": 2, "trade": "electrical", "phone": "+1 555 0142", "city": "Portland, OR",
+        "skills": "Conduit bending, panel upgrades, three-phase wiring, fault finding.",
+        "qualifications": "State journeyman licence EL-4471; OSHA 30; first aid.", "years": 8 },
+      { "headline": "Residential plumber and pipefitter", "user": 3, "trade": "plumbing", "phone": "+1 555 0177", "city": "Salem, OR",
+        "skills": "Copper and PEX, drain cleaning, water heater installs, backflow testing.",
+        "qualifications": "Journeyman plumber licence PL-2290; backflow tester certificate.", "years": 5 }
+    ],
+    "Job": [
+      { "title": "Commercial electrician", "company": "BuildRight Construction", "employer": 4, "trade": "electrical", "location": "Portland, OR",
+        "description": "Pull and terminate feeders for a four-storey office fit-out, working from stamped drawings alongside the mechanical crew.",
+        "requirements": "State journeyman licence, own hand tools, able to work from lifts, two years of commercial experience.",
+        "contactName": "Dana Fowler", "contactEmail": "dana@buildright.test", "contactPhone": "+1 555 0301",
+        "payRate": 42.00, "payUnit": "hour", "postedAt": "2026-09-08" },
+      { "title": "Journeyman electrician, night shift", "company": "Pipeworks Ltd", "employer": 5, "trade": "electrical", "location": "Salem, OR",
+        "description": "Night maintenance on a running bottling line: motor controls, sensors and emergency stops, with a two-person crew.",
+        "requirements": "Journeyman licence, controls experience, comfortable on a 22:00 to 06:00 shift.",
+        "contactName": "Ravi Menon", "contactEmail": "ravi@pipeworks.test", "contactPhone": "+1 555 0302",
+        "payRate": 46.50, "payUnit": "hour", "postedAt": "2026-09-09" },
+      { "title": "Site plumber for a housing estate", "company": "BuildRight Construction", "employer": 4, "trade": "plumbing", "location": "Portland, OR",
+        "description": "First and second fix on twenty-four new-build houses, running supply and waste to kitchens and bathrooms.",
+        "requirements": "Journeyman plumber licence, PEX and copper, own van preferred.",
+        "contactName": "Dana Fowler", "contactEmail": "dana@buildright.test", "contactPhone": "+1 555 0301",
+        "payRate": 38.00, "payUnit": "hour", "postedAt": "2026-09-05" },
+      { "title": "Emergency plumbing technician", "company": "Pipeworks Ltd", "employer": 5, "trade": "plumbing", "location": "Eugene, OR",
+        "description": "Rotating call-out for burst pipes and blocked drains across the county, one week in four on standby.",
+        "requirements": "Journeyman plumber licence, clean driving record, on-call availability.",
+        "contactName": "Ravi Menon", "contactEmail": "ravi@pipeworks.test", "contactPhone": "+1 555 0302",
+        "payRate": 40.00, "payUnit": "hour", "postedAt": "2026-09-11" },
+      { "title": "Concrete formwork carpenter", "company": "BuildRight Construction", "employer": 4, "trade": "carpentry", "location": "Portland, OR",
+        "description": "Build and strip wall and column forms for a cast-in-place car park, three months of steady work.",
+        "requirements": "Three years of formwork, able to read shop drawings, own nail bags.",
+        "contactName": "Dana Fowler", "contactEmail": "dana@buildright.test", "contactPhone": "+1 555 0301",
+        "payRate": 36.00, "payUnit": "hour", "postedAt": "2026-09-02" },
+      { "title": "General construction labourer", "company": "Pipeworks Ltd", "employer": 5, "trade": "construction", "location": "Bend, OR",
+        "description": "Site clean-up, material handling and assisting the trades on a retail refurbishment.",
+        "requirements": "Steel toe boots, hard hat, willing to learn; no licence needed.",
+        "contactName": "Ravi Menon", "contactEmail": "ravi@pipeworks.test", "contactPhone": "+1 555 0302",
+        "payRate": 24.00, "payUnit": "hour", "postedAt": "2026-08-28", "status": "filled" }
+    ],
+    "Application": [
+      { "job": 3, "worker": 2, "employer": 4, "message": "Eight years on site, available from next Monday.", "createdAt": "2026-09-10T08:00:00.000Z" },
+      { "job": 1, "worker": 3, "employer": 4, "message": "Licensed and insured, can start immediately.", "status": "shortlisted", "createdAt": "2026-09-10T09:30:00.000Z" }
+    ]
+  },
+
+  "connectors": {
+    "mail": { "kind": "mail", "from": "jobs@trades.test" }
+  },
+
+  "events": [
+    { "on": "User.created", "do": [ { "block": "db.createRow", "entity": "Profile", "values": { "user": "@row.id" } } ] }
+  ],
+
+  "actions": [
+    { "name": "apply", "in": "Job", "title": "Apply for this job", "by": ["worker"],
+      "after": "/list/my-applications", "confirm": "Application sent to {row.company}",
+      "do": [ { "block": "db.createRow", "entity": "Application",
+                "values": { "job": "@row.id", "worker": "@me", "employer": "@row.employer", "message": "@values.message" } },
+              { "block": "mail.send", "connector": "mail", "to": "@row.contactEmail",
+                "subject": "New application for {row.title}",
+                "text": "A worker applied for {row.title} at {row.company} in {row.location}." } ] }
+  ],
+
+  "states": {
+    "Application": { "field": "status", "transitions": [
+      { "name": "shortlist", "from": ["submitted"], "to": "shortlisted", "title": "Shortlist" },
+      { "name": "hire", "from": ["shortlisted"], "to": "hired", "title": "Hire", "confirm": "Hired for {row.job.title}",
+        "do": [ { "block": "mail.send", "connector": "mail", "to": "@row.worker.email",
+                  "subject": "You were hired for {row.job.title}",
+                  "text": "{row.job.company} hired you for {row.job.title} in {row.job.location}." } ] },
+      { "name": "decline", "from": ["submitted", "shortlisted"], "to": "declined", "title": "Decline" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Job.list":         { "title": "Job listings", "intro": "Open positions for trades: construction, plumbing, electrical and more.",
+                          "columns": ["title", "company", "trade", "location", "payRate", "payUnit", "postedAt"],
+                          "search": ["title", "company", "location"],
+                          "filters": [ { "name": "Trade", "field": "trade" } ],
+                          "where": { "status": "open" }, "sort": { "field": "postedAt", "dir": "desc" },
+                          "rowActions": ["view", "apply"], "createTitle": "Post a job" },
+    "Job.form":         { "title": "Post a job", "fields": ["title", "company", "trade", "location", "description", "requirements",
+                                                            "contactName", "contactEmail", "contactPhone", "payRate", "payUnit"],
+                          "submit": "Post job", "confirm": "Your job listing is live", "after": "/Job/{id}",
+                          "confirmEdit": "Job listing updated", "afterEdit": "/Job/{id}" },
+    "Job.detail":       { "fields": ["title", "company", "trade", "location", "description", "requirements",
+                                     "contactName", "contactEmail", "contactPhone", "payRate", "payUnit", "postedAt", "status", "applicants"],
+                          "actions": ["apply"],
+                          "related": [ { "entity": "Application", "via": "job", "title": "Applications",
+                                         "columns": ["worker", "message", "status", "createdAt"], "form": false,
+                                         "rowActions": ["go:shortlist", "go:hire", "go:decline"] } ] },
+    "Profile.list":     { "title": "Workers", "columns": ["fullName", "trade", "city", "years", "available", "applications"],
+                          "search": ["headline", "skills", "qualifications", "city"],
+                          "filters": [ { "name": "Trade", "field": "trade" }, { "name": "Available", "field": "available" } ],
+                          "labels": { "available": ["Not available", "Available"] },
+                          "rowActions": ["view", "edit"], "create": false },
+    "Profile.form":     { "title": "My profile", "fields": ["headline", "trade", "phone", "city", "skills", "qualifications", "photo", "years", "available"],
+                          "submit": "Save profile", "confirmEdit": "Profile updated", "afterEdit": "/Profile/{id}" },
+    "Profile.detail":   { "fields": ["fullName", "email", "headline", "trade", "phone", "city", "skills", "qualifications", "photo", "years", "available", "applications"],
+                          "labels": { "available": ["Not available", "Available"] } },
+    "Application.list": { "title": "Applications", "columns": ["job", "worker", "status", "createdAt"],
+                          "filters": [ { "name": "Status", "field": "status" } ],
+                          "sort": { "field": "createdAt", "dir": "desc" },
+                          "rowActions": ["view", "go:shortlist", "go:hire", "go:decline"], "create": false },
+    "Application.detail": { "fields": ["job", "worker", "message", "status", "createdAt"] },
+    "User.list":        { "title": "Users", "columns": ["email", "name", "role"] },
+    "User.form":        { "fields": ["email", "password", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "my-applications", "entity": "Application", "title": "My applications", "roles": ["worker"],
+      "where": { "worker": "@me" }, "columns": ["job", "status", "createdAt"], "rowActions": ["view"],
+      "sort": { "field": "createdAt", "dir": "desc" } },
+    { "id": "my-postings", "entity": "Job", "title": "My postings", "roles": ["employer"],
+      "where": { "employer": "@me" }, "columns": ["title", "trade", "location", "status", "applicants", "postedAt"],
+      "rowActions": ["view", "edit", "delete"], "create": true, "filters": [ { "name": "Status", "field": "status" } ] },
+    { "id": "candidates", "entity": "Application", "title": "Candidates", "roles": ["employer"],
+      "where": { "employer": "@me" }, "columns": ["job", "worker", "status", "createdAt"],
+      "rowActions": ["view", "go:shortlist", "go:hire", "go:decline"], "filters": [ { "name": "Status", "field": "status" } ] }
+  ],
+
+  "dashboards": [
+    { "id": "market", "title": "Market", "roles": ["admin"], "period": { "Application": "createdAt" },
+      "cards": [ { "title": "Open jobs", "entity": "Job", "fn": "count", "where": { "status": "open" } },
+                 { "title": "Workers available", "entity": "Profile", "fn": "count", "where": { "available": 1 } },
+                 { "title": "Applications", "entity": "Application", "fn": "count" },
+                 { "title": "Average pay rate", "entity": "Job", "fn": "avg", "field": "payRate", "where": { "status": "open" } } ],
+      "tables": [ { "title": "Open jobs by trade", "entity": "Job", "groupBy": "trade", "groupTitle": "Trade", "where": { "status": "open" },
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Jobs" }, { "fn": "max", "field": "payRate", "as": "top", "title": "Top rate" } ] },
+                  { "title": "Applications by status", "entity": "Application", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Applications" } ] } ] }
+  ],
+
+  "pages": [
+    { "id": "about", "title": "How it works", "heading": "Work that pays, crews that show up",
+      "body": [ "Employers post what the job is, what it needs and who to call; every listing carries the trade, the site and the rate.",
+                "Workers keep one profile with their skills, qualifications and a photograph, then apply to a listing with a single button.",
+                "An employer follows each candidate from submitted to shortlisted to hired." ],
+      "links": [ { "label": "Browse job listings", "href": "/Job" }, { "label": "Workers", "href": "/Profile" } ] }
+  ]
+}

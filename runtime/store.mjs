@@ -8,6 +8,8 @@ import { hashPassword, isHashed } from './auth.mjs';
 import { DEFAULT } from './registry.mjs';
 
 const OPS = { gte: '>=', lte: '<=', gt: '>', lt: '<', ne: '!=' };
+// What the user typed is what is searched for: "50%" is a percent sign, not "anything".
+const likeSafe = (v) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
 const UNITS = { day: '%Y-%m-%d', month: '%Y-%m', year: '%Y' };
 
 export class Store {
@@ -56,6 +58,8 @@ export class Store {
     // The outbox: every effect that leaves the process is a row here first.
     this.db.exec(`CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT,
       target TEXT, payload TEXT, status TEXT, code INTEGER, error TEXT, attempts INTEGER DEFAULT 0, at TEXT, updatedAt TEXT)`);
+    // Sessions: the cookie names a row here, so signing out really ends the session.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS "_session" (id TEXT PRIMARY KEY, user INTEGER, at TEXT)`);
   }
 
   field(entity, name) { return (this.fields[entity] || []).find((f) => f.name === name); }
@@ -86,6 +90,14 @@ export class Store {
     throw new Error(`${child} references ${parent} through ${refs.map((f) => f.name).join(' and ')}; name one: ${child}.${refs[0].name}`);
   }
 
+  // A write is a write: a step, a seed and a form all meet the same declared kind.
+  // Without this, "closed set" means "closed on the form route only".
+  checkValue(entity, f, v) {
+    const bad = f.type.validate(v, f, this);
+    if (bad) throw new Error(bad);
+    return v;
+  }
+
   static prepareValue(f, v) {
     if (f.type.secret) return v === null || v === '' || v === undefined ? null : isHashed(v) ? v : hashPassword(String(v));
     return coerce(f, v);
@@ -95,8 +107,10 @@ export class Store {
     const cols = [], vals = [];
     for (const f of this.fields[entity].filter(isStored)) {
       const given = values[f.name];
+      const use = given === undefined || given === '' ? defaultValue(f) : Store.prepareValue(f, this.checkValue(entity, f, given));
+      if (f.required && (use === null || use === undefined || use === '')) throw new Error(`${f.name} is required`);
       cols.push(`"${f.name}"`);
-      vals.push(given === undefined || given === '' ? defaultValue(f) : Store.prepareValue(f, given));
+      vals.push(use);
     }
     const st = this.db.prepare(cols.length
       ? `INSERT INTO "${entity.toLowerCase()}" (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`
@@ -111,7 +125,10 @@ export class Store {
       if (!f || !isStored(f)) continue;
       // An empty password on edit means "keep the old one", never "erase it".
       if (f.type.secret && (v === '' || v === undefined || v === null)) continue;
-      sets.push(`"${k}"=?`); vals.push(Store.prepareValue(f, v));
+      // A blank box means the declared default, on an edit exactly as on a create.
+      const use = v === undefined || v === '' ? defaultValue(f) : Store.prepareValue(f, this.checkValue(entity, f, v));
+      if (f.required && (use === null || use === undefined || use === '')) throw new Error(`${f.name} is required`);
+      sets.push(`"${k}"=?`); vals.push(use);
     }
     if (!sets.length) return;
     this.db.prepare(`UPDATE "${entity.toLowerCase()}" SET ${sets.join(',')} WHERE id=?`).run(...vals, Number(id));
@@ -131,8 +148,11 @@ export class Store {
   exists(entity, field, value, excludeId = null) {
     const f = this.field(entity, field);
     const v = coerce(f, value);
-    const row = this.db.prepare(`SELECT id FROM "${entity.toLowerCase()}" WHERE "${field}"=? AND id!=?`).get(v, Number(excludeId ?? 0));
-    return Boolean(row);
+    // Two logins that differ only in case are one login.
+    const sql = f?.type.exprKind === 'text' && typeof v === 'string'
+      ? `SELECT id FROM "${entity.toLowerCase()}" WHERE LOWER("${field}")=LOWER(?) AND id!=?`
+      : `SELECT id FROM "${entity.toLowerCase()}" WHERE "${field}"=? AND id!=?`;
+    return Boolean(this.db.prepare(sql).get(v, Number(excludeId ?? 0)));
   }
 
   count(entity, where = {}) { return this.list(entity, { where }).length; }
@@ -145,8 +165,11 @@ export class Store {
 
   // --- derived fields ----------------------------------------------------------
   // The evaluation context of a row: field reads (money in major units), one hop
-  // through references, and the child rows an aggregate walks.
-  ctx(entity, row, stack = []) {
+  // through references, and the child rows an aggregate walks. `allowSecret` is
+  // for a rule check on the row's own submitted values (still plain text, not yet
+  // hashed, and never stored): it does not propagate through a hop or an
+  // aggregate, so a referenced row's real password hash stays unreadable.
+  ctx(entity, row, stack = [], { allowSecret = false } = {}) {
     const store = this;
     return {
       entity, row,
@@ -154,6 +177,8 @@ export class Store {
         const [head, ...rest] = path;
         const f = store.field(entity, head);
         if (!f) throw new Error(`${entity} has no field "${head}"`);
+        // A password hash is not a value the algebra may copy into an ordinary column.
+        if (f.type.secret && !allowSecret) throw new Error(`${entity}.${head} is secret; expressions cannot read it`);
         const v = toExpr(f, f.derive ? store.derived(entity, row, f, stack) : row[head]);
         if (!rest.length) return v;
         if (f.kind !== 'ref') throw new Error(`${entity}.${head} is ${f.kind}, cannot read .${rest[0]} of it`);
@@ -205,7 +230,7 @@ export class Store {
         for (const [op, v] of Object.entries(cmp)) {
           if (v === undefined || v === '' || v === null) continue;
           if (op === 'in') { const arr = Array.isArray(v) ? v : [v]; clauses.push(`"${field}" IN (${arr.map(() => '?').join(',')})`); arr.forEach((x) => vals.push(coerce(f, x))); }
-          else if (op === 'like') { clauses.push(`LOWER("${field}") LIKE ?`); vals.push(`%${String(v).toLowerCase()}%`); }
+          else if (op === 'like') { clauses.push(`LOWER("${field}") LIKE ? ESCAPE '\\'`); vals.push(`%${likeSafe(String(v).toLowerCase())}%`); }
           else if (OPS[op]) { clauses.push(`"${field}" ${OPS[op]} ?`); vals.push(coerce(f, v)); }
           else throw new Error(`unknown comparison "${op}" on ${entity}.${field}; known: ${Object.keys(OPS).join(', ')}, in, like`);
         }
@@ -229,7 +254,8 @@ export class Store {
         if (op === 'like') return String(v ?? '').toLowerCase().includes(String(x).toLowerCase());
         if (op === 'gte') return v >= c(x); if (op === 'lte') return v <= c(x);
         if (op === 'gt') return v > c(x); if (op === 'lt') return v < c(x);
-        return String(v) !== String(c(x));
+        if (op === 'ne') return String(v) !== String(c(x));
+        throw new Error(`unknown comparison "${op}"; known: ${Object.keys(OPS).join(', ')}, in, like`);
       });
     }
     return String(v) === String(c(cmp));
@@ -239,8 +265,8 @@ export class Store {
     const table = entity.toLowerCase();
     const { clauses, vals } = this.clauses(entity, where);
     if (q && search.length) {
-      clauses.push('(' + search.map((f) => `LOWER("${f}") LIKE ?`).join(' OR ') + ')');
-      search.forEach(() => vals.push(`%${q.toLowerCase()}%`));
+      clauses.push('(' + search.map((f) => `LOWER("${f}") LIKE ? ESCAPE '\\'`).join(' OR ') + ')');
+      search.forEach(() => vals.push(`%${likeSafe(q.toLowerCase())}%`));
     }
     const sortField = sort ? this.field(entity, sort.field) : null;
     const order = sort && !sortField?.derive ? `ORDER BY "${sort.field}" ${sort.dir === 'asc' ? 'ASC' : 'DESC'}` : 'ORDER BY id DESC';
@@ -321,6 +347,19 @@ export class Store {
       .map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
   }
   outboxGet(id) { return this.outbox({ id: Number(id) })[0] || null; }
+
+  // --- sessions ---------------------------------------------------------------------
+  sessionSet(sid, userId) {
+    this.db.prepare(`INSERT OR REPLACE INTO "_session" (id, user, at) VALUES (?, ?, ?)`)
+      .run(String(sid), Number(userId), new Date().toISOString());
+    return sid;
+  }
+  sessionUser(sid) {
+    const row = this.db.prepare(`SELECT user FROM "_session" WHERE id=?`).get(String(sid));
+    return row ? Number(row.user) : null;
+  }
+  sessionEnd(sid) { this.db.prepare(`DELETE FROM "_session" WHERE id=?`).run(String(sid)); }
+  sessionsDrop(userId) { this.db.prepare(`DELETE FROM "_session" WHERE user=?`).run(Number(userId)); }
   outboxUpdate(id, patch) {
     const sets = [], vals = [];
     for (const [k, v] of Object.entries(patch)) { sets.push(`"${k}"=?`); vals.push(v); }
