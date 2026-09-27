@@ -8,7 +8,10 @@ import { once } from 'node:events';
 import { Store } from '../runtime/store.mjs';
 import { CATALOG } from '../runtime/blocks.mjs';
 import { validate } from '../runtime/validate.mjs';
-import { listView, formView, detailView, dashboardView } from '../runtime/render.mjs';
+import { listView } from '../runtime/render/list.mjs';
+import { formView } from '../runtime/render/form.mjs';
+import { detailView } from '../runtime/render/detail.mjs';
+import { dashboardView } from '../runtime/render/dashboard.mjs';
 import { serve } from '../runtime/server.mjs';
 import { boot, rows, flash } from './helpers.mjs';
 
@@ -225,7 +228,7 @@ test('the strikethrough row, a page whose graph declares no actions, an identity
   assert.equal((html.match(/<tr class="done">/g) || []).length, 1, 'exactly the finished row is struck through');
   assert.equal((html.match(/<tr class="">/g) || []).length, 1);
 
-  const { staticPage } = await import('../runtime/render.mjs');
+  const { staticPage } = await import('../runtime/render/pages.mjs');
   const bareGraph = { app: 'x', data: { T: {} } };
   const page = staticPage(bareGraph, { id: 'p', title: 'P', actions: ['ghost'] });
   assert.match(page, />Ghost</, 'a page button survives a graph that declares no actions at all');

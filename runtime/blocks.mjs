@@ -11,6 +11,7 @@
 //     store, graph, entity, id, values, step, resolve(obj), text(str), run(steps, extra), user
 import { toMinor } from './fields.mjs';
 
+/** @type {Record<string, import('./types.d.ts').BlockType>} */
 export const CATALOG = {
   'db.create': {
     summary: 'create a row of the action entity from submitted values',

@@ -4,10 +4,12 @@
 // same shape (SMTP, a queue, a chat API…).
 const TIMEOUT_MS = 3000;
 
+/** @type {Record<string, import('./types.d.ts').TransportType>} */
 export const TRANSPORTS = {
   http: {
     summary: 'a JSON request to "url" (POST by default) with optional "headers" and "timeout"',
     validate: (c) => {
+      /** @type {[string, string, string?][]} */
       const out = [];
       if (!/^https?:\/\//.test(String(c.url || ''))) out.push(['url', 'an http connector needs "url" starting with http:// or https://']);
       if (c.method !== undefined && !['POST', 'PUT', 'PATCH', 'GET'].includes(c.method)) out.push(['method', `unsupported method "${c.method}"`, 'POST, PUT, PATCH or GET']);

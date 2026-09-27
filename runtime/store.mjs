@@ -2,15 +2,12 @@
 // is the diff between the graph and the live table. Destructive steps need a marker.
 // Derived fields never touch the schema: they are computed on every read.
 import { DatabaseSync } from 'node:sqlite';
-import { parseField, sqlType, defaultValue, coerce, isStored, toExpr, fromExpr, exprKind } from './spec.mjs';
+import { parseField, sqlType, defaultValue, coerce, isStored, toExpr, fromExpr } from './spec.mjs';
 import { evaluate } from './expr.mjs';
 import { hashPassword, isHashed } from './auth.mjs';
 import { DEFAULT } from './registry.mjs';
-
-const OPS = { gte: '>=', lte: '<=', gt: '>', lt: '<', ne: '!=' };
-// What the user typed is what is searched for: "50%" is a percent sign, not "anything".
-const likeSafe = (v) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
-const UNITS = { day: '%Y-%m-%d', month: '%Y-%m', year: '%Y' };
+import * as query from './store/query.mjs';
+import * as state from './store/state.mjs';
 
 export class Store {
   constructor(graph, file, registry = DEFAULT) {
@@ -215,158 +212,11 @@ export class Store {
     for (const f of this.fields[entity]) if (f.derive) out[f.name] = this.derived(entity, row, f);
     return out;
   }
-
-  // --- queries -------------------------------------------------------------------
-  // Structured query only: the graph names fields and comparisons, never SQL.
-  // where: { field: value } is equality; { field: { gte, lte, gt, lt, ne, in, like } } is a range.
-  clauses(entity, where) {
-    const clauses = [], vals = [], later = [];
-    for (const [field, cmp] of Object.entries(where)) {
-      if (cmp === undefined || cmp === '') continue;
-      const f = field === 'id' ? { kind: 'int', type: this.registry.fields.int } : this.field(entity, field);
-      if (f?.derive) { later.push([field, cmp]); continue; }
-      if (cmp === null) { clauses.push(`"${field}" IS NULL`); continue; }
-      if (typeof cmp === 'object' && !Array.isArray(cmp)) {
-        for (const [op, v] of Object.entries(cmp)) {
-          if (v === undefined || v === '' || v === null) continue;
-          if (op === 'in') { const arr = Array.isArray(v) ? v : [v]; clauses.push(`"${field}" IN (${arr.map(() => '?').join(',')})`); arr.forEach((x) => vals.push(coerce(f, x))); }
-          else if (op === 'like') { clauses.push(`LOWER("${field}") LIKE ? ESCAPE '\\'`); vals.push(`%${likeSafe(String(v).toLowerCase())}%`); }
-          else if (OPS[op]) { clauses.push(`"${field}" ${OPS[op]} ?`); vals.push(coerce(f, v)); }
-          else throw new Error(`unknown comparison "${op}" on ${entity}.${field}; known: ${Object.keys(OPS).join(', ')}, in, like`);
-        }
-        continue;
-      }
-      clauses.push(`"${field}"=?`);
-      vals.push(coerce(f, cmp));
-    }
-    return { clauses, vals, later };
-  }
-
-  // The in-memory twin of a where clause, for derived fields: values compare in storage units.
-  static matches(row, field, cmp, f = null) {
-    const v = row[field];
-    const c = (x) => (f ? coerce(f, x) : x);
-    if (cmp === null) return v === null;
-    if (typeof cmp === 'object' && !Array.isArray(cmp)) {
-      return Object.entries(cmp).every(([op, x]) => {
-        if (x === undefined || x === '' || x === null) return true;
-        if (op === 'in') return (Array.isArray(x) ? x : [x]).map((y) => String(c(y))).includes(String(v));
-        if (op === 'like') return String(v ?? '').toLowerCase().includes(String(x).toLowerCase());
-        if (op === 'gte') return v >= c(x); if (op === 'lte') return v <= c(x);
-        if (op === 'gt') return v > c(x); if (op === 'lt') return v < c(x);
-        if (op === 'ne') return String(v) !== String(c(x));
-        throw new Error(`unknown comparison "${op}"; known: ${Object.keys(OPS).join(', ')}, in, like`);
-      });
-    }
-    return String(v) === String(c(cmp));
-  }
-
-  listRaw(entity, { search = [], q = '', where = {}, sort = null } = {}) {
-    const table = entity.toLowerCase();
-    const { clauses, vals } = this.clauses(entity, where);
-    if (q && search.length) {
-      clauses.push('(' + search.map((f) => `LOWER("${f}") LIKE ? ESCAPE '\\'`).join(' OR ') + ')');
-      search.forEach(() => vals.push(`%${likeSafe(q.toLowerCase())}%`));
-    }
-    const sortField = sort ? this.field(entity, sort.field) : null;
-    const order = sort && !sortField?.derive ? `ORDER BY "${sort.field}" ${sort.dir === 'asc' ? 'ASC' : 'DESC'}` : 'ORDER BY id DESC';
-    return this.db.prepare(
-      `SELECT * FROM "${table}"${clauses.length ? ' WHERE ' + clauses.join(' AND ') : ''} ${order}`).all(...vals);
-  }
-
-  list(entity, opts = {}) {
-    let rows = this.listRaw(entity, opts).map((r) => this.hydrate(entity, r));
-    const { later } = this.clauses(entity, opts.where || {});
-    for (const [field, cmp] of later) rows = rows.filter((r) => Store.matches(r, field, cmp, this.field(entity, field)));
-    const sort = opts.sort;
-    if (sort && this.field(entity, sort.field)?.derive) {
-      const dir = sort.dir === 'asc' ? 1 : -1;
-      rows.sort((a, b) => (a[sort.field] > b[sort.field] ? dir : a[sort.field] < b[sort.field] ? -dir : 0));
-    }
-    return rows;
-  }
-
-  // Declarative aggregation: the graph names the function and the field, never SQL.
-  // groupUnit (day | month | year) buckets a date or time field.
-  aggregate(entity, { groupBy = null, groupUnit = null, metrics = [], sort = null, limit = null, where = {} } = {}) {
-    const usesDerived = (groupBy && this.field(entity, groupBy)?.derive) || metrics.some((m) => m.field && this.field(entity, m.field)?.derive)
-      || this.clauses(entity, where).later.length;
-    if (usesDerived) return this.aggregateInMemory(entity, { groupBy, groupUnit, metrics, sort, limit, where });
-    const table = entity.toLowerCase();
-    const cols = [];
-    if (groupBy) cols.push(groupUnit ? `strftime('${UNITS[groupUnit]}', "${groupBy}") AS grp` : `"${groupBy}" AS grp`);
-    for (const m of metrics) {
-      const fn = String(m.fn).toUpperCase();
-      const expr = fn === 'COUNT' ? 'COUNT(*)' : `${fn}("${m.field}")`;
-      cols.push(`${expr} AS "${m.as}"`);
-    }
-    const { clauses, vals } = this.clauses(entity, where);
-    let sql = `SELECT ${cols.join(', ')} FROM "${table}"`;
-    if (clauses.length) sql += ` WHERE ${clauses.join(' AND ')}`;
-    if (groupBy) sql += ' GROUP BY grp';
-    if (sort) sql += ` ORDER BY "${sort.field}" ${sort.dir === 'asc' ? 'ASC' : 'DESC'}`;
-    if (limit) sql += ` LIMIT ${Number(limit)}`;
-    return this.db.prepare(sql).all(...vals).map((r) => ({ ...r }));
-  }
-
-  aggregateInMemory(entity, { groupBy, groupUnit, metrics, sort, limit, where }) {
-    const rows = this.list(entity, { where });
-    const bucket = (v) => (groupUnit && v ? String(v).slice(0, { day: 10, month: 7, year: 4 }[groupUnit]) : v);
-    const groups = new Map();
-    for (const r of rows) {
-      const key = groupBy ? bucket(r[groupBy]) : null;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(r);
-    }
-    let out = [...groups.entries()].map(([grp, rs]) => {
-      const o = groupBy ? { grp } : {};
-      for (const m of metrics) {
-        const vals = rs.map((r) => r[m.field]).filter((v) => v !== null && v !== undefined);
-        o[m.as] = m.fn === 'count' ? rs.length : !vals.length ? null
-          : m.fn === 'sum' ? vals.reduce((a, b) => a + b, 0)
-          : m.fn === 'avg' ? vals.reduce((a, b) => a + b, 0) / vals.length
-          : m.fn === 'min' ? Math.min(...vals) : Math.max(...vals);
-      }
-      return o;
-    });
-    if (sort) { const d = sort.dir === 'asc' ? 1 : -1; out.sort((a, b) => (a[sort.field] > b[sort.field] ? d : a[sort.field] < b[sort.field] ? -d : 0)); }
-    if (limit) out = out.slice(0, Number(limit));
-    return out;
-  }
-
-  // --- outbox ----------------------------------------------------------------------
-  enqueue({ kind, connector, target, payload }) {
-    const at = new Date().toISOString();
-    return Number(this.db.prepare(`INSERT INTO "_outbox" (kind, connector, target, payload, status, attempts, at, updatedAt)
-      VALUES (?, ?, ?, ?, 'queued', 0, ?, ?)`).run(kind, connector, target, JSON.stringify(payload ?? null), at, at).lastInsertRowid);
-  }
-  outbox(where = {}) {
-    const clauses = [], vals = [];
-    for (const [k, v] of Object.entries(where)) { clauses.push(`"${k}"=?`); vals.push(v); }
-    return this.db.prepare(`SELECT * FROM "_outbox"${clauses.length ? ' WHERE ' + clauses.join(' AND ') : ''} ORDER BY id DESC`).all(...vals)
-      .map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
-  }
-  outboxGet(id) { return this.outbox({ id: Number(id) })[0] || null; }
-
-  // --- sessions ---------------------------------------------------------------------
-  sessionSet(sid, userId) {
-    this.db.prepare(`INSERT OR REPLACE INTO "_session" (id, user, at) VALUES (?, ?, ?)`)
-      .run(String(sid), Number(userId), new Date().toISOString());
-    return sid;
-  }
-  sessionUser(sid) {
-    const row = this.db.prepare(`SELECT user FROM "_session" WHERE id=?`).get(String(sid));
-    return row ? Number(row.user) : null;
-  }
-  sessionEnd(sid) { this.db.prepare(`DELETE FROM "_session" WHERE id=?`).run(String(sid)); }
-  sessionsDrop(userId) { this.db.prepare(`DELETE FROM "_session" WHERE user=?`).run(Number(userId)); }
-  outboxUpdate(id, patch) {
-    const sets = [], vals = [];
-    for (const [k, v] of Object.entries(patch)) { sets.push(`"${k}"=?`); vals.push(v); }
-    sets.push('"updatedAt"=?'); vals.push(new Date().toISOString());
-    this.db.prepare(`UPDATE "_outbox" SET ${sets.join(',')} WHERE id=?`).run(...vals, Number(id));
-  }
 }
 
-export { exprKind };
+// Queries/aggregation (runtime/store/query.mjs) and the outbox/session tables
+// (runtime/store/state.mjs) are plain functions run with `this` bound to the
+// Store instance — split out only to keep this file under the size budget;
+// they are as much "the store" as anything above.
+Object.assign(Store.prototype, query, state);
 

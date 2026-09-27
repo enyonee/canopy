@@ -18,7 +18,7 @@ const needText = (fn, k) => { if (!['text', 'any'].includes(k)) throw new Error(
 // Which kinds may meet: numbers with numbers, dates with dates, text with text.
 export const family = (k) => (NUMERIC.has(k) ? 'number' : ['date', 'time'].includes(k) ? 'date' : k === 'any' ? null : k);
 // The kind of a set of arguments that must agree ("if" branches, "min"/"max", "coalesce").
-export const unify = (fn, ks) => {
+const unify = (fn, ks) => {
   const known = ks.filter((k) => k !== 'any');
   if (!known.length) return 'any';
   const fams = [...new Set(known.map(family))];
@@ -26,11 +26,12 @@ export const unify = (fn, ks) => {
   return known.includes('money') ? 'money' : known[0];
 };
 
+/** @type {Record<string, import('./types.d.ts').FunctionType>} */
 export const FUNCTIONS = {
   if: { arity: 3, kind: (ks) => unify('if', [ks[1], ks[2]]), run: (a) => (truthy(a[0]) ? a[1] : a[2]) },
   days: { arity: 2,
     kind: (ks) => { for (const k of ks) if (!['date', 'time', 'any'].includes(k)) throw new Error(`days() needs dates, got ${k}`); return 'number'; },
-    run: (a) => { const x = toDate(a[0]), y = toDate(a[1]); return x && y ? Math.round((x - y) / dayMs) : null; } },
+    run: (a) => { const x = toDate(a[0]), y = toDate(a[1]); return x && y ? Math.round((+x - +y) / dayMs) : null; } },
   round: { arity: [1, 2], kind: (ks) => { needNumber('round', ks[0]); if (ks.length > 1) needNumber('round', ks[1]); return ks[0] === 'any' ? 'number' : ks[0]; },
     run: (a) => { if (a[0] == null) return null; const m = 10 ** (a[1] || 0); return Math.round(a[0] * m) / m; } },
   abs: { arity: 1, kind: (ks) => { needNumber('abs', ks[0]); return ks[0] === 'any' ? 'number' : ks[0]; },

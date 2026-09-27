@@ -1,18 +1,22 @@
-// Scaffold renderer. Not a product UI — an admin-grade surface derived from the
-// schema so a browser can reach the backend. Colours come from /theme, never CSS.
-// `vc` is the view context: who is looking (user, role) and what they may do.
-import { formatMoney, isStored } from './spec.mjs';
+// Scaffold renderer: the shell (the page frame, nav, colours) and the small
+// primitives every view shares (escaping, one field's HTML, a row's action
+// buttons, which transitions a row offers). Not a product UI — an admin-grade
+// surface derived from the schema so a browser can reach the backend. The
+// actual views (list/form/detail/dashboard/static pages) are one file each
+// under runtime/render/, all built on what this module exports.
+import { formatMoney } from './spec.mjs';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const label = (name) => String(name).replace(/([A-Z])/g, ' $1').trim().replace(/^./, (c) => c.toUpperCase());
-const plural = (word) => /[^aeiou]y$/i.test(word) ? word.slice(0, -1) + 'ies'
+export const plural = (word) => /[^aeiou]y$/i.test(word) ? word.slice(0, -1) + 'ies'
   : /(s|x|z|ch|sh)$/i.test(word) ? word + 'es' : word + 's';
 export { esc, label };
 
-const anyone = { user: null, role: null, can: () => true, canSee: () => true, ownField: () => null, ownWhere: () => ({}), enabled: false };
+/** @type {import('./types.d.ts').ViewContext} */
+export const anyone = { user: null, role: null, can: (_e, _op, _row) => true, canSee: (_item) => true, ownField: (_e) => null, ownWhere: (_e) => ({}), enabled: false };
 
-export function page(graph, { title, body, flash, vc = anyone }) {
+export function page(graph, { title, body, flash = '', vc = anyone }) {
   const bg = graph.theme?.background || 'white';
   const accent = graph.theme?.accent || 'navy';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -81,13 +85,13 @@ export function fmt(store, entity, f, row, labels = {}) {
   return f.type.format(row[f.name], f, { esc, label, store, entity, row, labels });
 }
 
-const cell = (store, entity, fields, r, c, labels = {}) => {
+export const cell = (store, entity, fields, r, c, labels = {}) => {
   const f = fields.find((x) => x.name === c);
   return `<td>${f ? fmt(store, entity, f, r, labels) : esc(r[c])}</td>`;
 };
 
 // The buttons a row offers: built-ins, declared actions and state transitions.
-function rowButtons(graph, store, entity, r, actions, vc) {
+export function rowButtons(graph, store, entity, r, actions, vc) {
   return actions.map((a) => {
     if (a === 'view') return `<a class="btn" href="/${entity}/${r.id}">Open</a>`;
     if (a === 'edit') return vc.can(entity, 'edit', r) ? `<a class="btn" href="/${entity}/${r.id}/edit">Edit</a>` : '';
@@ -116,242 +120,7 @@ export function transitionsFor(graph, entity, row, vc = anyone) {
   });
 }
 
-function rangeForm(entity, path, filters, ctx) {
-  const ranges = filters.filter((f) => f.range);
-  if (!ranges.length) return '';
-  const inputs = ranges.map((f) => {
-    const type = ctx.store.field(entity, f.field)?.type.temporal ? 'date' : 'number';
-    return `<div class="range"><div><label for="${f.field}_from">${esc(f.name || label(f.field))} from</label>
-      <input type="${type}" id="${f.field}_from" name="${f.field}_from" value="${esc(ctx.range?.[`${f.field}_from`] || '')}"></div>
-      <div><label for="${f.field}_to">to</label><input type="${type}" id="${f.field}_to" name="${f.field}_to" value="${esc(ctx.range?.[`${f.field}_to`] || '')}"></div></div>`;
-  }).join('');
-  return `<form class="card" method="get" action="${path}">${inputs}<p><button type="submit">Apply</button> <a class="btn" href="${path}">Reset</a></p></form>`;
-}
-
-export function listView(graph, store, entity, fields, rows, ctx) {
-  const vc = ctx.vc || anyone;
-  const ov = graph.override?.[`${entity}.list`] || {};
-  const cols = ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name);
-  const actions = ov.rowActions ?? ['edit', 'delete'];
-  const doneField = fields.find((f) => f.kind === 'bool');
-  const path = ctx.path || `/${entity}`;
-
-  const filters = (ov.filters || []).filter((f) => !f.range).map((f) => {
-    const field = store.field(entity, f.field);
-    let options = f.options;
-    if (!options && field?.kind === 'ref') {
-      options = [{ label: 'All' }, ...store.list(field.target, {}).map((r) => ({ label: store.label(field.target, r), eq: r.id }))];
-    }
-    if (!options && field?.kind === 'enum') {
-      options = [{ label: 'All' }, ...field.options.map((o) => ({ label: label(o), eq: o }))];
-    }
-    if (!options && field?.kind === 'bool') {
-      const pair = (ov.labels || {})[f.field] || ['No', 'Yes'];
-      options = [{ label: 'All' }, { label: pair[1], eq: 1 }, { label: pair[0], eq: 0 }];
-    }
-    const links = options.map((o) => {
-      const active = String(ctx.where[f.field] ?? '') === String(o.eq ?? '');
-      const href = o.eq === undefined ? path : `${path}?${f.field}=${encodeURIComponent(o.eq)}`;
-      return `<a class="btn" href="${href}"${active ? ' aria-current="true"' : ''}>${esc(o.label)}</a>`;
-    }).join(' ');
-    return `<div class="card"><strong>${esc(f.name || label(f.field))}</strong><div>${links}</div></div>`;
-  }).join('') + rangeForm(entity, path, ov.filters || [], { ...ctx, store });
-
-  const searchBox = (ov.search || []).length ? `<form class="card" method="get" action="${path}">
-    <label for="q">Search</label>
-    <input type="text" id="q" name="q" value="${esc(ctx.q)}" placeholder="Search ${esc(entity.toLowerCase())}s">
-    <p><button type="submit">Search</button></p></form>` : '';
-
-  const keep = new URLSearchParams(ctx.query || '');
-  keep.delete('sort'); keep.delete('dir'); keep.delete('page');
-  const sortHref = (c) => { const q = new URLSearchParams(keep); q.set('sort', c); q.set('dir', ctx.sort === c && ctx.dir === 'asc' ? 'desc' : 'asc'); return `${path}?${q}`; };
-  const head = cols.map((c) => `<th><a href="${sortHref(c)}">${esc(label(c))}${ctx.sort === c ? (ctx.dir === 'asc' ? ' ▲' : ' ▼') : ''}</a></th>`).join('') + (actions.length ? '<th>Actions</th>' : '');
-  const pageHref = (n) => { const q = new URLSearchParams(ctx.query || ''); q.set('page', String(n)); return `${path}?${q}`; };
-  const pager = ctx.pages > 1 ? `<p class="pages">Page ${ctx.page} of ${ctx.pages} · ${ctx.page > 1 ? `<a href="${pageHref(ctx.page - 1)}">Previous</a>` : ''}${ctx.page < ctx.pages ? `<a href="${pageHref(ctx.page + 1)}">Next</a>` : ''}</p>` : '';
-  const body = rows.map((r) => {
-    const cells = cols.map((c) => cell(store, entity, fields, r, c, ov.labels || {})).join('');
-    const btns = actions.length ? rowButtons(graph, store, entity, r, actions, vc) : '';
-    const isDone = doneField && r[doneField.name] && ov.strikeDone !== false && doneField.name === 'done';
-    return `<tr class="${isDone ? 'done' : ''}">${cells}${actions.length ? `<td>${btns}</td>` : ''}</tr>`;
-  }).join('');
-
-  const title = ov.title || plural(label(entity));
-  const canCreate = ov.create !== false && vc.can(entity, 'create');
-  return page(graph, {
-    title, flash: ctx.flash, vc,
-    body: `<h2>${esc(title)}</h2>${ov.intro ? `<p>${esc(ov.intro)}</p>` : ''}${searchBox}${filters}
-      <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
-      <p class="muted">${ctx.total ?? rows.length} item(s) · <a href="${path}.csv${ctx.query ? `?${ctx.query}` : ''}">Export CSV</a></p>${pager}
-      ${canCreate ? `<p><a class="btn" href="/${entity}/new">${esc(ov.createTitle || `Add ${label(entity)}`)}</a></p>` : ''}`,
-  });
-}
-
-export function formFields(store, entity, fields, row, only, { skip = [] } = {}) {
-  const statusField = store.graph?.states?.[entity]?.field;
-  return fields.filter(isStored).filter((f) => !skip.includes(f.name) && (f.name !== statusField || only?.includes(f.name)))
-    .filter((f) => (only ? only.includes(f.name) : true)).filter((f) => f.type.input).map((f) =>
-      `<label for="f_${f.name}">${esc(label(f.name))}${f.required ? ' *' : ''}</label>${f.type.input(f, row?.[f.name], { esc, store, entity, row })}`).join('');
-}
-
-const enctype = (fields) => (fields.some((f) => f.type.upload) ? ' enctype="multipart/form-data"' : '');
-
-export function formView(graph, store, entity, fields, row, mode, errors = [], vc = anyone, flash = '') {
-  const ov = graph.override?.[`${entity}.form`] || {};
-  const action = mode === 'new' ? `/${entity}` : `/${entity}/${row.id}`;
-  const title = ov.title || (mode === 'new' ? `Add ${label(entity)}` : `Edit ${label(entity)}`);
-  const problems = errors.length
-    ? `<div class="card"><p class="error">Please fix the following before submitting:</p><ul>${
-        errors.map((e) => `<li class="error">${esc(e)}</li>`).join('')}</ul></div>` : '';
-  const skip = Object.keys(ov.fill || {});
-  const own = vc.ownField(entity);
-  if (own) skip.push(own);
-  return page(graph, {
-    title, vc, flash,
-    body: `<h2>${esc(title)}</h2>${problems}${ov.intro ? `<p>${esc(ov.intro)}</p>` : ''}
-      <form class="card" method="post" action="${action}"${enctype(fields)}>${formFields(store, entity, fields, row, ov.fields, { skip })}
-      <p><button type="submit">${esc(ov.submit || (mode === 'new' ? 'Submit' : 'Save'))}</button>
-      <a class="btn" href="/${entity}">Cancel</a></p></form>`,
-  });
-}
-
-function transitionForms(graph, store, entity, fields, row, vc) {
-  return transitionsFor(graph, entity, row, vc).map((t) =>
-    `<form class="card inline-block" method="post" action="/${entity}/${row.id}/go/${t.name}">
-      ${t.fields?.length ? formFields(store, entity, fields, row, t.fields) : ''}
-      <p><button type="submit">${esc(t.title || label(t.name))}</button></p></form>`).join('');
-}
-
-export function detailView(graph, store, entity, fields, row, flash, vc = anyone) {
-  const ov = graph.override?.[`${entity}.detail`] || {};
-  const rows = fields.filter((f) => !f.type.secret).filter((f) => !ov.fields || ov.fields.includes(f.name)).map((f) =>
-    `<tr><th>${esc(label(f.name))}</th><td>${fmt(store, entity, f, row, ov.labels || {})}</td></tr>`).join('');
-
-  // A child table is a read of another entity: the viewer needs "view" on it, not only
-  // on the parent row it hangs under.
-  const related = (ov.related || []).filter((rel) => vc.can(rel.entity, 'view')).map((rel) => {
-    const kids = store.list(rel.entity, { where: { [rel.via]: row.id, ...vc.ownWhere(rel.entity) }, sort: { field: 'id', dir: 'asc' } });
-    const kidFields = store.fields[rel.entity];
-    const show = rel.columns || kidFields.filter((f) => f.name !== rel.via && !f.type.secret).map((f) => f.name);
-    const body = kids.map((k) => `<tr>${show.map((c) => cell(store, rel.entity, kidFields, k, c)).join('')}${
-      rel.rowActions ? `<td>${rowButtons(graph, store, rel.entity, k, rel.rowActions, vc)}</td>` : ''}</tr>`).join('');
-    const form = rel.form === false || !vc.can(rel.entity, 'create') ? '' : `<form class="card" method="post" action="/${entity}/${row.id}/add/${rel.entity}"${enctype(kidFields)}>
-      ${formFields(store, rel.entity, kidFields.filter((f) => f.name !== rel.via), {}, rel.form === true ? null : rel.form, { skip: Object.keys(rel.fill || {}) })}
-      <p><button type="submit">${esc(rel.submit || `Add ${label(rel.entity)}`)}</button></p></form>`;
-    return `<h3>${esc(rel.title || plural(label(rel.entity)))}</h3>
-      <table><thead><tr>${show.map((c) => `<th>${esc(label(c))}</th>`).join('')}${rel.rowActions ? '<th>Actions</th>' : ''}</tr></thead><tbody>${body}</tbody></table>
-      <p class="muted">${kids.length} item(s)</p>${form}`;
-  }).join('');
-
-  const buttons = [
-    vc.can(entity, 'edit', row) ? `<a class="btn" href="/${entity}/${row.id}/edit">Edit</a>` : '',
-    ...(ov.actions || []).filter((a) => vc.can(entity, `do:${a}`, row)).map((a) => {
-      const act = (graph.actions || []).find((x) => x.name === a);
-      return `<form class="inline" method="post" action="/${entity}/${row.id}/action/${a}"><button type="submit">${esc(act?.title || label(a))}</button></form>`;
-    }),
-    `<a class="btn" href="/${entity}">Back</a>`,
-  ].filter(Boolean).join(' ');
-
-  return page(graph, {
-    title: `${label(entity)} ${store.label(entity, row)}`, flash, vc,
-    body: `<h2>${esc(store.label(entity, row))}</h2><table>${rows}</table>
-      <p>${buttons}</p>${transitionForms(graph, store, entity, fields, row, vc)}${related}`,
-  });
-}
-
-const metricValue = (store, entity, fieldName, v) => {
-  if (v === null || v === undefined) return '—';
-  const f = fieldName ? store.field(entity, fieldName) : null;
-  if (f?.kind === 'money') return formatMoney(Math.round(v));
-  return typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : v;
-};
-
-export function dashboardView(graph, store, dash, flash, vc = anyone, period = {}) {
-  const inPeriod = (entity, where = {}) => {
-    const f = dash.period?.[entity];
-    if (!f || (!period.from && !period.to)) return where;
-    const kind = store.field(entity, f).kind;
-    const range = {};
-    if (period.from) range.gte = kind === 'time' ? `${period.from}T00:00:00` : period.from;
-    if (period.to) range.lte = kind === 'time' ? `${period.to}T23:59:59.999Z` : period.to;
-    return { ...where, [f]: range };
-  };
-  const periodForm = dash.period ? `<form class="card" method="get" action="/dashboard/${dash.id}"><div class="range">
-      <div><label for="from">From</label><input type="date" id="from" name="from" value="${esc(period.from || '')}"></div>
-      <div><label for="to">To</label><input type="date" id="to" name="to" value="${esc(period.to || '')}"></div>
-      <div><button type="submit">Apply</button> <a class="btn" href="/dashboard/${dash.id}">All time</a></div></div></form>` : '';
-  const cards = (dash.cards || []).map((c) => {
-    const [row] = store.aggregate(c.entity, { metrics: [{ fn: c.fn || 'count', field: c.field, as: 'v' }], where: inPeriod(c.entity, c.where || {}) });
-    const v = row?.v ?? 0;
-    return `<div class="metric"><b>${esc(metricValue(store, c.entity, c.fn === 'count' || !c.fn ? null : c.field, v))}</b>${esc(c.title)}</div>`;
-  }).join('');
-  const tables = (dash.tables || []).map((t) => {
-    const rows = store.aggregate(t.entity, { ...t, where: inPeriod(t.entity, t.where || {}) });
-    const groupField = t.groupBy ? store.field(t.entity, t.groupBy) : null;
-    const head = (t.groupBy ? `<th>${esc(t.groupTitle || label(t.groupBy))}</th>` : '') +
-      (t.metrics || []).map((m) => `<th>${esc(m.title ?? label(m.as))}</th>`).join('');
-    const body = rows.map((r) => {
-      let g = r.grp;
-      if (groupField?.kind === 'ref') g = store.label(groupField.target, store.get(groupField.target, g)) || null;
-      if (groupField?.kind === 'enum') g = g === null ? null : label(g);
-      if (groupField?.kind === 'bool') g = g ? 'Yes' : 'No';
-      return `<tr>${t.groupBy ? `<td>${esc(g ?? '—')}</td>` : ''}${
-        (t.metrics ?? []).map((m) => `<td>${esc(metricValue(store, t.entity, m.fn === 'count' ? null : m.field, r[m.as]))}</td>`).join('')}</tr>`;
-    }).join('');
-    return `<h3>${esc(t.title)}</h3><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
-  }).join('');
-  return page(graph, {
-    title: dash.title, flash, vc,
-    body: `<h2>${esc(dash.title)}</h2>${dash.intro ? `<p>${esc(dash.intro)}</p>` : ''}${periodForm}
-      <div class="metrics">${cards}</div>${tables}`,
-  });
-}
-
-export function staticPage(graph, p, flash, vc = anyone) {
-  const body = (p.body || []).map((t) => `<p>${esc(t)}</p>`).join('');
-  const links = (p.links || []).map((l) => `<a class="btn" href="${esc(l.href)}">${esc(l.label)}</a>`).join(' ');
-  const buttons = (p.actions || []).map((a) => {
-    const act = (graph.actions || []).find((x) => x.name === a);
-    return `<form class="inline" method="post" action="/action/${esc(a)}"><button type="submit">${esc(act?.title || label(a))}</button></form>`;
-  }).join(' ');
-  return page(graph, { title: p.title, flash, vc,
-    body: `<h2>${esc(p.heading || p.title)}</h2><div class="card">${body}${buttons ? `<p>${buttons}</p>` : ''}</div><p>${links}</p>` });
-}
-
-export function loginView(graph, { error = '', next = '', login = '' } = {}, vc = anyone) {
-  const problems = error ? `<div class="card"><p class="error">${esc(error)}</p></div>` : '';
-  return page(graph, { title: 'Login', vc,
-    body: `<h2>Login</h2>${problems}<form class="card" method="post" action="/login">
-      <input type="hidden" name="next" value="${esc(next)}">
-      <label for="login">${esc(label(graph.roles.login))}</label><input type="text" id="login" name="login" value="${esc(login)}" required>
-      <label for="password">Password</label><input type="password" id="password" name="password" required>
-      <p><button type="submit">Login</button>${graph.roles.register ? ` <a class="btn" href="/register">Register</a>` : ''}</p></form>` });
-}
-
-export function registerView(graph, store, fields, submitted = {}, errors = [], vc = anyone) {
-  const problems = errors.length
-    ? `<div class="card"><p class="error">Please fix the following before submitting:</p><ul>${errors.map((e) => `<li class="error">${esc(e)}</li>`).join('')}</ul></div>` : '';
-  const skip = [graph.roles.role];
-  return page(graph, { title: 'Register', vc,
-    body: `<h2>Register</h2>${problems}<form class="card" method="post" action="/register"${enctype(fields)}>
-      ${formFields(store, graph.roles.entity, fields, submitted, null, { skip })}
-      <p><button type="submit">Register</button> <a class="btn" href="/login">Login</a></p></form>` });
-}
-
-export function outboxView(graph, rows, flash, vc = anyone) {
-  const body = rows.map((r) => `<tr><td>${r.id}</td><td>${esc(r.kind)}</td><td>${esc(r.connector)}</td><td>${esc(r.target)}</td>
-    <td><span class="status">${esc(r.status)}</span>${r.code ? ` ${r.code}` : ''}${r.error ? `<div class="error">${esc(r.error)}</div>` : ''}</td>
-    <td><pre class="muted">${esc(JSON.stringify(r.payload, null, 1))}</pre></td><td>${esc(r.updatedAt)}</td>
-    <td>${r.status === 'failed' ? `<form class="inline" method="post" action="/outbox/${r.id}/retry"><button type="submit">Retry</button></form>` : ''}</td></tr>`).join('');
-  return page(graph, { title: 'Outbox', flash, vc,
-    body: `<h2>Outbox</h2><p class="muted">Everything the application sent out, with its delivery status.</p>
-      <table><thead><tr><th>#</th><th>Kind</th><th>Connector</th><th>Target</th><th>Status</th><th>Payload</th><th>Updated</th><th></th></tr></thead>
-      <tbody>${body}</tbody></table><p class="muted">${rows.length} item(s)</p>` });
-}
-
-export function forbiddenPage(graph, vc = anyone, message = 'You are not allowed to do this.') {
-  return page(graph, { title: 'Forbidden', vc,
-    body: `<h2>Forbidden</h2><div class="card"><p class="error">${esc(message)}</p>${vc.user ? '' : '<p><a class="btn" href="/login">Login</a></p>'}</div>` });
-}
+export const enctype = (fields) => (fields.some((f) => f.type.upload) ? ' enctype="multipart/form-data"' : '');
 
 // CSV: one line per row, cells quoted when they need it, formatted like the page but without HTML.
 export function csv(header, rows) {
@@ -366,6 +135,11 @@ export function plain(store, entity, f, row, labels = {}) {
   if (f.kind === 'money') return formatMoney(v);
   if (f.type.secret) return '';
   return v ?? '';
+}
+
+export function forbiddenPage(graph, vc = anyone, message = 'You are not allowed to do this.') {
+  return page(graph, { title: 'Forbidden', vc,
+    body: `<h2>Forbidden</h2><div class="card"><p class="error">${esc(message)}</p>${vc.user ? '' : '<p><a class="btn" href="/login">Login</a></p>'}</div>` });
 }
 
 export function noticePage(graph, vc = anyone, title = 'Notice', message = '') {

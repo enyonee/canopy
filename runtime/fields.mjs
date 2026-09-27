@@ -42,6 +42,7 @@ const plain = { sql: 'TEXT', exprKind: 'text', derivable: true,
   def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)), validate: () => null,
   format: (v, f, { esc }) => esc(v), input: textInput('text') };
 
+/** @type {Record<string, import('./types.d.ts').FieldType>} */
 export const FIELDS = {
   text: { ...plain },
   longtext: { ...plain, input: (f, v, { esc }) => `<textarea id="f_${f.name}" name="${f.name}" rows="4"${f.required ? ' required' : ''}>${esc(v)}</textarea>` },

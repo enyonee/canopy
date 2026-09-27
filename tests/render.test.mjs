@@ -1,7 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../runtime/store.mjs';
-import { page, listView, formView, detailView, dashboardView, staticPage, errorPage, esc, label } from '../runtime/render.mjs';
+import { page, errorPage, esc, label } from '../runtime/render.mjs';
+import { listView } from '../runtime/render/list.mjs';
+import { formView } from '../runtime/render/form.mjs';
+import { detailView } from '../runtime/render/detail.mjs';
+import { dashboardView } from '../runtime/render/dashboard.mjs';
+import { staticPage } from '../runtime/render/pages.mjs';
 
 const bare = { app: 'bare', data: {
   Thing: { name: 'text!', body: 'longtext', n: 'int=0', flag: 'bool=false', kind: 'enum[a,b]=a', at: 'time=now', peer: 'ref:Thing' },

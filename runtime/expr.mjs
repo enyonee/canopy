@@ -47,75 +47,83 @@ const tokenize = (src) => {
 };
 
 // --- parser (precedence climbing) --------------------------------------------
+// One mutable cursor (`st.p`) threaded through plain functions instead of a
+// nest of closures — same grammar, split out to stay under the per-function
+// line budget (tests/arch.test.mjs). Precedence, low to high: or, and, not,
+// comparison, +/-, star/slash, unary minus, primary.
+const peek = (st) => st.toks[st.p];
+const next = (st) => st.toks[st.p++];
+const isOp = (st, v) => peek(st).t === 'op' && peek(st).v === v;
+const isWord = (st, v) => peek(st).t === 'id' && peek(st).v === v;
+const expect = (st, v) => { if (!isOp(st, v)) throw new Error(`expected "${v}" at ${peek(st).at}`); return next(st); };
+
+const parseOr = (st) => { let a = parseAnd(st); while (isWord(st, 'or')) { next(st); a = { t: 'bin', op: 'or', a, b: parseAnd(st) }; } return a; };
+const parseAnd = (st) => { let a = parseNot(st); while (isWord(st, 'and')) { next(st); a = { t: 'bin', op: 'and', a, b: parseNot(st) }; } return a; };
+const parseNot = (st) => { if (isWord(st, 'not')) { next(st); return { t: 'un', op: 'not', a: parseNot(st) }; } return parseCmp(st); };
+const parseCmp = (st) => {
+  const a = parseAdd(st);
+  if (peek(st).t === 'op' && ['=', '!=', '<', '<=', '>', '>='].includes(peek(st).v)) {
+    const op = next(st).v; return { t: 'bin', op, a, b: parseAdd(st) };
+  }
+  return a;
+};
+const parseAdd = (st) => { let a = parseMul(st); while (isOp(st, '+') || isOp(st, '-')) { const op = next(st).v; a = { t: 'bin', op, a, b: parseMul(st) }; } return a; };
+const parseMul = (st) => { let a = parseUnary(st); while (isOp(st, '*') || isOp(st, '/')) { const op = next(st).v; a = { t: 'bin', op, a, b: parseUnary(st) }; } return a; };
+const parseUnary = (st) => { if (isOp(st, '-')) { next(st); return { t: 'un', op: '-', a: parseUnary(st) }; } return parsePrimary(st); };
+
+const parsePrimary = (st) => {
+  const tk = next(st);
+  if (tk.t === 'num') return { t: 'num', v: tk.v };
+  if (tk.t === 'str') return { t: 'str', v: tk.v };
+  if (tk.t === 'op' && tk.v === '(') { const e = parseOr(st); expect(st, ')'); return e; }
+  if (tk.t === 'id') {
+    if (tk.v === 'true' || tk.v === 'false') return { t: 'bool', v: tk.v === 'true' };
+    if (tk.v === 'null') return { t: 'null' };
+    if (isOp(st, '(')) return parseCall(st, tk.v);
+    const path = [tk.v];
+    while (isOp(st, '.')) { next(st); const s = next(st); if (s.t !== 'id') throw new Error(`expected a name after "." at ${s.at}`); path.push(s.v); }
+    return { t: 'path', p: path };
+  }
+  throw new Error(`unexpected ${tk.t === 'end' ? 'end of expression' : `"${tk.v}"`} at ${tk.at}`);
+};
+
+const parseAggregateForm = (st, fn) => {
+  const save = st.p;
+  const ent = next(st).v;
+  let via = null;
+  if (isOp(st, '.')) { next(st); via = next(st).v; }
+  if (!isOp(st, ':') && !isOp(st, ')')) { st.p = save; return undefined; }
+  let body = null;
+  if (isOp(st, ':')) { next(st); body = parseOr(st); }
+  expect(st, ')');
+  if (fn !== 'count' && !body) throw new Error(`${fn}(${ent}) needs a body: ${fn}(${ent}: field)`);
+  return { t: 'agg', fn, entity: ent, via, body };
+};
+
+const parseCall = (st, fn) => {
+  expect(st, '(');
+  // Aggregate form: fn(Entity[.via][: body])
+  if (AGG.has(fn) && peek(st).t === 'id' && /^[A-Z]/.test(peek(st).v)) {
+    const agg = parseAggregateForm(st, fn);
+    if (agg) return agg;
+  }
+  const args = [];
+  if (!isOp(st, ')')) { args.push(parseOr(st)); while (isOp(st, ',')) { next(st); args.push(parseOr(st)); } }
+  expect(st, ')');
+  if (AGG.has(fn) && (fn === 'sum' || fn === 'avg' || fn === 'count'))
+    throw new Error(`${fn}() aggregates rows: write ${fn}(Entity: field)`);
+  const def = st.functions[fn];
+  if (!def) throw new Error(`unknown function "${fn}"; known: ${Object.keys(st.functions).join(', ')}, and sum/count/avg/min/max over an entity`);
+  const [lo, hi] = Array.isArray(def.arity) ? def.arity : [def.arity, def.arity];
+  if (args.length < lo || args.length > hi) throw new Error(`${fn}() takes ${lo === hi ? lo : `${lo}–${hi}`} argument(s), got ${args.length}`);
+  return { t: 'call', fn, args };
+};
+
 export function parse(src, functions = FUNCTIONS) {
   if (typeof src !== 'string' || !src.trim()) throw new Error('empty expression');
-  const toks = tokenize(src);
-  let p = 0;
-  const peek = () => toks[p];
-  const next = () => toks[p++];
-  const isOp = (v) => peek().t === 'op' && peek().v === v;
-  const isWord = (v) => peek().t === 'id' && peek().v === v;
-  const expect = (v) => { if (!isOp(v)) throw new Error(`expected "${v}" at ${peek().at}`); return next(); };
-
-  const or = () => { let a = and(); while (isWord('or')) { next(); a = { t: 'bin', op: 'or', a, b: and() }; } return a; };
-  const and = () => { let a = not(); while (isWord('and')) { next(); a = { t: 'bin', op: 'and', a, b: not() }; } return a; };
-  const not = () => { if (isWord('not')) { next(); return { t: 'un', op: 'not', a: not() }; } return cmp(); };
-  const cmp = () => {
-    const a = add();
-    if (peek().t === 'op' && ['=', '!=', '<', '<=', '>', '>='].includes(peek().v)) {
-      const op = next().v; return { t: 'bin', op, a, b: add() };
-    }
-    return a;
-  };
-  const add = () => { let a = mul(); while (isOp('+') || isOp('-')) { const op = next().v; a = { t: 'bin', op, a, b: mul() }; } return a; };
-  const mul = () => { let a = unary(); while (isOp('*') || isOp('/')) { const op = next().v; a = { t: 'bin', op, a, b: unary() }; } return a; };
-  const unary = () => { if (isOp('-')) { next(); return { t: 'un', op: '-', a: unary() }; } return primary(); };
-  const primary = () => {
-    const tk = next();
-    if (tk.t === 'num') return { t: 'num', v: tk.v };
-    if (tk.t === 'str') return { t: 'str', v: tk.v };
-    if (tk.t === 'op' && tk.v === '(') { const e = or(); expect(')'); return e; }
-    if (tk.t === 'id') {
-      if (tk.v === 'true' || tk.v === 'false') return { t: 'bool', v: tk.v === 'true' };
-      if (tk.v === 'null') return { t: 'null' };
-      if (isOp('(')) return call(tk.v);
-      const path = [tk.v];
-      while (isOp('.')) { next(); const s = next(); if (s.t !== 'id') throw new Error(`expected a name after "." at ${s.at}`); path.push(s.v); }
-      return { t: 'path', p: path };
-    }
-    throw new Error(`unexpected ${tk.t === 'end' ? 'end of expression' : `"${tk.v}"`} at ${tk.at}`);
-  };
-  const call = (fn) => {
-    expect('(');
-    // Aggregate form: fn(Entity[.via][: body])
-    if (AGG.has(fn) && peek().t === 'id' && /^[A-Z]/.test(peek().v)) {
-      const save = p;
-      const ent = next().v;
-      let via = null;
-      if (isOp('.')) { next(); via = next().v; }
-      if (isOp(':') || isOp(')')) {
-        let body = null;
-        if (isOp(':')) { next(); body = or(); }
-        expect(')');
-        if (fn !== 'count' && !body) throw new Error(`${fn}(${ent}) needs a body: ${fn}(${ent}: field)`);
-        return { t: 'agg', fn, entity: ent, via, body };
-      }
-      p = save;
-    }
-    const args = [];
-    if (!isOp(')')) { args.push(or()); while (isOp(',')) { next(); args.push(or()); } }
-    expect(')');
-    if (AGG.has(fn) && (fn === 'sum' || fn === 'avg' || fn === 'count'))
-      throw new Error(`${fn}() aggregates rows: write ${fn}(Entity: field)`);
-    const def = functions[fn];
-    if (!def) throw new Error(`unknown function "${fn}"; known: ${Object.keys(functions).join(', ')}, and sum/count/avg/min/max over an entity`);
-    const [lo, hi] = Array.isArray(def.arity) ? def.arity : [def.arity, def.arity];
-    if (args.length < lo || args.length > hi) throw new Error(`${fn}() takes ${lo === hi ? lo : `${lo}–${hi}`} argument(s), got ${args.length}`);
-    return { t: 'call', fn, args };
-  };
-
-  const ast = or();
-  if (peek().t !== 'end') throw new Error(`unexpected "${peek().v}" at ${peek().at}`);
+  const st = { toks: tokenize(src), p: 0, functions };
+  const ast = parseOr(st);
+  if (peek(st).t !== 'end') throw new Error(`unexpected "${peek(st).v}" at ${peek(st).at}`);
   return ast;
 }
 

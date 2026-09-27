@@ -4,7 +4,7 @@
 // transaction and never blocks a commit.
 import { DEFAULT } from './registry.mjs';
 
-export async function deliver(store, graph, row, { fetchImpl = fetch, trace = () => {}, registry = DEFAULT } = {}) {
+export async function deliver(store, graph, row, { fetchImpl = fetch, trace = (_event) => {}, registry = DEFAULT } = {}) {
   const connector = graph.connectors?.[row.connector] || {};
   const patch = { attempts: (row.attempts || 0) + 1 };
   const transport = registry.transports[row.kind];

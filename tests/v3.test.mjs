@@ -27,7 +27,7 @@ const graph = {
   override: { 'Car.list': { columns: ['name', 'pricePerDay', 'bookings', 'nextFree', 'photo'], pageSize: 2, sort: { field: 'name', dir: 'asc' }, rowActions: ['note'] },
     'Booking.list': { columns: ['id', 'car', 'start', 'end', 'days', 'total', 'until', 'clashes', 'status'], where: { id: { gte: 1 } } } },
   lists: [{ id: 'cheap', entity: 'Car', where: { pricePerDay: { lte: 60 } }, columns: ['name', 'pricePerDay'], sort: { field: 'pricePerDay', dir: 'desc' } }],
-  dashboards: [{ id: 'd', title: 'D', cards: [{ title: 'Cars', entity: 'Car' }, { title: 'Revenue', entity: 'Booking', fn: 'sum', field: 'total' }],
+  dashboards: [{ id: 'd', title: 'D', period: { Booking: 'start' }, cards: [{ title: 'Cars', entity: 'Car' }, { title: 'Revenue', entity: 'Booking', fn: 'sum', field: 'total' }],
     tables: [{ title: 'By car', entity: 'Booking', groupBy: 'car', metrics: [{ fn: 'count', as: 'n', title: 'Bookings' }, { fn: 'sum', field: 'total', as: 'rev', title: 'Revenue' }] }] }],
 };
 
@@ -61,6 +61,8 @@ test('CSV export of an entity list, a saved list and a dashboard, with the same 
   assert.match(b.html, /^Id,Car,Start,End,Days,Total,Until,Clashes,Status\r\n1,Beetle,2026-05-10,2026-05-12,2,60\.00,2026-05-13,0,draft\r\n$/, 'references export as labels');
   const d = await s.get('/dashboard/d.csv');
   assert.equal(d.html, 'Section,Metric,Group,Value\r\ncard,Cars,,3\r\ncard,Revenue,,60.00\r\nBy car,Bookings,Beetle,1\r\nBy car,Revenue,Beetle,60.00\r\n');
+  const outsidePeriod = await s.get('/dashboard/d.csv?from=2026-06-01&to=2026-06-30');
+  assert.equal(outsidePeriod.html, 'Section,Metric,Group,Value\r\ncard,Cars,,3\r\ncard,Revenue,,0.00\r\n', 'a period outside every booking narrows the CSV export too, not only the HTML view');
   assert.equal((await s.get('/dashboard/nope.csv')).status, 404);
   assert.equal((await s.get('/list/nope.csv')).status, 404);
   await s.post('/Note', { car: 1, text: 'a "quoted", note' });
