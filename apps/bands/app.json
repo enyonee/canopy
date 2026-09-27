@@ -1,0 +1,64 @@
+{
+  "app": "bands",
+  "task": "webgen-bench/000087",
+  "note": "Entertainment directory: bands and advertisers are both rows of the same login entity (one 'register' role only supports one signup flow, so advertisers self-serve through the plain entity-create form at /User/new, with role fixed by 'fill' — the second honest registration path this format allows); band registration captures bio/picture/audio-link/video-link together since the format has no follow-up self-edit that would not also expose other bands' rows to editing (the same own-scopes-view trade-off documented in apps/qna).",
+  "theme": { "background": "floralwhite", "accent": "darkgoldenrod" },
+  "home": "/page/home",
+
+  "data": {
+    "User": { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,band,advertiser]=band",
+              "bio": "longtext", "contact": "text", "photo": "image", "audioUrl": "text", "youtubeUrl": "text" },
+    "Ad":   { "title": "text!", "image": "image", "linkUrl": "text", "advertiser": "ref:User!", "active": "bool=true", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "band", "anonymous": "guest",
+    "can": {
+      "admin":      "*",
+      "band":       { "User": ["view"], "Ad": ["view"] },
+      "advertiser": { "User": ["view"], "Ad": { "own": "advertiser", "can": ["view", "create"] } },
+      "guest":      { "User": ["view", "create"], "Ad": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [ { "email": "admin@bands.test", "password": "admin123", "name": "Admin", "role": "admin" },
+              { "email": "theband@bands.test", "password": "band123", "name": "The Midnight Owls", "role": "band",
+                "bio": "A five-piece indie rock band from Portland, playing since 2018.", "contact": "booking@midnightowls.test",
+                "audioUrl": "https://audio.example.test/midnight-owls-demo.mp3", "youtubeUrl": "https://youtube.com/watch?v=example1" } ],
+    "Ad":   [ { "title": "Local Music Festival — tickets on sale", "linkUrl": "https://festival.example.test", "advertiser": 1, "active": true } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "User.list":   { "hidden": true, "title": "Users", "columns": ["email", "name", "role"] },
+    "User.form":   { "title": "Sign up", "fields": ["name", "email", "password", "bio", "contact", "photo", "audioUrl", "youtubeUrl"],
+                     "submit": "Sign up", "confirm": "Registration complete" },
+    "User.detail": { "fields": ["name", "role", "bio", "contact", "photo", "audioUrl", "youtubeUrl"] },
+    "Ad.list":     { "title": "Advertisements", "columns": ["title", "image", "linkUrl"], "where": { "active": 1 },
+                     "rowActions": ["view"], "createTitle": "Place an ad" },
+    "Ad.form":     { "title": "Place an ad", "fields": ["title", "image", "linkUrl"], "fill": { "advertiser": "@me" },
+                     "submit": "Submit ad", "confirm": "Ad submitted" },
+    "Ad.detail":   { "fields": ["title", "image", "linkUrl", "active"] }
+  },
+
+  "lists": [
+    { "id": "bands", "entity": "User", "title": "Bands", "where": { "role": "band" },
+      "search": ["name", "bio"], "columns": ["name", "bio", "contact"], "rowActions": ["view"] },
+    { "id": "my-profile", "entity": "User", "title": "My Dashboard", "roles": ["band", "advertiser"],
+      "where": { "id": "@me" }, "columns": ["name", "email", "role"], "rowActions": ["view"] }
+  ],
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Bands and advertisers, side by side",
+      "body": [ "Browse band profiles, listen to audio samples, watch their videos, and view advertisements.",
+                "Bands and advertisers can each register and sign in from here." ],
+      "links": [ { "label": "Bands", "href": "/list/bands" }, { "label": "Advertisements", "href": "/Ad" },
+                 { "label": "Band sign up", "href": "/register" }, { "label": "Advertiser sign up", "href": "/User/new" } ] }
+  ]
+}

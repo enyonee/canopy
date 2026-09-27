@@ -1,0 +1,98 @@
+{
+  "app": "nutrition",
+  "task": "webgen-bench/000063",
+  "note": "Canadian nutrition facts labels: a searchable Food catalogue with the full per-serving label; a nutrition analysis tool where a visitor starts an Analysis and adds ingredient rows (food + grams), whose macro totals are derived sums over the entered ingredients; a packaging design tool whose form fields are the Canadian labelling compliance choices (material, bilingual language, allergen declaration). No accounts: every function is open to any visitor.",
+  "theme": { "background": "linen", "accent": "maroon" },
+  "home": "/Food",
+
+  "data": {
+    "Food": { "name": "text!", "category": "enum[fruit,vegetable,grain,protein,dairy,other]=other",
+              "servingSize": "text!", "servingGrams": "int!",
+              "calories": "int=0", "fat": "int=0", "saturatedFat": "int=0", "transFat": "int=0",
+              "cholesterol": "int=0", "sodium": "int=0", "carbohydrate": "int=0", "fiber": "int=0", "sugars": "int=0",
+              "protein": "int=0", "potassium": "int=0", "calcium": "int=0", "iron": "int=0", "vitaminD": "int=0" },
+
+    "Analysis": { "title": "text=Untitled analysis", "createdAt": "time=now",
+                  "items": "int := count(AnalysisItem)",
+                  "totalCalories": "int := sum(AnalysisItem: food.calories * grams / food.servingGrams)",
+                  "totalFat": "int := sum(AnalysisItem: food.fat * grams / food.servingGrams)",
+                  "totalCarbohydrate": "int := sum(AnalysisItem: food.carbohydrate * grams / food.servingGrams)",
+                  "totalProtein": "int := sum(AnalysisItem: food.protein * grams / food.servingGrams)",
+                  "totalSodium": "int := sum(AnalysisItem: food.sodium * grams / food.servingGrams)" },
+    "AnalysisItem": { "analysis": "ref:Analysis!", "food": "ref:Food!", "grams": "int=100",
+                       "calories": "int := round(food.calories * grams / food.servingGrams, 0)",
+                       "protein": "int := round(food.protein * grams / food.servingGrams, 0)" },
+
+    "PackageDesign": { "food": "ref:Food!", "material": "enum[plasticFilm,paperboard,glassJar,aluminumCan,flexiblePouch]=paperboard",
+                        "labelLanguage": "enum[bilingual,englishOnly,frenchOnly]=bilingual",
+                        "netQuantity": "text!", "allergenStatement": "longtext!",
+                        "bilingualCompliant": "bool := labelLanguage = 'bilingual'", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "Food":          [ { "check": "servingGrams > 0", "message": "Serving size in grams must be positive" } ],
+    "AnalysisItem":  [ { "check": "grams > 0", "message": "Grams must be at least 1" } ]
+  },
+
+  "seed": {
+    "Food": [
+      { "name": "Apple", "category": "fruit", "servingSize": "1 medium (182 g)", "servingGrams": 182,
+        "calories": 95, "fat": 0, "saturatedFat": 0, "transFat": 0, "cholesterol": 0, "sodium": 2,
+        "carbohydrate": 25, "fiber": 4, "sugars": 19, "protein": 0, "potassium": 195, "calcium": 11, "iron": 0, "vitaminD": 0 },
+      { "name": "Banana", "category": "fruit", "servingSize": "1 medium (118 g)", "servingGrams": 118,
+        "calories": 105, "fat": 0, "saturatedFat": 0, "transFat": 0, "cholesterol": 0, "sodium": 1,
+        "carbohydrate": 27, "fiber": 3, "sugars": 14, "protein": 1, "potassium": 422, "calcium": 6, "iron": 0, "vitaminD": 0 },
+      { "name": "Chicken breast, cooked", "category": "protein", "servingSize": "100 g", "servingGrams": 100,
+        "calories": 165, "fat": 4, "saturatedFat": 1, "transFat": 0, "cholesterol": 85, "sodium": 74,
+        "carbohydrate": 0, "fiber": 0, "sugars": 0, "protein": 31, "potassium": 256, "calcium": 15, "iron": 1, "vitaminD": 0 },
+      { "name": "White rice, cooked", "category": "grain", "servingSize": "1 cup (158 g)", "servingGrams": 158,
+        "calories": 205, "fat": 0, "saturatedFat": 0, "transFat": 0, "cholesterol": 0, "sodium": 2,
+        "carbohydrate": 45, "fiber": 1, "sugars": 0, "protein": 4, "potassium": 55, "calcium": 16, "iron": 2, "vitaminD": 0 },
+      { "name": "Broccoli, cooked", "category": "vegetable", "servingSize": "1 cup (156 g)", "servingGrams": 156,
+        "calories": 55, "fat": 1, "saturatedFat": 0, "transFat": 0, "cholesterol": 0, "sodium": 64,
+        "carbohydrate": 11, "fiber": 5, "sugars": 2, "protein": 4, "potassium": 457, "calcium": 62, "iron": 1, "vitaminD": 0 },
+      { "name": "Whole milk", "category": "dairy", "servingSize": "1 cup (250 mL)", "servingGrams": 250,
+        "calories": 150, "fat": 8, "saturatedFat": 5, "transFat": 0, "cholesterol": 35, "sodium": 105,
+        "carbohydrate": 12, "fiber": 0, "sugars": 12, "protein": 8, "potassium": 350, "calcium": 300, "iron": 0, "vitaminD": 3 },
+      { "name": "Whole wheat bread", "category": "grain", "servingSize": "1 slice (35 g)", "servingGrams": 35,
+        "calories": 90, "fat": 1, "saturatedFat": 0, "transFat": 0, "cholesterol": 0, "sodium": 150,
+        "carbohydrate": 17, "fiber": 2, "sugars": 2, "protein": 4, "potassium": 70, "calcium": 20, "iron": 1, "vitaminD": 0 }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Food.list":   { "title": "Nutrition Facts Search", "intro": "Search foods by name to see their Canadian Nutrition Facts label.",
+                     "columns": ["name", "category", "servingSize", "calories", "protein", "sodium"],
+                     "search": ["name"], "filters": [ { "name": "Category", "field": "category" } ],
+                     "sort": { "field": "name", "dir": "asc" }, "rowActions": ["view"], "create": false },
+    "Food.detail": { "fields": ["name", "category", "servingSize", "calories", "fat", "saturatedFat", "transFat",
+                                "cholesterol", "sodium", "carbohydrate", "fiber", "sugars", "protein",
+                                "potassium", "calcium", "iron", "vitaminD"] },
+
+    "Analysis.list":   { "title": "Nutrition Analysis", "intro": "Start a new analysis, then add ingredients with their serving size in grams.",
+                         "columns": ["title", "items", "totalCalories", "totalProtein", "createdAt"],
+                         "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "createTitle": "Start new analysis" },
+    "Analysis.form":   { "title": "Start a nutrition analysis", "fields": [], "submit": "Start new analysis",
+                         "confirm": "Analysis started — add ingredients below", "after": "/Analysis/{id}" },
+    "Analysis.detail": { "fields": ["title", "items", "totalCalories", "totalFat", "totalCarbohydrate", "totalProtein", "totalSodium", "createdAt"],
+                         "related": [ { "entity": "AnalysisItem", "via": "analysis", "title": "Ingredients",
+                                        "columns": ["food", "grams", "calories", "protein"],
+                                        "form": ["food", "grams"], "submit": "Add ingredient", "confirm": "Ingredient added",
+                                        "rowActions": ["edit", "delete"] } ] },
+    "AnalysisItem.list": { "hidden": true },
+
+    "PackageDesign.list":   { "title": "Packaging Design", "intro": "Start a new package design and choose the options required for Canadian compliance.",
+                              "columns": ["food", "material", "labelLanguage", "netQuantity", "bilingualCompliant", "createdAt"],
+                              "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "createTitle": "New packaging design" },
+    "PackageDesign.form":   { "title": "New packaging design", "fields": ["food", "material", "labelLanguage", "netQuantity", "allergenStatement"],
+                              "submit": "Start design", "confirm": "Packaging design started", "after": "/PackageDesign/{id}" },
+    "PackageDesign.detail": { "fields": ["food", "material", "labelLanguage", "netQuantity", "allergenStatement", "bilingualCompliant", "createdAt"] }
+  },
+
+  "pages": [
+    { "id": "about", "title": "About", "heading": "Canadian Nutrition Facts",
+      "body": [ "Search foods to see their Canadian Nutrition Facts label, analyze a meal by entering ingredients and serving sizes, or start a package design that follows Canadian labelling rules." ],
+      "links": [ { "label": "Search foods", "href": "/Food" }, { "label": "Nutrition analysis", "href": "/Analysis" }, { "label": "Packaging design", "href": "/PackageDesign" } ] }
+  ]
+}

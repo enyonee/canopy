@@ -1,0 +1,72 @@
+{
+  "app": "fitness",
+  "task": "webgen-bench/000076",
+  "note": "Fitness tracker: exercises and diary entries are visible community-wide (a small mini-program, not a private ledger) so the leaderboard can rank every user's activity without own-scoping fighting the aggregate; each user's personal views ('My Exercises', 'My Diary', 'My Fitness Stats') are explicit @me-filtered saved lists and a dashboard rather than row ownership.",
+  "theme": { "background": "white", "accent": "navy" },
+  "home": "/dashboard/mystats",
+
+  "data": {
+    "User":        { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,user]=user" },
+    "Exercise":    { "user": "ref:User!", "type": "enum[running,cycling,swimming,strength,yoga,other]=running",
+                     "durationMinutes": "int!", "calories": "int=0", "date": "date=today", "notes": "text" },
+    "DiaryEntry":  { "user": "ref:User!", "title": "text!", "body": "longtext!", "mood": "enum[great,good,okay,bad]=good", "date": "date=today" }
+  },
+
+  "rules": {
+    "User":     [ { "unique": "email", "message": "This email is already registered" } ],
+    "Exercise": [ { "check": "durationMinutes > 0", "message": "Duration must be at least 1 minute" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "user", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "user":  { "Exercise": ["view", "create"], "DiaryEntry": ["view", "create"] },
+      "guest": { "Exercise": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":     [ { "email": "admin@fitness.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                  { "email": "kai@fitness.test", "password": "kai123", "name": "Kai Nakamura", "role": "user" },
+                  { "email": "leah@fitness.test", "password": "leah123", "name": "Leah Novak", "role": "user" } ],
+    "Exercise": [ { "user": 2, "type": "running", "durationMinutes": 30, "calories": 300, "date": "2026-09-20" },
+                  { "user": 2, "type": "cycling", "durationMinutes": 45, "calories": 400, "date": "2026-09-22" },
+                  { "user": 3, "type": "yoga", "durationMinutes": 20, "calories": 90, "date": "2026-09-21" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "User.list":       { "title": "Users", "columns": ["email", "name", "role"] },
+    "Exercise.list":   { "title": "Activity Feed", "intro": "Every workout logged across the community.",
+                         "columns": ["user", "type", "durationMinutes", "calories", "date"], "search": [],
+                         "filters": [ { "name": "Type", "field": "type" } ], "sort": { "field": "date", "dir": "desc" },
+                         "rowActions": ["view"], "create": false },
+    "Exercise.form":   { "title": "Record an exercise", "fields": ["type", "durationMinutes", "calories", "date", "notes"],
+                         "fill": { "user": "@me" }, "submit": "Save exercise", "confirm": "Exercise recorded", "after": "/list/my-exercises" },
+    "DiaryEntry.list": { "hidden": true, "create": false },
+    "DiaryEntry.form": { "title": "New diary entry", "fields": ["title", "body", "mood", "date"], "fill": { "user": "@me" },
+                         "submit": "Save entry", "confirm": "Diary entry saved", "after": "/list/my-diary" }
+  },
+
+  "lists": [
+    { "id": "my-exercises", "entity": "Exercise", "title": "My Exercises", "roles": ["user"], "where": { "user": "@me" },
+      "columns": ["type", "durationMinutes", "calories", "date"], "rowActions": ["view"], "create": true, "sort": { "field": "date", "dir": "desc" } },
+    { "id": "my-diary", "entity": "DiaryEntry", "title": "My Fitness Diary", "roles": ["user"], "where": { "user": "@me" },
+      "columns": ["title", "mood", "date"], "rowActions": ["view"], "create": true, "sort": { "field": "date", "dir": "desc" } }
+  ],
+
+  "dashboards": [
+    { "id": "leaderboard", "title": "Fitness Leaderboard", "intro": "Ranked by total minutes exercised, most active first.",
+      "tables": [ { "title": "Leaderboard", "entity": "Exercise", "groupBy": "user", "groupTitle": "User",
+                    "metrics": [ { "fn": "sum", "field": "durationMinutes", "as": "minutes", "title": "Minutes" },
+                                 { "fn": "count", "as": "sessions", "title": "Sessions" } ],
+                    "sort": { "field": "minutes", "dir": "desc" }, "limit": 10 } ] },
+    { "id": "mystats", "title": "My Fitness Stats", "roles": ["user"],
+      "cards": [ { "title": "Exercises logged", "entity": "Exercise", "fn": "count", "where": { "user": "@me" } },
+                 { "title": "Total minutes", "entity": "Exercise", "fn": "sum", "field": "durationMinutes", "where": { "user": "@me" } },
+                 { "title": "Total calories", "entity": "Exercise", "fn": "sum", "field": "calories", "where": { "user": "@me" } },
+                 { "title": "Diary entries", "entity": "DiaryEntry", "fn": "count", "where": { "user": "@me" } } ] }
+  ]
+}

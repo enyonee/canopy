@@ -1,0 +1,57 @@
+{
+  "app": "bourbon",
+  "task": "webgen-bench/000021",
+  "note": "The All-In Bourbon Bar brochure site: a seeded Menu, a static Poker Room page (membership benefits and how to join - no interactive membership flow is tested), a combined Events & Promotions catalogue sorted soonest-first, and a Reservation form.",
+  "theme": { "background": "peachpuff", "accent": "indianred" },
+  "home": "/page/home",
+
+  "data": {
+    "MenuItem":    { "name": "text!", "category": "enum[food,drink,bourbon]=bourbon", "description": "longtext", "price": "money!" },
+    "Happening":   { "title": "text!", "kind": "enum[event,promotion]=event", "date": "date!", "description": "longtext!", "offer": "text" },
+    "Reservation": { "name": "text!", "email": "text!", "phone": "text", "partySize": "int=2", "date": "date!", "time": "text!", "notes": "longtext",
+                     "status": "enum[requested,confirmed,cancelled]=requested", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "Reservation": [ { "check": "partySize > 0", "message": "Party size must be at least 1" } ]
+  },
+
+  "seed": {
+    "MenuItem":  [ { "name": "All-In Old Fashioned", "category": "drink", "description": "Our house bourbon, demerara, orange oil, one large cube.", "price": 14 },
+                   { "name": "Wheated Reserve, 2 oz pour", "category": "bourbon", "description": "A soft, wheat-forward bourbon aged 8 years, served neat or on the rocks.", "price": 22 },
+                   { "name": "High-Rye Single Barrel, 2 oz pour", "category": "bourbon", "description": "Spicy and bold, hand-picked from a single barrel, bottled at cask strength.", "price": 26 },
+                   { "name": "Bourbon-Glazed Wings", "category": "food", "description": "Six wings, bourbon-brown sugar glaze, served with pickled celery.", "price": 15 },
+                   { "name": "Smoked Brisket Sliders", "category": "food", "description": "Three sliders, twelve-hour smoked brisket, bourbon barbecue sauce.", "price": 17 } ],
+    "Happening": [ { "title": "Live blues Friday", "kind": "event", "date": "2026-10-03", "description": "Local blues trio on the main floor, no cover charge.", "offer": "" },
+                    { "title": "Half-price pours, Tuesdays", "kind": "promotion", "date": "2026-10-06", "description": "Every bourbon flight is half price all night, every Tuesday.", "offer": "50% off bourbon flights" },
+                    { "title": "Whiskey tasting night", "kind": "event", "date": "2026-10-17", "description": "A guided tasting of five single-barrel bourbons with our head bartender.", "offer": "" },
+                    { "title": "Poker room member appreciation night", "kind": "promotion", "date": "2026-10-24", "description": "Members and one guest each get a complimentary Old Fashioned.", "offer": "Free Old Fashioned for members" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "MenuItem.list":    { "title": "Menu", "intro": "Our current food, drink and bourbon list.",
+                          "columns": ["name", "category", "description", "price"], "filters": [ { "name": "Category", "field": "category" } ],
+                          "create": false, "rowActions": ["view"] },
+    "Happening.list":   { "title": "Events & Promotions", "intro": "What's on at The All-In Bourbon Bar, soonest first.",
+                          "columns": ["date", "title", "kind", "description", "offer"], "sort": { "field": "date", "dir": "asc" },
+                          "filters": [ { "name": "Kind", "field": "kind" } ], "create": false, "rowActions": ["view"] },
+    "Reservation.list": { "title": "Reserve", "intro": "Reserve a table for the bar floor or a menu item to have ready when you arrive.",
+                          "columns": ["date", "time", "partySize", "status"], "createTitle": "Make a reservation", "rowActions": ["view"] },
+    "Reservation.form": { "title": "Make a reservation", "fields": ["name", "email", "phone", "partySize", "date", "time", "notes"],
+                          "submit": "Reserve", "confirm": "Reservation received - we look forward to seeing you." }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "The All-In Bourbon Bar",
+      "body": [ "Craft bourbon, a kitchen that respects it, and a members-only private poker room in the back.",
+                "Browse the menu, see what's on, learn about the poker room, or reserve a table." ],
+      "links": [ { "label": "Menu", "href": "/MenuItem" }, { "label": "Poker Room", "href": "/page/poker-room" },
+                 { "label": "Events & Promotions", "href": "/Happening" }, { "label": "Reserve", "href": "/Reservation" } ] },
+    { "id": "poker-room", "title": "Poker Room", "heading": "The Private Poker Room",
+      "body": [ "Membership benefits: a reserved seat at our weekly no-limit hold'em game, a private bourbon locker, and priority booking for the room for private games.",
+                "How to join: membership is by referral from a current member or by speaking with the floor manager on a weeknight; a background check and a one-time initiation fee apply.",
+                "The room seats ten and is available for private buyouts on off nights, subject to member approval." ],
+      "links": [ { "label": "Reserve", "href": "/Reservation" }, { "label": "Events & Promotions", "href": "/Happening" } ] }
+  ]
+}

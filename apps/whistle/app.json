@@ -1,0 +1,60 @@
+{
+  "app": "whistle",
+  "task": "webgen-bench/000032",
+  "note": "Whistleblower awareness site: anonymous reports carry no identity at all (no author field, no session); a discussion forum lets anyone start a thread and reply under a free-text display name; a news/blog section publishes staff articles; search is the search box on the reports, forum and news lists.",
+  "theme": { "background": "azure", "accent": "midnightblue" },
+  "home": "/page/home",
+
+  "data": {
+    "Category": { "name": "text!", "about": "text" },
+    "Report":   { "title": "text!", "details": "longtext!", "evidence": "file", "createdAt": "time=now" },
+    "Thread":   { "title": "text!", "body": "longtext!", "category": "ref:Category!", "authorName": "text=Anonymous", "createdAt": "time=now" },
+    "Reply":    { "thread": "ref:Thread!", "body": "longtext!", "authorName": "text=Anonymous", "createdAt": "time=now" },
+    "Article":  { "title": "text!", "body": "longtext!", "summary": "text", "publishedAt": "date=today" }
+  },
+
+  "seed": {
+    "Category": [ { "name": "Corporate", "about": "Corporate wrongdoing and fraud" },
+                  { "name": "Environment", "about": "Pollution and environmental harm" },
+                  { "name": "Government", "about": "Public-sector misconduct" } ],
+    "Report":   [ { "title": "Dumping near the river", "details": "A contractor has been dumping waste behind the old mill at night.", "createdAt": "2026-09-01T02:00:00.000Z" } ],
+    "Thread":   [ { "title": "How do I stay safe when reporting?", "body": "What precautions should I take before submitting evidence?", "category": 1, "authorName": "concerned_citizen", "createdAt": "2026-09-02T09:00:00.000Z" } ],
+    "Reply":    [ { "thread": 1, "body": "Use a public computer and never sign your report.", "authorName": "watcher99", "createdAt": "2026-09-02T10:00:00.000Z" } ],
+    "Article":  [ { "title": "New protections for whistleblowers announced", "body": "Lawmakers passed new rules shielding whistleblowers from retaliation this week.", "summary": "New legal protections for whistleblowers.", "publishedAt": "2026-09-20" },
+                  { "title": "Health inspectors uncover unsafe conditions", "body": "An anonymous tip led inspectors to a factory with serious safety violations.", "summary": "A tip led to a factory safety investigation.", "publishedAt": "2026-09-15" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Report.list":    { "title": "Anonymous Reporting", "intro": "Submit what you know. Nothing you type here is linked to you.",
+                        "search": ["title", "details"], "columns": ["title", "createdAt"], "sort": { "field": "createdAt", "dir": "desc" },
+                        "rowActions": ["view"], "createTitle": "Submit a report" },
+    "Report.form":    { "title": "Submit an anonymous report", "fields": ["title", "details", "evidence"], "submit": "Submit anonymously",
+                        "confirm": "Your report was submitted anonymously. Thank you for speaking up." },
+    "Report.detail":  { "fields": ["title", "details", "evidence", "createdAt"] },
+    "Category.list":  { "hidden": true, "create": false },
+    "Thread.list":    { "title": "Forum", "intro": "Discuss and share thoughts and opinions.",
+                        "search": ["title", "body"], "filters": [ { "name": "Category", "field": "category" } ],
+                        "columns": ["title", "category", "authorName", "createdAt"], "sort": { "field": "createdAt", "dir": "desc" },
+                        "rowActions": ["view"], "createTitle": "Start a thread" },
+    "Thread.form":    { "title": "Start a discussion", "fields": ["title", "body", "category", "authorName"], "submit": "Post thread",
+                        "confirm": "Thread posted" },
+    "Thread.detail":  { "fields": ["title", "body", "category", "authorName", "createdAt"],
+                        "related": [ { "entity": "Reply", "via": "thread", "title": "Replies", "columns": ["body", "authorName", "createdAt"],
+                                       "form": ["body", "authorName"], "submit": "Post reply", "confirm": "Reply posted" } ] },
+    "Reply.list":     { "hidden": true },
+    "Article.list":   { "title": "News & Blog", "intro": "The latest news and articles.",
+                        "search": ["title", "body", "summary"], "columns": ["title", "summary", "publishedAt"],
+                        "sort": { "field": "publishedAt", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "Article.detail": { "fields": ["title", "summary", "body", "publishedAt"] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Expose the truth. Stay anonymous.",
+      "body": [ "This site lets anyone report wrongdoing without revealing who they are, discuss it in the open forum, and read the news that comes out of it.",
+                "Reporting asks for no name, no email and no account; nothing you submit there is ever tied to you." ],
+      "links": [ { "label": "Anonymous Reporting", "href": "/Report/new" },
+                 { "label": "Forum", "href": "/Thread" },
+                 { "label": "News & Blog", "href": "/Article" } ] }
+  ]
+}

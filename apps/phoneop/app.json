@@ -1,0 +1,46 @@
+{
+  "app": "phoneop",
+  "task": "webgen-bench/000020",
+  "note": "Phone operator brochure + self-service site: a seeded ServicePlan catalogue with full detail pages, a SupportRequest form standing in for a live chat (a confirmation that an agent will follow up), and a single fake current-user Profile (identity, no login) for account management.",
+  "theme": { "background": "lightgoldenrodyellow", "accent": "olivedrab" },
+  "home": "/page/home",
+
+  "data": {
+    "ServicePlan":    { "name": "text!", "monthlyPrice": "money!", "dataAllowance": "text!", "minutesAllowance": "text!", "smsAllowance": "text!", "features": "longtext!" },
+    "SupportRequest": { "topic": "enum[billing,coverage,device,account,other]=other", "message": "longtext!", "status": "enum[open,answered]=open", "submittedAt": "time=now" },
+    "Profile":        { "name": "text!", "email": "text!", "phone": "text", "address": "text" }
+  },
+
+  "identity": { "entity": "Profile", "defaults": { "name": "Jamie Lee", "email": "jamie@phoneop.test", "phone": "+1 555 0100", "address": "12 Signal street, Rivertown" } },
+
+  "seed": {
+    "ServicePlan": [ { "name": "Basic 5GB", "monthlyPrice": 25, "dataAllowance": "5 GB", "minutesAllowance": "Unlimited", "smsAllowance": "Unlimited",
+                       "features": "5G access, free voicemail, no annual contract. Best for light data users who mostly use Wi-Fi." },
+                     { "name": "Family 40GB", "monthlyPrice": 65, "dataAllowance": "40 GB shared", "minutesAllowance": "Unlimited", "smsAllowance": "Unlimited",
+                       "features": "Shared across up to 4 lines, mobile hotspot included, international texting. Best value for households with 2+ phones." },
+                     { "name": "Unlimited Pro", "monthlyPrice": 85, "dataAllowance": "Unlimited (50 GB priority)", "minutesAllowance": "Unlimited", "smsAllowance": "Unlimited",
+                       "features": "Priority network access, 50 GB mobile hotspot, free international roaming in 30 countries, premium support line." } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "ServicePlan.list":    { "title": "Service Plans", "intro": "Compare our plans and open one for full pricing and feature details.",
+                             "columns": ["name", "monthlyPrice", "dataAllowance", "minutesAllowance"], "create": false, "rowActions": ["view"] },
+    "ServicePlan.detail":  { "fields": ["name", "monthlyPrice", "dataAllowance", "minutesAllowance", "smsAllowance", "features"] },
+    "SupportRequest.list": { "title": "Customer Support", "intro": "Start a chat with our support team - describe your issue below and an agent will follow up.",
+                             "columns": ["topic", "status", "submittedAt"], "createTitle": "Start a chat", "rowActions": ["view"] },
+    "SupportRequest.form": { "title": "Start a support chat", "fields": ["topic", "message"], "submit": "Send",
+                             "confirm": "Message received - a support agent will assist you shortly." },
+    "Profile.list":        { "hidden": true },
+    "Profile.detail":      { "fields": ["name", "email", "phone", "address"] },
+    "Profile.form":        { "title": "Update your account information", "fields": ["name", "email", "phone", "address"], "submit": "Save changes",
+                             "confirm": "Your account information was updated successfully.", "after": "/Profile/{id}" }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "WaveLink Mobile",
+      "body": [ "Simple plans, real coverage, and support that actually answers. Compare service plans, chat with support, or manage your account below.",
+                "No store visit required for any of it." ],
+      "links": [ { "label": "Service Plans", "href": "/ServicePlan" }, { "label": "Customer Support", "href": "/SupportRequest" }, { "label": "My Account", "href": "/Profile/1" } ] }
+  ]
+}

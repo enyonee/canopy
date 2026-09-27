@@ -1,0 +1,50 @@
+{
+  "app": "biography",
+  "task": "webgen-bench/000074",
+  "note": "A biography site: the homepage is the Person entity itself (name, birthdate, summary), Life Experiences are a dated timeline, Achievements and Honors are a dated, categorised list; each holds its own text search since the format has no cross-entity search node. No login: one subject's biography, open to browse and edit as data.",
+  "theme": { "background": "snow", "accent": "dimgray" },
+  "home": "/Person",
+
+  "data": {
+    "Person":         { "name": "text!", "birthdate": "date!", "summary": "longtext!" },
+    "LifeExperience": { "title": "text!", "date": "date!", "description": "longtext!" },
+    "Achievement":    { "title": "text!", "date": "date!", "category": "enum[award,honor,publication,other]=award", "description": "longtext" }
+  },
+
+  "seed": {
+    "Person": [ { "name": "Elena Marchetti", "birthdate": "1934-04-12",
+                  "summary": "Elena Marchetti is a physicist known for her work on low-temperature superconductivity; her 1987 paper reshaped the field's understanding of critical currents. She taught at the University of Turin for three decades and received the Nobel Prize in Physics in 1991." } ],
+    "LifeExperience": [
+      { "title": "Born in Turin, Italy", "date": "1934-04-12", "description": "Elena Marchetti was born to a family of clockmakers in Turin." },
+      { "title": "Doctorate in Physics", "date": "1958-07-01", "description": "Completed her doctorate at the University of Turin, studying magnetic properties of metals at low temperature." },
+      { "title": "Joined the University of Turin faculty", "date": "1961-09-01", "description": "Began teaching solid-state physics; established the Low Temperature Laboratory in 1965." },
+      { "title": "Retired from teaching", "date": "1994-06-30", "description": "Retired after 33 years, continuing research as professor emerita." }
+    ],
+    "Achievement": [
+      { "title": "Best Paper Award, European Physical Society", "date": "1988-05-10", "category": "award",
+        "description": "Recognised for the 1987 paper on critical currents in superconducting alloys." },
+      { "title": "Nobel Prize in Physics", "date": "1991-12-10", "category": "award",
+        "description": "Awarded the Nobel Prize in Physics for her discoveries concerning low-temperature superconductivity." },
+      { "title": "Honorary Doctorate, ETH Zurich", "date": "1993-10-01", "category": "honor",
+        "description": "Conferred in recognition of three decades of research and teaching." },
+      { "title": "\"Currents at the Edge\" published", "date": "1987-03-15", "category": "publication",
+        "description": "Her most cited paper, on critical currents in superconducting alloys." }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Person.list":         { "title": "Home", "intro": "Basic information about the subject of this biography.",
+                             "columns": ["name", "birthdate", "summary"], "create": false, "rowActions": ["edit"] },
+    "Person.form":         { "title": "Edit basic information", "submit": "Save", "confirmEdit": "Basic information updated", "afterEdit": "/Person" },
+    "LifeExperience.list": { "title": "Life Experiences", "intro": "A timeline of key life events, earliest first.",
+                             "columns": ["date", "title", "description"], "search": ["title", "description"],
+                             "sort": { "field": "date", "dir": "asc" }, "rowActions": ["view", "edit", "delete"], "createTitle": "Add a life event" },
+    "LifeExperience.detail": { "fields": ["title", "date", "description"] },
+    "Achievement.list":   { "title": "Achievements and Honors", "intro": "Key achievements and honors, most recent first. Search by keyword, e.g. a prize or publication name.",
+                             "columns": ["date", "title", "category", "description"], "search": ["title", "description"],
+                             "filters": [ { "name": "Category", "field": "category" } ], "sort": { "field": "date", "dir": "desc" },
+                             "rowActions": ["view", "edit", "delete"], "createTitle": "Add an achievement" },
+    "Achievement.detail": { "fields": ["title", "date", "category", "description"] }
+  }
+}

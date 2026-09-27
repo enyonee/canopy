@@ -1,0 +1,82 @@
+{
+  "app": "ringtones",
+  "task": "webgen-bench/000095",
+  "note": "Ringtones and wallpapers: everyone browses, searches and filters by category; a registered member downloads content (recorded as a row so it appears in their download history) or adds it to their collection without downloading. The admin curates content and categories.",
+  "theme": { "background": "lightgoldenrodyellow", "accent": "olivedrab" },
+  "home": "/Content",
+
+  "data": {
+    "User":       { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member" },
+    "Category":   { "name": "text!" },
+    "Content":    { "title": "text!", "kind": "enum[ringtone,wallpaper]=ringtone", "category": "ref:Category!",
+                    "description": "longtext", "file": "file", "downloads": "int := count(Download)", "createdAt": "time=now" },
+    "Download":   { "content": "ref:Content!", "user": "ref:User!", "downloadedAt": "time=now" },
+    "Collection": { "content": "ref:Content!", "user": "ref:User!", "addedAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Content": ["view", "do:download", "do:addToCollection"], "Category": ["view"],
+                  "Download": { "own": "user", "can": ["view"] }, "Collection": { "own": "user", "can": ["view", "delete"] } },
+      "guest":  { "Content": ["view"], "Category": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":     [ { "email": "admin@ringtones.test", "password": "admin123", "name": "Admin", "role": "admin" } ],
+    "Category": [ { "name": "Pop" }, { "name": "Rock" }, { "name": "Nature" }, { "name": "Abstract" }, { "name": "Funny" }, { "name": "Classical" } ],
+    "Content":  [
+      { "title": "Summer Vibes", "kind": "ringtone", "category": 1, "description": "An upbeat pop ringtone for sunny days." },
+      { "title": "Thunder Riff", "kind": "ringtone", "category": 2, "description": "A short, punchy rock guitar riff." },
+      { "title": "Forest Rain", "kind": "ringtone", "category": 3, "description": "Gentle rainfall recorded in a pine forest." },
+      { "title": "Ocean Sunset", "kind": "wallpaper", "category": 3, "description": "A wide-angle photo of the sun setting over calm water." },
+      { "title": "Neon City", "kind": "wallpaper", "category": 4, "description": "Abstract neon shapes over a dark city skyline." },
+      { "title": "Laugh Track", "kind": "ringtone", "category": 5, "description": "A silly canned-laughter ringtone." },
+      { "title": "Mountain Peak", "kind": "wallpaper", "category": 3, "description": "A snow-capped mountain peak at dawn." },
+      { "title": "Classical Bell", "kind": "ringtone", "category": 6, "description": "A single resonant bell chime." }
+    ]
+  },
+
+  "actions": [
+    { "name": "download", "in": "Content", "title": "Download", "by": ["member", "admin"], "after": "/Content/{id}",
+      "confirm": "Download recorded for {row.title} — use the file link below to save it",
+      "do": [ { "block": "db.createRow", "entity": "Download", "values": { "content": "@row.id", "user": "@me" } } ] },
+    { "name": "addToCollection", "in": "Content", "title": "Add to collection", "by": ["member", "admin"], "after": "/Content/{id}",
+      "confirm": "{row.title} added to your collection",
+      "do": [ { "block": "db.ensure", "entity": "Collection", "where": { "content": "@row.id", "user": "@me" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Content.list":   { "title": "Ringtones & Wallpapers", "intro": "Browse, search and filter ringtones and wallpapers.",
+                        "search": ["title", "description"], "columns": ["title", "kind", "category", "downloads", "createdAt"],
+                        "filters": [ { "name": "Kind", "field": "kind" }, { "name": "Category", "field": "category" } ],
+                        "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "Content.detail": { "fields": ["title", "kind", "category", "description", "file", "downloads", "createdAt"], "actions": ["download", "addToCollection"] },
+    "Category.list":  { "hidden": true },
+    "Download.list":  { "hidden": true, "title": "Downloads", "columns": ["content", "user", "downloadedAt"], "create": false },
+    "Collection.list": { "hidden": true, "title": "Collection", "columns": ["content", "user", "addedAt"], "create": false },
+    "User.list":      { "title": "Users", "columns": ["email", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "my-downloads", "entity": "Download", "title": "My Download History", "roles": ["member"],
+      "where": { "user": "@me" }, "columns": ["content", "downloadedAt"], "rowActions": ["view"] },
+    { "id": "my-collection", "entity": "Collection", "title": "My Collection", "roles": ["member"],
+      "where": { "user": "@me" }, "columns": ["content", "addedAt"], "rowActions": ["view", "delete"] }
+  ],
+
+  "pages": [
+    { "id": "about", "title": "About", "heading": "Ringtones and wallpapers",
+      "body": [ "Search or browse by category, then download a ringtone or wallpaper — or save it to your collection for later.",
+                "Sign in to see your download history and collection." ],
+      "links": [ { "label": "Browse", "href": "/Content" } ] }
+  ]
+}

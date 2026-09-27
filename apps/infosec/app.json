@@ -1,0 +1,109 @@
+{
+  "app": "infosec",
+  "task": "webgen-bench/000055",
+  "note": "Course catalogue and enrollment site for the Global Institute of Information Security, with a data-driven FAQ chatbot (matches the typed text against an Answer table, exactly the pattern proven in apps/chatbot) and a contact form. No login is asked for anywhere in the brief, so the whole site is open, like apps/teamshow.",
+  "theme": { "background": "lavender", "accent": "indigo" },
+  "home": "/Course",
+
+  "data": {
+    "Course":     { "title": "text!", "level": "enum[beginner,intermediate,advanced]=beginner", "duration": "text!",
+                    "description": "longtext!", "syllabus": "longtext!", "certification": "longtext!",
+                    "enrolled": "int := count(Enrollment)", "openBatches": "int := count(Batch: seats > 0)" },
+    "Batch":      { "course": "ref:Course!", "startDate": "date!", "endDate": "date!", "seats": "int=20", "location": "text" },
+    "Enrollment": { "course": "ref:Course!", "batch": "ref:Batch", "name": "text!", "email": "text!", "phone": "text",
+                    "createdAt": "time=now" },
+    "Contact":    { "name": "text!", "email": "text!", "message": "longtext!", "createdAt": "time=now" },
+    "Answer":     { "question": "text!", "reply": "longtext!" },
+    "Chat":       { "title": "text!", "startedAt": "time=now", "messages": "int := count(Message)" },
+    "Message":    { "chat": "ref:Chat!", "text": "text!", "answer": "ref:Answer",
+                    "reply": "text := coalesce(answer.reply, 'Sorry, I do not have an answer for that yet. Try asking about our courses, batch timetables, certifications or how to enrol.')",
+                    "sentAt": "time=now" }
+  },
+
+  "rules": {
+    "Enrollment": [ { "check": "len(name) >= 2", "message": "Please enter your name" } ],
+    "Contact":    [ { "check": "len(message) >= 3", "message": "Please enter a message" } ]
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "admissions@infosec-institute.test" } },
+
+  "events": [
+    { "on": "Message.created", "do": [
+        { "block": "db.each", "from": "Answer", "where": { "question": { "like": "@row.text" } },
+          "do": [ { "block": "db.update", "set": { "answer": "@each.id" } } ] } ] },
+    { "on": "Enrollment.created", "do": [
+        { "block": "mail.send", "connector": "mail", "to": "@row.email", "subject": "You are enrolled: {row.course.title}",
+          "text": "Hello {row.name}, your enrollment in {row.course.title} ({row.course.level}, {row.course.duration}) is confirmed. Certification path: {row.course.certification}" } ] }
+  ],
+
+  "seed": {
+    "Course": [
+      { "title": "Certified Ethical Hacking Foundations", "level": "beginner", "duration": "6 weeks",
+        "description": "An entry-level course covering the attacker mindset, reconnaissance, scanning and reporting.",
+        "syllabus": "Week 1: security fundamentals. Week 2: reconnaissance and footprinting. Week 3: scanning and enumeration. Week 4: vulnerability analysis. Week 5: exploitation basics. Week 6: reporting and capstone lab.",
+        "certification": "On completion you earn the Institute's CEHF Foundation Badge, which counts as the first credit toward the Certified Ethical Hacker Professional (CEHP) track." },
+      { "title": "Network Security Analyst", "level": "intermediate", "duration": "8 weeks",
+        "description": "Hardening networks, intrusion detection and firewall design for working administrators.",
+        "syllabus": "Week 1: TCP/IP security review. Week 2: firewalls and segmentation. Week 3: IDS/IPS. Week 4: VPNs. Week 5: wireless security. Week 6: monitoring and SIEM. Week 7: incident drills. Week 8: capstone assessment.",
+        "certification": "Graduates sit the Network Security Analyst (NSA) certification exam on the final day; passing grants the NSA credential and eligibility for the Security Operations track." },
+      { "title": "Advanced Penetration Testing", "level": "advanced", "duration": "10 weeks",
+        "description": "Hands-on offensive security: web, network and cloud penetration testing against realistic ranges.",
+        "syllabus": "Week 1: engagement scoping. Weeks 2-3: web application attacks. Weeks 4-5: network pivoting. Weeks 6-7: cloud and container attacks. Week 8: active directory attacks. Weeks 9-10: capstone red-team exercise.",
+        "certification": "Completion is the final requirement for the Certified Ethical Hacker Professional (CEHP) credential, the Institute's senior offensive-security certification." }
+    ],
+    "Batch": [
+      { "course": 1, "startDate": "2026-10-05", "endDate": "2026-11-13", "seats": 25, "location": "Online" },
+      { "course": 1, "startDate": "2026-11-16", "endDate": "2026-12-24", "seats": 25, "location": "Online" },
+      { "course": 2, "startDate": "2026-10-12", "endDate": "2026-12-04", "seats": 18, "location": "Institute Campus, Block C" },
+      { "course": 3, "startDate": "2026-10-19", "endDate": "2026-12-28", "seats": 0, "location": "Institute Campus, Block A" }
+    ],
+    "Answer": [
+      { "question": "What courses do you offer?", "reply": "We offer three programmes: Certified Ethical Hacking Foundations (beginner, 6 weeks), Network Security Analyst (intermediate, 8 weeks) and Advanced Penetration Testing (advanced, 10 weeks). See the course catalogue for full syllabi." },
+      { "question": "What are your batch timetables?", "reply": "Foundations runs online starting 2026-10-05 and again 2026-11-16; Network Security Analyst runs on campus starting 2026-10-12; Advanced Penetration Testing's next batch starts 2026-10-19 but is currently full. Open batches are shown on each course page." },
+      { "question": "How do I enrol?", "reply": "Open the course you want from the catalogue, review its batches, then use the Enrol form on the course page with your name, email and phone; you will get an emailed confirmation right away." },
+      { "question": "What certification will I get?", "reply": "Each course ends in its own credential: Foundations grants the CEHF badge, Network Security Analyst grants the NSA credential, and Advanced Penetration Testing completes the Certified Ethical Hacker Professional (CEHP) track. Details are on each course's page." },
+      { "question": "How can I contact the institute?", "reply": "Use the Contact page to send your name, email and message and our admissions team will get back to you." }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Course.list":   { "title": "Course catalogue", "intro": "Browse our information security programmes.",
+                       "columns": ["title", "level", "duration", "description", "openBatches", "enrolled"],
+                       "search": ["title", "description"], "filters": [ { "name": "Level", "field": "level" } ],
+                       "rowActions": ["view"], "createTitle": "Add a course" },
+    "Course.detail": { "fields": ["title", "level", "duration", "description", "syllabus", "certification", "openBatches", "enrolled"],
+                       "related": [ { "entity": "Batch", "via": "course", "title": "Batches", "columns": ["startDate", "endDate", "seats", "location"],
+                                      "form": ["startDate", "endDate", "seats", "location"], "submit": "Add batch", "confirm": "Batch scheduled",
+                                      "rowActions": ["edit", "delete"] },
+                                    { "entity": "Enrollment", "via": "course", "title": "Enrol in this course", "columns": ["name", "email", "createdAt"],
+                                      "form": ["batch", "name", "email", "phone"], "submit": "Enrol now",
+                                      "confirm": "You are enrolled — a confirmation email is on its way", "rowActions": [] } ] },
+    "Batch.list":    { "hidden": true },
+    "Enrollment.list": { "title": "Enrollments", "columns": ["course", "batch", "name", "email", "createdAt"],
+                       "search": ["name", "email"], "sort": { "field": "createdAt", "dir": "desc" }, "create": false, "rowActions": ["view"] },
+    "Contact.list":  { "title": "Contact us", "intro": "Reach the Global Institute of Information Security — we reply within one business day.",
+                       "columns": ["name", "email", "message", "createdAt"], "sort": { "field": "createdAt", "dir": "desc" },
+                       "rowActions": ["view"], "createTitle": "Send a message" },
+    "Contact.form":  { "title": "Contact the institute", "fields": ["name", "email", "message"], "submit": "Send message",
+                       "confirm": "Thank you — your message has been received", "after": "/Contact" },
+    "Answer.list":   { "title": "FAQ", "columns": ["question", "reply"], "search": ["question", "reply"] },
+    "Chat.list":     { "title": "Chat with us", "columns": ["title", "messages", "startedAt"], "rowActions": ["view"], "createTitle": "Start a chat" },
+    "Chat.form":     { "title": "Start a chat", "fields": ["title"], "confirm": "Conversation started — ask anything about our courses", "after": "/Chat/{id}" },
+    "Chat.detail":   { "fields": ["title", "messages", "startedAt"],
+                       "related": [ { "entity": "Message", "via": "chat", "title": "Conversation", "columns": ["text", "reply", "sentAt"],
+                                      "form": ["text"], "submit": "Send", "confirm": "Message sent" } ] },
+    "Message.list":  { "hidden": true }
+  },
+
+  "pages": [
+    { "id": "pathways", "title": "Certification Pathways", "heading": "Certification pathways",
+      "body": [ "Every programme ends in its own credential, and the tracks build on each other.",
+                "Foundations (beginner) grants the CEHF badge and is the entry point into the offensive-security track.",
+                "Network Security Analyst (intermediate) grants the NSA credential for defenders and SOC analysts.",
+                "Advanced Penetration Testing (advanced) is the final requirement for the Certified Ethical Hacker Professional (CEHP) credential." ],
+      "links": [ { "label": "Certified Ethical Hacking Foundations", "href": "/Course/1" },
+                 { "label": "Network Security Analyst", "href": "/Course/2" },
+                 { "label": "Advanced Penetration Testing", "href": "/Course/3" } ] }
+  ]
+}

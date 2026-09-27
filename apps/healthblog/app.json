@@ -1,0 +1,57 @@
+{
+  "app": "healthblog",
+  "task": "webgen-bench/000069",
+  "note": "Health blog: articles are browsed, searched and categorized; anyone may comment; 'following' a topic is a row action on the category list that records a Follow row for the single simulated visitor (no login site, per apps/forum's use of identity) and shows up in a personal list.",
+  "theme": { "background": "mistyrose", "accent": "firebrick" },
+  "home": "/page/home",
+  "identity": { "entity": "Profile", "defaults": { "name": "Reader", "email": "reader@example.com" } },
+
+  "data": {
+    "Profile":  { "name": "text!", "email": "text" },
+    "Category": { "name": "text!", "about": "text" },
+    "Article":  { "title": "text!", "body": "longtext!", "category": "ref:Category!", "author": "text!", "publishedAt": "date=today" },
+    "Comment":  { "article": "ref:Article!", "author": "ref:Profile", "body": "longtext!", "createdAt": "time=now" },
+    "Follow":   { "category": "ref:Category!", "follower": "ref:Profile", "createdAt": "time=now" }
+  },
+
+  "seed": {
+    "Category": [ { "name": "Nutrition", "about": "Diet and healthy eating" },
+                  { "name": "Fitness", "about": "Exercise and movement" },
+                  { "name": "Mental Health", "about": "Stress, sleep and wellbeing" } ],
+    "Article":  [ { "title": "Five habits for a healthier morning", "body": "Starting your day with water, light movement and a balanced breakfast can set the tone for better choices all day.", "category": 1, "author": "Dr. Elena Vasquez", "publishedAt": "2026-09-22" },
+                  { "title": "Why short walks matter more than you think", "body": "A ten-minute walk after meals measurably improves blood sugar control and mood.", "category": 2, "author": "Marcus Lee", "publishedAt": "2026-09-18" },
+                  { "title": "Sleep hygiene: the basics that actually work", "body": "Consistent bedtimes and a dark, cool room do more for sleep quality than most supplements.", "category": 3, "author": "Dr. Elena Vasquez", "publishedAt": "2026-09-10" } ]
+  },
+
+  "actions": [
+    { "name": "follow", "in": "Category", "title": "Follow", "after": "/list/my-follows", "confirm": "You are now following {row.name}",
+      "do": [ { "block": "db.createRow", "entity": "Follow", "values": { "category": "@row.id", "follower": "@me" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Article.list":   { "title": "Articles", "intro": "Health articles and healthy-lifestyle guidance.",
+                        "search": ["title", "body"], "filters": [ { "name": "Category", "field": "category" } ],
+                        "columns": ["title", "category", "author", "publishedAt"], "sort": { "field": "publishedAt", "dir": "desc" },
+                        "rowActions": ["view"], "create": false },
+    "Article.detail": { "fields": ["title", "category", "author", "publishedAt", "body"],
+                        "related": [ { "entity": "Comment", "via": "article", "title": "Comments", "columns": ["author", "body", "createdAt"],
+                                       "form": ["body"], "fill": { "author": "@me" }, "submit": "Post comment", "confirm": "Comment posted" } ] },
+    "Comment.list":   { "hidden": true },
+    "Category.list":  { "title": "Categories", "columns": ["name", "about"], "create": false, "rowActions": ["view", "follow"] },
+    "Follow.list":    { "hidden": true },
+    "Profile.list":   { "title": "My Profile", "columns": ["name", "email"], "create": false }
+  },
+
+  "lists": [
+    { "id": "my-follows", "entity": "Follow", "title": "My Follows", "where": { "follower": "@me" },
+      "columns": ["category", "createdAt"] }
+  ],
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Live healthier, one article at a time",
+      "body": [ "Browse and search health articles, discuss them in the comments, and follow the topics you care about." ],
+      "links": [ { "label": "Articles", "href": "/Article" }, { "label": "Categories", "href": "/Category" },
+                 { "label": "My Follows", "href": "/list/my-follows" } ] }
+  ]
+}

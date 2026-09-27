@@ -1,0 +1,38 @@
+{
+  "app": "linktree",
+  "task": "webgen-bench/000073",
+  "note": "A link-in-bio site: a Link entity holds the tree (title, url, position) with full add/edit/delete; the tree itself, at /Link, is the public shareable page (open to guests, no login) — the Home page names its own address as the link to share. A Profile entity is the owner's public handle/bio.",
+  "theme": { "background": "papayawhip", "accent": "darkorange" },
+  "home": "/page/home",
+
+  "data": {
+    "Link":    { "title": "text!", "url": "text!", "position": "int=0" },
+    "Profile": { "handle": "text!", "bio": "longtext" }
+  },
+
+  "seed": {
+    "Link": [ { "title": "My design portfolio", "url": "https://example.test/portfolio", "position": 1 },
+              { "title": "Latest video", "url": "https://example.test/video", "position": 2 },
+              { "title": "Newsletter signup", "url": "https://example.test/newsletter", "position": 3 },
+              { "title": "Shop my prints", "url": "https://example.test/shop", "position": 4 } ],
+    "Profile": [ { "handle": "@rae.makes", "bio": "Illustrator and printmaker. New drops every Friday." } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Link.list":     { "title": "Link Tree", "intro": "Your public, shareable link tree — its address is this page's own URL, /Link: copy it from the address bar to share.",
+                       "columns": ["position", "title", "url"], "sort": { "field": "position", "dir": "asc" },
+                       "rowActions": ["edit", "delete"], "createTitle": "Add a link" },
+    "Link.form":     { "confirm": "Link added to your tree", "confirmEdit": "Link updated", "afterEdit": "/Link" },
+    "Profile.list":  { "title": "Profile", "intro": "Your public handle and bio, shown above the link tree.",
+                       "columns": ["handle", "bio"], "create": false, "rowActions": ["edit"] },
+    "Profile.form":  { "title": "Edit profile", "submit": "Save", "confirmEdit": "Profile updated", "afterEdit": "/Profile" }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Build your link tree",
+      "body": [ "One page for every link that matters: add, edit and remove links any time.",
+                "Your link tree is public at /Link — share that address so anyone can open it, no account needed." ],
+      "links": [ { "label": "Open my Link Tree", "href": "/Link" }, { "label": "Edit my Profile", "href": "/Profile" } ] }
+  ]
+}

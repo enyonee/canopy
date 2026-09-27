@@ -1,0 +1,45 @@
+{
+  "app": "species",
+  "task": "webgen-bench/000088",
+  "note": "Species biological information database: browse, search and filter only — the task describes no editing, so the catalogue is read-only (no create/edit/delete), which keeps the data curated and honest about what was actually asked for.",
+  "theme": { "background": "linen", "accent": "maroon" },
+  "home": "/Species",
+
+  "data": {
+    "Species": { "commonName": "text!", "scientificName": "text!", "kingdom": "enum[Animalia,Plantae,Fungi]=Animalia",
+                 "habitat": "enum[Forest,Ocean,Desert,Grassland,Freshwater,Arctic]=Forest",
+                 "conservationStatus": "enum[LC,NT,VU,EN,CR,EW,EX]=LC", "population": "int",
+                 "description": "longtext", "image": "image" }
+  },
+
+  "seed": {
+    "Species": [
+      { "commonName": "Gray Wolf", "scientificName": "Canis lupus", "kingdom": "Animalia", "habitat": "Forest", "conservationStatus": "LC", "population": 300000, "description": "A highly social canid found across forests and tundra of the Northern Hemisphere." },
+      { "commonName": "Bottlenose Dolphin", "scientificName": "Tursiops truncatus", "kingdom": "Animalia", "habitat": "Ocean", "conservationStatus": "LC", "population": 600000, "description": "An intelligent marine mammal found in warm and temperate seas worldwide." },
+      { "commonName": "Saguaro Cactus", "scientificName": "Carnegiea gigantea", "kingdom": "Plantae", "habitat": "Desert", "conservationStatus": "LC", "population": 47000000, "description": "A tree-sized cactus native to the Sonoran Desert, able to live over 150 years." },
+      { "commonName": "African Elephant", "scientificName": "Loxodonta africana", "kingdom": "Animalia", "habitat": "Grassland", "conservationStatus": "EN", "population": 415000, "description": "The largest living terrestrial animal, found across African savannas and forests." },
+      { "commonName": "Amazon Water Lily", "scientificName": "Victoria amazonica", "kingdom": "Plantae", "habitat": "Freshwater", "conservationStatus": "LC", "population": 0, "description": "A giant water lily native to the shallow waters of the Amazon River basin." },
+      { "commonName": "Emperor Penguin", "scientificName": "Aptenodytes forsteri", "kingdom": "Animalia", "habitat": "Arctic", "conservationStatus": "NT", "population": 595000, "description": "The tallest and heaviest penguin species, breeding in Antarctica's harshest winters." },
+      { "commonName": "Fly Agaric", "scientificName": "Amanita muscaria", "kingdom": "Fungi", "habitat": "Forest", "conservationStatus": "LC", "population": 0, "description": "A distinctive red-and-white mushroom found in birch and pine forests across the Northern Hemisphere." },
+      { "commonName": "Vaquita", "scientificName": "Phocoena sinus", "kingdom": "Animalia", "habitat": "Ocean", "conservationStatus": "CR", "population": 10, "description": "The world's most endangered marine mammal, found only in the northern Gulf of California." },
+      { "commonName": "Fennec Fox", "scientificName": "Vulpes zerda", "kingdom": "Animalia", "habitat": "Desert", "conservationStatus": "LC", "population": 0, "description": "The smallest fox species, adapted to the Sahara desert with oversized ears for heat dispersal." }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Species.list":   { "title": "Species Database", "intro": "Browse, search and filter biological information for different species.",
+                        "search": ["commonName", "scientificName"],
+                        "filters": [ { "name": "Habitat", "field": "habitat" }, { "name": "Kingdom", "field": "kingdom" },
+                                     { "name": "Conservation Status", "field": "conservationStatus" } ],
+                        "columns": ["commonName", "scientificName", "kingdom", "habitat", "conservationStatus", "population"],
+                        "sort": { "field": "commonName", "dir": "asc" }, "rowActions": ["view"], "create": false },
+    "Species.detail": { "fields": ["commonName", "scientificName", "kingdom", "habitat", "conservationStatus", "population", "description", "image"] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Species Database",
+      "body": [ "Browse, search and filter biological information for species across every kingdom and habitat." ],
+      "links": [ { "label": "Browse the database", "href": "/Species" } ] }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "app": "detective",
+  "task": "webgen-bench/000083",
+  "note": "Detective agency case management: cases are a shared agency asset (no per-investigator ownership — colleagues collaborate on the same case), with reports and work hours logged underneath a case (apps/qna's answer-under-question shape, twice). The 'estimated expense sheet' and 'service assignment sheet' are sections of the case detail page: derived labor-cost/expense fields and a related assignment table, not separate documents the format has no way to generate.",
+  "theme": { "background": "beige", "accent": "saddlebrown" },
+  "home": "/dashboard/overview",
+
+  "data": {
+    "User":       { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,investigator]=investigator" },
+    "Case":       { "title": "text!", "client": "text!", "description": "longtext!",
+                    "status": "enum[open,active,closed]=open", "openedDate": "date=today",
+                    "hourlyRate": "money!", "miscExpenses": "money=0",
+                    "totalHours": "money := sum(TimeLog: hours)",
+                    "laborCost": "money := totalHours * hourlyRate",
+                    "estimatedExpense": "money := laborCost + miscExpenses",
+                    "reportCount": "int := count(Report)" },
+    "Report":     { "case": "ref:Case!", "author": "ref:User!", "body": "longtext!", "createdAt": "time=now" },
+    "TimeLog":    { "case": "ref:Case!", "investigator": "ref:User!", "hours": "money!", "date": "date=today", "notes": "text", "createdAt": "time=now" },
+    "Assignment": { "case": "ref:Case!", "investigator": "ref:User!", "role": "text!", "assignedAt": "time=now" }
+  },
+
+  "rules": {
+    "User":    [ { "unique": "email", "message": "This email is already registered" } ],
+    "TimeLog": [ { "check": "hours > 0", "message": "Hours must be greater than 0" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": {
+      "admin":        "*",
+      "investigator": { "Case": ["view"], "Report": ["view", "create"], "TimeLog": ["view", "create"], "Assignment": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [ { "email": "admin@detective.test", "password": "admin123", "name": "Admin", "role": "admin" },
+              { "email": "jordan@detective.test", "password": "jordan123", "name": "Jordan Vance", "role": "investigator" },
+              { "email": "priya@detective.test", "password": "priya123", "name": "Priya Anand", "role": "investigator" } ],
+    "Case": [ { "title": "The Hartley Disappearance", "client": "Eleanor Hartley",
+                "description": "Eleanor's adult son has not been seen in three weeks; last known contact was a text from the docks.",
+                "status": "active", "openedDate": "2026-09-05", "hourlyRate": 75, "miscExpenses": 150 },
+              { "title": "Bellview Insurance Fraud", "client": "Bellview Mutual",
+                "description": "Suspected staged burglary claim; policyholder's alibi needs verification.",
+                "status": "open", "openedDate": "2026-09-18", "hourlyRate": 60, "miscExpenses": 40 } ],
+    "Report":     [ { "case": 1, "author": 2, "body": "Interviewed the dockworkers; one recalls a man matching the description boarding a cargo van around 22:00.",
+                      "createdAt": "2026-09-08T14:00:00.000Z" } ],
+    "TimeLog":    [ { "case": 1, "investigator": 2, "hours": 3.5, "date": "2026-09-08", "notes": "Dock interviews and CCTV request" } ],
+    "Assignment": [ { "case": 1, "investigator": 2, "role": "Lead investigator" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "User.list":        { "title": "Staff", "columns": ["email", "name", "role"] },
+    "Case.list":        { "title": "Cases", "intro": "Every case currently on the books.",
+                          "columns": ["title", "client", "status", "openedDate", "totalHours", "estimatedExpense"],
+                          "search": ["title", "client"], "filters": [ { "name": "Status", "field": "status" } ],
+                          "rowActions": ["view"] },
+    "Case.detail":      { "fields": ["title", "client", "description", "status", "openedDate", "hourlyRate", "miscExpenses",
+                                     "totalHours", "laborCost", "estimatedExpense", "reportCount"],
+                          "related": [ { "entity": "Report", "via": "case", "title": "Reports", "columns": ["author", "body", "createdAt"],
+                                         "form": ["body"], "fill": { "author": "@me" }, "submit": "Submit report", "confirm": "Report submitted" },
+                                       { "entity": "TimeLog", "via": "case", "title": "Work hours", "columns": ["investigator", "hours", "date", "notes"],
+                                         "form": ["hours", "date", "notes"], "fill": { "investigator": "@me" }, "submit": "Log hours", "confirm": "Hours logged" },
+                                       { "entity": "Assignment", "via": "case", "title": "Service assignment sheet",
+                                         "columns": ["investigator", "role", "assignedAt"], "form": false, "rowActions": [] } ] },
+    "Report.list":      { "hidden": true, "create": false },
+    "TimeLog.list":      { "hidden": true, "create": false },
+    "Assignment.list":  { "hidden": true, "create": false }
+  },
+
+  "dashboards": [
+    { "id": "overview", "title": "Agency Dashboard", "intro": "Cases, hours and reports across the agency.",
+      "cards": [ { "title": "Open cases", "entity": "Case", "fn": "count", "where": { "status": { "in": ["open", "active"] } } },
+                 { "title": "Hours logged", "entity": "TimeLog", "fn": "sum", "field": "hours" },
+                 { "title": "Reports filed", "entity": "Report", "fn": "count" } ],
+      "tables": [ { "title": "Cases by status", "entity": "Case", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Cases" }, { "fn": "sum", "field": "estimatedExpense", "as": "expense", "title": "Estimated expense" } ] } ] }
+  ]
+}

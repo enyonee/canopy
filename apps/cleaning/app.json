@@ -1,0 +1,52 @@
+{
+  "app": "cleaning",
+  "task": "webgen-bench/000018",
+  "note": "House cleaning brochure site: a Service catalogue, a Book Now form that creates a Booking (a created-event derives a text 'BK-<id>' reference), a separate Check Status search by that reference (two named `lists` over the same Booking entity, one create-only, one search-only), and a static Contact Us page.",
+  "theme": { "background": "azure", "accent": "darkslateblue" },
+  "home": "/page/home",
+
+  "data": {
+    "Service": { "name": "text!", "description": "longtext!", "price": "money=0" },
+    "Booking": { "name": "text!", "email": "text!", "phone": "text!", "service": "ref:Service!", "date": "date!", "address": "text!",
+                 "notes": "longtext", "reference": "text", "status": "enum[requested,confirmed,completed,cancelled]=requested", "createdAt": "time=now" }
+  },
+
+  "events": [
+    { "on": "Booking.created", "do": [ { "block": "db.update", "set": { "reference": "@row.id" } } ] }
+  ],
+
+  "seed": {
+    "Service": [ { "name": "Standard home cleaning", "description": "Dusting, vacuuming, mopping and bathroom/kitchen cleaning for homes up to 2,000 sq ft.", "price": 99 },
+                 { "name": "Deep cleaning", "description": "A thorough top-to-bottom clean including baseboards, inside appliances and window sills.", "price": 189 },
+                 { "name": "Move-in / move-out cleaning", "description": "Empty-property cleaning for landlords and tenants, including cabinets and closets.", "price": 229 },
+                 { "name": "Recurring maintenance clean", "description": "Weekly or bi-weekly upkeep cleaning at a discounted recurring rate.", "price": 79 } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Service.list":  { "title": "Services", "intro": "Every cleaning service we offer, with what is included.",
+                       "columns": ["name", "description", "price"], "create": false, "rowActions": ["view"] },
+    "Booking.list":  { "hidden": true },
+    "Booking.form":  { "title": "Book a cleaning", "fields": ["name", "email", "phone", "service", "date", "address", "notes"],
+                       "submit": "Book now", "confirm": "Booking received! Your reference number will be shown on the next page.", "after": "/Booking/{id}" },
+    "Booking.detail": { "fields": ["reference", "name", "email", "phone", "service", "date", "address", "notes", "status", "createdAt"] }
+  },
+
+  "lists": [
+    { "id": "book", "entity": "Booking", "title": "Book Now", "intro": "Choose a service, a date and your address - we confirm by email.",
+      "columns": ["reference", "service", "date", "status"], "sort": { "field": "createdAt", "dir": "desc" }, "create": true, "createTitle": "Book a cleaning" },
+    { "id": "status", "entity": "Booking", "title": "Check Service Status", "intro": "Enter the booking reference number from your confirmation to see its current status.",
+      "columns": ["reference", "service", "date", "status"], "search": ["reference"], "create": false }
+  ],
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Sparkle Home Cleaning",
+      "body": [ "Reliable house cleaning, booked online in a minute. Standard, deep, move-out and recurring plans available.",
+                "Use the menu to browse services, book now, check the status of an existing booking, or contact us." ],
+      "links": [ { "label": "Services", "href": "/Service" }, { "label": "Book Now", "href": "/list/book" },
+                 { "label": "Check Status", "href": "/list/status" }, { "label": "Contact Us", "href": "/page/contact" } ] },
+    { "id": "contact", "title": "Contact Us", "heading": "Contact Us",
+      "body": [ "Sparkle Home Cleaning, 220 Birch street, Lakeview.", "Phone: +1 555 0188 - Email: hello@sparkleclean.test - Mon-Sat 7:00-19:00." ],
+      "links": [ { "label": "Book Now", "href": "/list/book" }, { "label": "Check Status", "href": "/list/status" } ] }
+  ]
+}

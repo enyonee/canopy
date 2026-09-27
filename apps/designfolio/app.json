@@ -1,0 +1,56 @@
+{
+  "app": "designfolio",
+  "task": "webgen-bench/000071",
+  "note": "Personal portfolio for a designer: the Portfolio section lists design works with category, year and an optional image; the About page holds the designer's bio, experience and contact details as one profile row so it stays data, not prose; a public contact form records messages. No login: this is a single owner's site, open to browse and (per the brief) manage as data.",
+  "theme": { "background": "peachpuff", "accent": "indianred" },
+  "home": "/Work",
+
+  "data": {
+    "Work":    { "title": "text!", "category": "enum[branding,web,print,packaging,illustration]=web", "year": "int=2026",
+                 "image": "image", "url": "text", "description": "longtext!" },
+    "Profile": { "name": "text!", "bio": "longtext!", "experience": "longtext!", "email": "text!", "phone": "text" },
+    "Message": { "name": "text!", "email": "text!", "body": "longtext!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "Work": [ { "check": "year >= 1900", "message": "Year looks wrong" } ]
+  },
+
+  "seed": {
+    "Work": [
+      { "title": "Nimbus identity system", "category": "branding", "year": 2026, "url": "https://example.test/nimbus",
+        "description": "Full brand identity for a weather-data startup: logotype, colour system and a icon set of 40 pictograms." },
+      { "title": "Aster e-commerce redesign", "category": "web", "year": 2025, "url": "https://example.test/aster",
+        "description": "Ground-up redesign of a homeware store: new grid, checkout flow and a component library shipped to engineering." },
+      { "title": "Quarterly report layout", "category": "print", "year": 2025, "url": "https://example.test/quarterly",
+        "description": "A 32-page annual report: typographic system, data pages and a printable cover in two spot colours." },
+      { "title": "Loop coffee packaging", "category": "packaging", "year": 2024, "url": "https://example.test/loop",
+        "description": "Recyclable packaging for a coffee roaster's three blends, with a die-line and shelf mock-ups." },
+      { "title": "Field guide illustrations", "category": "illustration", "year": 2024, "url": "https://example.test/fieldguide",
+        "description": "Forty botanical illustrations for a regional field guide, inked and coloured digitally." }
+    ],
+    "Profile": [
+      { "name": "Priya Nandan", "email": "priya@designfolio.test", "phone": "+1 555 0142",
+        "bio": "Priya Nandan is a visual designer working across branding, packaging and digital product. Based in Portland, she has spent the last nine years helping small manufacturers and startups look like themselves.",
+        "experience": "Senior Designer at Kettleworks (2021–present): brand and packaging for food and drink clients. Designer at Studio Farlow (2017–2021): web and print for cultural institutions. BFA in Graphic Design, Willamette College of Art (2017)." }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Work.list":      { "title": "Portfolio", "intro": "Selected design work, most recent first.",
+                        "columns": ["title", "category", "year", "image"], "search": ["title", "description"],
+                        "filters": [ { "name": "Category", "field": "category" } ], "sort": { "field": "year", "dir": "desc" },
+                        "rowActions": ["view", "edit", "delete"], "createTitle": "Add a work" },
+    "Work.form":      { "confirm": "Work added to the portfolio", "after": "/Work/{id}", "confirmEdit": "Work updated" },
+    "Work.detail":    { "fields": ["title", "category", "year", "image", "url", "description"] },
+    "Profile.list":   { "title": "About", "intro": "Background, experience and how to get in touch.",
+                        "columns": ["name", "bio", "experience", "email", "phone"], "create": false, "rowActions": ["edit"] },
+    "Profile.form":   { "title": "Edit profile", "submit": "Save", "confirmEdit": "Profile updated", "afterEdit": "/Profile" },
+    "Message.list":   { "title": "Messages", "intro": "Messages sent through the contact form.",
+                        "columns": ["name", "email", "body", "createdAt"], "sort": { "field": "createdAt", "dir": "desc" },
+                        "rowActions": ["view", "delete"], "createTitle": "Contact the designer" },
+    "Message.form":   { "title": "Get in touch", "fields": ["name", "email", "body"], "submit": "Send message",
+                        "confirm": "Your message has been sent successfully", "after": "/Message" }
+  }
+}

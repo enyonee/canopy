@@ -1,0 +1,99 @@
+{
+  "app": "agri",
+  "task": "webgen-bench/000065",
+  "note": "Agriculture information site: agricultural news, a farm product catalogue and a weather forecast are open to everyone; an admin manages all three. The weather forecast is seeded rows for one fixed region (Green Valley County) — there is no geolocation or external weather API, stated here rather than faked.",
+  "theme": { "background": "lightcyan", "accent": "cadetblue" },
+  "home": "/page/home",
+
+  "data": {
+    "User":           { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin]=admin" },
+    "NewsArticle":    { "title": "text!", "summary": "text", "body": "longtext!",
+                        "category": "enum[cropProduction,livestock,markets,technology,policy]=cropProduction", "publishedAt": "date=today" },
+    "FarmProduct":    { "name": "text!", "category": "enum[grain,vegetable,fruit,dairy,livestock]=grain", "farm": "text!",
+                        "price": "money!", "unit": "enum[kg,ton,dozen,litre,each]=kg",
+                        "availability": "enum[inStock,limited,outOfStock]=inStock", "description": "longtext" },
+    "WeatherReading": { "location": "text!", "date": "date!", "condition": "enum[sunny,cloudy,rain,storm,snow]=sunny",
+                        "highTemp": "int=20", "lowTemp": "int=10", "precipitationChance": "int=0", "windSpeed": "int=0" }
+  },
+
+  "rules": {
+    "User":        [ { "unique": "email", "message": "This email is already registered" } ],
+    "FarmProduct": [ { "check": "price >= 0", "message": "Price cannot be negative" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "guest": { "NewsArticle": ["view"], "FarmProduct": ["view"], "WeatherReading": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":        [ { "email": "admin@agri.test", "password": "admin123", "name": "Admin", "role": "admin" } ],
+    "NewsArticle": [
+      { "title": "Wheat yields expected to rise this harvest", "summary": "Favourable spring rains lift the outlook for cereal growers.",
+        "body": "Agronomists across Green Valley County report stronger-than-average tillering after a wet spring, with regional wheat yields projected to rise 8% over last year.",
+        "category": "cropProduction", "publishedAt": "2026-09-20" },
+      { "title": "New drip-irrigation subsidy opens for applications", "summary": "Growers can now apply for cost-sharing on water-efficient irrigation.",
+        "body": "The county agriculture office opened applications for a subsidy covering up to 40% of drip-irrigation installation costs for row-crop farms.",
+        "category": "policy", "publishedAt": "2026-09-18" },
+      { "title": "Dairy prices firm on strong export demand", "summary": "Wholesale milk prices climbed for a third straight month.",
+        "body": "Wholesale milk prices rose again this month as export orders from overseas processors kept demand ahead of the seasonal flush in supply.",
+        "category": "markets", "publishedAt": "2026-09-15" },
+      { "title": "Drone-based crop scouting gains ground with local growers", "summary": "More farms are pairing multispectral drones with soil sensors.",
+        "body": "A growing number of Green Valley farms are combining multispectral drone imagery with in-field soil sensors to catch nutrient stress weeks earlier than a visual walk-through.",
+        "category": "technology", "publishedAt": "2026-09-10" },
+      { "title": "Cattle producers watch feed costs ahead of winter", "summary": "Hay prices are up on tighter regional supply.",
+        "body": "Cattle producers are locking in hay contracts earlier than usual this year as a dry second cutting tightened regional supply ahead of winter feeding.",
+        "category": "livestock", "publishedAt": "2026-09-05" }
+    ],
+    "FarmProduct": [
+      { "name": "Sweet corn", "category": "vegetable", "farm": "Green Valley Growers", "price": 3.5, "unit": "dozen", "availability": "inStock",
+        "description": "Freshly picked sweet corn, harvested daily through the season." },
+      { "name": "Heirloom tomatoes", "category": "vegetable", "farm": "Sunrise Family Farm", "price": 4.25, "unit": "kg", "availability": "limited",
+        "description": "Mixed heirloom varieties, vine-ripened, sold by the kilogram." },
+      { "name": "Honeycrisp apples", "category": "fruit", "farm": "Orchard Hill", "price": 2.75, "unit": "kg", "availability": "inStock",
+        "description": "Crisp, sweet-tart apples from a fourth-generation orchard." },
+      { "name": "Whole milk", "category": "dairy", "farm": "Meadowbrook Dairy", "price": 1.9, "unit": "litre", "availability": "inStock",
+        "description": "Pasteurised whole milk from a small grass-fed herd." },
+      { "name": "Yellow field corn", "category": "grain", "farm": "Green Valley Growers", "price": 210, "unit": "ton", "availability": "inStock",
+        "description": "Feed-grade field corn, bulk delivery available." },
+      { "name": "Free-range eggs", "category": "livestock", "farm": "Meadowbrook Dairy", "price": 5, "unit": "dozen", "availability": "outOfStock",
+        "description": "Free-range hen eggs, currently sold out until next week." }
+    ],
+    "WeatherReading": [
+      { "location": "Green Valley County", "date": "2026-09-27", "condition": "sunny", "highTemp": 24, "lowTemp": 12, "precipitationChance": 5, "windSpeed": 10 },
+      { "location": "Green Valley County", "date": "2026-09-28", "condition": "cloudy", "highTemp": 21, "lowTemp": 13, "precipitationChance": 30, "windSpeed": 14 },
+      { "location": "Green Valley County", "date": "2026-09-29", "condition": "rain", "highTemp": 18, "lowTemp": 11, "precipitationChance": 80, "windSpeed": 22 },
+      { "location": "Green Valley County", "date": "2026-09-30", "condition": "rain", "highTemp": 17, "lowTemp": 10, "precipitationChance": 65, "windSpeed": 18 },
+      { "location": "Green Valley County", "date": "2026-10-01", "condition": "sunny", "highTemp": 22, "lowTemp": 9, "precipitationChance": 10, "windSpeed": 8 }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "NewsArticle.list":   { "title": "Agricultural News", "intro": "The latest agricultural news for Green Valley County.",
+                            "search": ["title", "summary", "body"], "columns": ["title", "category", "publishedAt", "summary"],
+                            "filters": [ { "name": "Category", "field": "category" } ],
+                            "sort": { "field": "publishedAt", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "NewsArticle.detail": { "fields": ["title", "category", "publishedAt", "summary", "body"] },
+    "FarmProduct.list":   { "title": "Farm Products", "intro": "Browse produce and livestock products from local farms.",
+                            "search": ["name", "farm"], "columns": ["name", "category", "farm", "price", "unit", "availability"],
+                            "filters": [ { "name": "Category", "field": "category" }, { "name": "Availability", "field": "availability" } ],
+                            "rowActions": ["view"], "create": false },
+    "FarmProduct.detail": { "fields": ["name", "category", "farm", "price", "unit", "availability", "description"] },
+    "WeatherReading.list":   { "title": "Weather Forecast", "intro": "5-day forecast for Green Valley County (seeded data — no live weather source).",
+                              "columns": ["location", "date", "condition", "highTemp", "lowTemp", "precipitationChance", "windSpeed"],
+                              "sort": { "field": "date", "dir": "asc" }, "rowActions": ["view"], "create": false },
+    "WeatherReading.detail": { "fields": ["location", "date", "condition", "highTemp", "lowTemp", "precipitationChance", "windSpeed"] },
+    "User.list":          { "title": "Admins", "columns": ["email", "name"] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Agriculture news, products and weather",
+      "body": [ "News from the fields, a catalogue of local farm products, and the Green Valley County forecast, in one place.",
+                "Search and filter the news and product catalogues, or check the five-day forecast before you head out." ],
+      "links": [ { "label": "News", "href": "/NewsArticle" }, { "label": "Farm Products", "href": "/FarmProduct" }, { "label": "Weather Forecast", "href": "/WeatherReading" } ] }
+  ]
+}

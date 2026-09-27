@@ -1,0 +1,64 @@
+{
+  "app": "matrimony",
+  "task": "webgen-bench/000091",
+  "note": "Matrimonial matchmaking site: the profile (age, gender, location, interests, bio, photo) is filled at registration itself, since no ui_instruct case tests a separate edit flow and a single role cannot be both publicly browsable and self-scoped for edit (own restricts every operation on the same field, not just one). Messaging is private per recipient via own:\"to\", created through an action on the other member's row.",
+  "theme": { "background": "lemonchiffon", "accent": "chocolate" },
+  "home": "/User",
+
+  "data": {
+    "User":    { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member",
+                 "age": "int=25", "gender": "enum[male,female,other]=other", "location": "text", "interests": "longtext", "bio": "longtext", "photo": "image" },
+    "Message": { "from": "ref:User!", "to": "ref:User!", "body": "longtext!", "sentAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" },
+              { "check": "age >= 18", "message": "You must be at least 18 to register" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "User": ["view", "do:contact"], "Message": { "own": "to", "can": ["view"] } },
+      "guest":  {}
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@matrimony.test", "password": "admin123", "name": "Admin", "role": "admin", "age": 30 },
+      { "email": "leah@matrimony.test", "password": "leah12345", "name": "Leah Kim", "role": "member",
+        "age": 29, "gender": "female", "location": "Seattle", "interests": "hiking, jazz, cooking", "bio": "Product designer who loves the outdoors." },
+      { "email": "omar@matrimony.test", "password": "omar12345", "name": "Omar Siddiqui", "role": "member",
+        "age": 32, "gender": "male", "location": "Chicago", "interests": "cycling, chess, travel", "bio": "Civil engineer, always planning the next trip." },
+      { "email": "priya@matrimony.test", "password": "priya1234", "name": "Priya Menon", "role": "member",
+        "age": 27, "gender": "female", "location": "Seattle", "interests": "painting, yoga", "bio": "Illustrator building a small studio." }
+    ]
+  },
+
+  "actions": [
+    { "name": "contact", "in": "User", "title": "Message", "after": "/User/{id}", "confirm": "Message sent to {row.name}",
+      "do": [ { "block": "db.createRow", "entity": "Message", "values": { "from": "@me", "to": "@row.id", "body": "@values.body" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "User.list":    { "title": "Members", "intro": "Browse and search for a compatible partner.",
+                      "columns": ["name", "age", "gender", "location", "interests"],
+                      "search": ["location", "interests", "bio", "name"],
+                      "filters": [ { "name": "Gender", "field": "gender" }, { "field": "age", "range": true } ],
+                      "sort": { "field": "age", "dir": "asc" }, "rowActions": ["view", "contact"], "create": false },
+    "User.form":    { "fields": ["email", "password", "name", "age", "gender", "location", "interests", "bio", "photo"] },
+    "User.detail":  { "fields": ["name", "age", "gender", "location", "interests", "bio", "photo"], "actions": ["contact"] },
+    "Message.list": { "title": "Messages", "intro": "Messages sent to you.", "columns": ["from", "body", "sentAt"],
+                      "sort": { "field": "sentAt", "dir": "desc" }, "rowActions": ["view"], "create": false }
+  },
+
+  "pages": [
+    { "id": "about", "title": "About", "heading": "Find a compatible partner",
+      "body": [ "Search members by age, location and interests, then send a private message to start a conversation." ],
+      "links": [ { "label": "Browse members", "href": "/User" }, { "label": "Your messages", "href": "/Message" } ], "roles": ["member", "admin"] }
+  ]
+}

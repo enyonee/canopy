@@ -1,0 +1,90 @@
+{
+  "app": "sportsrecruit",
+  "task": "webgen-bench/000054",
+  "note": "Sports recruitment platform: athletes self-register, sports organizations (seeded accounts) post job listings, athletes apply with a one-click action, and organizations message athletes directly; the athlete's inbox and an unread counter stand in for the notification.",
+  "theme": { "background": "ghostwhite", "accent": "slategray" },
+  "home": "/Job",
+
+  "data": {
+    "User":        { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,athlete,organization]=athlete",
+                     "sport": "text", "position": "text", "unread": "int := count(Message.to: not read)" },
+    "Job":         { "title": "text!", "organization": "ref:User!", "sport": "text!", "location": "text!", "description": "longtext!",
+                     "salary": "money=0", "status": "enum[open,closed]=open", "createdAt": "time=now",
+                     "applicants": "int := count(Application)" },
+    "Application": { "job": "ref:Job!", "athlete": "ref:User!", "note": "longtext", "status": "enum[submitted,reviewed,accepted,rejected]=submitted",
+                     "createdAt": "time=now" },
+    "Message":     { "from": "ref:User!", "to": "ref:User!", "body": "longtext!", "sentAt": "time=now", "read": "bool=false" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "athlete", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "athlete": { "Job": ["view", "do:apply"], "Application": { "own": "athlete", "can": ["view"] },
+                   "Message": { "own": "to", "can": ["view", "do:markRead"] }, "User": ["view"] },
+      "organization": { "Job": { "own": "organization", "can": ["view", "create", "edit"] },
+                        "Application": ["view"], "User": ["view", "do:contact"],
+                        "Message": { "own": "from", "can": ["view", "create"] } },
+      "guest": { "Job": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@sportsrecruit.test", "password": "admin123", "name": "Admin", "role": "admin" },
+      { "email": "falcons@sportsrecruit.test", "password": "falcons123", "name": "FC Falcons", "role": "organization" },
+      { "email": "harborhawks@sportsrecruit.test", "password": "hawks123", "name": "Harbor Hawks", "role": "organization" },
+      { "email": "sam@sportsrecruit.test", "password": "sam12345", "name": "Sam Rivera", "role": "athlete", "sport": "Soccer", "position": "Midfielder" }
+    ],
+    "Job": [
+      { "title": "Starting Goalkeeper", "organization": 2, "sport": "Soccer", "location": "Portland, OR", "description": "First-team goalkeeper for the upcoming season; prior semi-pro experience preferred.", "salary": 42000 },
+      { "title": "Assistant Strength Coach", "organization": 2, "sport": "Soccer", "location": "Portland, OR", "description": "Support the conditioning program for the senior squad.", "salary": 38000 },
+      { "title": "Point Guard", "organization": 3, "sport": "Basketball", "location": "Austin, TX", "description": "Floor general for a rebuilding roster; ball-handling and vision a must.", "salary": 51000 }
+    ]
+  },
+
+  "actions": [
+    { "name": "apply", "in": "Job", "title": "Apply", "after": "/list/my-applications",
+      "confirm": "Application submitted for {row.title}",
+      "do": [ { "block": "db.createRow", "entity": "Application", "values": { "job": "@row.id", "athlete": "@me" } } ] },
+    { "name": "contact", "in": "User", "title": "Message", "after": "/User/{id}",
+      "confirm": "Message sent to {row.name}",
+      "do": [ { "block": "db.createRow", "entity": "Message", "values": { "from": "@me", "to": "@row.id", "body": "@values.body" } } ] },
+    { "name": "markRead", "in": "Message", "title": "Mark read", "after": "/Message/{id}", "confirm": "Marked as read",
+      "do": [ { "block": "db.update", "set": { "read": true } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "User.list":         { "title": "Athletes & organizations", "columns": ["email", "name", "role", "sport", "position"],
+                           "search": ["name", "email", "sport"], "filters": [ { "name": "Role", "field": "role" } ],
+                           "rowActions": ["view", "edit", "delete", "contact"] },
+    "User.detail":       { "fields": ["email", "name", "role", "sport", "position", "unread"], "actions": ["contact"] },
+    "User.form":         { "fields": ["email", "password", "name", "role", "sport", "position"] },
+    "Job.list":          { "title": "Job listings", "intro": "Open roles from sports organizations.",
+                           "columns": ["title", "organization", "sport", "location", "salary", "status", "applicants"],
+                           "search": ["title", "location", "sport"], "filters": [ { "name": "Status", "field": "status" } ],
+                           "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view", "apply"], "createTitle": "Post a job" },
+    "Job.form":          { "title": "Post a job", "fields": ["title", "sport", "location", "description", "salary"],
+                           "fill": { "organization": "@me" }, "submit": "Post job", "confirm": "Job listing posted", "after": "/Job/{id}" },
+    "Job.detail":        { "fields": ["title", "organization", "sport", "location", "description", "salary", "status", "applicants"], "actions": ["apply"] },
+    "Application.list":  { "title": "Applications", "columns": ["job", "athlete", "status", "createdAt"],
+                           "filters": [ { "name": "Status", "field": "status" } ], "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "Application.detail": { "fields": ["job", "athlete", "note", "status", "createdAt"] },
+    "Message.list":      { "title": "Messages", "columns": ["from", "to", "body", "read", "sentAt"], "sort": { "field": "sentAt", "dir": "desc" },
+                           "rowActions": ["view", "markRead"], "create": false, "labels": { "read": ["New", "Read"] } },
+    "Message.detail":    { "fields": ["from", "to", "body", "read", "sentAt"], "actions": ["markRead"] }
+  },
+
+  "lists": [
+    { "id": "my-applications", "entity": "Application", "title": "My applications", "roles": ["athlete"],
+      "where": { "athlete": "@me" }, "columns": ["job", "status", "createdAt"], "rowActions": ["view"], "sort": { "field": "createdAt", "dir": "desc" } },
+    { "id": "my-profile", "entity": "User", "title": "My profile", "roles": ["athlete", "organization"],
+      "where": { "id": "@me" }, "columns": ["name", "email", "sport", "position", "unread"], "rowActions": ["view"] }
+  ]
+}

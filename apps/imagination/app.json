@@ -1,0 +1,93 @@
+{
+  "app": "imagination",
+  "task": "webgen-bench/000093",
+  "note": "World of Imagination: a creative-works gallery, a share-ideas form, discussions with threaded comments (the same related-child-form idiom as apps/qna's answers), and member interactions via the own:\"to\" private-messaging idiom (apps/matrimony, apps/sportsrecruit) with a derived unread counter standing in for the notification.",
+  "theme": { "background": "azure", "accent": "darkslateblue" },
+  "home": "/page/home",
+
+  "data": {
+    "User":         { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member",
+                      "unread": "int := count(Message.to: not read)" },
+    "CreativeWork": { "title": "text!", "description": "longtext!", "image": "image", "author": "ref:User!", "createdAt": "time=now" },
+    "Idea":         { "title": "text!", "body": "longtext!", "author": "ref:User!", "createdAt": "time=now" },
+    "Discussion":   { "title": "text!", "body": "longtext!", "author": "ref:User!", "createdAt": "time=now",
+                      "comments": "int := count(Comment)" },
+    "Comment":      { "discussion": "ref:Discussion!", "author": "ref:User!", "body": "longtext!", "createdAt": "time=now" },
+    "Message":      { "from": "ref:User!", "to": "ref:User!", "body": "longtext!", "sentAt": "time=now", "read": "bool=false" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "CreativeWork": ["view", "create"], "Idea": ["view", "create"], "Discussion": ["view", "create"],
+                  "Comment": ["view", "create"], "User": ["view", "do:contact"], "Message": { "own": "to", "can": ["view"] } },
+      "guest":  { "CreativeWork": ["view"], "Idea": ["view"], "Discussion": ["view"], "Comment": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@imagination.test", "password": "admin123", "name": "Admin", "role": "admin" },
+      { "email": "nora@imagination.test", "password": "nora12345", "name": "Nora Vance", "role": "member" }
+    ],
+    "CreativeWork": [
+      { "title": "A city grown from coral", "description": "Concept sketches for a coastal city whose towers are cultivated, not built.", "author": 2, "createdAt": "2026-07-01T09:00:00.000Z" },
+      { "title": "Songs for a second moon", "description": "A short concept album imagining a solar system with two moons and how tides would sound.", "author": 2, "createdAt": "2026-07-10T09:00:00.000Z" }
+    ],
+    "Idea": [
+      { "title": "Libraries that grow with the reader", "body": "A library that rearranges itself based on what you've already read, surfacing what you're not yet ready for last.", "author": 2, "createdAt": "2026-07-05T09:00:00.000Z" }
+    ],
+    "Discussion": [
+      { "title": "What would you invent if materials were free?", "body": "No cost, no scarcity — what's the first thing you'd build?", "author": 2, "createdAt": "2026-07-02T09:00:00.000Z" }
+    ],
+    "Comment": [
+      { "discussion": 1, "author": 2, "body": "A staircase that leads somewhere different every time.", "createdAt": "2026-07-02T10:00:00.000Z" }
+    ]
+  },
+
+  "actions": [
+    { "name": "contact", "in": "User", "title": "Message", "after": "/User/{id}", "confirm": "Message sent to {row.name}",
+      "do": [ { "block": "db.createRow", "entity": "Message", "values": { "from": "@me", "to": "@row.id", "body": "@values.body" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "User.list":         { "title": "Interactions", "intro": "Members you can reach out to.", "columns": ["name", "email", "unread"],
+                           "rowActions": ["view", "contact"], "create": false },
+    "CreativeWork.list": { "title": "Creative Works", "intro": "Browse what the community has imagined.",
+                           "columns": ["image", "title", "description", "author", "createdAt"],
+                           "search": ["title", "description"], "sort": { "field": "createdAt", "dir": "desc" }, "createTitle": "Share a creative work" },
+    "CreativeWork.form": { "title": "Share a creative work", "fields": ["title", "description", "image"], "fill": { "author": "@me" },
+                           "submit": "Share", "confirm": "Your creative work has been shared", "after": "/CreativeWork/{id}" },
+    "CreativeWork.detail": { "fields": ["title", "description", "image", "author", "createdAt"] },
+    "Idea.list":         { "title": "Share Ideas", "intro": "Ideas the community is floating.",
+                           "columns": ["title", "body", "author", "createdAt"], "search": ["title", "body"],
+                           "sort": { "field": "createdAt", "dir": "desc" }, "createTitle": "Share an idea" },
+    "Idea.form":         { "title": "Share an idea", "fields": ["title", "body"], "fill": { "author": "@me" },
+                           "submit": "Share idea", "confirm": "Your idea has been shared", "after": "/Idea" },
+    "Discussion.list":   { "title": "Discussions", "intro": "Start or join a conversation.",
+                           "columns": ["title", "author", "comments", "createdAt"], "search": ["title", "body"],
+                           "sort": { "field": "createdAt", "dir": "desc" }, "createTitle": "Start a discussion" },
+    "Discussion.form":   { "title": "Start a discussion", "fields": ["title", "body"], "fill": { "author": "@me" },
+                           "submit": "Start discussion", "confirm": "Discussion started", "after": "/Discussion/{id}" },
+    "Discussion.detail": { "fields": ["title", "body", "author", "createdAt", "comments"],
+                           "related": [ { "entity": "Comment", "via": "discussion", "title": "Comments", "columns": ["author", "body", "createdAt"],
+                                          "form": ["body"], "fill": { "author": "@me" }, "submit": "Post comment", "confirm": "Comment posted" } ] },
+    "Comment.list":      { "hidden": true },
+    "Message.list":      { "title": "Messages", "intro": "Messages sent to you.", "columns": ["from", "body", "read", "sentAt"],
+                           "sort": { "field": "sentAt", "dir": "desc" }, "rowActions": ["view"], "create": false, "labels": { "read": ["New", "Read"] } }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "World of Imagination",
+      "body": [ "Browse what others have created, share your own ideas, join a discussion, and reach out to fellow members." ],
+      "links": [ { "label": "Creative Works", "href": "/CreativeWork" }, { "label": "Share Ideas", "href": "/Idea" },
+                 { "label": "Discussions", "href": "/Discussion" }, { "label": "Interactions", "href": "/User" } ] }
+  ]
+}

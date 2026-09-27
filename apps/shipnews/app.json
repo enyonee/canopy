@@ -1,0 +1,73 @@
+{
+  "app": "shipnews",
+  "task": "webgen-bench/000064",
+  "note": "Shipping-industry news blog: articles, company profiles and events are open to everyone; a newsletter subscription is a public form; an admin-only backend manages ad spaces, which show up on the public Ads page (the closest honest reading of an 'ad space on the main site' — the format has no way to embed a dynamic block inside a static page body).",
+  "theme": { "background": "oldlace", "accent": "rosybrown" },
+  "home": "/page/home",
+
+  "data": {
+    "User":       { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin]=admin" },
+    "Article":    { "title": "text!", "summary": "text", "body": "longtext!", "publishedAt": "date=today" },
+    "Company":    { "name": "text!", "history": "longtext", "executives": "longtext", "contactEmail": "text", "contactPhone": "text" },
+    "Event":      { "title": "text!", "description": "longtext!", "date": "date!", "time": "text", "location": "text!" },
+    "Subscriber": { "email": "text!", "createdAt": "time=now" },
+    "Ad":         { "title": "text!", "image": "image", "linkUrl": "text", "active": "bool=true", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User":       [ { "unique": "email", "message": "This email is already registered" } ],
+    "Subscriber": [ { "unique": "email", "message": "This email is already subscribed" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "guest": { "Article": ["view"], "Company": ["view"], "Event": ["view"], "Ad": ["view"], "Subscriber": ["create"] }
+    }
+  },
+
+  "seed": {
+    "User":    [ { "email": "admin@shipnews.test", "password": "admin123", "name": "Admin", "role": "admin" } ],
+    "Article": [ { "title": "Port of Rotterdam sets new container record", "summary": "Container throughput hit an all-time high this quarter.", "body": "The Port of Rotterdam handled more containers this quarter than in any previous quarter, driven by rebounding trade routes from Asia.", "publishedAt": "2026-09-24" },
+                 { "title": "New emissions rules for bulk carriers take effect", "summary": "Operators must report fuel use under tighter limits.", "body": "Starting this month, bulk carriers over 5000 tonnes must report fuel consumption under the revised international emissions framework.", "publishedAt": "2026-09-18" },
+                 { "title": "Suez Canal traffic returns to pre-disruption levels", "summary": "Transit volumes recovered after a slow first half of the year.", "body": "Canal authorities report that daily transits have returned to levels last seen before regional disruptions began.", "publishedAt": "2026-09-10" } ],
+    "Company": [ { "name": "Meridian Shipping Lines", "history": "Founded in 1974, Meridian grew from a single coastal freighter into a global container carrier operating on six continents.", "executives": "CEO: Laura Chen; COO: Marcus Webb; CFO: Priya Nair.", "contactEmail": "info@meridianshipping.test", "contactPhone": "+1 555 0134" },
+                 { "name": "Northstar Marine Freight", "history": "Northstar began as a regional bulk carrier in 1998 and now operates a fleet of forty vessels across the Atlantic and Pacific.", "executives": "CEO: Tomas Reyes; COO: Hannah OSullivan.", "contactEmail": "contact@northstarmarine.test", "contactPhone": "+1 555 0177" } ],
+    "Event":   [ { "title": "Global Maritime Logistics Summit", "description": "Industry leaders discuss the future of container shipping and port automation.", "date": "2026-10-14", "time": "09:00", "location": "Rotterdam Convention Centre" },
+                 { "title": "Port Efficiency Workshop", "description": "A hands-on workshop covering turnaround times and berth scheduling.", "date": "2026-11-02", "time": "13:30", "location": "Singapore Maritime Hub" } ],
+    "Ad":      [ { "title": "Meridian Shipping Lines — book cargo space today", "linkUrl": "https://meridianshipping.test", "active": true } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Article.list":    { "title": "News", "intro": "The latest shipping-industry news.",
+                         "search": ["title", "summary", "body"], "columns": ["title", "publishedAt", "summary"],
+                         "sort": { "field": "publishedAt", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "Article.detail":  { "fields": ["title", "summary", "body", "publishedAt"] },
+    "Company.list":    { "title": "Company Profiles", "search": ["name"], "columns": ["name", "contactEmail", "contactPhone"],
+                         "rowActions": ["view"], "create": false },
+    "Company.detail":  { "fields": ["name", "history", "executives", "contactEmail", "contactPhone"] },
+    "Event.list":      { "title": "Events", "columns": ["title", "date", "time", "location"], "sort": { "field": "date", "dir": "asc" },
+                         "rowActions": ["view"], "create": false },
+    "Event.detail":    { "fields": ["title", "description", "date", "time", "location"] },
+    "Subscriber.list": { "title": "Subscribe", "hidden": true, "columns": ["email", "createdAt"] },
+    "Subscriber.form": { "title": "Subscribe to our newsletter", "fields": ["email"], "submit": "Subscribe",
+                         "confirm": "You are subscribed to the newsletter.", "after": "/page/home" },
+    "Ad.list":         { "title": "Ads", "columns": ["title", "image", "linkUrl", "active"], "where": { "active": 1 },
+                         "rowActions": ["view"], "createTitle": "Place an ad" },
+    "Ad.form":         { "title": "Place an ad", "fields": ["title", "image", "linkUrl", "active"],
+                         "submit": "Place ad", "confirm": "Advertisement placed" },
+    "Ad.detail":       { "fields": ["title", "image", "linkUrl", "active"] },
+    "User.list":       { "title": "Admins", "columns": ["email", "name"] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Shipping industry news",
+      "body": [ "News, company profiles and events for the shipping industry, in one place.",
+                "Subscribe below to get the latest news by email." ],
+      "links": [ { "label": "News", "href": "/Article" }, { "label": "Company Profiles", "href": "/Company" },
+                 { "label": "Events", "href": "/Event" }, { "label": "Subscribe", "href": "/Subscriber/new" },
+                 { "label": "Ads", "href": "/Ad" } ] }
+  ]
+}

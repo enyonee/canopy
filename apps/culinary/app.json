@@ -1,0 +1,106 @@
+{
+  "app": "culinary",
+  "task": "webgen-bench/000066",
+  "note": "Culinary guide: restaurants and recipes are browsed and searched by everyone; registered members add reviews and star ratings under a restaurant, which feed its derived average rating. There is no geolocation, so 'nearby' restaurants are the whole directory, filterable by city.",
+  "theme": { "background": "lemonchiffon", "accent": "chocolate" },
+  "home": "/page/home",
+
+  "data": {
+    "User":       { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member" },
+    "Restaurant": { "name": "text!", "cuisine": "enum[italian,chinese,mexican,indian,american,french,other]=other",
+                    "address": "text!", "city": "text!", "priceRange": "enum[$,$$,$$$,$$$$]=$$", "description": "longtext",
+                    "rating": "int := avg(Review: stars)", "reviews": "int := count(Review)" },
+    "Recipe":     { "title": "text!", "cuisine": "enum[italian,chinese,mexican,indian,american,french,other]=other",
+                    "description": "text!", "ingredients": "longtext!", "instructions": "longtext!",
+                    "prepTime": "int=30", "difficulty": "enum[easy,medium,hard]=easy" },
+    "Review":     { "restaurant": "ref:Restaurant!", "author": "ref:User!", "stars": "int=5", "comment": "longtext!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User":   [ { "unique": "email", "message": "This email is already registered" } ],
+    "Review": [ { "check": "stars >= 1 and stars <= 5", "message": "Rating must be between 1 and 5 stars" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Restaurant": ["view"], "Recipe": ["view"], "Review": ["view", "create"] },
+      "guest":  { "Restaurant": ["view"], "Recipe": ["view"], "Review": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":       [ { "email": "admin@culinary.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                    { "email": "priya@culinary.test", "password": "priya123", "name": "Priya", "role": "member" } ],
+    "Restaurant": [
+      { "name": "Trattoria Solare", "cuisine": "italian", "address": "12 Fig St", "city": "Riverton", "priceRange": "$$",
+        "description": "Wood-fired pizza and handmade pasta in a small, family-run dining room." },
+      { "name": "Golden Dragon", "cuisine": "chinese", "address": "88 Harbor Rd", "city": "Riverton", "priceRange": "$$",
+        "description": "Cantonese classics and dim sum on weekends." },
+      { "name": "Casa Maya", "cuisine": "mexican", "address": "45 Sunset Ave", "city": "Fairview", "priceRange": "$",
+        "description": "Street-style tacos, fresh salsas and house-made tortillas." },
+      { "name": "Spice Route", "cuisine": "indian", "address": "3 Lotus Ln", "city": "Fairview", "priceRange": "$$",
+        "description": "Regional curries, tandoor breads and a long list of vegetarian dishes." },
+      { "name": "Le Petit Bistro", "cuisine": "french", "address": "9 Rue Blanche", "city": "Riverton", "priceRange": "$$$",
+        "description": "Classic French bistro fare: onion soup, steak frites, crème brûlée." }
+    ],
+    "Recipe": [
+      { "title": "Classic Margherita Pizza", "cuisine": "italian", "description": "Neapolitan-style pizza with tomato, mozzarella and basil.",
+        "ingredients": "Pizza dough, San Marzano tomatoes, fresh mozzarella, basil, olive oil, salt.",
+        "instructions": "Stretch the dough, top sparingly, bake at the highest oven setting on a hot stone for 6-8 minutes.",
+        "prepTime": 40, "difficulty": "medium" },
+      { "title": "Kung Pao Chicken", "cuisine": "chinese", "description": "Stir-fried chicken with peanuts and dried chilies in a savory-sweet sauce.",
+        "ingredients": "Chicken thigh, peanuts, dried chilies, garlic, ginger, soy sauce, black vinegar, sugar.",
+        "instructions": "Velvet the chicken, stir-fry aromatics and chilies, add chicken and sauce, finish with peanuts.",
+        "prepTime": 30, "difficulty": "medium" },
+      { "title": "Street Tacos al Pastor", "cuisine": "mexican", "description": "Marinated pork tacos with pineapple and cilantro.",
+        "ingredients": "Pork shoulder, achiote paste, pineapple, corn tortillas, onion, cilantro, lime.",
+        "instructions": "Marinate the pork overnight, sear thin slices, chop and serve on warm tortillas with pineapple and cilantro.",
+        "prepTime": 50, "difficulty": "hard" },
+      { "title": "Chana Masala", "cuisine": "indian", "description": "Chickpeas simmered in a spiced tomato-onion gravy.",
+        "ingredients": "Chickpeas, onion, tomato, ginger, garlic, cumin, coriander, garam masala.",
+        "instructions": "Saute onion and spices, add tomato and chickpeas, simmer until the gravy thickens.",
+        "prepTime": 35, "difficulty": "easy" },
+      { "title": "Coq au Vin", "cuisine": "french", "description": "Chicken braised slowly in red wine with mushrooms and bacon.",
+        "ingredients": "Chicken, red wine, lardons, pearl onions, mushrooms, thyme, bay leaf.",
+        "instructions": "Brown the chicken and lardons, braise with wine and aromatics for 45 minutes, reduce the sauce.",
+        "prepTime": 90, "difficulty": "hard" }
+    ],
+    "Review": [
+      { "restaurant": 1, "author": 2, "stars": 5, "comment": "Best pizza crust in town, blistered and chewy.", "createdAt": "2026-09-10T18:00:00.000Z" },
+      { "restaurant": 1, "author": 1, "stars": 4, "comment": "Great pasta, a bit slow on a busy Friday.", "createdAt": "2026-09-15T19:30:00.000Z" },
+      { "restaurant": 2, "author": 2, "stars": 4, "comment": "Dim sum on Sunday morning is the move.", "createdAt": "2026-09-05T11:00:00.000Z" }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Restaurant.list":   { "title": "Restaurants", "intro": "Browse restaurants and their reviews.",
+                           "search": ["name", "address"], "columns": ["name", "cuisine", "city", "priceRange", "rating", "reviews"],
+                           "filters": [ { "name": "City", "field": "city", "options": [ { "label": "All" }, { "label": "Riverton", "eq": "Riverton" }, { "label": "Fairview", "eq": "Fairview" } ] },
+                                        { "name": "Cuisine", "field": "cuisine" } ],
+                           "rowActions": ["view"], "create": false },
+    "Restaurant.detail": { "fields": ["name", "cuisine", "address", "city", "priceRange", "description", "rating", "reviews"],
+                           "related": [ { "entity": "Review", "via": "restaurant", "title": "Reviews", "columns": ["author", "stars", "comment", "createdAt"],
+                                          "form": ["stars", "comment"], "fill": { "author": "@me" }, "submit": "Post review", "confirm": "Your review has been posted",
+                                          "rowActions": ["delete"] } ] },
+    "Recipe.list":       { "title": "Recipes", "intro": "Search recipes by name, description or cuisine.",
+                           "search": ["title", "description", "ingredients"], "columns": ["title", "cuisine", "prepTime", "difficulty"],
+                           "filters": [ { "name": "Cuisine", "field": "cuisine" }, { "name": "Difficulty", "field": "difficulty" } ],
+                           "rowActions": ["view"], "create": false },
+    "Recipe.detail":     { "fields": ["title", "cuisine", "description", "ingredients", "instructions", "prepTime", "difficulty"] },
+    "Review.list":       { "title": "Reviews", "intro": "Every review across every restaurant.",
+                           "columns": ["restaurant", "author", "stars", "comment", "createdAt"],
+                           "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "User.list":         { "title": "Users", "columns": ["email", "name", "role"] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Restaurants and recipes",
+      "body": [ "Browse restaurants near you and search thousands of recipes.",
+                "Sign in to leave your own reviews and star ratings." ],
+      "links": [ { "label": "Restaurants", "href": "/Restaurant" }, { "label": "Recipes", "href": "/Recipe" }, { "label": "Reviews", "href": "/Review" } ] }
+  ]
+}

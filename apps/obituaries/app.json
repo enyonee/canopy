@@ -1,0 +1,75 @@
+{
+  "app": "obituaries",
+  "task": "webgen-bench/000067",
+  "note": "Family event portal for obituaries: members publish obituaries (with a personal 'my obituaries' dashboard) that everyone can browse and leave condolences on; a public mortuary directory; a statistics dashboard. Editing/deleting someone else's obituary is left to the admin, the same trade-off apps/qna documents, because the format's 'own' scopes view as well as write and members must still browse each other's obituaries.",
+  "theme": { "background": "cornsilk", "accent": "peru" },
+  "home": "/page/home",
+
+  "data": {
+    "User":       { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member" },
+    "Obituary":   { "title": "text!", "content": "longtext!", "image": "image", "owner": "ref:User!",
+                    "funeralDate": "date", "funeralLocation": "text", "createdAt": "time=now" },
+    "Mortuary":   { "name": "text!", "location": "text!", "phone": "text!", "email": "text" },
+    "Condolence": { "obituary": "ref:Obituary!", "authorName": "text!", "message": "longtext!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Obituary": ["view", "create"], "Condolence": ["view", "create"], "Mortuary": ["view"] },
+      "guest":  { "Obituary": ["view"], "Condolence": ["view", "create"], "Mortuary": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":     [ { "email": "admin@obit.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                  { "email": "grace@obit.test", "password": "grace123", "name": "Grace Holloway", "role": "member" } ],
+    "Obituary": [ { "title": "In loving memory of Arthur Bennett", "content": "Arthur Bennett, 78, passed peacefully surrounded by family. He was a devoted father, gardener and volunteer firefighter for over thirty years.", "owner": 2, "funeralDate": "2026-10-03", "funeralLocation": "Riverside Chapel", "createdAt": "2026-09-20T08:00:00.000Z" } ],
+    "Mortuary": [ { "name": "Riverside Funeral Home", "location": "12 Riverside Ave", "phone": "+1 555 0110", "email": "care@riversidefh.test" },
+                  { "name": "Evergreen Memorial Services", "location": "88 Evergreen Rd", "phone": "+1 555 0199", "email": "info@evergreenms.test" } ],
+    "Condolence": [ { "obituary": 1, "authorName": "Nancy Reed", "message": "Arthur was always the first to help a neighbour. He will be deeply missed.", "createdAt": "2026-09-21T09:30:00.000Z" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Obituary.list":    { "title": "Obituaries", "intro": "Published obituaries and funeral arrangements.",
+                          "search": ["title", "content"], "columns": ["title", "funeralDate", "funeralLocation", "createdAt"],
+                          "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "createTitle": "Publish an obituary" },
+    "Obituary.form":    { "title": "Publish an obituary", "fields": ["title", "content", "image", "funeralDate", "funeralLocation"],
+                          "fill": { "owner": "@me" }, "submit": "Publish", "confirm": "Obituary published", "after": "/list/my-obituaries" },
+    "Obituary.detail":  { "fields": ["title", "content", "image", "owner", "funeralDate", "funeralLocation", "createdAt"],
+                          "related": [ { "entity": "Condolence", "via": "obituary", "title": "Condolences", "columns": ["authorName", "message", "createdAt"],
+                                         "form": ["authorName", "message"], "submit": "Leave a message", "confirm": "Condolence posted" } ] },
+    "Mortuary.list":    { "title": "Mortuaries", "columns": ["name", "location", "phone", "email"], "create": false, "rowActions": ["view"] },
+    "Condolence.list":  { "hidden": true },
+    "User.list":        { "title": "Members", "columns": ["email", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "my-obituaries", "entity": "Obituary", "title": "My Obituaries", "roles": ["member", "admin"],
+      "where": { "owner": "@me" }, "columns": ["title", "funeralDate", "createdAt"], "rowActions": ["view"] }
+  ],
+
+  "dashboards": [
+    { "id": "stats", "title": "Statistics", "intro": "Statistical overview of obituaries and condolences.",
+      "period": { "Obituary": "createdAt" },
+      "cards": [ { "title": "Obituaries published", "entity": "Obituary", "fn": "count" },
+                 { "title": "Condolences left", "entity": "Condolence", "fn": "count" },
+                 { "title": "Mortuaries listed", "entity": "Mortuary", "fn": "count" } ],
+      "tables": [ { "title": "Obituaries by month", "entity": "Obituary", "groupBy": "createdAt", "groupUnit": "month", "groupTitle": "Month",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Obituaries" } ], "sort": { "field": "n", "dir": "desc" } } ] }
+  ],
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Remember, arrange, and share condolences",
+      "body": [ "Publish an obituary for a loved one, browse those shared by others, find a mortuary, and leave a condolence message." ],
+      "links": [ { "label": "Obituaries", "href": "/Obituary" }, { "label": "Mortuaries", "href": "/Mortuary" },
+                 { "label": "Statistics", "href": "/dashboard/stats" } ] }
+  ]
+}

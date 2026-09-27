@@ -1,0 +1,141 @@
+{
+  "app": "construction",
+  "task": "webgen-bench/000085",
+  "note": "Construction management: projects hold tasks (with due dates and a todo/in-progress/done status), a time-tracking log, job-costing line items and resource allocations, all rolling up into derived project totals and a progress percentage; a lightweight team message log stands in for the communication tool; documents are files attached to a project. No self-registration: the admin provisions the team, like the reference crm app.",
+  "theme": { "background": "lightgray", "accent": "darkred" },
+  "home": "/Project",
+
+  "data": {
+    "User":              { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member" },
+    "Project":           { "name": "text!", "client": "text", "description": "longtext", "startDate": "date!", "endDate": "date!",
+                           "budget": "money=0", "status": "enum[planning,active,onHold,completed]=planning", "manager": "ref:User",
+                           "taskCount": "int := count(Task)", "completedTasks": "int := count(Task: status = 'done')",
+                           "progressPercent": "int := coalesce(round(100 * count(Task: status = 'done') / count(Task), 0), 0)",
+                           "estimatedTotal": "money := sum(CostItem: estimatedAmount)", "actualTotal": "money := sum(CostItem: actualAmount)",
+                           "totalHours": "int := sum(TimeEntry: hours)" },
+    "Task":              { "project": "ref:Project!", "title": "text!", "description": "longtext", "assignee": "ref:User",
+                           "dueDate": "date", "status": "enum[todo,inProgress,done]=todo",
+                           "hoursLogged": "int := sum(TimeEntry: hours)" },
+    "TimeEntry":         { "task": "ref:Task!", "project": "ref:Project!", "worker": "ref:User!", "date": "date=today", "hours": "int=1", "notes": "text" },
+    "CostItem":          { "project": "ref:Project!", "category": "text!", "description": "text", "estimatedAmount": "money!", "actualAmount": "money=0" },
+    "Resource":          { "name": "text!", "kind": "enum[equipment,material,labor]=equipment", "unit": "text!", "capacity": "int!",
+                           "allocated": "int := sum(ResourceAllocation: quantity)", "available": "int := capacity - sum(ResourceAllocation: quantity)" },
+    "ResourceAllocation": { "resource": "ref:Resource!", "project": "ref:Project!", "quantity": "int=1", "assignedAt": "date=today" },
+    "Message":           { "sender": "ref:User!", "recipient": "ref:User!", "project": "ref:Project", "body": "longtext!", "createdAt": "time=now" },
+    "Document":          { "project": "ref:Project!", "title": "text!", "file": "file", "uploadedBy": "ref:User", "uploadedAt": "time=now" }
+  },
+
+  "rules": {
+    "User":              [ { "unique": "email", "message": "This email is already registered" } ],
+    "Project":           [ { "check": "endDate >= startDate", "message": "End date cannot be before the start date" } ],
+    "TimeEntry":         [ { "check": "hours > 0", "message": "Hours must be at least 1" },
+                           { "check": "task.project = project", "message": "The selected project must match the project of this task" } ],
+    "CostItem":          [ { "check": "estimatedAmount >= 0", "message": "Estimated amount cannot be negative" } ],
+    "Resource":          [ { "check": "capacity > 0", "message": "Capacity must be at least 1" } ],
+    "ResourceAllocation": [ { "check": "quantity > 0", "message": "Quantity must be at least 1" },
+                            { "check": "quantity <= resource.available", "message": "Not enough of this resource is available" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": {
+      "admin":  "*",
+      "member": { "Project": ["view", "create", "edit"], "Task": ["view", "create", "edit", "go:*"],
+                  "TimeEntry": { "own": "worker", "can": ["view", "create"] },
+                  "CostItem": ["view", "create", "edit"], "Resource": ["view"], "ResourceAllocation": ["view", "create"],
+                  "Message": ["view", "create"], "Document": ["view", "create"] }
+    }
+  },
+
+  "seed": {
+    "User":     [ { "email": "admin@construction.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                  { "email": "maria@construction.test", "password": "maria123", "name": "Maria Novak", "role": "member" },
+                  { "email": "sam@construction.test", "password": "sam123", "name": "Sam Ortiz", "role": "member" } ],
+    "Project":  [ { "name": "Riverside Office Tower", "client": "Riverside Development Co", "description": "12-storey office tower, ground-up construction.",
+                    "startDate": "2026-06-01", "endDate": "2027-03-31", "budget": 2500000, "status": "active", "manager": 2 },
+                  { "name": "Maple Street Renovation", "client": "City of Maple Grove", "description": "Interior renovation of the old municipal hall.",
+                    "startDate": "2026-08-01", "endDate": "2026-12-15", "budget": 180000, "status": "planning", "manager": 2 } ],
+    "Task":     [ { "project": 1, "title": "Pour foundation", "description": "Excavate and pour the foundation slab.", "assignee": 3, "dueDate": "2026-06-20", "status": "done" },
+                  { "project": 1, "title": "Erect steel frame", "description": "Structural steel erection, floors 1-12.", "assignee": 3, "dueDate": "2026-08-15", "status": "inProgress" },
+                  { "project": 1, "title": "Install HVAC", "description": "Rough-in HVAC ductwork.", "assignee": 3, "dueDate": "2026-10-01", "status": "todo" },
+                  { "project": 2, "title": "Demolish interior walls", "description": "Remove non-load-bearing partition walls.", "assignee": 3, "dueDate": "2026-08-10", "status": "todo" } ],
+    "TimeEntry": [ { "task": 1, "project": 1, "worker": 3, "date": "2026-06-18", "hours": 8, "notes": "Formwork and rebar" },
+                   { "task": 2, "project": 1, "worker": 3, "date": "2026-08-05", "hours": 6, "notes": "Crane setup for steel delivery" } ],
+    "CostItem": [ { "project": 1, "category": "Labor", "description": "Framing and steel crews", "estimatedAmount": 500000, "actualAmount": 120000 },
+                  { "project": 1, "category": "Materials", "description": "Structural steel and concrete", "estimatedAmount": 800000, "actualAmount": 300000 },
+                  { "project": 2, "category": "Materials", "description": "Drywall and paint", "estimatedAmount": 40000, "actualAmount": 0 } ],
+    "Resource": [ { "name": "Tower crane", "kind": "equipment", "unit": "units", "capacity": 2 },
+                  { "name": "Ready-mix concrete", "kind": "material", "unit": "m3", "capacity": 500 },
+                  { "name": "Electrician crew", "kind": "labor", "unit": "crew-days", "capacity": 100 } ],
+    "ResourceAllocation": [ { "resource": 1, "project": 1, "quantity": 1, "assignedAt": "2026-06-05" },
+                             { "resource": 2, "project": 1, "quantity": 220, "assignedAt": "2026-06-10" } ],
+    "Message":  [ { "sender": 2, "recipient": 3, "project": 1, "body": "Please prioritize the HVAC install this week.", "createdAt": "2026-09-20T14:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Task": { "field": "status", "transitions": [
+      { "name": "start",    "from": ["todo"],              "to": "inProgress", "title": "Start task" },
+      { "name": "complete", "from": ["todo", "inProgress"], "to": "done",       "title": "Mark complete", "confirm": "{row.title} marked complete" },
+      { "name": "reopen",   "from": ["done"],              "to": "todo",       "title": "Reopen" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Project.list":   { "title": "Projects", "columns": ["name", "client", "status", "startDate", "endDate", "progressPercent", "estimatedTotal", "actualTotal"],
+                        "search": ["name", "client"], "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "edit"] },
+    "Project.form":   { "fields": ["name", "client", "description", "startDate", "endDate", "budget", "status", "manager"],
+                        "confirm": "Project created", "after": "/Project/{id}" },
+    "Project.detail": { "fields": ["name", "client", "description", "startDate", "endDate", "status", "manager", "budget",
+                                   "taskCount", "completedTasks", "progressPercent", "estimatedTotal", "actualTotal", "totalHours"],
+                        "related": [ { "entity": "Task", "via": "project", "title": "Tasks", "columns": ["title", "assignee", "dueDate", "status", "hoursLogged"],
+                                       "form": ["title", "description", "assignee", "dueDate"], "submit": "Add task", "confirm": "Task added",
+                                       "rowActions": ["view", "go:start", "go:complete", "go:reopen"] },
+                                     { "entity": "CostItem", "via": "project", "title": "Cost Items", "columns": ["category", "description", "estimatedAmount", "actualAmount"],
+                                       "form": ["category", "description", "estimatedAmount", "actualAmount"], "submit": "Add cost item", "confirm": "Cost item added",
+                                       "rowActions": ["edit", "delete"] },
+                                     { "entity": "Document", "via": "project", "title": "Documents", "columns": ["title", "file", "uploadedBy", "uploadedAt"],
+                                       "form": ["title", "file"], "fill": { "uploadedBy": "@me" }, "submit": "Upload document", "confirm": "Document uploaded" } ] },
+    "Task.list":      { "hidden": true, "title": "Tasks", "columns": ["project", "title", "assignee", "dueDate", "status", "hoursLogged"],
+                        "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "go:start", "go:complete"], "create": false },
+    "Task.detail":    { "fields": ["project", "title", "description", "assignee", "dueDate", "status", "hoursLogged"],
+                        "related": [ { "entity": "TimeEntry", "via": "task", "title": "Time Entries", "columns": ["worker", "date", "hours", "notes"],
+                                       "form": ["project", "date", "hours", "notes"], "submit": "Log time", "confirm": "Time logged",
+                                       "rowActions": ["delete"] } ] },
+    "TimeEntry.list": { "hidden": true, "title": "Time Entries", "columns": ["project", "task", "worker", "date", "hours", "notes"], "create": false },
+    "CostItem.list":  { "hidden": true, "title": "Cost Items", "columns": ["project", "category", "description", "estimatedAmount", "actualAmount"], "create": false },
+    "Resource.list":  { "title": "Resources", "intro": "Equipment, materials and labor, with what's still available.",
+                        "columns": ["name", "kind", "unit", "capacity", "allocated", "available"],
+                        "filters": [ { "name": "Kind", "field": "kind" } ], "rowActions": ["view", "edit"] },
+    "Resource.detail": { "fields": ["name", "kind", "unit", "capacity", "allocated", "available"],
+                        "related": [ { "entity": "ResourceAllocation", "via": "resource", "title": "Allocations", "columns": ["project", "quantity", "assignedAt"],
+                                       "form": ["project", "quantity"], "submit": "Allocate to project", "confirm": "Resource allocated",
+                                       "rowActions": ["delete"] } ] },
+    "ResourceAllocation.list": { "hidden": true, "create": false },
+    "Message.list":   { "title": "Team Messages", "intro": "Every message across the team.", "columns": ["sender", "recipient", "project", "body", "createdAt"],
+                        "sort": { "field": "createdAt", "dir": "desc" }, "createTitle": "Send message" },
+    "Message.form":   { "title": "Send a message", "fields": ["recipient", "project", "body"], "fill": { "sender": "@me" },
+                        "submit": "Send", "confirm": "Message sent", "after": "/Message" },
+    "Document.list":  { "title": "Documents", "columns": ["project", "title", "file", "uploadedBy", "uploadedAt"], "create": false },
+    "User.list":      { "title": "Team", "columns": ["email", "name", "role"] }
+  },
+
+  "lists": [
+    { "id": "inbox", "entity": "Message", "title": "My Inbox", "roles": ["member", "admin"],
+      "where": { "recipient": "@me" }, "columns": ["sender", "project", "body", "createdAt"], "rowActions": ["view"] },
+    { "id": "my-timesheet", "entity": "TimeEntry", "title": "My Timesheet", "roles": ["member"],
+      "where": { "worker": "@me" }, "columns": ["project", "task", "date", "hours", "notes"], "rowActions": ["view"] }
+  ],
+
+  "dashboards": [
+    { "id": "overview", "title": "Overview", "roles": ["admin"],
+      "cards": [ { "title": "Active projects", "entity": "Project", "fn": "count", "where": { "status": "active" } },
+                 { "title": "Estimated total", "entity": "CostItem", "fn": "sum", "field": "estimatedAmount" },
+                 { "title": "Actual total", "entity": "CostItem", "fn": "sum", "field": "actualAmount" },
+                 { "title": "Hours logged", "entity": "TimeEntry", "fn": "sum", "field": "hours" } ],
+      "tables": [ { "title": "Projects by status", "entity": "Project", "groupBy": "status", "groupTitle": "Status",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Projects" }, { "fn": "sum", "field": "budget", "as": "budget", "title": "Budget" } ] },
+                  { "title": "Resources by kind", "entity": "Resource", "groupBy": "kind", "groupTitle": "Kind",
+                    "metrics": [ { "fn": "sum", "field": "capacity", "as": "capacity", "title": "Capacity" }, { "fn": "sum", "field": "allocated", "as": "allocated", "title": "Allocated" } ] } ] }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "app": "skillshare",
+  "task": "webgen-bench/000092",
+  "note": "Skill-sharing directory: members add skills and certifications as their own top-level rows (fill: {owner: \"@me\"} on the create form, which always wins over whatever a client submits — confirmed against runtime/server.mjs — so no per-row 'own' scoping is needed to keep authorship honest), browsable read-only on every profile page. Contact reuses the own:\"to\" action-based messaging idiom proven in apps/matrimony.",
+  "theme": { "background": "cornsilk", "accent": "peru" },
+  "home": "/User",
+
+  "data": {
+    "User":          { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member", "bio": "longtext" },
+    "Skill":         { "owner": "ref:User!", "name": "text!", "level": "enum[beginner,intermediate,expert]=intermediate" },
+    "Certification": { "owner": "ref:User!", "name": "text!", "issuer": "text", "year": "int" },
+    "Message":       { "from": "ref:User!", "to": "ref:User!", "body": "longtext!", "sentAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "User": ["view", "do:contact"], "Skill": ["view", "create"], "Certification": ["view", "create"],
+                  "Message": { "own": "to", "can": ["view"] } },
+      "guest":  { "User": ["view"], "Skill": ["view"], "Certification": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@skillshare.test", "password": "admin123", "name": "Admin", "role": "admin" },
+      { "email": "wren@skillshare.test", "password": "wren12345", "name": "Wren Castillo", "role": "member",
+        "bio": "Backend engineer who teaches distributed systems on the side." },
+      { "email": "das@skillshare.test", "password": "das123456", "name": "Ravi Das", "role": "member",
+        "bio": "Freelance illustrator and Procreate tutor." }
+    ],
+    "Skill": [
+      { "owner": 2, "name": "Distributed systems", "level": "expert" },
+      { "owner": 2, "name": "Go programming", "level": "expert" },
+      { "owner": 2, "name": "Public speaking", "level": "intermediate" },
+      { "owner": 3, "name": "Digital illustration", "level": "expert" },
+      { "owner": 3, "name": "Procreate", "level": "expert" }
+    ],
+    "Certification": [
+      { "owner": 2, "name": "AWS Certified Solutions Architect", "issuer": "Amazon Web Services", "year": 2024 },
+      { "owner": 3, "name": "Adobe Certified Professional", "issuer": "Adobe", "year": 2023 }
+    ]
+  },
+
+  "actions": [
+    { "name": "contact", "in": "User", "title": "Contact", "after": "/User/{id}", "confirm": "Message sent to {row.name}",
+      "do": [ { "block": "db.createRow", "entity": "Message", "values": { "from": "@me", "to": "@row.id", "body": "@values.body" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "User.list":         { "title": "Members", "intro": "Browse members and see what they're good at.",
+                           "columns": ["name", "bio"], "search": ["name", "bio"], "rowActions": ["view", "contact"], "create": false },
+    "User.form":         { "fields": ["email", "password", "name", "bio"] },
+    "User.detail":       { "fields": ["name", "email", "bio"], "actions": ["contact"],
+                           "related": [ { "entity": "Skill", "via": "owner", "title": "Skills", "columns": ["name", "level"], "form": false },
+                                        { "entity": "Certification", "via": "owner", "title": "Certifications", "columns": ["name", "issuer", "year"], "form": false } ] },
+    "Skill.list":        { "title": "Skills", "intro": "Search members by a skill they've listed.",
+                           "columns": ["name", "level", "owner"], "search": ["name"],
+                           "filters": [ { "name": "Level", "field": "level" } ], "createTitle": "Add a skill", "rowActions": ["view"] },
+    "Skill.form":        { "title": "Add a skill", "fields": ["name", "level"], "fill": { "owner": "@me" },
+                           "submit": "Add skill", "confirm": "Skill added to your profile", "after": "/User/{owner}" },
+    "Certification.list": { "title": "Certifications", "columns": ["name", "issuer", "year", "owner"], "search": ["name", "issuer"],
+                           "createTitle": "Add a certification", "rowActions": ["view"] },
+    "Certification.form": { "title": "Add a certification", "fields": ["name", "issuer", "year"], "fill": { "owner": "@me" },
+                           "submit": "Add certification", "confirm": "Certification added to your profile", "after": "/User/{owner}" },
+    "Message.list":      { "title": "Messages", "intro": "Messages sent to you.", "columns": ["from", "body", "sentAt"],
+                           "sort": { "field": "sentAt", "dir": "desc" }, "rowActions": ["view"], "create": false }
+  },
+
+  "pages": [
+    { "id": "about", "title": "About", "heading": "Find people by what they know",
+      "body": [ "Add your own skills and certifications, search for others by theirs, and reach out directly." ],
+      "links": [ { "label": "Browse members", "href": "/User" }, { "label": "Search skills", "href": "/Skill" } ] }
+  ]
+}

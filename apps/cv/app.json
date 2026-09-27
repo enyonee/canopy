@@ -1,0 +1,60 @@
+{
+  "app": "cv",
+  "task": "webgen-bench/000072",
+  "note": "A comprehensive CV site: personal information, work experience, skills, education and projects each live as their own entity (per the brief, kept as data so they can be browsed, searched and managed) rather than fixed prose; the nav visits all five sections in the CV's usual reading order. No login: one owner's CV, open to browse and edit.",
+  "theme": { "background": "lightpink", "accent": "mediumvioletred" },
+  "home": "/Profile",
+
+  "data": {
+    "Profile":   { "name": "text!", "title": "text!", "summary": "longtext!", "email": "text!", "phone": "text", "location": "text" },
+    "Job":       { "title": "text!", "employer": "text!", "startDate": "date!", "endDate": "date", "description": "longtext!" },
+    "Skill":     { "name": "text!", "category": "enum[design,engineering,product,language,other]=engineering", "level": "enum[beginner,intermediate,advanced,expert]=intermediate" },
+    "Education": { "institution": "text!", "degree": "text!", "startDate": "date!", "endDate": "date", "details": "longtext" },
+    "Project":   { "title": "text!", "description": "longtext!", "link": "text", "year": "int=2026" }
+  },
+
+  "seed": {
+    "Profile": [ { "name": "Jordan Lee", "title": "Senior Product Engineer", "email": "jordan.lee@cv.test", "phone": "+1 555 0177", "location": "Denver, CO",
+                   "summary": "Product engineer with nine years shipping web applications end to end, from data modelling to the interfaces people touch. Enjoys turning fuzzy requirements into small, well-tested systems." } ],
+    "Job": [ { "title": "Senior Product Engineer", "employer": "Northwind Software", "startDate": "2022-03-01",
+               "description": "Lead a team of four building the billing platform. Cut checkout latency by 40% and introduced a review process that halved production incidents." },
+             { "title": "Software Engineer", "employer": "Helio Systems", "startDate": "2018-06-01", "endDate": "2022-02-15",
+               "description": "Built the reporting pipeline used by every customer dashboard. Migrated the frontend from jQuery to a component-based stack." },
+             { "title": "Junior Developer", "employer": "Bramble Digital", "startDate": "2016-09-01", "endDate": "2018-05-30",
+               "description": "Maintained client marketing sites and built a shared component library adopted across the agency." } ],
+    "Skill": [ { "name": "TypeScript", "category": "engineering", "level": "expert" },
+               { "name": "System design", "category": "engineering", "level": "advanced" },
+               { "name": "Product strategy", "category": "product", "level": "advanced" },
+               { "name": "Interaction design", "category": "design", "level": "intermediate" },
+               { "name": "SQL", "category": "engineering", "level": "advanced" },
+               { "name": "Spanish", "category": "language", "level": "intermediate" } ],
+    "Education": [ { "institution": "Willamette College of Engineering", "degree": "B.S. in Computer Science", "startDate": "2012-09-01", "endDate": "2016-05-30",
+                      "details": "Focus on distributed systems; senior project on eventual-consistency simulation." },
+                    { "institution": "Denver Coding Academy", "degree": "Certificate in Web Development", "startDate": "2016-01-01", "endDate": "2016-06-01", "details": "Full-time evening program alongside the last year of the degree." } ],
+    "Project": [ { "title": "Ledgerly", "description": "An open-source double-entry bookkeeping library for small businesses, with a CLI and a Postgres adapter.", "link": "https://example.test/ledgerly", "year": 2025 },
+                 { "title": "Commute Planner", "description": "A weekend project that merges transit and weather APIs to suggest the best way to get to work each morning.", "link": "https://example.test/commute", "year": 2023 },
+                 { "title": "Northwind Design Kit", "description": "A shared component library and Figma kit adopted by three product teams at Northwind Software.", "link": "https://example.test/design-kit", "year": 2022 } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Profile.list":   { "title": "Personal Information", "intro": "Contact details and a short summary.",
+                        "columns": ["name", "title", "summary", "email", "phone", "location"], "create": false, "rowActions": ["edit"] },
+    "Profile.form":   { "title": "Edit personal information", "submit": "Save", "confirmEdit": "Personal information updated", "afterEdit": "/Profile" },
+    "Job.list":       { "title": "Work Experience", "intro": "Roles held, most recent first.",
+                        "columns": ["title", "employer", "startDate", "endDate", "description"], "sort": { "field": "startDate", "dir": "desc" },
+                        "rowActions": ["view", "edit", "delete"], "createTitle": "Add a role" },
+    "Job.detail":     { "fields": ["title", "employer", "startDate", "endDate", "description"] },
+    "Skill.list":     { "title": "Skills", "intro": "Skills and current proficiency.", "columns": ["name", "category", "level"],
+                        "filters": [ { "name": "Category", "field": "category" } ], "sort": { "field": "name", "dir": "asc" },
+                        "rowActions": ["edit", "delete"], "createTitle": "Add a skill" },
+    "Education.list": { "title": "Education", "intro": "Qualifications, most recent first.",
+                        "columns": ["institution", "degree", "startDate", "endDate", "details"], "sort": { "field": "startDate", "dir": "desc" },
+                        "rowActions": ["view", "edit", "delete"], "createTitle": "Add education" },
+    "Education.detail": { "fields": ["institution", "degree", "startDate", "endDate", "details"] },
+    "Project.list":   { "title": "Projects", "intro": "Personal and professional projects, most recent first.",
+                        "columns": ["title", "description", "link", "year"], "sort": { "field": "year", "dir": "desc" },
+                        "rowActions": ["view", "edit", "delete"], "createTitle": "Add a project" },
+    "Project.detail": { "fields": ["title", "description", "link", "year"] }
+  }
+}

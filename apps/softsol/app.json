@@ -1,0 +1,60 @@
+{
+  "app": "softsol",
+  "task": "webgen-bench/000019",
+  "note": "Software solutions + staffing brochure site for SMBs: a Solutions catalogue (software products and staffing services), Industry News with author/date, Customer Stories, and a Contact form. Search is per-catalogue (Solutions, Industry News each have their own search box) - the format has no cross-entity search node.",
+  "theme": { "background": "mistyrose", "accent": "firebrick" },
+  "home": "/page/home",
+
+  "data": {
+    "Solution":      { "name": "text!", "category": "enum[software,staffing]=software", "summary": "text", "description": "longtext!" },
+    "NewsArticle":   { "title": "text!", "publishedAt": "date!", "author": "text!", "summary": "text", "body": "longtext!" },
+    "CustomerStory": { "client": "text!", "title": "text!", "summary": "text", "body": "longtext!" },
+    "ContactMessage": { "name": "text!", "email": "text!", "message": "longtext!", "submittedAt": "time=now" }
+  },
+
+  "seed": {
+    "Solution":      [ { "name": "InvoiceFlow", "category": "software", "summary": "Automated invoicing and payment reminders for small teams.",
+                          "description": "InvoiceFlow generates recurring invoices, chases overdue payments automatically, and syncs with common accounting tools. Built for teams under 50 people who bill hourly or by retainer." },
+                        { "name": "HireDesk Staffing", "category": "staffing", "summary": "On-demand contract staffing for short technical projects.",
+                          "description": "HireDesk places vetted contractors within a week for development, QA and IT support projects lasting one to six months, with a replacement guarantee." },
+                        { "name": "DeskPilot Helpdesk", "category": "software", "summary": "A lightweight support ticket system for growing teams.",
+                          "description": "DeskPilot organises customer support tickets by priority and SLA, with canned replies and a satisfaction survey after each resolved ticket." } ],
+    "NewsArticle":   [ { "title": "Small businesses are adopting AI support tools twice as fast this year", "publishedAt": "2026-07-18", "author": "Priya Nair",
+                          "summary": "Survey data shows SMB helpdesk automation adoption doubling year over year.",
+                          "body": "A survey of 400 small businesses found helpdesk automation adoption nearly doubled in the last twelve months, driven mostly by teams under 20 employees looking to avoid a first support hire." },
+                        { "title": "Contract staffing overtakes full-time hiring for short technical projects", "publishedAt": "2026-08-25", "author": "Marcus Webb",
+                          "summary": "Short-term technical contracts are now the default for projects under six months.",
+                          "body": "Industry data shows most technical projects scoped under six months are now staffed with contractors rather than new full-time hires, as companies avoid the ramp-up cost of permanent roles for short engagements." },
+                        { "title": "Recurring billing errors remain the top cause of SMB cash flow gaps", "publishedAt": "2026-09-05", "author": "Priya Nair",
+                          "summary": "Manual invoicing mistakes are still the leading cause of late payments for small businesses.",
+                          "body": "A review of small-business cash flow gaps found manual invoicing errors - wrong amounts, missed recurring cycles, forgotten reminders - responsible for more late payments than customer creditworthiness." } ],
+    "CustomerStory": [ { "client": "Bramwell Landscaping", "title": "Cut overdue invoices by 80% in two months", "summary": "A 12-person landscaping company automated its billing with InvoiceFlow.",
+                          "body": "Bramwell Landscaping was chasing overdue invoices by hand every Friday. After switching to InvoiceFlow's automated reminders, overdue invoices dropped from one in four to one in twenty within two months, freeing up roughly six hours a week." },
+                        { "client": "Northgate Clinic Group", "title": "Staffed a six-month EHR migration without a single hire", "summary": "A clinic group used HireDesk to staff a project team in under two weeks.",
+                          "body": "Northgate Clinic Group needed four developers for a six-month electronic health records migration. HireDesk placed the full team within twelve days, and every contractor rolled off cleanly at project end with no severance obligations." } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Solution.list":       { "title": "Software Solutions", "intro": "Software and staffing services built for small and medium-sized businesses.",
+                             "columns": ["name", "category", "summary"], "search": ["name", "summary", "description"],
+                             "filters": [ { "name": "Category", "field": "category" } ], "create": false, "rowActions": ["view"] },
+    "NewsArticle.list":    { "title": "Industry News", "intro": "Trends and data from the small-business software and staffing world.",
+                             "columns": ["publishedAt", "title", "author", "summary"], "search": ["title", "summary", "body"],
+                             "sort": { "field": "publishedAt", "dir": "desc" }, "create": false, "rowActions": ["view"] },
+    "CustomerStory.list":  { "title": "Customer Stories", "intro": "Real results from real clients.",
+                             "columns": ["client", "title", "summary"], "create": false, "rowActions": ["view"] },
+    "ContactMessage.list": { "title": "Contact", "intro": "Questions about a solution or a staffing need? Send us a message and we will follow up within one business day.",
+                             "columns": ["name", "email", "submittedAt"], "createTitle": "Send a message", "rowActions": ["view"] },
+    "ContactMessage.form": { "title": "Contact us", "fields": ["name", "email", "message"], "submit": "Send message",
+                             "confirm": "Thanks for reaching out - we will get back to you within one business day." }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Software and staffing built for small and medium-sized businesses",
+      "body": [ "We help SMBs run leaner: software that automates the busywork, and vetted contract staffing when a project needs hands fast.",
+                "Browse our solutions, read industry news and customer stories, or contact us for more information." ],
+      "links": [ { "label": "Software Solutions", "href": "/Solution" }, { "label": "Industry News", "href": "/NewsArticle" },
+                 { "label": "Customer Stories", "href": "/CustomerStory" }, { "label": "Contact", "href": "/ContactMessage" } ] }
+  ]
+}

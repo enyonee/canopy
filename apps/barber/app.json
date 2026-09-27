@@ -1,0 +1,62 @@
+{
+  "app": "barber",
+  "task": "webgen-bench/000049",
+  "note": "Barber shop management: an open admin console (no login — a single shop-staff persona, like a back office) for barbers, services and clients. 'Sending a WhatsApp notification' to a client is a row action that logs the message and queues it through an outgoing http connector to the sandbox sink; there is no real WhatsApp API to call.",
+  "theme": { "background": "snow", "accent": "dimgray" },
+  "home": "/page/dashboard",
+
+  "data": {
+    "Barber":       { "name": "text!", "phone": "text", "specialty": "text", "bio": "longtext", "active": "bool=true" },
+    "Service":      { "name": "text!", "description": "longtext", "price": "money!", "durationMinutes": "int=30", "active": "bool=true" },
+    "Client":       { "name": "text!", "phone": "text!", "email": "text" },
+    "Notification": { "client": "ref:Client!", "message": "longtext!", "createdAt": "time=now" }
+  },
+
+  "seed": {
+    "Barber":  [ { "name": "Marco Reyes", "phone": "555-0101", "specialty": "Classic cuts & fades", "bio": "12 years behind the chair.", "active": true },
+                 { "name": "Jun Ito", "phone": "555-0102", "specialty": "Beard styling", "bio": "Straight-razor specialist.", "active": true },
+                 { "name": "Sam Okoye", "phone": "555-0103", "specialty": "Kids' cuts", "bio": "Fast, friendly, patient with kids.", "active": false } ],
+    "Service": [ { "name": "Classic Haircut", "description": "Scissor or clipper cut, finished with a style.", "price": 25, "durationMinutes": 30 },
+                 { "name": "Beard Trim", "description": "Shape and line up, hot towel included.", "price": 15, "durationMinutes": 15 },
+                 { "name": "Hot Towel Shave", "description": "Straight-razor shave with hot towel prep.", "price": 30, "durationMinutes": 45 },
+                 { "name": "Kids' Cut", "description": "Haircut for ages 10 and under.", "price": 18, "durationMinutes": 20, "active": false } ],
+    "Client":  [ { "name": "Dana Price", "phone": "555-0201", "email": "dana@example.test" },
+                 { "name": "Wes Turner", "phone": "555-0202", "email": "wes@example.test" } ]
+  },
+
+  "connectors": { "whatsapp": { "kind": "http", "url": "http://127.0.0.1:8999/whatsapp", "method": "POST" } },
+
+  "actions": [
+    { "name": "notify", "in": "Client", "title": "Send WhatsApp notification", "after": "/Client/{id}",
+      "confirm": "WhatsApp notification queued for {row.name}",
+      "do": [ { "block": "db.createRow", "entity": "Notification", "values": { "client": "@row.id",
+                "message": "= coalesce(values.message, 'Your next appointment is coming up — see you soon!')" } },
+              { "block": "http.send", "connector": "whatsapp",
+                "body": { "to": "@row.phone", "client": "@row.name",
+                          "message": "= coalesce(values.message, 'Your next appointment is coming up — see you soon!')" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Barber.list":         { "title": "Barbers", "intro": "Everyone on the team.", "columns": ["name", "phone", "specialty", "active"],
+                             "search": ["name", "specialty"], "filters": [ { "name": "Active", "field": "active" } ],
+                             "labels": { "active": ["Inactive", "Active"] }, "rowActions": ["view", "edit", "delete"] },
+    "Barber.form":         { "confirm": "Barber added successfully", "createTitle": "Add a barber" },
+    "Service.list":        { "title": "Services", "intro": "Services currently offered.", "columns": ["name", "price", "durationMinutes", "active"],
+                             "search": ["name"], "filters": [ { "name": "Active", "field": "active" } ],
+                             "labels": { "active": ["Inactive", "Active"] }, "rowActions": ["view", "edit", "delete"] },
+    "Service.form":        { "confirm": "Service added successfully", "createTitle": "Add a service" },
+    "Client.list":         { "title": "Clients", "columns": ["name", "phone", "email"], "search": ["name", "phone", "email"],
+                             "rowActions": ["view", "notify", "edit", "delete"] },
+    "Client.detail":       { "fields": ["name", "phone", "email"], "actions": ["notify"],
+                             "related": [ { "entity": "Notification", "via": "client", "title": "Notifications sent",
+                                            "columns": ["message", "createdAt"], "form": false, "rowActions": [] } ] },
+    "Notification.list":  { "hidden": true, "columns": ["client", "message", "createdAt"], "create": false }
+  },
+
+  "pages": [
+    { "id": "dashboard", "title": "Dashboard", "heading": "Barber shop dashboard",
+      "body": [ "Manage your barbers, your service menu and your clients, and keep clients in the loop with a WhatsApp notification." ],
+      "links": [ { "label": "Barbers", "href": "/Barber" }, { "label": "Services", "href": "/Service" }, { "label": "Clients", "href": "/Client" } ] }
+  ]
+}

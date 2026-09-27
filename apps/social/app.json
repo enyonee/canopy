@@ -1,0 +1,80 @@
+{
+  "app": "social",
+  "task": "webgen-bench/000090",
+  "note": "Social platform: registration/login, a public photo gallery members upload to and vote on, points as a derived aggregate over uploads, and friend invitations sent by email. The signed-in member's home page is their own profile row (name, points), the closest the format gets to a personalised, name-welcoming homepage without free-text interpolation in a static page.",
+  "theme": { "background": "lightcyan", "accent": "cadetblue" },
+  "home": "/list/me",
+
+  "data": {
+    "User":       { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member",
+                    "points": "int := count(Photo) * 10" },
+    "Photo":      { "owner": "ref:User!", "image": "image!", "caption": "text", "uploadedAt": "time=now",
+                    "votes": "int := count(Vote)" },
+    "Vote":       { "photo": "ref:Photo!", "voter": "ref:User!", "createdAt": "time=now" },
+    "Invitation": { "from": "ref:User!", "email": "text!", "sentAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "hello@social-platform.test" } },
+
+  "events": [
+    { "on": "Invitation.created", "do": [
+        { "block": "mail.send", "connector": "mail", "to": "@row.email", "subject": "{row.from.name} invited you to join",
+          "text": "{row.from.name} thinks you'd like it here. Register at the platform to connect, share photos and earn points." } ] }
+  ],
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Photo": ["view", "create", "do:votePhoto"], "User": ["view"],
+                  "Invitation": { "own": "from", "can": ["view", "create"] } },
+      "guest":  { "Photo": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@social-platform.test", "password": "admin123", "name": "Admin", "role": "admin" },
+      { "email": "kai@social-platform.test", "password": "kai12345", "name": "Kai Torres", "role": "member" }
+    ]
+  },
+
+  "actions": [
+    { "name": "votePhoto", "in": "Photo", "title": "Vote", "after": "/Photo/{id}", "confirm": "Thanks for your vote",
+      "do": [ { "block": "db.createRow", "entity": "Vote", "values": { "photo": "@row.id", "voter": "@me" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "User.list":       { "title": "Members", "columns": ["email", "name", "role", "points"] },
+    "User.detail":     { "fields": ["name", "email", "points"],
+                         "related": [ { "entity": "Photo", "via": "owner", "title": "My uploads", "columns": ["image", "caption", "votes", "uploadedAt"], "form": false } ] },
+    "Photo.list":      { "title": "Gallery", "intro": "Photos from the community — vote on the ones you like.",
+                         "columns": ["image", "caption", "owner", "votes", "uploadedAt"], "sort": { "field": "uploadedAt", "dir": "desc" },
+                         "rowActions": ["view", "votePhoto"], "createTitle": "Upload a photo" },
+    "Photo.form":      { "title": "Upload a photo", "fields": ["image", "caption"], "fill": { "owner": "@me" },
+                         "submit": "Upload", "confirm": "Photo uploaded", "after": "/Photo/{id}" },
+    "Photo.detail":    { "fields": ["image", "caption", "owner", "votes", "uploadedAt"], "actions": ["votePhoto"] },
+    "Vote.list":       { "hidden": true },
+    "Invitation.list": { "title": "Invite friends", "columns": ["email", "sentAt"], "createTitle": "Invite a friend",
+                         "rowActions": [], "sort": { "field": "sentAt", "dir": "desc" } },
+    "Invitation.form": { "title": "Invite a friend", "fields": ["email"], "fill": { "from": "@me" },
+                         "submit": "Send invitation", "confirm": "Invitation sent!", "after": "/Invitation" }
+  },
+
+  "lists": [
+    { "id": "me", "entity": "User", "title": "My profile", "roles": ["member", "admin"],
+      "where": { "id": "@me" }, "columns": ["name", "email", "points"], "rowActions": ["view"] }
+  ],
+
+  "pages": [
+    { "id": "about", "title": "About", "heading": "Share, vote, connect",
+      "body": [ "Upload photos, vote on what the community shares, invite friends and earn points as you go." ],
+      "links": [ { "label": "Gallery", "href": "/Photo" }, { "label": "Invite friends", "href": "/Invitation" } ], "roles": ["member", "admin"] }
+  ]
+}

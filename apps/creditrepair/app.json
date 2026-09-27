@@ -1,0 +1,56 @@
+{
+  "app": "creditrepair",
+  "task": "webgen-bench/000014",
+  "note": "Credit repair lead-gen brochure site: an open catalogue of services, a lead form for personal info + credit status, and a self-service credit score inquiry whose score/band/advice are derived (no bureau) from the four factors the visitor reports — payment history, utilisation, open accounts, late payments.",
+  "theme": { "background": "oldlace", "accent": "rosybrown" },
+  "home": "/page/home",
+
+  "data": {
+    "Service":       { "name": "text!", "description": "longtext!" },
+    "Lead":          { "name": "text!", "email": "text!", "phone": "text", "address": "text",
+                       "employmentStatus": "enum[employed,selfEmployed,unemployed,retired]=employed",
+                       "creditStatus": "enum[excellent,good,fair,poor]=fair", "notes": "longtext",
+                       "status": "enum[new,contacted,resolved]=new", "createdAt": "time=now" },
+    "CreditInquiry": { "name": "text!", "email": "text!",
+                       "paymentHistory": "enum[always_on_time,mostly_on_time,some_late,many_late]=mostly_on_time",
+                       "utilization": "int=30", "openAccounts": "int=3", "latePayments": "int=0",
+                       "score": "int := max(300, min(850, round(300 + if(paymentHistory = 'always_on_time', 200, if(paymentHistory = 'mostly_on_time', 140, if(paymentHistory = 'some_late', 80, 20))) + (100 - utilization) * 2 + min(openAccounts, 10) * 5 - latePayments * 15, 0)))",
+                       "band": "text := if(score >= 750, 'Excellent', if(score >= 670, 'Good', if(score >= 580, 'Fair', 'Poor')))",
+                       "advice": "text := if(score >= 750, 'Excellent score - you likely qualify for the best rates available.', if(score >= 670, 'Good score - a few improvements could unlock even better offers.', if(score >= 580, 'Fair score - paying down balances and avoiding late payments will help the most.', 'Lower score - a personalised credit repair plan can help you improve it step by step.')))",
+                       "submittedAt": "time=now" }
+  },
+
+  "rules": {
+    "CreditInquiry": [ { "check": "utilization >= 0 and utilization <= 100", "message": "Utilization must be between 0 and 100" },
+                        { "check": "openAccounts >= 0", "message": "Open accounts cannot be negative" },
+                        { "check": "latePayments >= 0", "message": "Late payments cannot be negative" } ]
+  },
+
+  "seed": {
+    "Service": [ { "name": "Credit report audit", "description": "We pull your reports from all three bureaus and flag every item that looks inaccurate, outdated or unverifiable." },
+                 { "name": "Dispute filing", "description": "We draft and file disputes with the bureaus and the original creditors on your behalf, and track every response deadline." },
+                 { "name": "Credit building plan", "description": "A month-by-month plan of the specific actions that raise your score fastest: utilization, mix, and payment history." },
+                 { "name": "Ongoing monitoring", "description": "Monthly re-checks of your reports so new errors or fraud are caught within weeks, not years." } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Service.list":       { "title": "Our Credit Repair Services", "intro": "An introduction to what we do for every client, before you ever fill out a form.",
+                            "columns": ["name", "description"], "create": false, "rowActions": ["view"] },
+    "Lead.list":          { "title": "Apply Now", "intro": "Tell us about your situation and a credit specialist will reach out within one business day.",
+                            "columns": ["name", "email", "creditStatus", "status", "createdAt"], "createTitle": "Submit your information", "rowActions": ["view"] },
+    "Lead.form":          { "title": "Tell us about your credit situation", "fields": ["name", "email", "phone", "address", "employmentStatus", "creditStatus", "notes"],
+                            "submit": "Submit", "confirm": "Thanks! Your information has been recorded and a credit specialist will contact you soon." },
+    "CreditInquiry.list": { "title": "Check Your Score", "intro": "A quick, free estimate based on four factors you report yourself - no bureau is queried.",
+                            "columns": ["name", "score", "band", "submittedAt"], "createTitle": "Get my estimate", "rowActions": ["view"] },
+    "CreditInquiry.form": { "title": "Get a free score estimate", "fields": ["name", "email", "paymentHistory", "utilization", "openAccounts", "latePayments"],
+                            "submit": "Get my estimate", "confirm": "Here is your estimated score and next steps.", "after": "/CreditInquiry/{id}" }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Credit repair that gets specific about what to fix",
+      "body": [ "We audit your credit reports, file the disputes that stick, and build a month-by-month plan to raise your score - not vague promises, a concrete process.",
+                "Browse our services, get a free score estimate in under a minute, or tell us about your situation and a specialist will call you." ],
+      "links": [ { "label": "Services", "href": "/Service" }, { "label": "Check Your Score", "href": "/CreditInquiry" }, { "label": "Apply Now", "href": "/Lead" } ] }
+  ]
+}

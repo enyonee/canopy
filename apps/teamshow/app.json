@@ -1,0 +1,47 @@
+{
+  "app": "teamshow",
+  "task": "webgen-bench/000075",
+  "note": "A team showcase site: Team introduces members with their roles, Projects showcase past work with a detail page, Skills list the team's collective expertise, and Contact is a public message form (the team's email/phone are shown in its intro). No login: the whole site is data the team edits directly.",
+  "theme": { "background": "whitesmoke", "accent": "darkcyan" },
+  "home": "/Member",
+
+  "data": {
+    "Member":  { "name": "text!", "role": "text!", "bio": "longtext" },
+    "Project": { "title": "text!", "description": "longtext!", "image": "image", "link": "text" },
+    "Skill":   { "name": "text!", "category": "enum[design,engineering,product,marketing]=engineering" },
+    "Message": { "name": "text!", "email": "text!", "body": "longtext!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "Skill": [ { "unique": "name", "message": "This skill is already listed" } ]
+  },
+
+  "seed": {
+    "Member": [ { "name": "Nadia Kessler", "role": "Founder & Product Lead", "bio": "Sets the team's direction and works closely with every client on scope." },
+                { "name": "Theo Marchand", "role": "Lead Engineer", "bio": "Builds and ships the platform the whole team relies on." },
+                { "name": "Ines Vidal", "role": "Design Lead", "bio": "Owns visual and interaction design across every project." },
+                { "name": "Marcus Abara", "role": "Client Success", "bio": "Keeps projects on schedule and clients in the loop." } ],
+    "Project": [ { "title": "Riverside Market rebrand", "description": "A full rebrand and e-commerce build for a regional grocery chain, from logo to checkout.", "link": "https://example.test/riverside" },
+                 { "title": "Fleetwise dispatch dashboard", "description": "A real-time dispatch dashboard for a logistics company, replacing three spreadsheets with one live view.", "link": "https://example.test/fleetwise" },
+                 { "title": "Otter Health patient portal", "description": "A patient intake and scheduling portal built with the clinic's staff over six weeks of interviews.", "link": "https://example.test/otterhealth" } ],
+    "Skill": [ { "name": "Product strategy", "category": "product" }, { "name": "Brand identity", "category": "design" },
+               { "name": "Full-stack engineering", "category": "engineering" }, { "name": "User research", "category": "design" },
+               { "name": "Go-to-market", "category": "marketing" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Member.list":   { "title": "Team", "intro": "Meet the people behind the work.", "columns": ["name", "role", "bio"], "rowActions": ["view", "edit", "delete"], "createTitle": "Add a team member" },
+    "Member.detail": { "fields": ["name", "role", "bio"] },
+    "Project.list":  { "title": "Projects", "intro": "Selected work for our clients.", "columns": ["title", "description", "image"], "rowActions": ["view", "edit", "delete"], "createTitle": "Add a project" },
+    "Project.detail": { "fields": ["title", "description", "image", "link"] },
+    "Skill.list":    { "title": "Skills", "intro": "What the team is good at.", "columns": ["name", "category"],
+                       "filters": [ { "name": "Category", "field": "category" } ], "sort": { "field": "category", "dir": "asc" },
+                       "rowActions": ["edit", "delete"], "createTitle": "Add a skill" },
+    "Message.list":  { "title": "Contact", "intro": "Reach the team at hello@teamshow.test or +1 555 0190 — or send a message below.",
+                       "columns": ["name", "email", "body", "createdAt"], "sort": { "field": "createdAt", "dir": "desc" },
+                       "rowActions": ["view", "delete"], "createTitle": "Send a message" },
+    "Message.form":  { "title": "Contact the team", "fields": ["name", "email", "body"], "submit": "Send message",
+                       "confirm": "Your message has been sent successfully", "after": "/Message" }
+  }
+}

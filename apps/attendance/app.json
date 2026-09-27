@@ -1,0 +1,79 @@
+{
+  "app": "attendance",
+  "task": "webgen-bench/000048",
+  "note": "Time attendance: employees clock in (a create form with no visible fields — just a button — that stamps clockIn=now) and clock out (a status transition that stamps clockOut=now); hoursWorked is a plugin-derived field (no time arithmetic in the core expression algebra). A separate own-scoped Absence log covers 'absence time'. Admins see every employee's records and a statistics dashboard.",
+  "theme": { "background": "papayawhip", "accent": "darkorange" },
+  "home": "/Attendance",
+
+  "plugins": ["./plugins/attendance-calc.mjs"],
+
+  "data": {
+    "User":       { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,employee]=employee" },
+    "Attendance": { "employee": "ref:User!", "date": "date=today", "clockIn": "time", "clockOut": "time",
+                    "status": "enum[open,closed]=open", "hoursWorked": "money := hoursBetween(clockOut, clockIn)" },
+    "Absence":    { "employee": "ref:User!", "date": "date=today", "reason": "text!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": {
+      "admin":    "*",
+      "employee": { "Attendance": { "own": "employee", "can": ["view", "create", "go:clockOut"] },
+                    "Absence":    { "own": "employee", "can": ["view", "create"] } }
+    }
+  },
+
+  "seed": {
+    "User":       [ { "email": "admin@attendance.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                    { "email": "alice@attendance.test", "password": "alice123", "name": "Alice Smith", "role": "employee" },
+                    { "email": "bob@attendance.test", "password": "bob123", "name": "Bob Jones", "role": "employee" } ],
+    "Attendance": [ { "employee": 2, "date": "2026-09-20", "clockIn": "2026-09-20T09:00:00.000Z", "clockOut": "2026-09-20T17:00:00.000Z", "status": "closed" },
+                    { "employee": 2, "date": "2026-09-21", "clockIn": "2026-09-21T09:15:00.000Z", "clockOut": "2026-09-21T17:00:00.000Z", "status": "closed" },
+                    { "employee": 3, "date": "2026-09-20", "clockIn": "2026-09-20T08:30:00.000Z", "clockOut": "2026-09-20T16:30:00.000Z", "status": "closed" } ],
+    "Absence":    [ { "employee": 3, "date": "2026-09-22", "reason": "Sick leave", "createdAt": "2026-09-22T08:00:00.000Z" } ]
+  },
+
+  "states": {
+    "Attendance": { "field": "status", "transitions": [
+      { "name": "clockOut", "from": ["open"], "to": "closed", "title": "Clock out",
+        "confirm": "Clocked out at {row.clockOut}; {row.hoursWorked} hour(s) logged",
+        "do": [ { "block": "db.update", "set": { "clockOut": "@now" } } ] }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "User.list":         { "title": "Employees", "columns": ["email", "name", "role"] },
+    "Attendance.list":   { "title": "Attendance", "createTitle": "Clock in",
+                           "columns": ["employee", "date", "clockIn", "clockOut", "status", "hoursWorked"],
+                           "filters": [ { "name": "Employee", "field": "employee" }, { "name": "Status", "field": "status" },
+                                        { "field": "date", "range": true } ],
+                           "sort": { "field": "date", "dir": "desc" }, "rowActions": ["view", "go:clockOut"] },
+    "Attendance.form":   { "title": "Clock in", "fields": [], "fill": { "clockIn": "@now" }, "submit": "Clock in",
+                           "confirm": "Clocked in — your shift has started", "after": "/Attendance" },
+    "Attendance.detail": { "fields": ["employee", "date", "clockIn", "clockOut", "status", "hoursWorked"] },
+    "Absence.list":      { "title": "Absences", "createTitle": "Report an absence",
+                           "columns": ["employee", "date", "reason", "createdAt"],
+                           "filters": [ { "name": "Employee", "field": "employee" } ],
+                           "sort": { "field": "date", "dir": "desc" }, "rowActions": ["view"] },
+    "Absence.form":      { "title": "Report an absence", "fields": ["date", "reason"], "submit": "Report absence",
+                           "confirm": "Absence recorded", "after": "/Absence" },
+    "Absence.detail":    { "fields": ["employee", "date", "reason", "createdAt"] }
+  },
+
+  "dashboards": [
+    { "id": "stats", "title": "Attendance statistics", "roles": ["admin"], "period": { "Attendance": "date" },
+      "cards": [ { "title": "Employees", "entity": "User", "fn": "count", "where": { "role": "employee" } },
+                 { "title": "Sessions", "entity": "Attendance", "fn": "count" },
+                 { "title": "Hours logged", "entity": "Attendance", "fn": "sum", "field": "hoursWorked" },
+                 { "title": "Absences", "entity": "Absence", "fn": "count" } ],
+      "tables": [ { "title": "Hours by employee", "entity": "Attendance", "groupBy": "employee", "groupTitle": "Employee",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Sessions" }, { "fn": "sum", "field": "hoursWorked", "as": "hours", "title": "Hours" } ] },
+                  { "title": "Absences by employee", "entity": "Absence", "groupBy": "employee", "groupTitle": "Employee",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Absences" } ] } ] }
+  ]
+}

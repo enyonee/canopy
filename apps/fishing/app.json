@@ -1,0 +1,52 @@
+{
+  "app": "fishing",
+  "task": "webgen-bench/000028",
+  "note": "A fishing contest site: Contest is the announcement itself (sorted newest first); registering is an inline form on the contest's own page (like crm's Lead/Activity pattern); Results carry the catch and a manually recorded rank (no ranking/argmin aggregate exists in the catalog); Photos are open to everyone, no login required.",
+  "theme": { "background": "mintcream", "accent": "teal" },
+  "home": "/Contest",
+
+  "data": {
+    "Contest":      { "name": "text!", "description": "longtext!", "date": "date!", "location": "text!", "createdAt": "time=now",
+                      "registrations": "int := count(Registration)" },
+    "Registration": { "contest": "ref:Contest!", "name": "text!", "email": "text!", "phone": "text", "createdAt": "time=now" },
+    "Result":       { "contest": "ref:Contest!", "angler": "text!", "species": "text!", "weight": "money!", "rank": "int!" },
+    "Photo":        { "contest": "ref:Contest!", "caption": "text!", "image": "image" }
+  },
+
+  "rules": {
+    "Result": [ { "check": "weight > 0", "message": "Weight must be positive" }, { "check": "rank >= 1", "message": "Rank must be at least 1" } ]
+  },
+
+  "seed": {
+    "Contest": [ { "name": "Autumn Bass Classic", "description": "Our biggest lake tournament of the year: five hours, biggest single catch wins each category.", "date": "2026-09-13", "location": "Cedar Lake", "createdAt": "2026-08-01T09:00:00.000Z" },
+                 { "name": "Winter Ice Derby", "description": "A half-day ice-fishing derby for perch and pike; registration closes the night before.", "date": "2026-12-06", "location": "Frost Pond", "createdAt": "2026-09-20T09:00:00.000Z" } ],
+    "Registration": [ { "contest": 1, "name": "Marco Diaz", "email": "marco@anglers.test", "phone": "+1 555 0110", "createdAt": "2026-08-10T10:00:00.000Z" },
+                       { "contest": 1, "name": "Priya Raman", "email": "priya@anglers.test", "phone": "+1 555 0111", "createdAt": "2026-08-12T14:00:00.000Z" } ],
+    "Result": [ { "contest": 1, "angler": "Marco Diaz", "species": "Largemouth bass", "weight": 4.85, "rank": 1 },
+                { "contest": 1, "angler": "Priya Raman", "species": "Largemouth bass", "weight": 4.10, "rank": 2 },
+                { "contest": 1, "angler": "Sam Okoye", "species": "Smallmouth bass", "weight": 3.65, "rank": 3 } ],
+    "Photo": [ { "contest": 1, "caption": "Marco Diaz weighing in the winning bass" },
+               { "contest": 1, "caption": "The Cedar Lake dock at sunrise before the start" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Contest.list":      { "title": "Contest Announcements", "intro": "The latest fishing contests, most recent first.",
+                           "columns": ["name", "date", "location", "description", "registrations"],
+                           "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view", "edit", "delete"], "createTitle": "Announce a contest" },
+    "Contest.detail":    { "fields": ["name", "description", "date", "location", "registrations"],
+                           "related": [ { "entity": "Registration", "via": "contest", "title": "Register for this contest",
+                                          "columns": ["name", "email", "phone", "createdAt"], "form": ["name", "email", "phone"],
+                                          "submit": "Register", "confirm": "You are registered — see you on the water!", "rowActions": ["delete"] } ] },
+    "Registration.list": { "hidden": true },
+    "Result.list":       { "title": "Contest Results", "intro": "Results by contest, best rank first.",
+                           "columns": ["contest", "angler", "species", "weight", "rank"],
+                           "filters": [ { "name": "Contest", "field": "contest" } ], "sort": { "field": "rank", "dir": "asc" },
+                           "rowActions": ["view", "edit", "delete"], "createTitle": "Record a result" },
+    "Result.detail":     { "fields": ["contest", "angler", "species", "weight", "rank"] },
+    "Photo.list":        { "title": "Contest Photos", "intro": "Highlights from past contests — open to everyone.",
+                           "columns": ["contest", "caption", "image"], "filters": [ { "name": "Contest", "field": "contest" } ],
+                           "rowActions": ["view", "edit", "delete"], "createTitle": "Add a photo" },
+    "Photo.detail":      { "fields": ["contest", "caption", "image"] }
+  }
+}

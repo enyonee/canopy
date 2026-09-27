@@ -1,0 +1,41 @@
+{
+  "app": "polls",
+  "task": "webgen-bench/000026",
+  "note": "A polls site: each Poll has Options, each Option's vote count is a real derived aggregate (count(Vote)) and the Poll's total is summed from its options — nothing is stored redundantly. Voting is a row action on an Option that creates a Vote and lands back on the Poll's results. No login: anyone may browse, vote and see live results.",
+  "theme": { "background": "white", "accent": "navy" },
+  "home": "/Poll",
+
+  "data": {
+    "Poll":   { "question": "text!", "description": "longtext", "status": "enum[open,closed]=open", "createdAt": "time=now",
+                "totalVotes": "int := sum(Option: votes)" },
+    "Option": { "poll": "ref:Poll!", "label": "text!", "votes": "int := count(Vote)",
+                "percent": "int := round(votes * 100 / poll.totalVotes, 0)" },
+    "Vote":   { "option": "ref:Option!", "createdAt": "time=now" }
+  },
+
+  "seed": {
+    "Poll":   [ { "question": "Which language should we adopt for the new service?", "description": "One vote per visitor, please — results are live.", "createdAt": "2026-09-01T09:00:00.000Z" },
+                { "question": "Best time for the weekly sync?", "createdAt": "2026-09-10T09:00:00.000Z" } ],
+    "Option": [ { "poll": 1, "label": "TypeScript" }, { "poll": 1, "label": "Go" }, { "poll": 1, "label": "Rust" },
+                { "poll": 2, "label": "Monday 9am" }, { "poll": 2, "label": "Wednesday 2pm" }, { "poll": 2, "label": "Friday 10am" } ],
+    "Vote":   [ { "option": 1 }, { "option": 1 }, { "option": 1 }, { "option": 2 }, { "option": 3 },
+                { "option": 4 }, { "option": 5 }, { "option": 5 } ]
+  },
+
+  "actions": [
+    { "name": "vote", "in": "Option", "title": "Vote", "after": "/Poll/{poll}", "confirm": "Thanks for voting for {row.label}",
+      "do": [ { "block": "db.createRow", "entity": "Vote", "values": { "option": "@row.id" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Poll.list":     { "title": "Polls", "intro": "Browse the open polls and cast your vote.", "columns": ["question", "status", "totalVotes", "createdAt"],
+                       "search": ["question"], "filters": [ { "name": "Status", "field": "status" } ],
+                       "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "createTitle": "Start a poll" },
+    "Poll.detail":   { "fields": ["question", "description", "status", "totalVotes", "createdAt"],
+                       "related": [ { "entity": "Option", "via": "poll", "title": "Options & results", "columns": ["label", "votes", "percent"],
+                                      "form": false, "rowActions": ["vote"] } ] },
+    "Option.list":   { "hidden": true },
+    "Vote.list":     { "hidden": true }
+  }
+}

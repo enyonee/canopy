@@ -1,0 +1,51 @@
+{
+  "app": "solarco",
+  "task": "webgen-bench/000016",
+  "note": "Solar company brochure site: a static Company Introduction page (history/mission/values), a seeded Product Showcase with specs and a text photo caption (no real file to seed for an `image` field), News sorted newest-first, and a Contact Us message form.",
+  "theme": { "background": "lemonchiffon", "accent": "chocolate" },
+  "home": "/page/company",
+
+  "data": {
+    "Product":        { "name": "text!", "category": "enum[panel,inverter,battery,accessory]=panel", "specs": "longtext!", "price": "money!", "photo": "text" },
+    "NewsItem":       { "title": "text!", "publishedAt": "date!", "summary": "text", "body": "longtext!" },
+    "ContactMessage": { "name": "text!", "email": "text!", "message": "longtext!", "submittedAt": "time=now" }
+  },
+
+  "seed": {
+    "Product": [ { "name": "SunPeak 400W Monocrystalline Panel", "category": "panel", "price": 249,
+                   "specs": "400W, 21.5% efficiency, 25-year power warranty, anti-reflective tempered glass.", "photo": "photo: matte-black panel, low-profile aluminium frame" },
+                 { "name": "SunPeak Hybrid Inverter 5kW", "category": "inverter", "price": 890,
+                   "specs": "5kW continuous output, hybrid grid-tie + battery charging, Wi-Fi monitoring app.", "photo": "photo: wall-mounted inverter unit with LED status display" },
+                 { "name": "SunPeak PowerWall 10kWh", "category": "battery", "price": 4200,
+                   "specs": "10kWh usable capacity, 6000-cycle LFP chemistry, indoor/outdoor rated enclosure.", "photo": "photo: slim white battery cabinet, floor-standing" },
+                 { "name": "Roof Mounting Rail Kit", "category": "accessory", "price": 180,
+                   "specs": "Aluminium rail kit for 4 panels, tile and metal roof hardware included.", "photo": "photo: silver rail segments with mounting clamps" } ],
+    "NewsItem": [ { "title": "SunPeak opens a second regional service center", "publishedAt": "2026-08-01", "summary": "Faster installs and maintenance across the eastern service area.",
+                    "body": "To keep installation lead times under two weeks, we have opened a second service center staffed with six additional certified installers." },
+                  { "title": "New 25-year warranty on all monocrystalline panels", "publishedAt": "2026-08-20", "summary": "Every panel now ships with an extended power warranty.",
+                    "body": "Starting this month, every SunPeak monocrystalline panel carries a 25-year linear power warranty, up from 20, at no extra cost to new customers." },
+                  { "title": "SunPeak sponsors the Riverside Clean Energy Fair", "publishedAt": "2026-09-10", "summary": "Meet our engineers and see the PowerWall 10kWh live on September 20.",
+                    "body": "Our engineering team will be on site at the Riverside Clean Energy Fair with a working demo of the hybrid inverter and battery pairing." } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Product.list":        { "title": "Product Showcase", "intro": "Our current solar hardware line-up.",
+                             "columns": ["name", "category", "price"], "filters": [ { "name": "Category", "field": "category" } ], "create": false, "rowActions": ["view"] },
+    "Product.detail":      { "fields": ["name", "category", "specs", "price", "photo"] },
+    "NewsItem.list":       { "title": "News and Updates", "intro": "The latest from SunPeak, newest first.",
+                             "columns": ["publishedAt", "title", "summary"], "sort": { "field": "publishedAt", "dir": "desc" }, "create": false, "rowActions": ["view"] },
+    "ContactMessage.list": { "title": "Contact Us", "intro": "SunPeak Solar, 400 Solar Way, Rivertown. hello@sunpeak.test - +1 555 0161.",
+                             "columns": ["name", "email", "submittedAt"], "createTitle": "Send a message", "rowActions": ["view"] },
+    "ContactMessage.form": { "title": "Contact Us", "fields": ["name", "email", "message"], "submit": "Send message",
+                             "confirm": "Thank you for reaching out - our team will respond soon." }
+  },
+
+  "pages": [
+    { "id": "company", "title": "Company Introduction", "heading": "SunPeak Solar",
+      "body": [ "History: founded in 2014 by two solar engineers, SunPeak has installed systems for over 3,000 homes and businesses across the region.",
+                "Mission: make clean, self-generated power a practical choice for every roof, backed by hardware we would put on our own homes.",
+                "Values: transparent pricing, a 25-year warranty on our panels, and local service centers so a technician is never more than a day away." ],
+      "links": [ { "label": "Product Showcase", "href": "/Product" }, { "label": "News and Updates", "href": "/NewsItem" }, { "label": "Contact Us", "href": "/ContactMessage" } ] }
+  ]
+}

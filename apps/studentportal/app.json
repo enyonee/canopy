@@ -1,0 +1,107 @@
+{
+  "app": "studentportal",
+  "task": "webgen-bench/000057",
+  "note": "Student portal: students and training providers each keep an owned profile of matching criteria (location, field of study, career interest, qualification level). A Match row exists for every student/provider pair — created by an event the moment either side's profile is created — with a plugin-scored, always-fresh derived score, so editing a profile immediately changes what each side sees. Applying is a row action on a provider; direct communication is a message thread under the match, mirroring apps/qna's answer-under-question pattern.",
+  "theme": { "background": "azure", "accent": "midnightblue" },
+  "home": "/Provider",
+
+  "plugins": ["./plugins/matching.mjs"],
+
+  "data": {
+    "User":           { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,student,provider]=student" },
+    "StudentProfile": { "user": "ref:User!", "name": "text!", "location": "text!",
+                        "fieldOfStudy": "enum[data-science,software-engineering,business,healthcare,education]=data-science",
+                        "careerInterest": "enum[research,industry,entrepreneurship,public-sector]=industry",
+                        "qualification": "enum[highschool,associate,bachelor,master,phd]=bachelor",
+                        "qualificationDetails": "longtext", "bio": "longtext" },
+    "Provider":       { "user": "ref:User!", "orgName": "text!", "location": "text!",
+                        "fieldOfStudy": "enum[data-science,software-engineering,business,healthcare,education]=data-science",
+                        "careerFocus": "enum[research,industry,entrepreneurship,public-sector]=industry",
+                        "minQualification": "enum[highschool,associate,bachelor,master,phd]=associate",
+                        "description": "longtext!" },
+    "Match":          { "studentUser": "ref:User!", "student": "ref:StudentProfile!", "providerUser": "ref:User!", "provider": "ref:Provider!",
+                        "score": "int := matchScore(student.location, student.fieldOfStudy, student.careerInterest, student.qualification, provider.location, provider.fieldOfStudy, provider.careerFocus, provider.minQualification)",
+                        "isMatch": "bool := score >= 60" },
+    "Application":    { "student": "ref:User!", "provider": "ref:Provider!", "providerUser": "ref:User!", "message": "longtext", "createdAt": "time=now" },
+    "Message":        { "match": "ref:Match!", "sender": "ref:User!", "body": "longtext!", "createdAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "student", "anonymous": "guest",
+    "can": {
+      "admin":    "*",
+      "student":  { "StudentProfile": { "own": "user", "can": ["view", "create", "edit"] },
+                    "Match": { "own": "studentUser", "can": ["view"] },
+                    "Application": { "own": "student", "can": ["view"] },
+                    "Provider": ["view", "do:apply"], "Message": ["view", "create"] },
+      "provider": { "Provider": { "own": "user", "can": ["view", "create", "edit"] },
+                    "Match": { "own": "providerUser", "can": ["view"] },
+                    "Application": { "own": "providerUser", "can": ["view"] },
+                    "Message": ["view", "create"] },
+      "guest":    { "Provider": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":           [ { "email": "admin@portal.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                        { "email": "tech@portal.test", "password": "tech123", "name": "Priya Shah", "role": "provider" },
+                        { "email": "health@portal.test", "password": "health123", "name": "Owen Clarke", "role": "provider" },
+                        { "email": "alice@portal.test", "password": "alice123", "name": "Alice Kim", "role": "student" } ],
+    "Provider":       [ { "user": 2, "orgName": "TechForward Institute", "location": "Springfield",
+                          "fieldOfStudy": "data-science", "careerFocus": "industry", "minQualification": "associate",
+                          "description": "Applied data-science bootcamps and apprenticeships for industry-track graduates." },
+                        { "user": 3, "orgName": "HealthBridge College", "location": "Rivertown",
+                          "fieldOfStudy": "healthcare", "careerFocus": "public-sector", "minQualification": "master",
+                          "description": "Postgraduate health-sciences programmes for the public sector." } ],
+    "StudentProfile": [ { "user": 4, "name": "Alice Kim", "location": "Springfield", "fieldOfStudy": "data-science",
+                          "careerInterest": "industry", "qualification": "bachelor", "qualificationDetails": "BSc Computer Science, Springfield University",
+                          "bio": "Looking to move from a general software role into data science." } ],
+    "Match":          [ { "studentUser": 4, "student": 1, "providerUser": 2, "provider": 1 },
+                        { "studentUser": 4, "student": 1, "providerUser": 3, "provider": 2 } ]
+  },
+
+  "events": [
+    { "on": "StudentProfile.created", "do": [ { "block": "db.each", "from": "Provider",
+        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "studentUser": "@row.user", "student": "@row.id", "providerUser": "@each.user", "provider": "@each.id" } } ] } ] },
+    { "on": "Provider.created", "do": [ { "block": "db.each", "from": "StudentProfile",
+        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "studentUser": "@each.user", "student": "@each.id", "providerUser": "@row.user", "provider": "@row.id" } } ] } ] }
+  ],
+
+  "actions": [
+    { "name": "apply", "in": "Provider", "title": "Apply", "after": "/Application",
+      "confirm": "Application submitted to {row.orgName} — you will hear back soon",
+      "do": [ { "block": "db.createRow", "entity": "Application", "values": { "student": "@me", "provider": "@row.id", "providerUser": "@row.user",
+                "message": "= coalesce(values.message, 'I would like to apply to this programme.')" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "User.list":              { "title": "Users", "columns": ["email", "name", "role"] },
+    "StudentProfile.list":    { "title": "My Profile", "columns": ["name", "location", "fieldOfStudy", "careerInterest", "qualification"], "create": true },
+    "StudentProfile.form":    { "title": "Student profile", "fields": ["name", "location", "fieldOfStudy", "careerInterest", "qualification", "qualificationDetails", "bio"],
+                                "submit": "Save profile", "confirm": "Profile created — you are now visible to matching providers",
+                                "confirmEdit": "Profile updated", "after": "/StudentProfile" },
+    "Provider.list":          { "title": "Training providers", "intro": "Programmes open for applications.",
+                                "columns": ["orgName", "location", "fieldOfStudy", "careerFocus", "minQualification"],
+                                "search": ["orgName", "location"], "filters": [ { "name": "Field", "field": "fieldOfStudy" } ],
+                                "rowActions": ["view", "apply"] },
+    "Provider.form":          { "title": "Provider profile", "fields": ["orgName", "location", "fieldOfStudy", "careerFocus", "minQualification", "description"],
+                                "submit": "Save profile", "confirm": "Provider profile created — you can now see matching students",
+                                "confirmEdit": "Provider profile updated", "after": "/Provider" },
+    "Provider.detail":        { "fields": ["orgName", "location", "fieldOfStudy", "careerFocus", "minQualification", "description"], "actions": ["apply"] },
+    "Match.list":             { "title": "Matches", "columns": ["studentUser", "student", "provider", "score", "isMatch"],
+                                "labels": { "isMatch": ["Not a match", "Match"] },
+                                "filters": [ { "name": "Match", "field": "isMatch" } ], "sort": { "field": "score", "dir": "desc" },
+                                "rowActions": ["view"], "create": false },
+    "Match.detail":           { "fields": ["studentUser", "student", "provider", "score", "isMatch"],
+                                "related": [ { "entity": "Message", "via": "match", "title": "Messages", "columns": ["sender", "body", "createdAt"],
+                                              "form": ["body"], "fill": { "sender": "@me" }, "submit": "Send message", "confirm": "Message sent" } ] },
+    "Application.list":      { "title": "Applications", "columns": ["student", "provider", "message", "createdAt"], "create": false, "rowActions": ["view"] },
+    "Message.list":           { "hidden": true, "create": false }
+  }
+}

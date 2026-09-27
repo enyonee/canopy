@@ -1,0 +1,96 @@
+{
+  "app": "startups",
+  "task": "webgen-bench/000089",
+  "note": "Startup story publishing site: browse/search articles by category, collect favourites, share to a stand-in webhook (the graph can only send to the verify sink), register/login, and keep a personal reading history logged by an explicit 'Mark as read' action (the format has no on-view hook, only create/update/delete events).",
+  "theme": { "background": "oldlace", "accent": "rosybrown" },
+  "home": "/Article",
+
+  "data": {
+    "User":        { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,member]=member" },
+    "Article":     { "title": "text!", "category": "enum[funding,growth,product,culture,failure]=growth", "author": "text!",
+                     "body": "longtext!", "publishedAt": "time=now",
+                     "collects": "int := count(Collection)", "reads": "int := count(ReadHistory)" },
+    "Collection":  { "user": "ref:User!", "article": "ref:Article!", "createdAt": "time=now" },
+    "ReadHistory": { "user": "ref:User!", "article": "ref:Article!", "readAt": "time=now" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+  },
+
+  "connectors": { "shareHook": { "kind": "http", "url": "http://127.0.0.1:8999/share", "method": "POST" } },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "member", "anonymous": "guest",
+    "can": {
+      "admin":  "*",
+      "member": { "Article": ["view", "do:collect", "do:markRead", "do:share"],
+                  "Collection": { "own": "user", "can": ["view", "delete"] },
+                  "ReadHistory": { "own": "user", "can": ["view"] } },
+      "guest":  { "Article": ["view", "do:share"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@startups.test", "password": "admin123", "name": "Admin", "role": "admin" },
+      { "email": "grace@startups.test", "password": "grace123", "name": "Grace Lin", "role": "member" }
+    ],
+    "Article": [
+      { "title": "How we closed our seed round in six weeks", "category": "funding", "author": "Mira Okoye",
+        "body": "A founder's diary of investor meetings, the term sheet negotiation, and what she wishes she'd asked earlier.",
+        "publishedAt": "2026-08-01T09:00:00.000Z" },
+      { "title": "From 10 to 10,000 users without a marketing budget", "category": "growth", "author": "Ben Alvarez",
+        "body": "The channels that actually worked for an early-stage B2B tool, and the ones that wasted a quarter.",
+        "publishedAt": "2026-08-05T09:00:00.000Z" },
+      { "title": "Why we rebuilt our product around one feature", "category": "product", "author": "Priya Nair",
+        "body": "Cutting 80% of the roadmap to focus on the one workflow customers actually paid for.",
+        "publishedAt": "2026-08-10T09:00:00.000Z" },
+      { "title": "Remote-first culture, three years in", "category": "culture", "author": "Tomasz Wach",
+        "body": "What held up, what didn't, and the rituals that keep a distributed team honest.",
+        "publishedAt": "2026-08-14T09:00:00.000Z" },
+      { "title": "The post-mortem we almost didn't publish", "category": "failure", "author": "Mira Okoye",
+        "body": "Eighteen months, one pivot too many, and the lessons that only failure teaches.",
+        "publishedAt": "2026-08-20T09:00:00.000Z" },
+      { "title": "Raising a bridge round when the market turned", "category": "funding", "author": "Ben Alvarez",
+        "body": "Negotiating a bridge with existing investors after a down market spooked new ones.",
+        "publishedAt": "2026-08-25T09:00:00.000Z" }
+    ]
+  },
+
+  "actions": [
+    { "name": "collect", "in": "Article", "title": "Collect", "after": "/list/my-collections", "confirm": "{row.title} added to your collection",
+      "do": [ { "block": "db.ensure", "entity": "Collection", "where": { "user": "@me", "article": "@row.id" } } ] },
+    { "name": "markRead", "in": "Article", "title": "Mark as read", "after": "/Article/{id}", "confirm": "Marked as read",
+      "do": [ { "block": "db.ensure", "entity": "ReadHistory", "where": { "user": "@me", "article": "@row.id" }, "values": { "readAt": "@now" } } ] },
+    { "name": "share", "in": "Article", "title": "Share", "after": "/Article/{id}", "confirm": "Link ready to share: /Article/{row.id} — \"{row.title}\"",
+      "do": [ { "block": "http.send", "connector": "shareHook", "body": { "article": "@row.id", "title": "@row.title", "author": "@row.author" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "User.list":         { "title": "Members", "columns": ["email", "name", "role"] },
+    "Article.list":      { "title": "Articles", "intro": "Entrepreneurial stories from founders who lived them.",
+                           "columns": ["title", "category", "author", "publishedAt", "collects", "reads"],
+                           "search": ["title", "body"], "filters": [ { "name": "Category", "field": "category" } ],
+                           "sort": { "field": "publishedAt", "dir": "desc" }, "rowActions": ["view", "collect", "share"], "create": false },
+    "Article.detail":    { "fields": ["title", "category", "author", "publishedAt", "body", "collects", "reads"], "actions": ["collect", "markRead", "share"] },
+    "Collection.list":   { "hidden": true },
+    "ReadHistory.list":  { "hidden": true }
+  },
+
+  "lists": [
+    { "id": "my-collections", "entity": "Collection", "title": "My collections", "roles": ["member"],
+      "where": { "user": "@me" }, "columns": ["article", "createdAt"], "rowActions": ["delete"], "sort": { "field": "createdAt", "dir": "desc" } },
+    { "id": "my-history", "entity": "ReadHistory", "title": "Reading history", "roles": ["member"],
+      "where": { "user": "@me" }, "columns": ["article", "readAt"], "rowActions": [], "sort": { "field": "readAt", "dir": "desc" } }
+  ],
+
+  "pages": [
+    { "id": "about", "title": "About", "heading": "Real stories from real founders",
+      "body": [ "Browse by category, search for what you need, collect articles to read later, and share the ones worth passing on.",
+                "Register to keep your own collection and reading history." ],
+      "links": [ { "label": "Browse articles", "href": "/Article" } ] }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "app": "datasci",
+  "task": "webgen-bench/000056",
+  "note": "A data-science learning platform: courses hold ordered modules (text, an optional diagram image and a video link), modules hold assignments, assignments take one submission per student. Enrolling, submitting and querying grades are the same own-scoped Enrollment/Submission lists for both roles — filtered to the student's own rows, unfiltered for the admin who grades.",
+  "theme": { "background": "honeydew", "accent": "darkolivegreen" },
+  "home": "/Course",
+
+  "data": {
+    "User":       { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,student]=student" },
+    "Course":     { "title": "text!", "description": "longtext!", "syllabus": "longtext!", "instructor": "text!",
+                    "level": "enum[beginner,intermediate,advanced]=beginner" },
+    "Module":     { "course": "ref:Course!", "order": "int=1", "title": "text!", "content": "longtext!",
+                    "videoUrl": "text", "diagram": "image" },
+    "Assignment": { "module": "ref:Module!", "title": "text!", "instructions": "longtext!", "maxScore": "int=100" },
+    "Enrollment": { "student": "ref:User!", "course": "ref:Course!", "enrolledAt": "time=now" },
+    "Submission": { "assignment": "ref:Assignment!", "student": "ref:User!", "content": "longtext!",
+                    "submittedAt": "time=now", "score": "int", "feedback": "longtext",
+                    "percent": "int := round(score * 100 / assignment.maxScore, 0)" }
+  },
+
+  "rules": {
+    "User":       [ { "unique": "email", "message": "This email is already registered" } ],
+    "Submission": [ { "check": "score = null or (score >= 0 and score <= assignment.maxScore)", "message": "Score must be between 0 and the assignment's maximum" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "student", "anonymous": "guest",
+    "can": {
+      "admin":   "*",
+      "student": { "Course": ["view", "do:enroll"], "Module": ["view"], "Assignment": ["view"],
+                   "Enrollment": { "own": "student", "can": ["view", "create"] },
+                   "Submission": { "own": "student", "can": ["view", "create"] } },
+      "guest":   { "Course": ["view"], "Module": ["view"], "Assignment": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":       [ { "email": "admin@datasci.test", "password": "admin123", "name": "Admin", "role": "admin" } ],
+    "Course":     [ { "title": "Python for Data Analysis", "description": "Learn pandas and NumPy for real-world data wrangling.",
+                      "syllabus": "Week 1: NumPy arrays. Week 2: pandas Series and DataFrames. Week 3: cleaning and merging data. Week 4: exploratory analysis.",
+                      "instructor": "Dr. Elena Cruz", "level": "beginner" },
+                    { "title": "Machine Learning with scikit-learn", "description": "Build and evaluate predictive models in Python.",
+                      "syllabus": "Week 1: regression. Week 2: classification. Week 3: model evaluation. Week 4: pipelines.",
+                      "instructor": "Raj Patel", "level": "intermediate" },
+                    { "title": "Deep Learning Foundations", "description": "Neural networks from scratch to PyTorch.",
+                      "syllabus": "Week 1: perceptrons. Week 2: backpropagation. Week 3: CNNs. Week 4: RNNs.",
+                      "instructor": "Dr. Elena Cruz", "level": "advanced" } ],
+    "Module":     [ { "course": 1, "order": 1, "title": "NumPy arrays", "content": "NumPy arrays are the foundation of numeric Python: fixed-type, n-dimensional, and fast because the loops run in C, not Python.", "videoUrl": "https://videos.datasci.test/numpy-arrays" },
+                    { "course": 1, "order": 2, "title": "pandas DataFrames", "content": "A DataFrame is a table: labelled rows and columns over one or more NumPy arrays, with pandas providing the indexing and grouping operations." } ],
+    "Assignment": [ { "module": 1, "title": "Array practice", "instructions": "Create a 3x3 NumPy array of the numbers 1 through 9 and compute its row sums.", "maxScore": 100 } ]
+  },
+
+  "actions": [
+    { "name": "enroll", "in": "Course", "title": "Enroll", "after": "/Enrollment",
+      "confirm": "Enrolled in {row.title} — it now appears in your My Courses list",
+      "do": [ { "block": "db.ensure", "entity": "Enrollment", "where": { "student": "@me", "course": "@row.id" } } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "User.list":        { "title": "Users", "columns": ["email", "name", "role"] },
+    "Course.list":       { "title": "Courses", "intro": "Python data science courses open for enrollment.",
+                           "columns": ["title", "description", "instructor", "level"], "search": ["title", "description", "instructor"],
+                           "filters": [ { "name": "Level", "field": "level" } ], "rowActions": ["view"] },
+    "Course.detail":     { "fields": ["title", "description", "syllabus", "instructor", "level"], "actions": ["enroll"],
+                           "related": [ { "entity": "Module", "via": "course", "title": "Modules", "columns": ["order", "title"], "form": false, "rowActions": ["view"] } ] },
+    "Module.list":       { "hidden": true, "create": false },
+    "Module.detail":     { "fields": ["course", "order", "title", "content", "videoUrl", "diagram"],
+                           "related": [ { "entity": "Assignment", "via": "module", "title": "Assignments", "columns": ["title", "maxScore"], "form": false, "rowActions": ["view"] } ] },
+    "Assignment.list":   { "hidden": true, "create": false },
+    "Assignment.detail": { "fields": ["module", "title", "instructions", "maxScore"],
+                           "related": [ { "entity": "Submission", "via": "assignment", "title": "Submissions", "columns": ["student", "content", "score", "percent", "submittedAt"],
+                                          "form": ["content"], "submit": "Submit assignment", "confirm": "Assignment submitted — check Submissions for its status", "rowActions": [] } ] },
+    "Enrollment.list":   { "title": "My Courses", "columns": ["course", "enrolledAt"], "sort": { "field": "enrolledAt", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "Enrollment.detail": { "fields": ["student", "course", "enrolledAt"] },
+    "Submission.list":   { "title": "My Submissions", "columns": ["assignment", "content", "score", "percent", "submittedAt"],
+                           "sort": { "field": "submittedAt", "dir": "desc" }, "rowActions": ["view", "edit"], "create": false },
+    "Submission.detail": { "fields": ["assignment", "student", "content", "submittedAt", "score", "percent", "feedback"] },
+    "Submission.form":   { "fields": ["score", "feedback"], "confirmEdit": "Grade saved" }
+  }
+}

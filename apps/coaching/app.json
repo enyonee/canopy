@@ -1,0 +1,111 @@
+{
+  "app": "coaching",
+  "task": "webgen-bench/000058",
+  "note": "One-to-one coaching: a personality assessment is a status transition (its four answers are the transition's asked-for fields, applied to the row automatically before the derived DISC-style type is read back); Suggestion rows — one per client/coach pair, created by an event the moment either profile exists — carry an always-fresh plugin-scored suitability so editing a profile or retaking the assessment changes matches immediately, exactly as in apps/studentportal.",
+  "theme": { "background": "beige", "accent": "saddlebrown" },
+  "home": "/CoachProfile",
+
+  "plugins": ["./plugins/coachmatch.mjs"],
+
+  "data": {
+    "User":          { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,user,coach]=user" },
+    "ClientProfile": { "user": "ref:User!", "name": "text!", "goalArea": "enum[career,life,executive,wellness]=career", "bio": "longtext",
+                       "q1": "int=3", "q2": "int=3", "q3": "int=3", "q4": "int=3",
+                       "assessmentStatus": "enum[pending,completed]=pending",
+                       "profileType": "text := discType(q1, q2, q3, q4)" },
+    "CoachProfile":  { "user": "ref:User!", "name": "text!", "bio": "longtext!",
+                       "specialty": "enum[career,life,executive,wellness]=career",
+                       "preferredClientType": "enum[Dominance,Influence,Steadiness,Conscientiousness]=Influence",
+                       "hourlyRate": "money!", "active": "bool=true" },
+    "Suggestion":    { "client": "ref:User!", "profile": "ref:ClientProfile!", "coachAccount": "ref:User!", "coach": "ref:CoachProfile!",
+                       "suitability": "int := suitability(profile.goalArea, profile.profileType, coach.specialty, coach.preferredClientType)",
+                       "isSuitable": "bool := suitability >= 60" },
+    "Session":       { "client": "ref:User!", "coach": "ref:CoachProfile!", "coachAccount": "ref:User!",
+                       "scheduledAt": "time!", "topic": "text", "status": "enum[scheduled,completed,cancelled]=scheduled", "createdAt": "time=now" },
+    "Goal":          { "user": "ref:User!", "title": "text!", "targetDate": "date", "progress": "int=0", "notes": "longtext" }
+  },
+
+  "rules": {
+    "User": [ { "unique": "email", "message": "This email is already registered" } ],
+    "Goal": [ { "check": "progress >= 0 and progress <= 100", "message": "Progress must be between 0 and 100" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "user", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "user":  { "ClientProfile": { "own": "user", "can": ["view", "create", "edit", "go:submitAssessment"] },
+                 "CoachProfile": ["view", "do:schedule"],
+                 "Suggestion": { "own": "client", "can": ["view"] },
+                 "Session": { "own": "client", "can": ["view"] },
+                 "Goal": { "own": "user", "can": ["view", "create", "edit"] } },
+      "coach": { "CoachProfile": { "own": "user", "can": ["view", "create", "edit"] },
+                 "Suggestion": { "own": "coachAccount", "can": ["view"] },
+                 "Session": { "own": "coachAccount", "can": ["view"] } },
+      "guest": { "CoachProfile": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":         [ { "email": "admin@coaching.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                      { "email": "naomi@coaching.test", "password": "naomi123", "name": "Dr. Naomi Reed", "role": "coach" },
+                      { "email": "marcus@coaching.test", "password": "marcus123", "name": "Marcus Bello", "role": "coach" } ],
+    "CoachProfile": [ { "user": 2, "name": "Dr. Naomi Reed", "bio": "Executive coach for first-time leaders, 15 years in the field.",
+                        "specialty": "career", "preferredClientType": "Dominance", "hourlyRate": 120 },
+                      { "user": 3, "name": "Marcus Bello", "bio": "Life coach focused on work-life balance and steady, sustainable change.",
+                        "specialty": "life", "preferredClientType": "Steadiness", "hourlyRate": 85 } ]
+  },
+
+  "events": [
+    { "on": "ClientProfile.created", "do": [ { "block": "db.each", "from": "CoachProfile", "where": { "active": 1 },
+        "do": [ { "block": "db.ensure", "entity": "Suggestion", "where": { "client": "@row.user", "profile": "@row.id", "coachAccount": "@each.user", "coach": "@each.id" } } ] } ] },
+    { "on": "CoachProfile.created", "do": [ { "block": "db.each", "from": "ClientProfile",
+        "do": [ { "block": "db.ensure", "entity": "Suggestion", "where": { "client": "@each.user", "profile": "@each.id", "coachAccount": "@row.user", "coach": "@row.id" } } ] } ] }
+  ],
+
+  "actions": [
+    { "name": "schedule", "in": "CoachProfile", "title": "Schedule a session", "after": "/Session",
+      "confirm": "Session requested with {row.name} — you will both get a confirmation notification",
+      "do": [ { "block": "db.createRow", "entity": "Session", "values": { "client": "@me", "coach": "@row.id", "coachAccount": "@row.user",
+                "scheduledAt": "@values.scheduledAt", "topic": "@values.topic" } },
+              { "block": "mail.send", "connector": "mail", "to": "@row.user.email", "subject": "New coaching session booked",
+                "text": "{me.name} booked a session with you for {values.scheduledAt}." },
+              { "block": "mail.send", "connector": "mail", "to": "@me.email", "subject": "Your coaching session is confirmed",
+                "text": "Your session with {row.name} is confirmed for {values.scheduledAt}." } ] }
+  ],
+
+  "states": {
+    "ClientProfile": { "field": "assessmentStatus", "transitions": [
+      { "name": "submitAssessment", "from": ["pending"], "to": "completed", "title": "Complete personality assessment",
+        "fields": ["q1", "q2", "q3", "q4"],
+        "confirm": "Assessment complete — you are a {row.profileType} type; the result is saved to your profile" }
+    ] }
+  },
+
+  "connectors": { "mail": { "kind": "mail", "from": "coaching@example.test" } },
+
+  "views": "auto",
+  "override": {
+    "User.list":          { "title": "Users", "columns": ["email", "name", "role"] },
+    "ClientProfile.list": { "title": "My Profile", "columns": ["name", "goalArea", "assessmentStatus", "profileType"], "create": true },
+    "ClientProfile.form": { "title": "Client profile", "fields": ["name", "goalArea", "bio"], "submit": "Save profile",
+                            "confirm": "Profile created", "confirmEdit": "Profile updated", "after": "/ClientProfile" },
+    "ClientProfile.detail": { "fields": ["name", "goalArea", "bio", "assessmentStatus", "profileType", "q1", "q2", "q3", "q4"] },
+    "CoachProfile.list":  { "title": "Coaches", "intro": "Coaches currently taking new clients.",
+                            "columns": ["name", "specialty", "preferredClientType", "hourlyRate"], "search": ["name", "bio"],
+                            "filters": [ { "name": "Specialty", "field": "specialty" } ], "where": { "active": 1 },
+                            "rowActions": ["view", "schedule"] },
+    "CoachProfile.detail": { "fields": ["name", "bio", "specialty", "preferredClientType", "hourlyRate"], "actions": ["schedule"] },
+    "Suggestion.list":    { "title": "Find a Coach", "columns": ["coach", "suitability", "isSuitable"],
+                            "labels": { "isSuitable": ["Not suitable", "Suitable"] },
+                            "filters": [ { "name": "Suitable", "field": "isSuitable" } ],
+                            "sort": { "field": "suitability", "dir": "desc" }, "rowActions": ["view"], "create": false },
+    "Suggestion.detail":  { "fields": ["client", "profile", "coach", "suitability", "isSuitable"] },
+    "Session.list":       { "title": "Sessions", "columns": ["client", "coach", "scheduledAt", "topic", "status"],
+                            "sort": { "field": "scheduledAt", "dir": "asc" }, "rowActions": ["view"], "create": false },
+    "Goal.list":          { "title": "My Goals", "columns": ["title", "targetDate", "progress", "notes"], "createTitle": "Set a new goal" },
+    "Goal.form":          { "fields": ["title", "targetDate", "progress", "notes"], "submit": "Save goal",
+                            "confirm": "Goal saved", "confirmEdit": "Progress updated" }
+  }
+}

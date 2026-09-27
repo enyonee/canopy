@@ -1,0 +1,44 @@
+{
+  "app": "poetry",
+  "task": "webgen-bench/000070",
+  "note": "Poetry blog: browse, search, post and comment, no login (identity, as in apps/forum) so posting and commenting both fill 'author' from the single simulated visitor.",
+  "theme": { "background": "lightgoldenrodyellow", "accent": "olivedrab" },
+  "home": "/page/home",
+  "identity": { "entity": "Poet", "defaults": { "name": "Iris Marlow", "bio": "Writes about the sea." } },
+
+  "data": {
+    "Poet":     { "name": "text!", "bio": "text" },
+    "Category": { "name": "text!" },
+    "Poem":     { "title": "text!", "content": "longtext!", "tags": "text", "category": "ref:Category!", "author": "ref:Poet", "createdAt": "time=now" },
+    "Comment":  { "poem": "ref:Poem!", "author": "ref:Poet", "body": "longtext!", "createdAt": "time=now" }
+  },
+
+  "seed": {
+    "Category": [ { "name": "Sonnet" }, { "name": "Haiku" }, { "name": "Free Verse" }, { "name": "Ballad" } ],
+    "Poem":     [ { "title": "Autumn Tide", "content": "The tide pulls gold leaves out to sea,\nwhile morning fog forgets the shore.", "tags": "autumn, sea, nature", "category": 3, "author": 1, "createdAt": "2026-09-05T08:00:00.000Z" },
+                  { "title": "Quiet Pond", "content": "Old pond—\na frog jumps in,\nsound of water.", "tags": "nature, stillness", "category": 2, "author": 1, "createdAt": "2026-09-10T08:00:00.000Z" },
+                  { "title": "Sonnet for a Rainy Evening", "content": "When rain descends upon the sleeping town,\nand lantern light through fogged glass softly gleams...", "tags": "rain, love", "category": 1, "author": 1, "createdAt": "2026-09-15T08:00:00.000Z" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Poem.list":     { "title": "Poetry", "intro": "Browse and search poems by title or tag.",
+                       "search": ["title", "tags"], "filters": [ { "name": "Category", "field": "category" } ],
+                       "columns": ["title", "author", "category", "createdAt"], "sort": { "field": "createdAt", "dir": "desc" },
+                       "rowActions": ["view"], "createTitle": "Post a poem" },
+    "Poem.form":     { "title": "Post a poem", "fields": ["title", "content", "tags", "category"], "fill": { "author": "@me" },
+                       "submit": "Post poem", "confirm": "Poem posted" },
+    "Poem.detail":   { "fields": ["title", "author", "category", "tags", "content", "createdAt"],
+                       "related": [ { "entity": "Comment", "via": "poem", "title": "Comments", "columns": ["author", "body", "createdAt"],
+                                      "form": ["body"], "fill": { "author": "@me" }, "submit": "Post comment", "confirm": "Comment posted" } ] },
+    "Comment.list":  { "hidden": true },
+    "Category.list": { "title": "Categories", "columns": ["name"], "create": false, "rowActions": ["view"] },
+    "Poet.list":     { "title": "Poets", "columns": ["name", "bio"], "create": false }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Poetry, shared",
+      "body": [ "Browse and search poems, post your own, and comment on the work of others." ],
+      "links": [ { "label": "Poetry", "href": "/Poem" }, { "label": "Categories", "href": "/Category" } ] }
+  ]
+}
