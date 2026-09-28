@@ -50,6 +50,10 @@ export const checks = [
       must(sent.status === 303, `sending a message returned ${sent.status}`);
       const sentPage = await get(sent.location);
       must(/Message sent to Leah Kim/.test(flashOf(sentPage.html)), `no confirmation after messaging: ${flashOf(sentPage.html)}`);
+      // Round 4: own may name several fields, so Mia (the sender) now sees her own sent
+      // message in her inbox too — not only Leah (the recipient), as before.
+      const miaOwnInbox = await get('/Message');
+      must(/I loved your profile/.test(miaOwnInbox.html), 'Mia (the sender) cannot see the message she just sent');
       asGuest();
       must((await login('leah@matrimony.test', 'leah12345')).status === 303, 'Leah could not sign in to read her messages');
       const inbox = await get('/Message');
