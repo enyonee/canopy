@@ -195,6 +195,37 @@ writers, replication or online backups. Graphs never contain SQL, so apps do not
 It has to come after the performance round. With one query per row, every round trip to a
 database server would multiply the current latency instead of removing it.
 
+**A production connector library.** Today the outbox knows HTTP, a stand mail transport, SMS/
+WhatsApp recorded in the outbox, and a sandbox card gateway. For anyone to run real apps on
+Canopy, the common services have to work out of the box, configured in the graph and never
+coded:
+- **Payments**: Stripe, PayPal, Adyen, YooKassa; checkout, refunds, subscriptions, signed
+  webhooks for payment status.
+- **Email**: SMTP, Amazon SES, SendGrid, Postmark, Mailgun; templates, bounces and unsubscribes.
+- **Messaging and notifications**: Twilio SMS, WhatsApp Cloud API, Telegram bots, Slack,
+  Discord, web push.
+- **Sign-in**: OAuth/OIDC (Google, GitHub, Microsoft, Apple), SAML SSO, magic links, TOTP 2FA.
+- **Files and media**: S3-compatible storage, image resizing, signed download links.
+- **Calendars and scheduling**: Google Calendar, Microsoft 365, iCal feeds.
+- **Maps and places**: geocoding, distance and "near me" queries.
+- **Business systems**: HubSpot, Salesforce, Airtable, Google Sheets, Notion, Zapier and
+  generic inbound/outbound webhooks.
+- **AI**: LLM calls (Claude and others) as a block with a declared input/output schema, for
+  classification, extraction and summaries inside a workflow.
+- **Observability**: error reporting, metrics and structured logs of the step trace.
+
+Every connector follows one contract, so each new one is cheap and safe:
+- a declarative descriptor (auth, operations, input/output schemas, inbound events);
+- secrets kept out of `app.json`, in an encrypted secret store configured per deployment;
+- **sandbox by default**, with switching to live credentials as an explicit deployment action;
+- idempotency keys, retries only for idempotent operations, timeouts and a circuit breaker;
+- signature verification and deduplication for inbound webhooks;
+- recorded responses for hermetic tests, and contract-drift detection when a provider's
+  answer stops matching its schema.
+
+Import from an OpenAPI spec should cover the long tail. A settings screen for connectors and
+secrets means a non-programmer can connect an app to real services.
+
 **Horizontal scaling.** Today one app is one Node process with one SQLite file. A single
 process on one core sustains ~1.8k reads/s and ~1.7k writes/s at 50 concurrent clients
 (p99 ≈ 70 ms). The single SQLite writer is not the limit yet; the one process is. Next steps:
