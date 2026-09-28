@@ -5,6 +5,18 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **The outbox delivers each row once.** `flush` used to read every `queued` row, deliver them
+  one by one and only then update them, so two overlapping flushes (two requests committing
+  close together; later several instances) both delivered the same row. A row is now claimed by
+  one atomic `UPDATE ... WHERE status='queued'` (`Store#outboxClaim`) and only the caller whose
+  update changed the row delivers it: `queued → sending → sent|failed`.
+- **Lease recovery.** A row stuck in `sending` for more than 60 s (the process died
+  mid-delivery) is claimed again. Delivery is therefore exactly-once, and at-least-once across
+  a crash; connectors should send an idempotency key.
+- New column `_outbox.claimedAt`, added in place to databases made by earlier versions.
+- Tests: concurrent flushes, lease before/after, in-place upgrade from the old DDL; six new
+  mutations.
+
 ## 0.1.3 (2026-09-29)
 
 Runtime performance, round 3. No change to any answer: the JSON responses and CSV exports of
