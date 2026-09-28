@@ -5,35 +5,58 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
-- `AGENTS.md`, `CONTRIBUTING.md`, pull request and issue templates, this changelog.
-- README roadmap: runtime performance, PostgreSQL as a second driver, horizontal scaling,
-  a production connector library.
-- **Runtime performance, round 2.** No change to any answer: the same 13 benchmark routes and
-  the CSV export stay byte-identical.
-  - **Aggregates pushed into SQL** (`runtime/store/aggsql.mjs`): `count`/`sum`/`avg`/`min`/`max`
-    over a child with a direct `via` link, whose body is built only from the child's own stored
-    `int`/`money`/`bool` fields (`+ - *`, comparisons, `and`/`or`/`not`, integer literals,
-    `if(...)`), answers in one SQL query — a single row for `Store#get()`, one `GROUP BY` for a
-    whole page — instead of fetching every child row and summing in JS. `total := sum(Item: qty
-    * price)` on an order with 20 000 items: 30.7 ms → 2.0 ms (p50). Everything else (a derived
-    field inside the body, `row.*` correlation, a hop through a reference, date/time, division
-    anywhere in the body, a fractional literal, text/enum comparisons) still evaluates in JS,
-    unchanged. Parity with the JS path — including money's minor-unit rounding, NULL
-    propagation, and empty groups (`sum`/`count` are 0, `avg`/`min`/`max` are null) — is a
-    property test (`tests/aggsql.test.mjs`) over random rows and random compilable expressions,
-    plus direct tests of the compiler's accept/reject boundary.
-  - **Memory regression from 0.1.1 fixed.** `hydratePage` now builds its aggregate cache (and
-    fetches any raw child rows a non-compilable aggregate still needs) in chunks of 500 parent
-    rows at a time, released between chunks, instead of once for the whole page — and with SQL
-    aggregates above, most pages never fetch a child row into JS at all any more. RSS growth
-    after `/dashboard` + `/Order.csv` at 40 000 orders (200 000 items): +87 MB (0.1.1) → +17 MB
-    (this round), measured with the same script before and after a forced GC.
-  - `npm run bench` extended with both scenarios (`bench/run.mjs`); numbers above and the full
-    table are in `TESTS.md`.
+## 0.1.2 (2026-09-28)
+
+Runtime performance, round 2. No change to any answer except one fix below: the JSON responses
+of 13 benchmark routes, the wide-parent routes and the CSV exports are byte-identical to 0.1.1
+at both data sizes; the only difference is the dashboard JSON money unit.
+
+- **Aggregates pushed into SQL** (`runtime/store/aggsql.mjs`): `count`/`sum`/`avg`/`min`/`max`
+  over a child with a direct `via` link, whose body is built only from the child's own stored
+  `int`/`money`/`bool` fields (`+ - *`, comparisons, `and`/`or`/`not`, integer literals,
+  `if(...)`), answers in one SQL query — a single row for `Store#get()`, one `GROUP BY` for a
+  whole page — instead of fetching every child row and summing in JS. `total := sum(Item: qty
+  * price)` on an order with 20 000 items: 30.7 ms → 2.0 ms (p50). Everything else (a derived
+  field inside the body, `row.*` correlation, a hop through a reference, date/time, division
+  anywhere in the body, a fractional literal, text/enum comparisons) still evaluates in JS,
+  unchanged. Parity with the JS path — including money's minor-unit rounding, NULL
+  propagation, and empty groups (`sum`/`count` are 0, `avg`/`min`/`max` are null) — is a
+  property test (`tests/aggsql.test.mjs`) over random rows for every compilable shape,
+  plus direct tests of the compiler's accept/reject boundary.
+- **Memory regression from 0.1.1 fixed.** `hydratePage` now builds its aggregate cache (and
+  fetches any raw child rows a non-compilable aggregate still needs) in chunks of 500 parent
+  rows at a time, released between chunks, instead of once for the whole page — and with SQL
+  aggregates above, most pages never fetch a child row into JS at all any more. RSS growth
+  after `/dashboard` + `/Order.csv` at 40 000 orders (200 000 items): +87 MB (0.1.1) → +17 MB
+  (this round), measured with the same script before and after a forced GC.
+- `npm run bench` extended with both scenarios (`bench/run.mjs`); numbers above and the full
+  table are in `TESTS.md`.
 - **Fix**: `GET /dashboard/<id>` JSON answered a money card/table/chart aggregate in raw
   minor units (`6500000`) instead of the major units the rest of the JSON contract promises
   (`65000.00`); the HTML and CSV dashboard views were already correct. Cards, table metrics
   and chart metrics now convert the same way `rowJSON` already does for an ordinary field.
+- `AGENTS.md`, `CONTRIBUTING.md`, pull request and issue templates, this changelog.
+- README roadmap: runtime performance, PostgreSQL as a second driver, horizontal scaling,
+  a production connector library.
+
+Measured by the maintainer with the same scripts, graph, data and requests as 0.1.1 (p50, ms;
+one Node process). One customer with 5000 orders, one order with 20 000 items:
+
+| route | 0.1.1 | 0.1.2 |
+|---|---|---|
+| `GET /Order/<20 000 items>` | 30.6 | 2.8 |
+| `GET /Customer/1` (5000 orders) | 55.9 | 42 |
+| `GET /Customer` | 57.8 | 23.1 |
+| `GET /Order` | 34.5 | 3.4 |
+| `GET /Order?sort=total` (derived) | 60.7 | 24.8 |
+| `GET /Order.csv` | 80.8 | 46 |
+| `GET /Customer.csv` | 73.6 | 22.2 |
+| wide order detail, 50 clients | 49 req/s, p99 5.3 s | 632 req/s, p99 189 ms |
+
+On the 0.1.1 table graph at 8000 orders: `/dashboard/sales` 167 → 116 ms, `/Order.csv`
+134 → 109 ms, resident memory after the heavy requests 254 → 183 MB (0.1.0: 158 MB).
+
+Tests 256 → 267, mutations 134 → 143. All 699 acceptance checks pass.
 
 ## 0.1.1 (2026-09-28)
 
