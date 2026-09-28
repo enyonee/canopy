@@ -30,22 +30,30 @@ routes and the CSV export are byte-identical before and after, at both data size
   rows), that the index is used, and that the batched and per-row paths agree. `npm run bench`
   reports latencies (informational).
 
-Measured with the same graph, data and requests (p50, ms; one Node process):
+Measured with the same graph, data and requests (p50, ms; one Node process). *Corrected
+after release: the first published table came from a benchmark that wrote references as
+`'1.0'`, so every aggregate was empty. The numbers below come from real links, and the answers
+(non-zero sums and counts) are again byte-identical between 0.1.0 and 0.1.1.*
 
 | route | 2000 orders, before | after | 8000 orders, before | after |
 |---|---|---|---|---|
-| `GET /Order` | 1591 | 3.7 | 24 758 | 3.3 |
-| `GET /Order?status=paid` | 413 | 3.1 | 6197 | 3.4 |
-| `GET /Order?sort=total` (derived) | 1605 | 17 | 24 666 | 52 |
-| `GET /Customer` | 144 | 1.2 | 1997 | 1.8 |
-| `GET /dashboard/sales` | 3597 | 32 | 51 570 | 117 |
-| `GET /Order.csv` | 2566 | 79 | 41 495 | 435 |
-| `GET /Order/1` | 1.4 | 0.6 | 8.1 | 0.7 |
-| `POST /Item` | 1.6 | 1.4 | 2.5 | 1.4 |
+| `GET /Order` | 1564 | 1.9 | 22 020 | 5.1 |
+| `GET /Order?status=paid` | 520 | 2.2 | 6072 | 2.0 |
+| `GET /Order?sort=total` (derived) | 1790 | 29 | 23 364 | 104 |
+| `GET /Customer` | 1629 | 5.4 | 24 320 | 5.5 |
+| `GET /Customer?q=City 7` | 90 | 2.2 | 1230 | 9.4 |
+| `GET /dashboard/sales` | 3104 | 60 | 45 679 | 260 |
+| `GET /Order.csv` | 8439 | 42 | 112 133 | 188 |
+| `GET /Order/1` | 4.4 | 0.4 | 16.6 | 1.1 |
+| `POST /Item` | 1.5 | 1.2 | 1.2 | 1.0 |
 
-One customer with 4000 orders, `GET /Order.csv`: 293 s → 0.1 s (2000 orders on 0.1.0: 515 s);
-with 35 000 orders: 0.5 s. Under load (50 clients), detail reads went from 3413 to 5016 req/s
-and writes from 3013 to 3217 req/s. Boot and memory are unchanged (~0.3 s, ~75 MB).
+One customer with 4000 orders, `GET /Order.csv`: 293 s → 0.1 s; with 35 000 orders: 0.5 s.
+Under load (50 clients), detail reads went from 3413 to 5016 req/s and writes from 3013 to
+3217 req/s. Boot is unchanged (~0.25 s).
+
+**Known regression:** resident memory after heavy requests grew at the larger size (158 MB →
+292 MB after the dashboard and CSV export), because batched children are held in memory for
+the whole request. This is tracked for the next round.
 
 Tests 240 → 256, mutations 122 → 134. All 699 acceptance checks pass.
 

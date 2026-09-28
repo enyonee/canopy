@@ -209,7 +209,7 @@ failing test in `tests/arch.test.mjs`, part of `npm test`.
 derived fields computed only for the visible page, batched child aggregates, labels without
 hydrating the target row, and a prepared-statement cache. A query-count gate keeps a list page
 at O(1) queries. On 2000 customers / 8000 orders / 40 000 items, an order list went from
-24.8 s to 3 ms and a dashboard from 51.6 s to 0.12 s, with JSON answers byte-identical before
+22 s to 5 ms and a dashboard from 46 s to 0.26 s, with JSON answers byte-identical before
 and after ([CHANGELOG.md](CHANGELOG.md)). Next: push single-parent aggregates into SQL. Under
 load, a row with tens of thousands of children still sums them in JavaScript on every request.
 
