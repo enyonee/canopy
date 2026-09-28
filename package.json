@@ -13,5 +13,14 @@
   "devDependencies": {
     "@types/node": "^22.20.4",
     "typescript": "^5.9.3"
+  },
+  "description": "Applications as a closed graph of effects with pure leaves: one JSON document in, a working app out.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enyonee/canopy.git"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
