@@ -9,23 +9,22 @@
   code itself (the value a person or a check can read) stands in for a visual highlight.
 
 ## Misses
-- **Runtime bug, not a graph limitation** (found while building this app): `db.createRow` does
-  not fire `events: <Entity>.created` — only a form-posted `POST /Entity` (via `createRoute` in
-  `runtime/routes/entity.mjs`) calls `interp.fireEvents('created', ...)`; the `db.createRow` block
-  (`runtime/blocks.mjs`) just calls `store.insert()` directly. This silently breaks any
-  "on creation, fan out and notify" design that creates the row from an action/schedule/another
-  event rather than a plain HTTP form post. Worked around here by inlining the alert-matching
-  `db.each`/`sms.send` steps directly in the schedule after the `db.createRow`, instead of using a
-  separate `events: [{ "on": "Detection.created", ... }]` block (which was the first, more natural
-  design and silently never fired). Recommend either firing events from `db.createRow` too, or
-  documenting in `docs/FORMAT.md` that `events` only observes HTTP-originated creates.
 - `field kind`: no colour-swatch/inline-style rendering for a `text` field — a colour "code" is
   shown as its name/value, not a coloured mark.
 
 ## New for this app
-- First app in this batch to combine `schedule` with `roles`+`events`-style fan-out (worked
-  around, see Misses) and the shared `plugins/messaging.mjs` `sms.send` block; confirms the
-  outbox records `kind: "sms"` rows with `to`/`text` exactly as documented.
-- A schedule step sequence with two independent top-level `db.each` blocks in one `do` list (one
-  over the single-row "camera" singleton to ingest+evolve, one over `AlertRule` to match+alert),
-  demonstrating a schedule is not limited to one block or one entity per run.
+- The runtime bug this app found and reported (`db.createRow` did not fire `events:
+  <Entity>.created`, silently breaking any "on creation, fan out and notify" design that creates a
+  row from an action/schedule/another event rather than a plain HTTP form post) is fixed in round
+  5: `db.createRow`/`db.create`/`db.ensure` now fire their entity's own event from any block. The
+  schedule no longer inlines the alert-matching `db.each`/`sms.send` steps after its own
+  `db.createRow` — they moved to the separate `events: [{ "on": "Detection.created", ... }]` block
+  that was the first, more natural design attempt (see the schedule's own `note` in app.json),
+  decoupling "ingest a detection" from "notify whoever asked for this species", each independently
+  testable and reusable (an HTTP-created `Detection`, were one ever added, would now fan out too).
+- First app in this batch to combine `schedule` with `roles`+`events`-style fan-out, and the shared
+  `plugins/messaging.mjs` `sms.send` block; confirms the outbox records `kind: "sms"` rows with
+  `to`/`text` exactly as documented.
+- A schedule that creates a row and an event on that same entity's `created` trigger that reacts to
+  it, both exercised by one `POST /schedule/detect/run` — demonstrating a schedule's own writes are
+  full graph citizens, not a side channel that bypasses the rest of the graph.

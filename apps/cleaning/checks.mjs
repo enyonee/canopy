@@ -28,8 +28,13 @@ export const checks = [
       must(r.status === 200, `booking submission returned ${r.status}: ${r.html.slice(0, 200)}`);
       must(/Booking received/.test(flashOf(r.html)), `no confirmation: ${flashOf(r.html)}`);
       must(/status">requested/.test(r.html) || /<th>Status<\/th><td>requested<\/td>/.test(r.html), 'booking status not shown');
-      must(/<th>Reference<\/th><td>\d+<\/td>/.test(r.html), 'no booking reference was assigned');
-      return 'booking created, confirmation shown, reference assigned';
+      // Round 5: expressions can read a row's own "id" (read-only), so the
+      // Booking.created event now derives a genuine prefixed reference code
+      // (concat('BK-', id)) instead of copying the bare numeric id — closing
+      // the "a human-friendly prefixed reference code is not derivable
+      // purely in the graph" Miss.
+      must(/<th>Reference<\/th><td>BK-\d+<\/td>/.test(r.html), 'no BK-prefixed booking reference was assigned');
+      return 'booking created, confirmation shown, a BK-prefixed reference assigned';
     } },
   { task: 'The Contact Us page displays accurate contact details including a phone number and email address',
     run: async ({ get, must }) => {
@@ -45,11 +50,11 @@ export const checks = [
       must(/href="\/list\/status"/.test(home.html), 'no Check Status link on the homepage');
       const booked = await follow('/Booking', { name: 'Omar Diaz', email: 'omar@example.test', phone: '555-0111',
         service: 2, date: '2026-11-01', address: '5 Pine road' });
-      const ref = /<th>Reference<\/th><td>(\d+)<\/td>/.exec(booked.html)[1];
+      const ref = /<th>Reference<\/th><td>(BK-\d+)<\/td>/.exec(booked.html)[1];
       const found = await get(`/list/status?q=${ref}`);
       must(found.status === 200, `status lookup returned ${found.status}`);
       must(new RegExp(`<td>${ref}</td>`).test(found.html) && /requested/.test(found.html), 'the booking status was not found by its reference');
-      const miss = await get('/list/status?q=999999');
+      const miss = await get('/list/status?q=BK-999999');
       must(!new RegExp(`<td>${ref}</td>`).test(miss.html), 'the search does not narrow to the matching reference');
       return `booking #${ref} found by reference, status requested; a wrong reference finds nothing`;
     } },

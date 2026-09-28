@@ -5,11 +5,12 @@
 // the sole authority on whose turn it is and what is legal; a click here is
 // just a request, shown as an error if refused.
 //
-// Hole cards are shown openly for every seat, not only the viewer's own —
-// see NOTES.md "Misses": the format has no per-field/per-viewer redaction,
-// so pretending a card is hidden while it is still sitting in the same JSON
-// response anyone can fetch would be exactly the kind of fake privacy the
-// brief warns against.
+// Hole cards render straight from whatever `/Seat?room=` answers — no
+// client-side hiding here, because there is nothing left to fake: the server
+// redacts `holeCards` per viewer (`Seat.detail.private`, see app.json and
+// docs/FORMAT.md), so a seat that is not the signed-in viewer's own already
+// arrives with `holeCards: null` (an admin sees every seat's cards, same as
+// everywhere else `private` applies). See NOTES.md "New for this app".
 import { api, mountWidgets } from '/widget/_api.mjs';
 
 function cardEl(c) {

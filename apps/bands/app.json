@@ -38,7 +38,7 @@
   "override": {
     "User.list":   { "hidden": true, "title": "Users", "columns": ["email", "name", "role"] },
     "User.form":   { "title": "Sign up", "fields": ["name", "email", "password", "bio", "contact", "photo", "audioUrl", "youtubeUrl"],
-                     "submit": "Sign up", "confirm": "Registration complete" },
+                     "fill": { "role": "advertiser" }, "submit": "Sign up", "confirm": "Registration complete" },
     "User.detail": { "fields": ["name", "role", "bio", "contact", "photo", "audioUrl", "youtubeUrl"] },
     "Ad.list":     { "title": "Advertisements", "columns": ["title", "image", "linkUrl"], "where": { "active": 1 },
                      "rowActions": ["view"], "createTitle": "Place an ad" },

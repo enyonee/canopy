@@ -8,11 +8,10 @@
   walks the top menu, not literally every button on every page.
 
 ## Misses
-- `composition`: `Entity.form.confirm` has no `{row.*}` interpolation (only actions/transitions'
-  `confirm` does, per `docs/FORMAT.md`'s Actions section) — a create's flash is a static string.
-  Landing on the created row needs an explicit `"after": "/Entity/{id}"` (undocumented as the
-  default; the default `after` is the list, not the row, unlike what `{created}`/`{id}` in
-  `after` might suggest at first read).
+- `composition`: landing on the created row still needs an explicit `"after": "/Entity/{id}"`
+  (undocumented as the default; the default `after` is the list, not the row, unlike what
+  `{created}`/`{id}` in `after` might suggest at first read) — the interpolation half of this Miss
+  is closed, see New for this app.
 - `field kind`: no native "percent"/ratio kind (shop's plugin `percent` field is app-local); a
   derived percentage has to be coaxed to `money` kind by dividing a `number` by a `money` (see
   `changePct`) since `money / money` is explicitly demoted to `number` and a derived field must
@@ -21,6 +20,11 @@
   in extra sections beyond trends/financials) — out of scope for what the six cases ask.
 
 ## New for this app
+- Round 5: `Entity.form.confirm` now interpolates `{row.*}` (including a one-hop reference), the
+  same way an action's or a transition's `confirm` always could — closing the "a create's flash is
+  a static string" Miss. `Report.form.confirm` is now `"Report generated for {row.stock.name}
+  ({row.stock.symbol})"`; `checks.mjs`'s report-generation case asserts the flash names the actual
+  stock the report was just generated for, not a generic acknowledgement.
 - A derived `money` field built from `money / money` and `number * money` combined so the
   expression's inferred kind matches the declared field kind (`changePct`).
 - A derived `text` field that summarises another entity's derived fields through a one-hop

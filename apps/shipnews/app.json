@@ -1,7 +1,7 @@
 {
   "app": "shipnews",
   "task": "webgen-bench/000064",
-  "note": "Shipping-industry news blog: articles, company profiles and events are open to everyone; a newsletter subscription is a public form; an admin-only backend manages ad spaces, which show up on the public Ads page (the closest honest reading of an 'ad space on the main site' — the format has no way to embed a dynamic block inside a static page body).",
+  "note": "Shipping-industry news blog: articles, company profiles and events are open to everyone; a newsletter subscription is a public form; an admin-only backend manages ad spaces, which show up both on the public Ads page and as a live-embedded 'Sponsored' section on the homepage itself (round 5's pages[].sections).",
   "theme": { "background": "oldlace", "accent": "rosybrown" },
   "home": "/page/home",
 
@@ -39,6 +39,11 @@
     "Ad":      [ { "title": "Meridian Shipping Lines — book cargo space today", "linkUrl": "https://meridianshipping.test", "active": true } ]
   },
 
+  "lists": [
+    { "id": "homeAds", "entity": "Ad", "title": "Ads", "hidden": true, "where": { "active": 1 },
+      "columns": ["title", "image", "linkUrl"] }
+  ],
+
   "views": "auto",
   "override": {
     "Article.list":    { "title": "News", "intro": "The latest shipping-industry news.",
@@ -68,6 +73,7 @@
                 "Subscribe below to get the latest news by email." ],
       "links": [ { "label": "News", "href": "/Article" }, { "label": "Company Profiles", "href": "/Company" },
                  { "label": "Events", "href": "/Event" }, { "label": "Subscribe", "href": "/Subscriber/new" },
-                 { "label": "Ads", "href": "/Ad" } ] }
+                 { "label": "Ads", "href": "/Ad" } ],
+      "sections": [ { "text": "Sponsored:" }, { "list": "homeAds", "limit": 3 } ] }
   ]
 }

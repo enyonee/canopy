@@ -41,7 +41,17 @@ export const checks = [
       must(rows(hit.html).length === 1 && rowWith(hit.html, 'Nobel Prize in Physics'), 'searching "Nobel Prize" did not find the achievement');
       const miss = await get('/Achievement?q=Nonexistent keyword');
       must(rows(miss.html).length === 0, 'an unrelated keyword incorrectly matched something');
-      return '"Nobel Prize" finds the matching achievement via the Achievements search box; an unrelated keyword finds nothing';
+      // Round 5's top-level `search` node closes the "no cross-entity search
+      // node" Miss: one query, one page, one section per entity — "Turin"
+      // hits both Life Experiences (born there) and Achievements (the ETH
+      // Zurich doctorate's description never mentions it, so that section is
+      // legitimately empty, proving sections narrow independently).
+      const unified = await get('/search?q=Turin');
+      must(unified.status === 200, `unified search returned ${unified.status}`);
+      must(/<h3>Life Experiences<\/h3>(?:(?!<h3>)[\s\S])*Born in Turin/.test(unified.html), 'unified search misses the matching life experience');
+      must(/<h3>Achievements and Honors<\/h3>/.test(unified.html), 'unified search is missing the Achievements section header');
+      must(/name="q"/.test((await get('/')).html), 'no search box is offered in the page header');
+      return '"Nobel Prize" finds the matching achievement via the Achievements search box; an unrelated keyword finds nothing; unified /search finds "Turin" under Life Experiences';
     } },
   { task: 'Users can move between Home, Life Experiences, Achievements and Search without broken links',
     run: async ({ get, must }) => {

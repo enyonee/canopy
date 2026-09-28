@@ -50,11 +50,14 @@ export default {
       },
     },
     'chess.resign': {
+      // "Only a player of this game" is now the row-level `own: ["white",
+      // "black"]` grant on /roles (round 5's multi-field own) — the route
+      // never reaches this block for anyone else, so the block only has to
+      // decide *which* side that player was.
       summary: 'the current user resigns; the other side is awarded the win',
       effects: ['db.write'], requires: [],
       run: ({ store, entity, id, user }) => {
         const row = store.get(entity, id);
-        if (!user || (!sameUser(user.id, row.white) && !sameUser(user.id, row.black))) throw new Error('You are not a player in this game');
         const result = sameUser(user.id, row.white) ? 'black' : 'white';
         store.update(entity, id, { status: 'finished', result, endReason: 'resignation' });
         bumpStats(store, row, result);
@@ -106,11 +109,12 @@ export default {
       },
     },
     'chess.undo': {
+      // Same row-level `own` grant as chess.resign covers "only a player of
+      // this game" here too.
       summary: 'reverse the last move — and, in AI mode, the bot\'s reply with it — restoring the board (and status) to how it was beforehand',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id, user }) => {
+      run: ({ store, entity, id }) => {
         const row = store.get(entity, id);
-        if (!user || (!sameUser(user.id, row.white) && !sameUser(user.id, row.black))) throw new Error('You are not a player in this game');
         const moves = store.list('Move', { where: { game: id }, sort: { field: 'id', dir: 'desc' } });
         if (!moves.length) throw new Error('No moves to undo');
         const popCount = row.mode === 'ai' && sameUser(moves[0].by, row.black) && moves.length >= 2 ? 2 : 1;

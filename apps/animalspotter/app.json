@@ -52,12 +52,17 @@
 
   "schedule": [
     { "name": "detect", "every": "5m",
-      "note": "Ingests one deterministic detection from the trail camera (always a Fox, id 3, for a predictable alert target) with a confidence that bounces between a floor and a ceiling, then checks every active AlertRule for that species and texts it. The match-and-alert step lives here rather than in an `events: Detection.created` hook because `db.createRow` does not fire entity-created events (see NOTES) — only a form-posted create does.",
+      "note": "Ingests one deterministic detection from the trail camera (always a Fox, id 3, for a predictable alert target) with a confidence that bounces between a floor and a ceiling. Matching and texting every active AlertRule now lives in the Detection.created event below, not inlined here — round 5 made db.createRow fire entity-created events from any block, closing the bug this schedule used to work around (see NOTES.md).",
       "do": [ { "block": "db.each", "from": "Camera", "do": [
                  { "block": "db.createRow", "entity": "Detection", "values": { "species": 3, "location": "Trail Cam 1", "confidence": "@each.confidence" } },
                  { "block": "db.adjust", "entity": "Camera", "id": "@each.id", "field": "confidence", "by": "= if(each.confidence >= 95, -15, 6)", "min": 0 }
-               ] },
-               { "block": "db.each", "from": "AlertRule", "where": { "species": 3, "active": 1 }, "do": [
+               ] } ] }
+  ],
+
+  "events": [
+    { "on": "Detection.created",
+      "note": "Round 5: db.createRow now fires this like any other create, so the schedule's own db.createRow reaches it too — the natural design the schedule's own note used to say was unavailable.",
+      "do": [ { "block": "db.each", "from": "AlertRule", "where": { "species": "@row.species", "active": 1 }, "do": [
                  { "block": "sms.send", "connector": "alerts", "to": "@each.phone", "text": "Wildlife alert: Fox detected at Trail Cam 1." }
                ] } ] }
   ],

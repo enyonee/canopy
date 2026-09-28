@@ -25,16 +25,6 @@
   one-for-one (`runtime/check/data.mjs`); there is no way to derive a `money` value from `int`
   arithmetic (multiply/divide two `int` fields) without the checker calling it a mismatch. Cost a
   checker error before `battingAvg` was redeclared as `int` (thousandths) instead of `money`.
-- `composition` — same recorded miss as apps/chess and apps/poker: a global action's
-  `db.createRow` never fires the created entity's `created` event, so "create a game and
-  immediately simulate it" only works because `Game` is created through the *standard* entity form
-  (whose route does fire `Game.created`) — a bespoke "new game" global action would have needed a
-  hand-rolled insert+simulate block instead, same as those two apps' own workarounds.
-- `composition` — no way to give a bare `detail.actions` button its own input fields (only a
-  `states` transition's `fields` can collect input on a button press) — this is *why* adjusting
-  defense strategy and the budget split are ordinary edits of `Team.form` (with the real business
-  rule "neither budget may go negative" living in `/rules`) rather than dedicated actions; simpler
-  in the end, but only because the alternative was not directly available for a plain action.
 - `node kind` — no scheduled/background step (Round-4's `schedule` node exists but was judged the
   wrong fit here — see the note below); a truly "live" simulation would need one.
 
@@ -53,3 +43,16 @@
   kind of ask) and deliberately did not reach for it: this task's simulation is a discrete, finite
   event (one game, computed once) rather than an ongoing accrual a tick should advance — `schedule`
   is used instead, as intended, in apps/strategy's resource ticks.
+- Round 5 lets `db.createRow`/`db.create`/`db.ensure` fire their entity's own `created` event from
+  any block, closing the general "db.createRow never fires created" miss this app used to record
+  alongside apps/chess and apps/poker. No code changed: `Game` was already created through the
+  *standard* `Game.form` (typed `home`/`away`/`innings`, `rules`-checked "a team cannot play
+  itself"), whose route fired `Game.created` before this round too — a bespoke "new game" global
+  action would still trade that validation away for no benefit.
+- Round 5's `actions[].fields` (a typed input form on a bare row-action button, not only on a
+  `states` transition) closes the letter of the "no way to give a `detail.actions` button its own
+  input fields" Miss, but this app's own defense-strategy/budget edits stay on `Team.form`: a
+  dedicated action would need to either duplicate `defenseStrategy` onto both the create form and
+  a new action (two places to keep in sync) or drop it from creation entirely (losing "set a
+  strategy when the team is founded", never asked for by any case) — `Team.form`'s single field
+  list, plus the existing `/rules` budget guard, is still the simpler and equally-typed choice.

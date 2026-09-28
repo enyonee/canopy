@@ -65,6 +65,7 @@
                        { "entity": "Chat", "via": "room", "title": "Chat", "columns": ["authorLabel", "text"], "form": ["text"], "fill": { "authorLabel": "@me.name", "user": "@me" }, "submit": "Send" }
                      ] },
     "Seat.list": { "hidden": true, "filters": [ { "name": "Room", "field": "room" } ] },
+    "Seat.detail": { "private": { "holeCards": "user" } },
     "Hand.list": { "hidden": true, "filters": [ { "name": "Room", "field": "room" } ] },
     "Chat.list": { "hidden": true }
   },

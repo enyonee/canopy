@@ -23,29 +23,21 @@
 
 - `node kind` / `field kind` — no first-class board/matrix or FEN-like type; `fen` is a plain `text`
   field, decoded/encoded entirely by the plugin engine (`apps/chess/engine.mjs`).
-- `block` — a global action has no way to create a row and then act further "on" that new row in
-  the same step list (`db.create`/`db.createRow` expose only `@created`'s id, not a row the
-  following steps run against) — this is why game creation goes through the standard entity form
-  + a `Game.created` event (`chess.setupGame`) instead of a bespoke "new game" action the way
-  apps/game2048 had to hand-roll one block that both inserts and mutates by its own id.
 - `composition` — one field list per entity form (create and edit share `Entity.form.fields`); this
   is why `mode`/`difficulty`/`theme` are the only Game fields ever exposed to a client at all —
   `fen`/`status`/`result`/`white`/`black` are never directly editable by any role (a deliberate,
   stronger choice than apps/game2048's board, which *is* left editable for test setup — chess's
   legality matters enough that every state change goes through `move`/`undo`/`join`/`resign`,
   verified end to end by playing real, engine-legal move sequences in the checks instead).
-- `composition` — no per-row multi-owner permission (a "this row belongs to either of two users"
-  grant); `own` only names one ref field. Turn ownership ("only whoever's colour it is may move")
-  and "only a player of this game may resign/undo" are therefore real logic inside the blocks
-  (`sameUser`), not expressible in `/roles`.
+- `composition` — turn ownership ("only whoever's colour it is may move") is still real logic
+  inside `chess.move` (`sameUser` against whichever of `white`/`black` the FEN's side-to-move
+  names) — `own` grants a fixed per-row relationship, never a value that flips every ply, so this
+  half of the old "no per-row multi-owner permission" Miss stays open. The other half ("only a
+  player of this game may resign/undo/…") is closed — see New for this app.
 - A step's `"from"` key is reserved for an entity name by the generic step checker
   (`runtime/check/steps.mjs`, shared by `db.each`/`random.pick`) — a block with its own "source
   square" parameter has to name it something else (`fromSq` here); recorded since it cost a
   checker error before the rename.
-- A declared widget `prop` is never resolved against the row (`"fen": "@row.fen"` would reach the
-  client as the literal string `"@row.fen"` — `runtime/render.mjs`'s `widgetBlock()` only strips
-  `use` and JSON-stringifies the rest); every per-row value has to travel through `data-row`
-  instead, same as apps/tictactoe's `ttt` widget. Cost a design iteration here (see chess.mjs).
 
 ## New for this app
 
@@ -56,9 +48,28 @@
   stalemate as "no legal moves, in/not in check." Perft-verified against the standard counts.
 - Two players + a seeded "bot" `User` row standing in for the AI opponent, so `white`/`black` stay
   uniform `ref:User` fields whether the opponent is a person or the computer.
-- A block that creates a row from a global action and, in the very next line, mutates that same row
-  by the id it just returned (`db.createRow`'s `@created` isn't a row context — see Misses) —
-  reused from the same pattern in apps/game2048.
+- Round 5's multi-field `own` (`roles.can.player.Game: { "own": ["white", "black"], "can": [...],
+  "all": ["view", "create", "go:join"] }`) closes half of the "no per-row multi-owner permission"
+  Miss: `go:resign`/`do:move`/`do:undo`/`do:setDifficulty`/`do:setTheme` are now scoped, at the
+  role-matrix level, to whichever two users a game's own `white`/`black` name — a third party gets
+  a plain 403 before any block runs. `chess.resign` and `chess.undo` dropped their hand-rolled
+  "you are not a player in this game" guard as a result (the route no longer reaches them for
+  anyone else); `checks.mjs`'s resign case now asserts Bob is refused (403) on all three actions
+  against Alice's game, which — tellingly — includes `setDifficulty`/`setTheme`, two actions that
+  had *no* per-row guard at all before (only `resign`/`undo` ever hand-checked "are you a player");
+  `own` closes a real gap here, not just a cosmetic one. Turn ownership itself is unaffected — see
+  Misses.
+- Round 5 also lets `db.createRow`/`db.create`/`db.ensure` fire their entity's own `created` event
+  from any block, closing the general "db.createRow never fires created" miss this app used to
+  record. Game creation is unchanged: it already went through the standard `Game.form` (a typed,
+  validated create form for `mode`/`difficulty`/`theme`) whose route fired `Game.created` before
+  this round too, so `chess.setupGame` needed no rewrite.
+- Round 5 also lets a widget `prop`'s value be `"@row.field"`, resolved server-side — closing the
+  general "a declared widget prop is never resolved against the row" Miss this app used to record.
+  `chess`'s own widget still declares no props and reads everything off `data-row` instead: the
+  client needs `fen`, `mode`, `difficulty`, `theme`, `status`, `endReason` and `result` all at
+  once, and `data-row` already carries the whole row for free — naming each one as an individual
+  `prop` would duplicate, not simplify, what one `"widget": { "use": "chess" }` already gets it.
 - A real-browser widget check (Round-4 rule for widget apps) folded into the "Theme" ui_instruct
   case: it clicks a real move on the board *and* the theme control in one browser session, so the
   "board stays fully playable after a theme change" half of the expected result is actually

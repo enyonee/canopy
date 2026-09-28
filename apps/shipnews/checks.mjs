@@ -70,7 +70,14 @@ export const checks = [
       const publicAds = rows((await get('/Ad')).html);
       must(publicAds.length === 2, `expected 2 active ads on the public page, got ${publicAds.length}`);
       must(publicAds.some((r) => /Northstar Marine — cargo insurance quotes/.test(r)), 'the newly placed ad is not shown in the public ad space');
-      return 'admin placed an ad; it now shows in the public ad space alongside the seeded one';
+      // Round 5's pages[].sections embeds the same live "active ads" saved
+      // list directly on the homepage — a real "designated ad space on the
+      // website" (case 6), not only a separate /Ad page a visitor must find.
+      const home = await get('/page/home');
+      must(/Sponsored:/.test(home.html), 'the homepage has no ad section');
+      must(/Northstar Marine — cargo insurance quotes/.test(home.html) && /Meridian Shipping Lines — book cargo space today/.test(home.html),
+        `the homepage's ad section does not show the active ads: ${home.html}`);
+      return 'admin placed an ad; it now shows in the public ad space and in the homepage\'s own embedded ad section';
     } },
   colorCheck('oldlace', 'rosybrown'),
 ];

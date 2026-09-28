@@ -2,24 +2,28 @@
 
 ## Weakened cases
 
-- **Case 3 (Contact Us page "includes a form").** The format has no way to embed a create
-  form inside a list page or a static `pages` entry (a list page renders a table plus an
-  "Add" link; the form itself is always a separate `/Entity/new` step — see
-  `runtime/render.mjs` `listView`/`formView`). "Contact Us" is the `ContactMessage` list
-  (office address, phone and email as its intro text) with a prominent link to the real
-  form, checked as: open Contact Us, confirm the office details, follow the link, confirm
-  the form fields. One extra hop versus the literal wording, not a missing feature.
-- Cases 1, 2, 4 checked as specified.
+- Cases 1, 2, 3, 4 checked as specified (case 3's old "one extra hop" workaround is gone —
+  see New for this app).
 
 ## Misses
 
-- `composition` — no way to render dynamic entity rows (e.g. a `TeamMember` catalogue)
-  inside a static `pages` body; About Us names the team in prose instead, since the case
-  only checks content accuracy, not an interactive team directory.
+_None left specific to this app — both Misses/Weakened-case workarounds it used to record are
+closed, see New for this app._
 
 ## New for this app
 
-- The simplest content-only shape in this batch: two entities (a read-only catalogue, a
-  create-only message log), no roles, no states, no connectors — everything else is two
-  `pages` entries with cross-links (`links`) doing the "basic pages + simple navigation"
-  the task asks for.
+- Round 5's `pages[].sections` closes two things this app used to work around:
+  - `{ "form": "ContactMessage" }` on a new static `contact` page embeds the *real* create
+    form directly (posting to the normal `POST /ContactMessage` route) — Contact Us is now
+    genuinely "a page that includes a form", not a list page with a prominent link one hop
+    away. The old `ContactMessage.list` (office details as intro text) is now a hidden
+    "Past messages" log, still the `after` target once a message is sent.
+  - `{ "list": "team" }` on the About Us page embeds a real `TeamMember` catalogue (name,
+    role, bio) — closing the "no way to render dynamic entity rows inside a static page"
+    Miss this app used to record; the team is now data (browsable, in principle editable),
+    not prose naming three people.
+- The simplest content-only shape in this batch: three entities (two read-only catalogues, a
+  create-only message log), no roles, no states, no connectors — everything else is three
+  `pages` entries with cross-links (`links`) and embedded `sections` doing the "basic pages +
+  simple navigation" the task asks for, now with two of those pages carrying real data/forms
+  instead of only prose.

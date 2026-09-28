@@ -19,20 +19,28 @@
 
 ## Misses
 
-- `block` — no block updates an arbitrary already-found row. `db.ensure` exposes `@found`, and
-  `db.adjust` accepts an explicit `entity`+`id`, but `db.update` only ever writes the current
-  action/transition row. A "clock in creates-or-reopens today's row, then stamps a field on it"
-  flow (the obvious modelling of attendance) needs `db.update` to take the same `entity`+`id`
-  override `db.adjust` already has; without it, clock-in had to become "always create a fresh
-  session" instead of "resume today's".
-- `function` — the core expression algebra has arithmetic only over `number`/`money`, and no
-  time-difference function (`days()` is calendar-day only, dateless of time-of-day). "Hours
-  worked" from two `time` timestamps needed an app-local plugin function (`hoursBetween`,
-  `plugins/attendance-calc.mjs`), reusing the `money` kind as a two-decimal number carrier since
-  a derived field can only be `int`/`money`/`bool`/`text`/`date`/`time`.
-- `composition` — a form's field set and a create button can't vary by role, so the admin also
-  gets a "Clock in" button on `/Attendance` (harmless — nothing stops an admin from clocking a
-  shift — but it wasn't the intent).
+- `block` — round 5 added `db.set` (an update on an arbitrary found/each/referenced row, the same
+  `entity`+`id` override `db.adjust` already had) — but retrofitting "clock in creates-or-reopens
+  today's row" here would be a speculative redesign, not a clear win: no case asks for "clock in
+  twice in one day" to merge into one row rather than open a second session, and the current
+  "always create a fresh session" design already supports the realistic case a resume-flow would
+  complicate (a lunch-break out-and-back, two genuinely separate sessions on the same date). Left
+  as-is; `db.set` has no obvious retrofit site in this app, same conclusion apps/coaching reached.
+- `function` — round 5 added `hours()`/`minutes()` to the core expression algebra, but they
+  infer kind `number` (see `runtime/functions.mjs`'s `needTimes`) — and a derived field can only be
+  `int`/`money`/`bool`/`text`/`date`/`time`, never bare `number` (`runtime/check/data.mjs` would
+  reject it, suggesting `int` instead). `hoursWorked` genuinely needs its existing two-decimal,
+  summable-as-money precision (`checks.mjs` asserts `7.75`/`8.00`/`23.75` exactly, including a
+  dashboard `sum` over it) — `int := round(hours(clockOut, clockIn), 0)` would truncate every one
+  of those to whole hours, a real precision loss, not a simplification. Nothing in the core
+  algebra turns a plain `number` result into a `money` one without an existing `money`-kind value
+  to multiply/divide it by (the trick `apps/stockreports`' `changePct` uses) — `Attendance` has no
+  such field to piggyback on. The app-local `hoursBetween` plugin function (`money`-kind, two
+  decimals) stays; it is still solving a real gap `hours()` does not.
+- `composition` — a form's field set and a create button still can't vary by role (`byRole`
+  replaces a *form's* field list per role, not a list's create-button visibility), so the admin
+  still also gets a "Clock in" button on `/Attendance` (harmless — nothing stops an admin from
+  clocking a shift — but it wasn't the intent).
 
 ## New for this app
 

@@ -85,22 +85,25 @@ const DIRECTIONS = ['up', 'down', 'left', 'right'];
 
 export default {
   blocks: {
-    // A global action's own step, not a "created" event (db.create/db.createRow
-    // steps never fire Entity.created — only the standard form-create route
-    // does): insert a blank row, then use its own freshly-minted id as the PRNG
-    // seed to place its first two tiles, all inside one block so the row is
-    // never visible half-initialized.
-    'game2048.newGame': {
-      summary: 'create a fresh Game row with two random initial tiles (2 or 4), seeded by its own id',
+    // Round 5 closed the miss this used to work around: db.createRow now
+    // fires the created entity's own event from any block, not only the
+    // HTTP form route. "newGame" is therefore a plain global action doing a
+    // declared `db.createRow` (see app.json), and this block is that row's
+    // `Game.created` handler — the current row *is* the freshly-minted game
+    // (same "the current row is the new row" pattern apps/cleaning uses for
+    // its booking reference), so it can seed the first two tiles with a
+    // plain `db.update`-shaped write instead of one hand-written function
+    // doing the insert itself.
+    'game2048.seedTiles': {
+      summary: 'place the two starting tiles (2 or 4) on a freshly created Game, seeded by its own id',
       effects: ['db.write'], requires: [],
-      run: ({ store }) => {
-        const id = store.insert('Game', { board: formatBoard(new Array(SIZE * SIZE).fill(0)), score: 0, status: 'playing', won: 0, draws: 0 });
+      run: ({ store, entity, id }) => {
         let board = new Array(SIZE * SIZE).fill(0);
         let draw = 0;
         ({ board, draw } = spawnTile(board, id, draw));
         ({ board, draw } = spawnTile(board, id, draw));
-        store.update('Game', id, { board: formatBoard(board), draws: draw });
-        return { id };
+        store.update(entity, id, { board: formatBoard(board), draws: draw });
+        return {};
       },
     },
     'game2048.move': {

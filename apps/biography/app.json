@@ -1,7 +1,7 @@
 {
   "app": "biography",
   "task": "webgen-bench/000074",
-  "note": "A biography site: the homepage is the Person entity itself (name, birthdate, summary), Life Experiences are a dated timeline, Achievements and Honors are a dated, categorised list; each holds its own text search since the format has no cross-entity search node. No login: one subject's biography, open to browse and edit as data.",
+  "note": "A biography site: the homepage is the Person entity itself (name, birthdate, summary), Life Experiences are a dated timeline, Achievements and Honors are a dated, categorised list; each still has its own text search box, plus a unified /search?q= (round 5's top-level search node) across both from one box in the page header. No login: one subject's biography, open to browse and edit as data.",
   "theme": { "background": "snow", "accent": "dimgray" },
   "home": "/Person",
 
@@ -31,6 +31,8 @@
         "description": "Her most cited paper, on critical currents in superconducting alloys." }
     ]
   },
+
+  "search": { "entities": ["LifeExperience", "Achievement"], "title": "Search" },
 
   "views": "auto",
   "override": {

@@ -2,13 +2,6 @@
 
 ## Weakened cases
 
-- **Case 5 (check status by a booking reference).** `reference` is a plain `text` field set
-  by a `Booking.created` event (`{"set": {"reference": "@row.id"}}`); an expression cannot
-  reach the row's own id to prefix it (`concat('BK-', row.id)` is rejected by the checker:
-  `id` is not a declared field an expression may read, only `@row.id` as a literal
-  substitution is). So the "reference" is the booking's id as text, not a distinct code —
-  functionally a reference lookup (a genuine stored, searchable field), just not
-  cosmetically different from the id.
 - **No login anywhere in this app** (open site, see `apps/leads` precedent and
   `runtime/auth.mjs` — permission checks no-op without a `roles` block): the status lookup is
   a public search box, not scoped to "my bookings"; anyone who guesses or is given a
@@ -18,12 +11,19 @@
 
 ## Misses
 
-- `composition` — an expression cannot read a row's own `id` (only declared `data` fields);
-  a human-friendly prefixed reference code (`BK-<id>`) is therefore not derivable purely in
-  the graph without a plugin.
+_None left specific to this app — the one Miss it used to record (see New for this app) is
+closed._
 
 ## New for this app
 
+- Round 5: expressions can now read the current row's own `id` (read-only) — closing the "a
+  human-friendly prefixed reference code is not derivable purely in the graph" Miss. The
+  `Booking.created` event now sets `reference` to `"= concat('BK-', id)"` instead of copying the
+  bare id (`"@row.id"`), so a booking's reference is a real "BK-123"-style code end to end: shown
+  on the confirmation page, and looked up by that exact string on the status list's `search`
+  (`reference` stays a stored field — not a derived `:=` one — since `Entity.list.search` only
+  matches stored fields; the new expression capability upgrades what gets *written* into it, not
+  its kind).
 - Two named `lists` over the *same* entity (`book`, `status`) with different `columns`,
   `search` and `create` — one nav destination for creating bookings, a separate one for a
   reference lookup, while the entity's own default `Booking.list` is hidden from nav.

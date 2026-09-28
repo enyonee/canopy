@@ -44,7 +44,7 @@
                        "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view", "edit", "delete"] },
     "Report.form":   { "title": "Generate a stock report", "submit": "Generate report",
                        "fields": ["stock", "format", "includeTrends", "includeFinancials"],
-                       "confirm": "Report generated", "after": "/Report/{id}" },
+                       "confirm": "Report generated for {row.stock.name} ({row.stock.symbol})", "after": "/Report/{id}" },
     "Report.detail": { "fields": ["stock", "format", "includeTrends", "includeFinancials", "createdAt", "content"],
                        "labels": { "includeTrends": ["Not included", "Included"], "includeFinancials": ["Not included", "Included"] } }
   },

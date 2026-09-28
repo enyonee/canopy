@@ -37,7 +37,9 @@
     "register": "player", "anonymous": "guest",
     "can": {
       "admin": "*",
-      "player": { "Game": ["view", "create", "go:join", "go:resign", "do:move", "do:undo", "do:setDifficulty", "do:setTheme"],
+      "player": { "Game": { "own": ["white", "black"],
+                            "can": ["view", "create", "go:join", "go:resign", "do:move", "do:undo", "do:setDifficulty", "do:setTheme"],
+                            "all": ["view", "create", "go:join"] },
                   "Move": ["view"], "User": ["view"] },
       "guest":  { "Game": ["view"], "Move": ["view"], "User": ["view"] }
     }

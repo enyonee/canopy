@@ -121,10 +121,23 @@ export const checks = [
 
   { task: 'Clicking "Resign" ends the game and shows the resignation and final state',
     run: async ({ base, must }) => {
-      const alice = makeClient(base);
+      const alice = makeClient(base); const bob = makeClient(base);
       await alice.login('alice@chess.test', 'alice123');
+      await bob.login('bob@chess.test', 'bob12345');
       const game = await newGame(alice, { mode: 'ai' });
       const id = game.row.id;
+      // Round 5's multi-field `own` (roles.can.player.Game) now scopes
+      // go:resign/do:move/do:undo/do:setDifficulty/do:setTheme to this
+      // game's own two players at the row level, closing the "no per-row
+      // multi-owner permission" Miss — Bob is neither white nor black in
+      // Alice's solo AI game, so the server itself (not a hand-rolled
+      // "are you a player" check) must refuse him on every one of them.
+      const bobResign = await bob.post(`/Game/${id}/go/resign`, {}, { json: true });
+      must(bobResign.status === 403, `a non-player could resign someone else's game: ${bobResign.status}`);
+      const bobUndo = await bob.post(`/Game/${id}/action/undo`, {}, { json: true });
+      must(bobUndo.status === 403, `a non-player could undo in someone else's game: ${bobUndo.status}`);
+      const bobDifficulty = await bob.post(`/Game/${id}/action/setDifficulty`, { difficulty: 'hard' }, { json: true });
+      must(bobDifficulty.status === 403, `a non-player could change someone else's game difficulty: ${bobDifficulty.status}`);
       const resigned = await alice.post(`/Game/${id}/go/resign`, {}, { json: true });
       must(resigned.status === 200 && resigned.body.ok, `resign failed: ${JSON.stringify(resigned.body)}`);
       must(/resign/i.test(resigned.body.flash), `no resignation acknowledgment: "${resigned.body.flash}"`);
@@ -134,7 +147,7 @@ export const checks = [
       must(/finished/i.test(detail.html) && /resignation/i.test(detail.html), 'the final game state is not shown on the detail page');
       const again = await alice.post(`/Game/${id}/go/resign`, {}, { json: true });
       must(again.status === 409, `resigning twice was not refused: ${again.status}`);
-      return `Game #${id}: white resigned, black awarded the win by resignation, shown on the detail page; a second resign is refused (409)`;
+      return `Game #${id}: a non-player (Bob) is refused resign/undo/setDifficulty (403); white resigned, black awarded the win by resignation, shown on the detail page; a second resign is refused (409)`;
     } },
 
   { task: 'Changing the board theme updates its appearance immediately while the board stays fully playable',

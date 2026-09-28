@@ -21,7 +21,20 @@ export const checks = [
       must(rows(none.html).length === 0, 'an irrelevant search still returns products');
       const articles = await get('/NewsArticle?q=staffing');
       must(rows(articles.html).length === 1 && /Contract staffing overtakes full-time hiring/.test(articles.html), 'article search does not find the staffing article');
-      return 'Solutions search narrows to InvoiceFlow; News search narrows to the staffing article';
+      // Round 5's top-level `search` node closes the "no unified/cross-entity
+      // search index" Miss: one query, one page, one section per entity.
+      const unified = await get('/search?q=staffing');
+      must(unified.status === 200, `unified search returned ${unified.status}`);
+      for (const heading of ['Software Solutions', 'Industry News', 'Customer Stories'])
+        must(new RegExp(`<h3>${heading}</h3>`).test(unified.html), `unified /search is missing a "${heading}" section: ${unified.html}`);
+      must(/<h3>Software Solutions<\/h3>(?:(?!<h3>)[\s\S])*HireDesk Staffing/.test(unified.html), 'unified search misses the matching solution');
+      must(/<h3>Industry News<\/h3>(?:(?!<h3>)[\s\S])*Contract staffing overtakes full-time hiring/.test(unified.html), 'unified search misses the matching article');
+      // A different query proves the Customer Stories section is a real,
+      // independently-matching search, not just an always-empty section.
+      const unified2 = await get('/search?q=HireDesk');
+      must(/<h3>Customer Stories<\/h3>(?:(?!<h3>)[\s\S])*Northgate Clinic Group/.test(unified2.html), 'unified search misses the matching customer story');
+      must(/name="q"/.test((await get('/page/home')).html), 'no search box is offered in the page header');
+      return 'Solutions search narrows to InvoiceFlow; News search narrows to the staffing article; unified /search finds matches across all three catalogues from one box';
     } },
   { task: 'Submitting the contact form succeeds and the message is sent to the site owner',
     run: async ({ follow, must, flashOf }) => {

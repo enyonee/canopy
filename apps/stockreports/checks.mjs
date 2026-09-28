@@ -33,6 +33,11 @@ export const checks = [
     run: async ({ follow, get, idOf, must }) => {
       const stockId = idOf((await get('/Stock')).html, 'Apple Inc.');
       const trendsDetail = await follow('/Report', { stock: stockId, format: 'summary', includeTrends: 1 });
+      // Round 5: Entity.form.confirm now interpolates {row.*} (including a
+      // one-hop reference), same as an action's/transition's confirm always
+      // could — the create flash names the actual stock, not a static string.
+      must(/class="flash">Report generated for Apple Inc\. \(AAPL\)</.test(trendsDetail.html),
+        `the create flash does not name the report's own stock: ${trendsDetail.html.match(/class="flash">[^<]*/)}`);
       must(/trend: Up \(1\.23%\)/.test(trendsDetail.html), 'the trends-only report is missing the trend section');
       must(!/net income/.test(trendsDetail.html), 'the trends-only report leaked financial data');
       const finDetail = await follow('/Report', { stock: stockId, format: 'summary', includeFinancials: 1 });

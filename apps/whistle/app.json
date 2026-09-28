@@ -24,6 +24,13 @@
                   { "title": "Health inspectors uncover unsafe conditions", "body": "An anonymous tip led inspectors to a factory with serious safety violations.", "summary": "A tip led to a factory safety investigation.", "publishedAt": "2026-09-15" } ]
   },
 
+  "search": { "entities": ["Report", "Thread", "Article"], "title": "Search" },
+
+  "lists": [
+    { "id": "latestReports", "entity": "Report", "title": "Latest reports", "hidden": true,
+      "sort": { "field": "createdAt", "dir": "desc" }, "columns": ["title", "createdAt"] }
+  ],
+
   "views": "auto",
   "override": {
     "Report.list":    { "title": "Anonymous Reporting", "intro": "Submit what you know. Nothing you type here is linked to you.",
@@ -55,6 +62,7 @@
                 "Reporting asks for no name, no email and no account; nothing you submit there is ever tied to you." ],
       "links": [ { "label": "Anonymous Reporting", "href": "/Report/new" },
                  { "label": "Forum", "href": "/Thread" },
-                 { "label": "News & Blog", "href": "/Article" } ] }
+                 { "label": "News & Blog", "href": "/Article" } ],
+      "sections": [ { "text": "Latest reports:" }, { "list": "latestReports", "limit": 3 } ] }
   ]
 }

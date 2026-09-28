@@ -27,7 +27,11 @@ export const checks = [
   { task: 'Check the ability for band members to provide a profile picture link.',
     run: async ({ asGuest, upload, get, idOf, must, flashOf }) => {
       asGuest();
-      const r = await upload('/User', { name: 'Paper Moon Trio', email: 'papermoon@bands.test', password: 'paper123', bio: 'Jazz trio.', contact: 'papermoon@bands.test' },
+      // Registers through /register (roles.register fixes role "band"), not
+      // the generic /User/new — that route is reserved for advertiser
+      // sign-up (see "Assess the registration form..." below), now that
+      // User.form.fill forces role "advertiser" there.
+      const r = await upload('/register', { name: 'Paper Moon Trio', email: 'papermoon@bands.test', password: 'paper123', bio: 'Jazz trio.', contact: 'papermoon@bands.test' },
         { field: 'photo', name: 'band.jpg', content: 'fake-jpeg-bytes-for-band-photo' });
       must(r.status === 303, `band signup with a photo failed: ${r.status}: ${r.html.slice(0, 200)}`);
       const list = await get('/list/bands');
@@ -55,26 +59,34 @@ export const checks = [
       return `band #${id} profile shows its YouTube video link`;
     } },
   { task: 'Assess the registration form functionality for advertisers.',
-    run: async ({ asGuest, get, follow, must, flashOf }) => {
+    run: async ({ asGuest, get, post, must, flashOf }) => {
       asGuest();
       const form = await get('/User/new');
-      must(/name="name"/.test(form.html) && /name="email"/.test(form.html), 'advertiser signup form is missing name or email');
-      const r = await follow('/User', { name: 'BrightAd Media', email: 'brightad@bands.test', password: 'bright123' });
-      must(r.status === 200, `advertiser registration did not complete: ${r.status}`);
+      must(/name="name"/.test(form.html) && /name="email"/.test(form.html) && !/name="role"/.test(form.html),
+        'advertiser signup form is missing name or email, or lets the visitor pick a role');
+      const posted = await post('/User', { name: 'BrightAd Media', email: 'brightad@bands.test', password: 'bright123' });
+      // User.form.fill forces role "advertiser" on this route, regardless of
+      // what (if anything) a client sends for it — closing a real gap: this
+      // route used to leave every /User/new signup on the field's plain
+      // default ("band"), so an "advertiser" never actually got that role.
+      must(posted.status === 303, `advertiser registration did not complete: ${posted.status}: ${posted.html.slice(0, 200)}`);
+      const r = await get(posted.location);
       must(!/error|invalid/i.test(flashOf(r.html) || ''), `advertiser registration produced an error: ${flashOf(r.html)}`);
-      return 'advertiser registered via the sign-up form, no error';
+      return 'advertiser registered via the sign-up form, no error, no way to self-assign a role';
     } },
   { task: 'Evaluate login functionality for advertisers.',
-    run: async ({ asGuest, login, get, follow, must } ) => {
+    run: async ({ asGuest, login, get, post, must } ) => {
       asGuest();
       const ok = await login('brightad@bands.test', 'bright123');
       must(ok.status === 303, `valid advertiser credentials were rejected: ${ok.status}`);
-      const placed = await follow('/Ad', { title: 'Summer concert series — tickets now open', linkUrl: 'https://brightad.test/summer' });
-      must(placed.status === 200, `advertiser could not reach their dashboard after placing an ad: ${placed.status}`);
+      const placed = await post('/Ad', { title: 'Summer concert series — tickets now open', linkUrl: 'https://brightad.test/summer' });
+      must(placed.status === 303, `advertiser could not place an ad (role must actually be "advertiser"): ${placed.status}: ${placed.html.slice(0, 200)}`);
+      const ads = await get('/Ad');
+      must(/Summer concert series/.test(ads.html), 'the placed ad is not shown in the public ad list');
       asGuest();
       const bad = await login('brightad@bands.test', 'wrong-password');
       must(bad.status === 401 && /invalid|incorrect|wrong/i.test(bad.html), 'wrong advertiser password should show an error message');
-      return 'advertiser signs in, places an ad, and a bad password is rejected with an error';
+      return 'advertiser signs in, genuinely places an ad (role "advertiser" grants do:create on Ad), and a bad password is rejected with an error';
     } },
   colorCheck('floralwhite', 'darkgoldenrod'),
 ];

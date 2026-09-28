@@ -90,18 +90,49 @@ export const checks = [
 
   { task: 'A round of Texas Hold\'em can be played: hole cards, community cards, betting info and action buttons all work',
     run: async ({ base, must }) => {
-      const alice = makeClient(base); const bob = makeClient(base);
+      const alice = makeClient(base); const bob = makeClient(base); const admin = makeClient(base); const guest = makeClient(base);
       await alice.login('alice@poker.test', 'alice123');
       await bob.login('bob@poker.test', 'bob12345');
+      await admin.login('admin@poker.test', 'admin123');
       const created = await alice.post('/Room', { name: 'Heads Up', maxSeats: '2' }, { json: true });
       const id = created.body.id;
       await bob.post(`/Room/${id}/action/join`, {}, { json: true });
       const started = await alice.post(`/Room/${id}/action/startHand`, {}, { json: true });
       must(started.status === 200 && started.body.row.status === 'playing' && started.body.row.handNumber === 1, `hand did not start: ${JSON.stringify(started.body)}`);
       const handId = started.body.row.currentHand;
-      let seats = await seatsOf(alice, id);
+      // Verified against an admin fetch (Entity.detail.private exempts admins,
+      // same as everywhere else the feature applies) — the two players' own
+      // fetches are checked for redaction just below instead of for the deal.
+      let seats = await seatsOf(admin, id);
       const predicted = predictDeal(id, 1, 2);
       must(seats.every((s, i) => s.holeCards === predicted.holes[i].join(',')), `dealt hole cards do not match the seeded shuffle: ${JSON.stringify(seats.map((s) => s.holeCards))} vs ${JSON.stringify(predicted.holes)}`);
+      const aliceSeat = seats.find((s) => s.label === 'Alice'), bobSeat = seats.find((s) => s.label === 'Bob');
+
+      // Round-5 `Entity.detail.private` (holeCards -> Seat.user): a seat's
+      // hole cards must reach only that seat's own signed-in player (plus
+      // admin, checked above) — never another player, never a guest, in
+      // either the JSON API the widget itself calls or the plain HTML detail
+      // page — closing the "no per-viewer redaction" Miss (see NOTES.md).
+      const aliceView = await seatsOf(alice, id);
+      must(aliceView.find((s) => s.label === 'Alice').holeCards === aliceSeat.holeCards, "Alice cannot see her own hole cards via JSON");
+      must(aliceView.find((s) => s.label === 'Bob').holeCards === null, `Alice can see Bob's hole cards via JSON: ${JSON.stringify(aliceView)}`);
+      const bobView = await seatsOf(bob, id);
+      must(bobView.find((s) => s.label === 'Bob').holeCards === bobSeat.holeCards, "Bob cannot see his own hole cards via JSON");
+      must(bobView.find((s) => s.label === 'Alice').holeCards === null, `Bob can see Alice's hole cards via JSON: ${JSON.stringify(bobView)}`);
+      const guestView = await seatsOf(guest, id);
+      must(guestView.every((s) => s.holeCards === null), `a signed-out guest can see hole cards via JSON: ${JSON.stringify(guestView)}`);
+      // The full "Rs,Rs" pair (not just one card) is the needle: a lone card
+      // code like "Th" is a common English substring ("The…"), the comma-
+      // joined pair is not, so a false match here would be a real leak.
+      const bobLooksAtAlice = await bob.get(`/Seat/${aliceSeat.id}`);
+      must(bobLooksAtAlice.status === 200 && !bobLooksAtAlice.html.includes(aliceSeat.holeCards) && /Hidden/.test(bobLooksAtAlice.html),
+        `Bob can read Alice's hole cards off her Seat detail page: ${bobLooksAtAlice.html}`);
+      const guestLooksAtAlice = await guest.get(`/Seat/${aliceSeat.id}`);
+      must(guestLooksAtAlice.status === 200 && !guestLooksAtAlice.html.includes(aliceSeat.holeCards) && /Hidden/.test(guestLooksAtAlice.html),
+        `a signed-out guest can read Alice's hole cards off her Seat detail page: ${guestLooksAtAlice.html}`);
+      const aliceLooksAtSelf = await alice.get(`/Seat/${aliceSeat.id}`);
+      must(aliceLooksAtSelf.html.includes(aliceSeat.holeCards), `Alice cannot read her own hole cards off her own Seat detail page: ${aliceLooksAtSelf.html}`);
+
       let hand = await handOf(alice, handId);
       must(hand.stage === 'preflop' && hand.pot === 30 && hand.currentBet === 20, `preflop betting info is wrong: ${JSON.stringify(hand)}`);
       // Heads-up: dealer(=position0, Alice) is the small blind and acts first preflop.
@@ -127,7 +158,7 @@ export const checks = [
       await actAsToAct('check'); await actAsToAct('check');
       hand = await handOf(alice, handId);
       must(hand.stage === 'done', `hand did not reach showdown: ${JSON.stringify(hand)}`);
-      seats = await seatsOf(alice, id);
+      seats = await seatsOf(admin, id); // admin bypasses the per-seat redaction to verify the showdown independently
       const community = hand.community.split(',');
       const results = seats.map((s) => ({ label: s.label, ...bestHand([...s.holeCards.split(','), ...community]) }));
       results.sort((a, b) => { for (let i = 0; i < 9; i++) { const d = (b.score[i] ?? -1) - (a.score[i] ?? -1); if (d) return d; } return 0; });

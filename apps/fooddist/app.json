@@ -69,8 +69,10 @@
 
   "states": {
     "Application": { "field": "status", "transitions": [
-      { "name": "approve", "from": ["submitted"], "to": "approved", "title": "Approve" },
-      { "name": "deliver", "from": ["approved"], "to": "delivered", "title": "Mark delivered" },
+      { "name": "approve", "from": ["submitted"], "to": "approved", "title": "Approve",
+        "do": [ { "block": "db.set", "entity": "Donation", "id": "@row.donation", "set": { "status": "claimed" } } ] },
+      { "name": "deliver", "from": ["approved"], "to": "delivered", "title": "Mark delivered",
+        "do": [ { "block": "db.set", "entity": "Donation", "id": "@row.donation", "set": { "status": "distributed" } } ] },
       { "name": "reject", "from": ["submitted", "approved"], "to": "rejected", "title": "Reject" }
     ] }
   },

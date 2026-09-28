@@ -1,42 +1,58 @@
 {
   "app": "clinic",
   "task": "webgen-bench/000015",
-  "note": "Clinical office brochure site: Home, About Us and Services are static pages plus a seeded Service catalogue; Contact Us is the ContactMessage entity's list (office details as intro text) with its generic create form reached one click away.",
+  "note": "Clinical office brochure site: Home, About Us, Services and Contact Us are static pages; About Us embeds a real TeamMember catalogue and Contact Us embeds the real ContactMessage create form directly (round 5's pages[].sections), so both are genuine data/forms on an otherwise-static page, not prose or an extra hop away.",
   "theme": { "background": "lightcyan", "accent": "cadetblue" },
   "home": "/page/home",
 
   "data": {
     "Service":        { "name": "text!", "description": "longtext!" },
-    "ContactMessage": { "name": "text!", "email": "text!", "phone": "text", "message": "longtext!", "submittedAt": "time=now" }
+    "ContactMessage": { "name": "text!", "email": "text!", "phone": "text", "message": "longtext!", "submittedAt": "time=now" },
+    "TeamMember":     { "name": "text!", "role": "text!", "bio": "longtext" }
   },
 
   "seed": {
     "Service": [ { "name": "General consultation", "description": "A same-week appointment with one of our physicians for any new or ongoing concern." },
                  { "name": "Preventive check-ups", "description": "Annual physicals, vaccinations and screening panels tailored to your age and history." },
                  { "name": "Chronic care management", "description": "Ongoing monitoring and medication management for diabetes, hypertension and asthma." },
-                 { "name": "Minor procedures", "description": "In-office treatment of minor injuries, skin lesions and vaccinations, no hospital visit needed." } ]
+                 { "name": "Minor procedures", "description": "In-office treatment of minor injuries, skin lesions and vaccinations, no hospital visit needed." } ],
+    "TeamMember": [ { "name": "Dr. Amina Farouk", "role": "Family medicine, clinic director", "bio": "Leads the clinic's day-to-day care and its family medicine practice." },
+                    { "name": "Dr. Ben Ostrander", "role": "Internal medicine", "bio": "Focuses on chronic care management for adult patients." },
+                    { "name": "Carla Nunes", "role": "Nurse Practitioner", "bio": "Runs same-week consultations and preventive check-ups alongside the physicians." } ]
   },
 
   "views": "auto",
   "override": {
     "Service.list":        { "title": "Services", "intro": "Every service our office provides, so you know what to expect before you book.",
                              "columns": ["name", "description"], "create": false, "rowActions": ["view"] },
-    "ContactMessage.list": { "title": "Contact Us", "intro": "Riverside Family Clinic, 48 Maple avenue, Springfield. Phone: +1 555 0130 - Email: office@riversideclinic.test - Mon-Fri 8:00-18:00.",
+    "ContactMessage.list": { "title": "Past messages", "hidden": true,
                              "columns": ["name", "email", "submittedAt"], "createTitle": "Send us a message", "rowActions": ["view"] },
     "ContactMessage.form": { "title": "Send us a message", "intro": "Fill in your name, email, phone and message and our front desk will get back to you.",
                              "fields": ["name", "email", "phone", "message"], "submit": "Send message",
-                             "confirm": "Thank you - we received your message and will respond soon." }
+                             "confirm": "Thank you - we received your message and will respond soon." },
+    "TeamMember.list":     { "title": "Our Team", "hidden": true, "create": false, "columns": ["name", "role", "bio"] }
   },
+
+  "lists": [
+    { "id": "team", "entity": "TeamMember", "title": "Our Team", "hidden": true, "create": false,
+      "columns": ["name", "role", "bio"] }
+  ],
 
   "pages": [
     { "id": "home", "title": "Home", "heading": "Riverside Family Clinic",
       "body": [ "A community clinical office offering general consultations, preventive care and chronic disease management for the whole family.",
                 "Use the menu to read about our office, browse our services, or contact us." ],
-      "links": [ { "label": "About Us", "href": "/page/about" }, { "label": "Services", "href": "/Service" }, { "label": "Contact Us", "href": "/ContactMessage" } ] },
+      "links": [ { "label": "About Us", "href": "/page/about" }, { "label": "Services", "href": "/Service" }, { "label": "Contact Us", "href": "/page/contact" } ] },
     { "id": "about", "title": "About Us", "heading": "About Riverside Family Clinic",
       "body": [ "History: Riverside Family Clinic opened in 2009 to bring same-week primary care to the Riverside neighbourhood; we now see over four thousand patients a year.",
                 "Mission: we believe every patient deserves an unhurried appointment, a clear explanation, and a plan they can actually follow.",
-                "Our team: Dr. Amina Farouk (family medicine, clinic director), Dr. Ben Ostrander (internal medicine), and Nurse Practitioner Carla Nunes lead a staff of eight." ],
-      "links": [ { "label": "Services", "href": "/Service" }, { "label": "Contact Us", "href": "/ContactMessage" } ] }
+                "Our team (part of a staff of eight):" ],
+      "sections": [ { "list": "team" } ],
+      "links": [ { "label": "Services", "href": "/Service" }, { "label": "Contact Us", "href": "/page/contact" } ] },
+    { "id": "contact", "title": "Contact Us", "heading": "Contact Us",
+      "body": [ "Riverside Family Clinic, 48 Maple avenue, Springfield. Phone: +1 555 0130 - Email: office@riversideclinic.test - Mon-Fri 8:00-18:00.",
+                "Fill in your name, email, phone and message and our front desk will get back to you." ],
+      "sections": [ { "form": "ContactMessage" } ],
+      "links": [ { "label": "About Us", "href": "/page/about" }, { "label": "Services", "href": "/Service" } ] }
   ]
 }

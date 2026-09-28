@@ -95,9 +95,19 @@ export const changes = [
         must(rowWith(apps.html, 'ben@food.test'), "Ben's application from the base run is gone");
         const r = await follow(`/Application/${applicationId}/go/approve`, {});
         must(/status">Approved/.test(r.html), 'the coordinator could not approve');
+        // Round 5's db.set (an update on an arbitrary row named by entity+id,
+        // not only the current one) closes the "no step updates a referenced
+        // row" Miss: approving an application now marks its own donation
+        // claimed automatically, instead of that staying a fully manual edit.
+        must(/<th>Status<\/th><td>claimed<\/td>/.test((await get('/Donation/1')).html),
+          'approving an application did not mark its donation claimed');
         const edited = await post('/Donation/1', { food: 'Apples', donor: 'Green Farm', kind: 'produce', quantity: 35, unit: 'kg', expires: '2026-09-30', location: 'North depot', status: 'available' });
         must(edited.status === 303, `the coordinator could not edit a donation: ${edited.status}`);
         must(/<td>35<\/td>/.test(rowWith((await get('/Donation')).html, 'Apples')), 'the edited quantity is not shown');
+        const delivered = await follow(`/Application/${applicationId}/go/deliver`, {});
+        must(/status">Delivered/.test(delivered.html), 'the coordinator could not mark the application delivered');
+        must(/<th>Status<\/th><td>distributed<\/td>/.test((await get('/Donation/1')).html),
+          'marking the application delivered did not mark its donation distributed');
         must((await post('/Donation/1/delete', {})).status === 403, 'the coordinator deleted a donation');
         must((await get('/User')).status === 403, 'the coordinator listed the users');
         must((await get('/dashboard/overview')).status === 403, 'the coordinator opened the dashboard');

@@ -25,18 +25,13 @@
   shared by create and edit, so hiding `board`/`score`/`won`/`draws` from the create screen (to
   avoid asking a new player to type a raw board) would also remove the edit-route lever the two
   checks above rely on. Traded the other way: the real "New Game" UX never renders that form at
-  all — `pages[].actions: ["newGame"]` posts a global action that inserts and seeds the row in one
-  step and redirects straight to `/Game/{created}` — so a player only meets the raw fields if they
-  navigate to `/Game/new` by hand.
+  all — `pages[].actions: ["newGame"]` posts a global action that inserts the row (its
+  `Game.created` event seeds the two starting tiles — round 5, see New for this app) and redirects
+  straight to `/Game/{created}` — so a player only meets the raw fields if they navigate to
+  `/Game/new` by hand.
 
 ## Misses
 
-- `block` — no primitive expresses "insert then compute a value from the row's own new id inside
-  one step list" declaratively; `game2048.newGame` is one hand-written block doing both
-  (`store.insert` then `store.update`) because the format's `db.createRow`/`db.create` steps do
-  not fire `Entity.created` events (only the standard form-create route, and a related-add, do —
-  see runtime/routes/entity.mjs vs runtime/interp.mjs), so an event-based init would silently never
-  run for a row created from inside a global action.
 - `composition` — no per-view field list (create vs. edit) on `Entity.form`; see the case-1 note
   above.
 - `node kind` — no native "shuffle/array" field kind; the board lives in a plain `text` field as
@@ -46,8 +41,16 @@
 
 - A widget (`game2048`) with on-screen direction buttons *and* arrow-key handling, following
   apps/tictactoe's client contract (`mountWidgets`, `api.post`, re-render from the JSON answer).
-- A block that both creates a row and mutates it by its own freshly-minted id in the same `run`
-  (`game2048.newGame`), the workaround for "created" events not firing on `db.createRow`.
+- Round 5 lets `db.createRow` fire the created entity's own event from *any* block, not just the
+  HTTP form route — closing the "insert then compute from the row's own new id" Miss this app used
+  to record. `newGame` is now a plain global action (`db.createRow` on `Game`, declared literal
+  defaults) plus a `Game.created` event (`game2048.seedTiles`) that places the two starting tiles —
+  the current row in that event *is* the freshly-minted game (same "the current row is the new
+  row" shape apps/cleaning's booking-reference event uses), so the one hand-written
+  insert-and-mutate block is gone in favour of the same create-then-event idiom apps/chess and
+  apps/poker already used for their own setup. (The PRNG placement math itself still has to be a
+  plugin block either way — no expression can seed a random draw — so this is a graph-shape win,
+  not a "no more plugin code" one.)
 - An `Entity.updated` event driving a "recompute derived status from stored data" block
   (`game2048.sync`), used both after every real move and after a direct test-setup edit.
 - id-seeded deterministic PRNG (`mulberry32` keyed by `id`, advanced by a persisted `draws`

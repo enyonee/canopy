@@ -31,12 +31,14 @@
 
   "actions": [
     { "name": "newGame", "after": "/Game/{created}", "confirm": "New game started!",
-      "do": [ { "block": "game2048.newGame" } ] },
+      "do": [ { "block": "db.createRow", "entity": "Game",
+                "values": { "board": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", "score": 0, "status": "playing", "won": false, "draws": 0 } } ] },
     { "name": "move", "in": "Game", "after": "/Game/{id}",
       "do": [ { "block": "game2048.move", "direction": "= values.direction" } ] }
   ],
 
   "events": [
+    { "on": "Game.created", "do": [ { "block": "game2048.seedTiles" } ] },
     { "on": "Game.updated", "do": [ { "block": "game2048.sync" } ] }
   ],
 

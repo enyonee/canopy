@@ -12,7 +12,7 @@
   },
 
   "events": [
-    { "on": "Booking.created", "do": [ { "block": "db.update", "set": { "reference": "@row.id" } } ] }
+    { "on": "Booking.created", "do": [ { "block": "db.update", "set": { "reference": "= concat('BK-', id)" } } ] }
   ],
 
   "seed": {

@@ -1,7 +1,7 @@
 {
   "app": "softsol",
   "task": "webgen-bench/000019",
-  "note": "Software solutions + staffing brochure site for SMBs: a Solutions catalogue (software products and staffing services), Industry News with author/date, Customer Stories, and a Contact form. Search is per-catalogue (Solutions, Industry News each have their own search box) - the format has no cross-entity search node.",
+  "note": "Software solutions + staffing brochure site for SMBs: a Solutions catalogue (software products and staffing services), Industry News with author/date, Customer Stories, and a Contact form. Each catalogue still has its own per-list search box, plus a unified /search?q= (round 5's top-level search node) across all three from one box in the page header.",
   "theme": { "background": "mistyrose", "accent": "firebrick" },
   "home": "/page/home",
 
@@ -34,6 +34,8 @@
                           "body": "Northgate Clinic Group needed four developers for a six-month electronic health records migration. HireDesk placed the full team within twelve days, and every contractor rolled off cleanly at project end with no severance obligations." } ]
   },
 
+  "search": { "entities": ["Solution", "NewsArticle", "CustomerStory"], "title": "Search" },
+
   "views": "auto",
   "override": {
     "Solution.list":       { "title": "Software Solutions", "intro": "Software and staffing services built for small and medium-sized businesses.",
@@ -43,7 +45,8 @@
                              "columns": ["publishedAt", "title", "author", "summary"], "search": ["title", "summary", "body"],
                              "sort": { "field": "publishedAt", "dir": "desc" }, "create": false, "rowActions": ["view"] },
     "CustomerStory.list":  { "title": "Customer Stories", "intro": "Real results from real clients.",
-                             "columns": ["client", "title", "summary"], "create": false, "rowActions": ["view"] },
+                             "columns": ["client", "title", "summary"], "search": ["client", "title", "summary", "body"],
+                             "create": false, "rowActions": ["view"] },
     "ContactMessage.list": { "title": "Contact", "intro": "Questions about a solution or a staffing need? Send us a message and we will follow up within one business day.",
                              "columns": ["name", "email", "submittedAt"], "createTitle": "Send a message", "rowActions": ["view"] },
     "ContactMessage.form": { "title": "Contact us", "fields": ["name", "email", "message"], "submit": "Send message",

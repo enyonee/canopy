@@ -14,7 +14,13 @@ export const checks = [
       const after = rows(submitted.html);
       must(after.length === before + 1, `expected one more report, had ${before} now ${after.length}`);
       must(!/Unsafe chemical dumping downtown[\s\S]*?(author|@|email)/i.test(submitted.html), 'the new report row should carry no author identity');
-      return `report submitted with no identity fields; confirmation shown; list grew ${before} → ${after.length}`;
+      // Round 5's pages[].sections embeds a live saved-list preview inside the
+      // otherwise-static homepage — closing the "a static page cannot embed
+      // a live query result (e.g. showing the 3 latest reports)" Miss.
+      const home = await get('/page/home');
+      must(/Latest reports/.test(home.html) && /Unsafe chemical dumping downtown/.test(home.html),
+        `the homepage does not show the just-submitted report in its "latest reports" section: ${home.html}`);
+      return `report submitted with no identity fields; confirmation shown; list grew ${before} → ${after.length}; homepage's latest-reports section shows it`;
     } },
   { task: 'Verify that the discussion forum is accessible and functional.',
     run: async ({ asGuest, get, follow, rows, rowWith, idOf, must, flashOf }) => {
@@ -39,7 +45,19 @@ export const checks = [
       must(newsHits.every((r) => /whistleblower/i.test(r)), 'news search returned an unrelated article');
       const reportHits = rows((await get('/Report?q=dumping')).html);
       must(reportHits.length >= 1, 'report search for "dumping" found nothing');
-      return `search matched ${forumHits.length} forum thread(s), ${newsHits.length} article(s), ${reportHits.length} report(s)`;
+      // Round 5's top-level `search` node closes the "no unified cross-entity
+      // search" Miss: one query, one page, one section per declared entity
+      // (each still matched against that entity's own list's own "search"
+      // fields and its own list's own title, e.g. Article.list's "News &
+      // Blog"), plus a search box in the page header on every page.
+      const unified = await get('/search?q=whistleblower');
+      must(unified.status === 200, `unified search returned ${unified.status}`);
+      for (const heading of ['Anonymous Reporting', 'Forum', 'News &amp; Blog'])
+        must(new RegExp(`<h3>${heading}</h3>`).test(unified.html), `unified /search is missing a "${heading}" section: ${unified.html}`);
+      must(/<h3>News &amp; Blog<\/h3>(?:(?!<h3>)[\s\S])*New protections for whistleblowers announced/.test(unified.html),
+        'the unified search does not actually find the matching article under its own section');
+      must(/name="q"/.test((await get('/')).html), 'no search box is offered in the page header');
+      return `search matched ${forumHits.length} forum thread(s), ${newsHits.length} article(s), ${reportHits.length} report(s); unified /search?q= returns one section per entity, header search box present`;
     } },
   { task: 'Validate the presence and proper functioning of the news and blog section.',
     run: async ({ asGuest, get, rows, rowWith, idOf, must }) => {
