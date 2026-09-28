@@ -168,9 +168,45 @@ failing test in `tests/arch.test.mjs`, part of `npm test`.
 - **A product UI.** The derived screens are a scaffold, not a designed interface. Widgets cover
   interactive cores (boards, canvases, editors); bespoke layouts are out of scope.
 - **Conditional permissions per row by parent status** (e.g. "order lines are frozen once the
-  order is placed"), background delivery (the outbox flushes within the request), real SMTP or
+  order is placed"), background delivery (the outbox flushes within the request; see the roadmap), real SMTP or
   SMS gateways (the outbox records messages; HTTP is really sent).
 - **Isolation for plugin code.** Plugins are trusted modules. The closed part is the graph.
+
+## Roadmap
+
+**Runtime performance** (in progress). Measured on 500 customers / 2000 orders / 10 000 items:
+a list with derived aggregates takes ~1.6 s and a dashboard ~3.6 s. That time goes to SQLite
+full scans and one aggregate query per row, not to JavaScript. The fixes: indexes derived from
+the graph, derived fields computed only for the visible page, batched child aggregates, and a
+prepared-statement cache. A query-count gate in the test suite will keep a list page at O(1)
+queries. Every number is measured before and after, and the JSON answers must stay
+byte-identical.
+
+**PostgreSQL as a second storage driver.** SQLite stays the default for development, tests and
+single-instance apps. Postgres is for deployments that need several instances, many concurrent
+writers, replication or online backups. Graphs never contain SQL, so apps do not change. Plan:
+1. an async driver interface over the current SQLite store, with everything still green (the
+   store, step interpreter, blocks and plugins are synchronous today; this is the main cost);
+2. a Postgres driver as an optional dependency, loaded only when configured (dialect: month
+   bucketing, `LIKE … ESCAPE`, identity columns, stable ordering of ties);
+3. the full acceptance suite (699 checks) run against both drivers in CI, one schema per app;
+4. the same benchmark before and after, plus a load test.
+
+It has to come after the performance round. With one query per row, every round trip to a
+database server would multiply the current latency instead of removing it.
+
+**Horizontal scaling.** Today one app is one Node process with one SQLite file. A single
+process on one core sustains ~1.8k reads/s and ~1.7k writes/s at 50 concurrent clients
+(p99 ≈ 70 ms). The single SQLite writer is not the limit yet; the one process is. Next steps:
+- **several instances of one app behind a load balancer** on the Postgres driver. Sessions
+  already live in the database rather than in memory, so any instance can serve any request;
+- **outbox delivery by workers**: claim rows with `FOR UPDATE SKIP LOCKED`, keep delivering
+  after the request returns, retry with backoff, deliver once across instances;
+- **schedules with one leader** (an advisory lock), so a timer fires once per cluster;
+- **files in object storage** (S3-compatible) instead of the app directory;
+- **many apps per process** for dense hosting. Each process costs ~75 MB of Node baseline, and
+  an extra app in a shared process would cost a few MB;
+- a load test with 1, 2 and 4 instances as the acceptance number for this item.
 
 ## The original plan, and what is not done yet
 
