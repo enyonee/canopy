@@ -208,6 +208,31 @@ test('two different aggregates over the same (child, via) pair get independent c
   assert.equal(row.total, 1000); // money is minor units: 10 * (1 * 1) major units = 1000 cents
 });
 
+test('batched hydration across more than one chunk (HYDRATE_CHUNK) still matches the per-row path exactly', () => {
+  const store = new Store(GRAPH, ':memory:');
+  const ids = seedRandom(store, 650, 5); // > 500 parents: crosses store/hydrate.mjs's chunk boundary
+  const batched = store.list('Parent', {}); // store.list orders id DESC (query.mjs's orderBy default)
+  const perRow = [...ids].reverse().map((id) => store.get('Parent', id));
+  assert.deepEqual(batched, perRow);
+});
+
+// Item 2's memory fix is a structural claim (each aggregate cache — and the
+// raw child rows it may hold — covers one chunk of parents, not the whole
+// page), which no value comparison above can see: correctness is identical
+// either way, by design. Proved directly instead, by recording how many
+// parent ids buildAggCache is ever asked to cover in one call.
+test('a big page is hydrated in bounded chunks, not built as one cache covering every row', () => {
+  const store = new Store(GRAPH, ':memory:');
+  seedRandom(store, 1200, 2); // well past HYDRATE_CHUNK (500), so at least 3 chunks
+  const sizes = [];
+  const orig = store.buildAggCache;
+  store.buildAggCache = function counted(entity, ids, ...rest) { if (entity === 'Parent') sizes.push(ids.length); return orig.call(this, entity, ids, ...rest); };
+  try { store.list('Parent', {}); } finally { store.buildAggCache = orig; }
+  assert.ok(sizes.length >= 3, `expected at least 3 chunks for 1200 rows, got ${sizes.length}: ${sizes}`);
+  assert.ok(sizes.every((n) => n <= 500), `a chunk exceeded 500 parents: ${sizes}`);
+  assert.equal(sizes.reduce((a, b) => a + b, 0), 1200);
+});
+
 // Direct unit tests of the compiler's accept/reject boundary (runtime/store/aggsql.mjs's
 // compileAgg) — precise, not statistical: every documented "falls back" case
 // (division, a fractional literal, date/time, a text comparison, a correlated

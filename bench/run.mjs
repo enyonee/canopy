@@ -1,30 +1,17 @@
 #!/usr/bin/env node
-// `npm run bench` — informational, not gating (tests/perf.test.mjs is the
-// gate; this prints wall-clock numbers for round 7's before/after in
-// TESTS.md). Boots the bench graph (Customer/Order/Item, docs/ARCHITECTURE.md's
-// layering unchanged), bulk-inserts 500 customers / 2000 orders / 10000 items
-// directly through the store (one transaction — this script measures the HTTP
-// path, not insert speed), then times real HTTP requests against the running
-// server: boot ms, RSS before/after loading, and p50/p95 of /Order, /Customer,
-// a detail page and a create.
+// `npm run bench` — informational, not gating (tests/perf.test.mjs and
+// tests/aggsql.test.mjs are the gates; this prints wall-clock and RSS
+// numbers). Three scenarios, each its own Store/server so one does not warm
+// the next: (1) round 7's original latency table (Customer/Order/Item,
+// 500/2000/10000); (2) round 8 item 1's own case — a single wide Order (many
+// Items) and a single Customer with many Orders — GET /Order/<id> before vs
+// after SQL-compiled aggregates; (3) round 8 item 2 — RSS after /dashboard
+// and /Order.csv at three sizes, before and after a forced GC (needs
+// `--expose-gc`, which the "bench" npm script already passes).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { serve } from '../runtime/server.mjs';
-
-const CUSTOMERS = 500, ORDERS_PER_CUSTOMER = 4, ITEMS_PER_ORDER = 5; // 2000 orders, 10000 items
-
-function seed(store) {
-  store.transaction(() => {
-    for (let c = 1; c <= CUSTOMERS; c++) {
-      const cid = store.insert('Customer', { name: `Customer ${c}` });
-      for (let o = 0; o < ORDERS_PER_CUSTOMER; o++) {
-        const oid = store.insert('Order', { customer: cid, status: o % 3 === 0 ? 'paid' : 'new' });
-        for (let i = 0; i < ITEMS_PER_ORDER; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + (i % 3), price: (5 + i * 2.5).toFixed(2) });
-      }
-    }
-  });
-}
 
 function percentile(sorted, p) {
   if (!sorted.length) return NaN;
@@ -44,49 +31,144 @@ async function timeRequests(url, options, n) {
   return { p50: percentile(ms, 50), p95: percentile(ms, 95) };
 }
 
-async function main() {
+const rssMB = () => Math.round(process.memoryUsage().rss / 1024 / 1024);
+
+// Several scenarios each start their own server in the same process — a
+// random port (wide range, and never reused: `used` below) avoids the
+// EADDRINUSE a narrow fixed range risked once bench grew past one server.
+const usedPorts = new Set();
+function freshPort() {
+  let port;
+  do { port = 8000 + Math.floor(Math.random() * 40_000); } while (usedPorts.has(port));
+  usedPorts.add(port);
+  return port;
+}
+
+async function withServer(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'canopy-bench-'));
   const graphFile = path.join(dir, 'app.json');
   fs.copyFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'app.json'), graphFile);
   const dbFile = path.join(dir, 'data.sqlite');
-  const port = 8000 + Math.floor(Math.random() * 1000);
-
-  const rssBoot = () => Math.round(process.memoryUsage().rss / 1024 / 1024);
+  const port = freshPort();
   const bootStart = performance.now();
   const app = serve({ graphFile, dbFile, traceFile: undefined, port, noTimers: true });
   const bootMs = performance.now() - bootStart;
-  const rssEmpty = rssBoot();
+  try { await fn(app, `http://127.0.0.1:${port}`, bootMs); }
+  finally { await new Promise((resolve) => app.server.close(resolve)); fs.rmSync(dir, { recursive: true, force: true }); }
+}
 
-  seed(app.store);
-  const rssLoaded = rssBoot();
+// --- scenario 1: round 7's original latency table ---------------------------
+const CUSTOMERS = 500, ORDERS_PER_CUSTOMER = 4, ITEMS_PER_ORDER = 5; // 2000 orders, 10000 items
 
-  const base = `http://127.0.0.1:${port}`;
-  const orderIds = app.store.listRaw('Order', {}).map((r) => r.id);
-  const detailUrl = `${base}/Order/${orderIds[Math.floor(orderIds.length / 2)]}`;
-  const customerIds = app.store.listRaw('Customer', {}).map((r) => r.id);
+function seedMain(store) {
+  store.transaction(() => {
+    for (let c = 1; c <= CUSTOMERS; c++) {
+      const cid = store.insert('Customer', { name: `Customer ${c}` });
+      for (let o = 0; o < ORDERS_PER_CUSTOMER; o++) {
+        const oid = store.insert('Order', { customer: cid, status: o % 3 === 0 ? 'paid' : 'new' });
+        for (let i = 0; i < ITEMS_PER_ORDER; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + (i % 3), price: (5 + i * 2.5).toFixed(2) });
+      }
+    }
+  });
+}
 
-  const N = 30;
-  const results = {};
-  results['/Order'] = await timeRequests(`${base}/Order`, {}, N);
-  results['/Order?sort=total'] = await timeRequests(`${base}/Order?sort=total`, {}, N);
-  results['/Order?status=paid'] = await timeRequests(`${base}/Order?status=paid`, {}, N);
-  results['/Order.csv'] = await timeRequests(`${base}/Order.csv`, {}, N);
-  results['/Customer'] = await timeRequests(`${base}/Customer`, {}, N);
-  results['/dashboard/sales'] = await timeRequests(`${base}/dashboard/sales`, {}, N);
-  results['detail'] = await timeRequests(detailUrl, {}, N);
-  results['create'] = await timeRequests(`${base}/Order`, {
-    method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: `customer=${customerIds[0]}&status=new`,
-  }, N);
+async function benchMain() {
+  await withServer(async (app, base, bootMs) => {
+    const rssEmpty = rssMB();
+    seedMain(app.store);
+    const rssLoaded = rssMB();
+    const orderIds = app.store.listRaw('Order', {}).map((r) => r.id);
+    const detailUrl = `${base}/Order/${orderIds[Math.floor(orderIds.length / 2)]}`;
+    const customerIds = app.store.listRaw('Customer', {}).map((r) => r.id);
+    const N = 30;
+    const results = {};
+    results['/Order'] = await timeRequests(`${base}/Order`, {}, N);
+    results['/Order?sort=total'] = await timeRequests(`${base}/Order?sort=total`, {}, N);
+    results['/Order?status=paid'] = await timeRequests(`${base}/Order?status=paid`, {}, N);
+    results['/Order.csv'] = await timeRequests(`${base}/Order.csv`, {}, N);
+    results['/Customer'] = await timeRequests(`${base}/Customer`, {}, N);
+    results['/dashboard/sales'] = await timeRequests(`${base}/dashboard/sales`, {}, N);
+    results['detail'] = await timeRequests(detailUrl, {}, N);
+    results['create'] = await timeRequests(`${base}/Order`, {
+      method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: `customer=${customerIds[0]}&status=new`,
+    }, N);
 
-  console.log(`boot: ${bootMs.toFixed(1)} ms`);
-  console.log(`RSS: ${rssEmpty} MB empty / ${rssLoaded} MB loaded (${CUSTOMERS} customers, ${CUSTOMERS * ORDERS_PER_CUSTOMER} orders, ${CUSTOMERS * ORDERS_PER_CUSTOMER * ITEMS_PER_ORDER} items)`);
+    console.log('=== scenario 1: latency table (round 7) ===');
+    console.log(`boot: ${bootMs.toFixed(1)} ms`);
+    console.log(`RSS: ${rssEmpty} MB empty / ${rssLoaded} MB loaded (${CUSTOMERS} customers, ${CUSTOMERS * ORDERS_PER_CUSTOMER} orders, ${CUSTOMERS * ORDERS_PER_CUSTOMER * ITEMS_PER_ORDER} items)`);
+    console.log('');
+    console.log('route                p50 (ms)   p95 (ms)');
+    for (const [route, { p50, p95 }] of Object.entries(results)) console.log(`${route.padEnd(20)}  ${p50.toFixed(1).padStart(8)}   ${p95.toFixed(1).padStart(8)}`);
+    console.log('');
+  });
+}
+
+// --- scenario 2: R8 item 1's own case — a wide Order, a wide Customer -------
+async function benchWide() {
+  await withServer(async (app, base) => {
+    const store = app.store;
+    let wideOrder;
+    store.transaction(() => {
+      const c = store.insert('Customer', { name: 'Solo' });
+      wideOrder = store.insert('Order', { customer: c, status: 'new' });
+      for (let i = 0; i < 20_000; i++) store.insert('Item', { order: wideOrder, title: `Item ${i}`, qty: 1 + (i % 5), price: (1 + (i % 997) * 0.13).toFixed(2) });
+    });
+    let wideCustomer;
+    store.transaction(() => {
+      wideCustomer = store.insert('Customer', { name: 'BigSpender' });
+      for (let o = 0; o < 5000; o++) {
+        const oid = store.insert('Order', { customer: wideCustomer, status: o % 2 ? 'paid' : 'new' });
+        for (let i = 0; i < 2; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + i, price: 10 + i });
+      }
+    });
+
+    const N = 30;
+    const orderResult = await timeRequests(`${base}/Order/${wideOrder}`, {}, N);
+    const custResult = await timeRequests(`${base}/Customer/${wideCustomer}`, {}, N);
+    console.log("=== scenario 2: R8 item 1 — GET /Order/<one order, 20 000 items> and /Customer/<one customer, 5000 orders> ===");
+    console.log(`GET /Order/<wide>     p50 ${orderResult.p50.toFixed(1)} ms   p95 ${orderResult.p95.toFixed(1)} ms`);
+    console.log(`GET /Customer/<wide>  p50 ${custResult.p50.toFixed(1)} ms   p95 ${custResult.p95.toFixed(1)} ms`);
+    console.log('');
+  });
+}
+
+// --- scenario 3: R8 item 2 — RSS after heavy requests, before/after GC -----
+function seedFlat(store, orders) {
+  store.transaction(() => {
+    const c = store.insert('Customer', { name: 'Heavy' });
+    for (let o = 0; o < orders; o++) {
+      const oid = store.insert('Order', { customer: c, status: o % 2 ? 'paid' : 'new' });
+      for (let i = 0; i < 5; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + (i % 3), price: (5 + i * 2.5).toFixed(2) });
+    }
+  });
+}
+
+async function benchMemoryAt(orders) {
+  await withServer(async (app, base) => {
+    seedFlat(app.store, orders);
+    if (global.gc) global.gc();
+    const rssBefore = rssMB();
+    await fetch(`${base}/dashboard/sales`).then((r) => r.arrayBuffer());
+    await fetch(`${base}/Order.csv`).then((r) => r.arrayBuffer());
+    const rssAfterNoGC = rssMB();
+    if (global.gc) global.gc();
+    const rssAfterGC = rssMB();
+    console.log(`${String(orders).padStart(6)} orders (${orders * 5} items)   before ${String(rssBefore).padStart(4)} MB   after ${String(rssAfterNoGC).padStart(4)} MB   after GC ${global.gc ? String(rssAfterGC).padStart(4) + ' MB' : '(run with --expose-gc)'}`);
+  });
+}
+
+async function benchMemory() {
+  console.log('=== scenario 3: R8 item 2 — RSS after /dashboard/sales + /Order.csv, before/after a forced GC ===');
+  if (!global.gc) console.log('(node was not started with --expose-gc — the "after GC" column will be blank; "npm run bench" already passes it)');
+  for (const orders of [2000, 8000, 40_000]) await benchMemoryAt(orders);
   console.log('');
-  console.log('route                p50 (ms)   p95 (ms)');
-  for (const [route, { p50, p95 }] of Object.entries(results)) console.log(`${route.padEnd(20)}  ${p50.toFixed(1).padStart(8)}   ${p95.toFixed(1).padStart(8)}`);
+}
 
-  app.server.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+async function main() {
+  await benchMain();
+  await benchWide();
+  await benchMemory();
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
