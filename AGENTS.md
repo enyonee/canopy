@@ -23,7 +23,8 @@ When a task says "the app", it means an app under `apps/<name>/`. "The runtime" 
 | `runtime/` | checker, store, interpreter, renderer, routes | runtime changes only, under the gates below |
 | `runtime/check/` | one checker module per top-level node kind | with every format change |
 | `runtime/routes/`, `runtime/render/` | HTTP routes and screens | |
-| `runtime/store.mjs`, `runtime/store/` | SQLite: schema, queries, rules, outbox, sessions | the only code that talks to the database |
+| `runtime/store.mjs`, `runtime/store/` | schema, queries, rules, outbox, sessions | the only code that asks the database anything, and only through `this.drv` |
+| `runtime/driver.mjs`, `runtime/driver/` | the storage `Driver` (SQLite today) | the only code that names the engine: `node:sqlite`, `PRAGMA`, `sqlite_master`, `.prepare(` |
 | `docs/FORMAT.md` | the format reference; what an app-writing model reads | with every format change |
 | `apps/<name>/` | `app.json`, `checks.mjs`, `NOTES.md`, optional `plugins/`, `*.client.mjs` | per app |
 | `tasks/` | WebGen-Bench task definitions | never |
