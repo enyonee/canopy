@@ -7,7 +7,9 @@
 // Items) and a single Customer with many Orders — GET /Order/<id> before vs
 // after SQL-compiled aggregates; (3) round 8 item 2 — RSS after /dashboard
 // and /Order.csv at three sizes, before and after a forced GC (needs
-// `--expose-gc`, which the "bench" npm script already passes).
+// `--expose-gc`, which the "bench" npm script already passes); (4) round 9 items 1-3 —
+// aggregates over derived fields, derived aggregates and dates on a customer with
+// 5000 orders (bench/app2.json).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,10 +46,10 @@ function freshPort() {
   return port;
 }
 
-async function withServer(fn) {
+async function withServer(fn, graph = 'app.json') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'canopy-bench-'));
   const graphFile = path.join(dir, 'app.json');
-  fs.copyFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'app.json'), graphFile);
+  fs.copyFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), graph), graphFile);
   const dbFile = path.join(dir, 'data.sqlite');
   const port = freshPort();
   const bootStart = performance.now();
@@ -165,10 +167,46 @@ async function benchMemory() {
   console.log('');
 }
 
+// --- scenario 4: R9 items 1-3 — derived fields and dates inside an aggregate body ---
+// One customer with 5000 orders (2 items each) plus 200 small customers. Every
+// Customer aggregate has a body the round-8 compiler could not push down: a derived
+// aggregate (total), a derived scalar (line), a derived value in a condition, a date
+// comparison, a max over a date, and `today`.
+async function benchDerived() {
+  await withServer(async (app, base) => {
+    const store = app.store;
+    let wide;
+    store.transaction(() => {
+      wide = store.insert('Customer', { name: 'BigSpender' });
+      for (let o = 0; o < 5000; o++) {
+        const oid = store.insert('Order', { customer: wide, status: o % 2 ? 'paid' : 'new', placed: `2025-${String(1 + (o % 12)).padStart(2, '0')}-15` });
+        for (let i = 0; i < 2; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + i, price: 10 + i, shipped: `2026-0${1 + (o % 9)}-01` });
+      }
+      for (let c = 0; c < 200; c++) {
+        const cid = store.insert('Customer', { name: `Small ${c}` });
+        for (let o = 0; o < 10; o++) {
+          const oid = store.insert('Order', { customer: cid, status: 'new', placed: `2026-0${1 + (o % 9)}-10` });
+          store.insert('Item', { order: oid, title: 'x', qty: 2, price: (5 + o).toFixed(2), shipped: '2026-03-01' });
+        }
+      }
+    });
+    const N = 20;
+    const rows = [];
+    for (const [label, url] of [['GET /Customer/<wide, 5000 orders>', `${base}/Customer/${wide}`], ['GET /Customer (201 rows)', `${base}/Customer`], ['GET /Customer.csv', `${base}/Customer.csv`], ['GET /Order (page)', `${base}/Order`]]) {
+      const r = await timeRequests(url, {}, N);
+      rows.push(`${label.padEnd(34)} p50 ${r.p50.toFixed(1).padStart(7)} ms   p95 ${r.p95.toFixed(1).padStart(7)} ms`);
+    }
+    console.log('=== scenario 4: R9 items 1-3 — derived fields and dates inside aggregate bodies ===');
+    for (const r of rows) console.log(r);
+    console.log('');
+  }, 'app2.json');
+}
+
 async function main() {
   await benchMain();
   await benchWide();
   await benchMemory();
+  await benchDerived();
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
