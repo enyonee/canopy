@@ -21,12 +21,6 @@
 
 ## Misses
 
-- `composition` — `own` must be a direct `ref:User` field, but the score expression needs a
-  direct reference to the *profile* (to read its criteria fields, one hop only). Neither role's
-  natural key (their profile) can serve both jobs, so `Match` carries two ref pairs per side
-  (`studentUser`/`student`, `providerUser`/`provider`) — an owner column purely for permission
-  scoping, denormalized alongside the display/scoring column. The same doubling recurs on
-  `Application` (`provider` for display, `providerUser` for the provider's own-scoping).
 - `block` — no conditional step, so a `StudentProfile.created`/`Provider.created` event can't
   special-case by role; this is why profile creation is its own entity/route per role rather than
   something a single `User.created` event could populate (a provider's account creation would
@@ -49,3 +43,10 @@
   in the graph.
 - A plugin `function` whose arguments are all plain fields (no plugin `field` kind or `block`
   needed) — the smallest way to add one comparison the algebra can't express.
+- Round 5: `own` may now be a one-hop path, closing the "owner column purely for permission
+  scoping, denormalized alongside the display/scoring column" Miss above. `Match.student`/
+  `Match.provider` (needed for the score expression's one-hop reads) are now *also* the own
+  paths: `student.user` / `provider.user`, not a second `studentUser`/`providerUser` field
+  duplicating what the display column already names. `Application` drops its `providerUser`
+  the same way (`provider.user`); `student` there was already a direct `ref:User`, unaffected.
+  Two real fields instead of four, one meaning each.
