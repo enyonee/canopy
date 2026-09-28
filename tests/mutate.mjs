@@ -374,8 +374,8 @@ const MUTATIONS = [
     find: "  if (later.length || sortField?.derive) {",
     replace: "  if (false) {" },
   { name: "round 7: hydrating a page never uses the batch cache — back to one query per row per aggregate (moved to store/hydrate.mjs in R8)", file: 'runtime/store/hydrate.mjs',
-    find: "export function hydratePage(entity, rows) {\n  if (!rows.length) return [];\n  const cache = this.buildAggCache(entity, rows.map((r) => r.id));\n  return rows.map((r) => this.hydrate(entity, r, cache));\n}",
-    replace: "export function hydratePage(entity, rows) { return rows.map((r) => this.hydrate(entity, r)); }" },
+    find: "function hydratePageChunk(entity, rows) {\n  const cache = this.buildAggCache(entity, rows.map((r) => r.id));\n  return rows.map((r) => this.hydrate(entity, r, cache));\n}",
+    replace: "function hydratePageChunk(entity, rows) { return rows.map((r) => this.hydrate(entity, r)); }" },
   { name: 'round 7: the prepared-statement cache never actually reuses a statement (recompiles every call)', file: 'runtime/store.mjs',
     find: "  prepare(sql) {\n    const hit = this.stmts.get(sql);\n    if (hit) { this.stmts.delete(sql); this.stmts.set(sql, hit); return hit; }\n    const st = this.db.prepare(sql);\n    this.stmts.set(sql, st);\n    if (this.stmts.size > 200) this.stmts.delete(this.stmts.keys().next().value);\n    return st;\n  }",
     replace: "  prepare(sql) { return this.db.prepare(sql); }" },
@@ -412,6 +412,9 @@ const MUTATIONS = [
   { name: 'R8 item 1: a single-row (uncached) compilable aggregate silently returns undefined instead of running its own query', file: 'runtime/store/hydrate.mjs',
     find: '  const hit = batch?.get(String(row.id));\n  return hit !== undefined ? hit : runAggOne(this, compiled, row.id);',
     replace: '  return batch?.get(String(row.id));' },
+  { name: 'R8 item 2: hydratePage no longer chunks a big page, so a full CSV export holds every batched child in memory for the whole request again', file: 'runtime/store/hydrate.mjs',
+    find: '  if (rows.length <= HYDRATE_CHUNK) return hydratePageChunk.call(this, entity, rows);\n  const out = [];\n  for (let i = 0; i < rows.length; i += HYDRATE_CHUNK) out.push(...hydratePageChunk.call(this, entity, rows.slice(i, i + HYDRATE_CHUNK)));\n  return out;',
+    replace: '  return hydratePageChunk.call(this, entity, rows);' },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

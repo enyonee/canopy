@@ -82,12 +82,31 @@ export function aggValue(entity, row, node, cache) {
   return hit !== undefined ? hit : runAggOne(this, compiled, row.id);
 }
 
+// How many parents' worth of aggregate cache to build and hydrate at once.
+// Item 2's memory fix: a page of thousands of rows (a full CSV export, an
+// in-memory dashboard aggregate) no longer holds every batched child of
+// every one of them for the whole request — only one chunk's worth, which
+// buildAggCache's own cache (and every raw child row it fetched) is free to
+// be garbage-collected the moment hydratePageChunk returns. Most aggregates
+// compile to SQL now (buildAggCache above) and never fetch a child row at
+// all; this chunking is for what is left — a correlated or nested aggregate
+// still batched the old way.
+const HYDRATE_CHUNK = 500;
+
+function hydratePageChunk(entity, rows) {
+  const cache = this.buildAggCache(entity, rows.map((r) => r.id));
+  return rows.map((r) => this.hydrate(entity, r, cache));
+}
+
 // Hydrates a whole page of rows of the same entity in a bounded number of
 // queries instead of one per row per aggregate derived field: one query per
 // distinct (child, via) pair reached from `entity`, at every depth, however
-// many rows are on the page.
+// many rows are on the page — chunked (above) so memory stays bounded by the
+// chunk, not by the page.
 export function hydratePage(entity, rows) {
   if (!rows.length) return [];
-  const cache = this.buildAggCache(entity, rows.map((r) => r.id));
-  return rows.map((r) => this.hydrate(entity, r, cache));
+  if (rows.length <= HYDRATE_CHUNK) return hydratePageChunk.call(this, entity, rows);
+  const out = [];
+  for (let i = 0; i < rows.length; i += HYDRATE_CHUNK) out.push(...hydratePageChunk.call(this, entity, rows.slice(i, i + HYDRATE_CHUNK)));
+  return out;
 }
