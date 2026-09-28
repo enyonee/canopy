@@ -44,14 +44,14 @@ function parseBody(req, filesDir) {
 const safeNext = (to) => (typeof to === 'string' && /^\/(?![/\\])[^\s\x00-\x1f]*$/.test(to) ? to : '/');
 
 // ?sort=&dir=&page= on any list, and its CSV export — split out only to keep
-// createContext() under the function-size budget.
+// createContext() under the function-size budget. `paged` hydrates only the
+// rows it is about to show (store.listPage — item 2, "page before hydrate"),
+// not the whole matching set: it takes the entity and the same query options
+// listRaw/list would, never an already-fetched row array.
 function createListHelpers(url, store, sendCsv, vc) {
-  const paged = (rows, ov) => {
-    const size = ov.pageSize || 50;
+  const paged = (entity, opts, ov) => {
     const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
-    const pages = Math.max(1, Math.ceil(rows.length / size));
-    const at = Math.min(page, pages);
-    return { rows: rows.slice((at - 1) * size, at * size), total: rows.length, page: at, pages };
+    return store.listPage(entity, opts, { page, pageSize: ov.pageSize || 50 });
   };
   const sortOf = (entity, ov) => {
     const field = url.searchParams.get('sort');

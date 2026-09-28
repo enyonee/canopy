@@ -119,10 +119,10 @@ function list(ctx) {
   const where = { ...resolveTop(l.where || {}), ...ownWhere(l.entity) };
   const view = { ...(graph.override?.[`${l.entity}.list`] || {}), ...l, create: l.create ?? false };
   const sort = sortOf(l.entity, view);
-  const all = store.list(l.entity, { where, sort, search: l.search || [], q: url.searchParams.get('q') || '' });
+  const opts = { where, sort, search: l.search || [], q: url.searchParams.get('q') || '' };
   const cols = view.columns || store.fields[l.entity].filter((f) => !f.type.secret).map((f) => f.name);
-  if (wantsCsv) { exportRows(l.id, l.entity, all, cols, view.labels || {}); return true; }
-  const pg = paged(all, view);
+  if (wantsCsv) { exportRows(l.id, l.entity, store.list(l.entity, opts), cols, view.labels || {}); return true; }
+  const pg = paged(l.entity, opts, view);
   if (ctx.wantsJSON) { ctx.sendJson(200, { rows: pg.rows.map((r) => rowJSON(store, l.entity, store.fields[l.entity], r, vc)), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
   const g = { ...graph, override: { ...graph.override, [`${l.entity}.list`]: view } };
   ctx.send(200, listView(g, store, l.entity, store.fields[l.entity], pg.rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, path: `/list/${l.id}`,
