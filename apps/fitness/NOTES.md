@@ -13,10 +13,10 @@
   entity list — the personal-stats requirement is a dashboard by nature (several summed/counted
   cards), and the format allows any route there.
 - A public (no `roles`) dashboard `table` with `groupBy` on a `ref` field and no `where` at all,
-  now relying on `own`'s `"all": ["view"]` (round 4) rather than the absence of `own` — every
+  now relying on `own`'s `"all": ["view"]` (round 5) rather than the absence of `own` — every
   viewer's role sees the same global ranking regardless of ownership, the mirror image of the
   owned, per-viewer dashboards in `apps/attendance` and `apps/datasci`.
-- Round 4: `own` grew `all`, closing the Miss above. `user.Exercise` is now `{"own": "user",
+- Round 5: `own` grew `all`, closing the Miss above. `user.Exercise` is now `{"own": "user",
   "can": ["edit", "delete"], "all": ["view", "create"]}` — the public activity feed and the
   leaderboard (and `mystats`'s own `"where": {"user": "@me"}` cards) stay exactly as unscoped as
   before (`view` is in `all`), but a user may now edit or delete their own exercise entries,

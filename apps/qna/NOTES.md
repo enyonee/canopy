@@ -10,7 +10,7 @@
 - `max(Answer: rating)` as a derived best-rating column next to `count(Answer)`.
 - `db.adjust` with a negative `by` for the down-vote, with `after: "/Question/{question}"` reading the child's reference to land back on the parent.
 - A related section whose `rowActions` are two declared actions plus `delete`, so the change patch can hand `delete` to a moderator who cannot create.
-- Round 4: `own` grew `all`, closing the one documented Miss. `member.Question` is now
+- Round 5: `own` grew `all`, closing the one documented Miss. `member.Question` is now
   `{"own": "author", "can": ["edit", "delete"], "all": ["view", "create"]}` — everyone still
   reads and asks questions unscoped, but a member may now edit or delete only their own
   question (`own`'s auto-fill replaced the form's `fill: {"author": "@me"}`).

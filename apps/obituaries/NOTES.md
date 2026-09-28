@@ -13,7 +13,7 @@
   case is a real grouped aggregate, not a hand-written report.
 - An `image` field used purely for display (uploaded once at publish time, shown as a
   thumbnail on the detail page), with no edit path afterwards.
-- Round 4: `own` grew `all` (unscoped operations alongside owned ones — see README/FORMAT.md).
+- Round 5: `own` grew `all` (unscoped operations alongside owned ones — see README/FORMAT.md).
   **"Manage their own obituaries" no longer needs a weakened case:** `member.Obituary` is now
   `{"own": "owner", "can": ["edit", "delete"], "all": ["view", "create"]}` — everyone still
   browses and reads every obituary to leave condolences (`view`/`create` unscoped), but a
