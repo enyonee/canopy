@@ -1,5 +1,5 @@
 // Index migration, attached to Store.prototype by store.mjs (so it runs with
-// `this` bound to the Store instance — `this.db`, `this.prepare`, `this.fields`,
+// `this` bound to the Store instance — `this.drv`, `this.fields`,
 // `this.graph`). Split out only to keep store.mjs under the size budget.
 //
 // The plain-index derivation for one entity (item: "indexes derived from the
@@ -48,17 +48,16 @@ function whereFieldsFor(store, entity) {
 export function migrateIndexes(entity) {
   const table = entity.toLowerCase();
   const desired = desiredIndexes(this, entity);
-  const existing = this.prepare(
-    `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=? AND name LIKE 'idx\\_%' ESCAPE '\\'`).all(table).map((r) => r.name);
+  const existing = this.drv.indexes(table, 'idx_');
   for (const { name, cols } of desired) {
     if (existing.includes(name)) continue;
-    this.db.exec(`CREATE INDEX IF NOT EXISTS "${name}" ON "${table}" (${cols.map((c) => `"${c}"`).join(', ')})`);
+    this.drv.createIndex(name, table, cols);
     this.migrations.push(`index ${table}.${name} (${cols.join(', ')})`);
   }
   const keep = new Set(desired.map((d) => d.name));
   for (const name of existing) {
     if (keep.has(name)) continue;
-    this.db.exec(`DROP INDEX IF EXISTS "${name}"`);
+    this.drv.dropIndex(name);
     this.migrations.push(`dropped index ${name} on ${table}`);
   }
 }
@@ -67,8 +66,9 @@ export function migrateIndexes(entity) {
 // "claimedAt" (epoch ms) is the lease of a row in `sending`; a database made
 // before it existed is upgraded in place.
 export function migrateOutbox() {
-  this.db.exec(`CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT,
-    target TEXT, payload TEXT, status TEXT, code INTEGER, error TEXT, attempts INTEGER DEFAULT 0, at TEXT, updatedAt TEXT, claimedAt INTEGER)`);
-  const live = this.prepare(`PRAGMA table_info("_outbox")`).all().map((r) => r.name);
-  if (!live.includes('claimedAt')) this.db.exec(`ALTER TABLE "_outbox" ADD COLUMN "claimedAt" INTEGER`);
+  this.drv.createTable('_outbox', [['kind', 'TEXT'], ['connector', 'TEXT'], ['target', 'TEXT'], ['payload', 'TEXT'],
+    ['status', 'TEXT'], ['code', 'INTEGER'], ['error', 'TEXT'], ['attempts', 'INTEGER DEFAULT 0'], ['at', 'TEXT'],
+    ['updatedAt', 'TEXT'], ['claimedAt', 'INTEGER']], { ifNotExists: true });
+  const live = this.drv.columns('_outbox').map((r) => r.name);
+  if (!live.includes('claimedAt')) this.drv.addColumn('_outbox', 'claimedAt', 'INTEGER');
 }

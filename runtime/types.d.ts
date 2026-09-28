@@ -207,6 +207,29 @@ export interface ViewContext {
 // SQL-compiled aggregate (runtime/store/aggsql.mjs's aggKey).
 type AggCache = { groups: Map<string, Map<string, any[]>>; scalars: Map<string, Map<string, any>>; clock: Date };
 
+/** What a Store talks to (runtime/driver/sqlite.mjs is the only implementation). Every
+ * result "may be awaited" by contract; today's driver is synchronous and nothing awaits. */
+export interface Driver {
+  dialect: { name: string; quote(id: string): string };
+  /** Called with the SQL text (and the call's options) of every statement the driver executes; tests count queries with it. */
+  onQuery: ((sql: string, opts?: { cache?: boolean }) => void) | null;
+  /** SQLite-only diagnostic: the prepared-statement LRU, oldest first. */
+  cache: Map<string, any>;
+  all(sql: string, params?: any[], opts?: { cache?: boolean }): any[];
+  get(sql: string, params?: any[], opts?: { cache?: boolean }): any;
+  run(sql: string, params?: any[], opts?: { cache?: boolean }): { changes: number; lastId: number };
+  exec(sql: string): void;
+  transaction<T>(fn: () => T): T;
+  close(): void;
+  tables(): string[];
+  columns(table: string): Array<{ name: string; type: string }>;
+  indexes(table: string, prefix?: string): string[];
+  createTable(table: string, cols: Array<[string, string]>, opts?: { ifNotExists?: boolean; serial?: boolean }): void;
+  addColumn(table: string, name: string, type: string): void;
+  createIndex(name: string, table: string, cols: string[]): void;
+  dropIndex(name: string): void;
+}
+
 // store/query.mjs, store/hydrate.mjs, store/state.mjs and store/rules.mjs
 // attach these to Store.prototype at runtime (`Object.assign(Store.prototype,
 // query, hydrate, state, rules)` in store.mjs) — declared here, once, instead

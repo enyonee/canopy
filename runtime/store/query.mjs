@@ -1,6 +1,6 @@
 // The query and aggregation engine, attached to Store.prototype by store.mjs
 // (so every function here runs with `this` bound to the Store instance —
-// `this.db`, `this.field(...)`, `this.fields[...]`). Structured query only:
+// `this.drv`, `this.field(...)`, `this.fields[...]`). Structured query only:
 // the graph names fields and comparisons, never SQL.
 import { coerce } from '../spec.mjs';
 
@@ -77,7 +77,7 @@ function orderBy(store, entity, sort) {
 
 export function listRaw(entity, opts = {}) {
   const { sql, vals } = buildWhere(this, entity, opts);
-  return this.prepare(`SELECT * FROM "${entity.toLowerCase()}"${sql} ${orderBy(this, entity, opts.sort)}`).all(...vals);
+  return this.drv.all(`SELECT * FROM "${entity.toLowerCase()}"${sql} ${orderBy(this, entity, opts.sort)}`, vals);
 }
 
 // A page of raw (un-hydrated) rows, in the same order listRaw would give —
@@ -85,13 +85,13 @@ export function listRaw(entity, opts = {}) {
 // in-memory ("later") where forces the full-scan path (query.mjs's listPage).
 export function listRawPage(entity, opts, limit, offset) {
   const { sql, vals } = buildWhere(this, entity, opts);
-  return this.prepare(`SELECT * FROM "${entity.toLowerCase()}"${sql} ${orderBy(this, entity, opts.sort)} LIMIT ? OFFSET ?`).all(...vals, limit, offset);
+  return this.drv.all(`SELECT * FROM "${entity.toLowerCase()}"${sql} ${orderBy(this, entity, opts.sort)} LIMIT ? OFFSET ?`, [...vals, limit, offset]);
 }
 
 // How many rows would match, without fetching or hydrating any of them.
 export function countRaw(entity, opts = {}) {
   const { sql, vals } = buildWhere(this, entity, opts);
-  return Number(this.prepare(`SELECT COUNT(*) AS n FROM "${entity.toLowerCase()}"${sql}`).get(...vals).n);
+  return Number(this.drv.get(`SELECT COUNT(*) AS n FROM "${entity.toLowerCase()}"${sql}`, vals).n);
 }
 
 // Bound well under SQLite's own SQLITE_MAX_VARIABLE_NUMBER (32766 since
@@ -112,7 +112,7 @@ const IN_CHUNK = 5000;
 // comparison's value through `coerce()` (= String) before binding it, and an
 // unrelated bound INTEGER does not get SQLite's column-affinity treatment the
 // way a bare `=` would, so an IN-list of raw numeric ids would silently match
-// nothing. Never cached (`this.db.prepare`, not `this.prepare`): the chunk
+// nothing. Never cached (`{ cache: false }`): the chunk
 // boundary varies with `ids.length`, so the SQL text rarely repeats, and
 // caching it would only evict statements that do.
 export function listRawIn(entity, via, ids) {
@@ -122,7 +122,7 @@ export function listRawIn(entity, via, ids) {
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const vals = ids.slice(i, i + IN_CHUNK).map(String);
     const sql = `SELECT * FROM "${table}" WHERE "${via}" IN (${vals.map(() => '?').join(',')}) ORDER BY id DESC`;
-    out.push(...this.db.prepare(sql).all(...vals));
+    out.push(...this.drv.all(sql, vals, { cache: false }));
   }
   return out;
 }
@@ -203,7 +203,7 @@ export function aggregate(entity, { groupBy = null, groupUnit = null, metrics = 
   if (groupBy) sql += ' GROUP BY grp';
   if (sort) sql += ` ORDER BY "${sort.field}" ${sort.dir === 'asc' ? 'ASC' : 'DESC'}`;
   if (limit) sql += ` LIMIT ${Number(limit)}`;
-  return this.prepare(sql).all(...vals).map((r) => ({ ...r }));
+  return this.drv.all(sql, vals).map((r) => ({ ...r }));
 }
 
 export function aggregateInMemory(entity, { groupBy, groupUnit, metrics, sort, limit, where }) {

@@ -10,11 +10,11 @@
 
 | слой | модули | зачем |
 |---|---|---|
-| 0 | `fields.mjs`, `functions.mjs`, `transports.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
-| 1 | `expr.mjs`, `spec.mjs` | алгебра выражений и разбор спецификации поля |
+| 0 | `fields.mjs`, `functions.mjs`, `transports.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/sqlite.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
+| 1 | `expr.mjs`, `spec.mjs`, `driver.mjs` | алгебра выражений и разбор спецификации поля; `driver.mjs` — `open(fileOrDriver)`, выбор драйвера хранилища |
 | 2 | `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
 | 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
-| 4 | `store.mjs`, `outbox.mjs` | хранилище (SQLite) и исходящий ящик |
+| 4 | `store.mjs`, `outbox.mjs` | хранилище (говорит с базой только через `this.drv`) и исходящий ящик |
 | 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
 | 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 5); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
 | 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 5) |
@@ -23,7 +23,7 @@
 | 10 | `cli.mjs`, `run.mjs` | точка входа |
 
 `node:` втроенные модули — по отдельной таблице в `tests/arch.test.mjs`: `node:sqlite`
-только в `store.mjs`; `node:http` только в `server.mjs`; `node:fs` также в `routes/widgets.mjs`
+только в `driver/sqlite.mjs`; `node:http` только в `server.mjs`; `node:fs` также в `routes/widgets.mjs`
 (читает файл виджета, который назвал плагин) и в `boot.mjs` (копирует сидируемый файл в
 `files/`, раунд 5); `fs`/`path` — там же, где сегодня
 (`auth.mjs`, `patch.mjs`, `server.mjs`, `cli.mjs`, `routes/context.mjs`, `routes/system.mjs`, `boot.mjs`).
@@ -34,9 +34,17 @@
   чтение и структурные запросы (`listRaw`/`listPage`/`aggregate`/…); `migrate.mjs`:
   индексы, выводимые из графа (`ref`-поля, `rules.unique`, статусное поле `states`,
   best-effort по `where` сохранённых списков/панелей) — создаются и удаляются как
-  колонки, идемпотентно. `Store#prepare` — bounded LRU кэш подготовленных
-  SQL-запросов по тексту, им пользуются все запросы, включая `store/query.mjs`
-  и `store/rules.mjs`.
+  колонки, идемпотентно.
+  **S1, шов драйвера** (`docs/POSTGRES.md`) — `runtime/driver/sqlite.mjs`: единственное
+  место, где живут `node:sqlite`, `PRAGMA`, `sqlite_master`, `AUTOINCREMENT` и
+  `.prepare(`. Контракт `Driver` (`runtime/types.d.ts`): `all/get/run(sql, params)`
+  (`run` → `{ changes, lastId }`), `exec`, `transaction(fn)`, `close`, `dialect`
+  (`name`, `quote`), схема (`tables/columns/indexes`, `createTable/addColumn/createIndex/
+  dropIndex`), хук `onQuery(sql, opts)` (счёт запросов в `perf.test.mjs`). Внутри —
+  bounded LRU кэш подготовленных запросов (`cache`, 200 записей; `{ cache: false }` — для
+  IN-списков, чей текст почти не повторяется). `Store` держит драйвер в `this.drv`
+  (4-й аргумент конструктора — свой драйвер), всё остальное в `store/` ходит только через
+  него; пока синхронно, ничего не `await`-ится.
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.

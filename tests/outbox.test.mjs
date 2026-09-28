@@ -4,7 +4,7 @@ import { Store } from '../runtime/store.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { open } from '../runtime/driver.mjs';
 import { deliver, flush, LEASE_MS } from '../runtime/outbox.mjs';
 import { DEFAULT } from '../runtime/registry.mjs';
 import { outboxView } from '../runtime/render/pages.mjs';
@@ -170,16 +170,16 @@ test('outboxFinish writes only while the claim is the caller\'s', () => {
 
 test('a database made before "claimedAt" existed is upgraded in place, rows kept', () => {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'outbox-')), 'old.sqlite');
-  const old = new DatabaseSync(file);
+  const old = open(file);
   old.exec(`CREATE TABLE "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT,
     target TEXT, payload TEXT, status TEXT, code INTEGER, error TEXT, attempts INTEGER DEFAULT 0, at TEXT, updatedAt TEXT)`);
-  old.prepare(`INSERT INTO "_outbox" (kind, connector, target, payload, status, attempts) VALUES ('http','hook','http://sink.test/o','1','queued',0)`).run();
+  old.run(`INSERT INTO "_outbox" (kind, connector, target, payload, status, attempts) VALUES ('http','hook','http://sink.test/o','1','queued',0)`);
   old.close();
   const store = new Store(graph, file);
   assert.equal(store.outboxGet(1).claimedAt, null);
   assert.equal(store.outboxClaim(1, 5, LEASE_MS), true);
   assert.equal(new Store(graph, file).outboxGet(1).claimedAt, 5, 'a second boot finds the column and changes nothing');
-  store.db.close();
+  store.drv.close();
 });
 
 test('the outbox screen shows a sending row and offers no retry for it', () => {

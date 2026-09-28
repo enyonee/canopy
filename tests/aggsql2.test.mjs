@@ -102,11 +102,10 @@ test('the subquery is joined through the ref index, not a scan per order', () =>
   const store = new Store({ ...GRAPH, data: { ...GRAPH.data, Customer: { name: 'text!', spent: ACCEPT.spent } } }, ':memory:');
   seed(store);
   const seen = [];
-  const prepare = store.db.prepare;
-  store.db.prepare = function spy(sql) { seen.push(sql); return prepare.call(this, sql); };
+  store.drv.onQuery = (sql) => seen.push(sql);
   runAggBatch(store, compileAgg(store, 'Customer', store.field('Customer', 'spent').derive), [1, 2]);
-  store.db.prepare = prepare;
-  const plan = store.db.prepare(`EXPLAIN QUERY PLAN ${seen.at(-1)}`).all({}, '1', '2').map((r) => r.detail).join(' | ');
+  store.drv.onQuery = null;
+  const plan = store.drv.all(`EXPLAIN QUERY PLAN ${seen.at(-1)}`, [{}, '1', '2']).map((r) => r.detail).join(' | ');
   assert.match(plan, /CORRELATED SCALAR SUBQUERY/);
   assert.doesNotMatch(plan, /SCAN item|SCAN t1/i, `the inner lookup scans: ${plan}`);
 });
