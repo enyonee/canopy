@@ -44,7 +44,7 @@ export const checks = [
     } },
 
   { task: 'Apply for a job listing as an athlete',
-    run: async ({ asGuest, login, get, follow, rows, must, flashOf }) => {
+    run: async ({ asGuest, login, get, post, follow, rows, must, flashOf }) => {
       asGuest();
       must((await login(athleteEmail, athletePassword)).status === 303, 'the newly registered athlete could not sign back in');
       const jobs = await get('/Job');
@@ -55,7 +55,14 @@ export const checks = [
       must(history.length === 1 && /Assistant Coach/.test(history[0]) && /submitted/.test(history[0]), `application not logged in account history: ${history[0]}`);
       const jobAfter = await get(`/Job/${postedJobId}`);
       must(/<th>Applicants<\/th><td>1<\/td>/.test(jobAfter.html), 'the job does not count the new applicant');
-      return `application logged in Ann's account history; job #${postedJobId} now shows 1 applicant`;
+      // Round 6: rules now guard a block's own write, not only an HTTP form —
+      // `apply`'s step is a plain db.createRow, so this duplicate is refused
+      // by Store#insert's own guard, not by anything the route checked first.
+      const again = await post(`/Job/${postedJobId}/action/apply`, {});
+      must(again.status === 400 && /already applied to this job/.test(again.html), `a duplicate application was accepted: ${again.status}`);
+      const jobStill = await get(`/Job/${postedJobId}`);
+      must(/<th>Applicants<\/th><td>1<\/td>/.test(jobStill.html), 'the refused duplicate still counted as a second applicant');
+      return `application logged in Ann's account history; job #${postedJobId} now shows 1 applicant, and a second apply is refused`;
     } },
 
   { task: 'Send a message from a sports organization to a registered athlete through the platform\'s communication feature',

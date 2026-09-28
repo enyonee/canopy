@@ -67,7 +67,10 @@ export const checks = [
       const after = await get(`/Photo/${photoId}`);
       must(/<th>Votes<\/th><td>1<\/td>/.test(after.html), 'the vote count did not update to 1');
       // Round 4: votePhoto uses db.ensure, not db.createRow, so a repeat vote by the same
-      // member is idempotent — it must not inflate the count a second time.
+      // member is idempotent — it must not inflate the count a second time. Round 6:
+      // rules.Vote now also declares {"unique": ["photo", "voter"]} as a backstop — the
+      // guard runs inside the store itself (Store#insert/#update), covering db.ensure too,
+      // not only an HTTP form, so this stays true even if votePhoto's step ever changes.
       await follow(`/Photo/${photoId}/action/votePhoto`, {});
       const again = await get(`/Photo/${photoId}`);
       must(/<th>Votes<\/th><td>1<\/td>/.test(again.html), `voting twice inflated the count: ${again.html.match(/<th>Votes<\/th><td>\d+<\/td>/)}`);

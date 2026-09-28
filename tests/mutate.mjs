@@ -135,10 +135,25 @@ const MUTATIONS = [
     find: "    if (ov.hidden || !vc.can(entity, 'view')) continue;", replace: "    if (ov.hidden) continue;" },
 
   // --- v2: rules, transitions, actions, effects ---
-  { name: 'a failing check rule is ignored', file: 'runtime/interp.mjs',
-    find: "      if (!ok) problems.push(rule.message);", replace: "      void ok;" },
-  { name: 'a unique rule never fires', file: 'runtime/interp.mjs',
-    find: "        if (v !== undefined && v !== '' && store.exists(entity, rule.unique, v, existing?.id)) problems.push(rule.message || `${rule.unique} is already taken`);", replace: "        void v;" },
+  // Round 6 moved rule enforcement from interp.mjs into Store#checkRules
+  // (runtime/store/rules.mjs) so a block/seed write meets it too, not only an
+  // HTTP form — same defects, new file (TESTS.md's refactor convention).
+  { name: 'a failing check rule is ignored', file: 'runtime/store/rules.mjs',
+    find: "    if (!ok) problems.push(rule.message);", replace: "    void ok;" },
+  { name: 'a unique rule never fires', file: 'runtime/store/rules.mjs',
+    find: "        if (v !== undefined && v !== '' && this.exists(entity, rule.unique, v, existing?.id)) problems.push(rule.message || `${rule.unique} is already taken`);", replace: "        void v;" },
+  // Round 6: rules now guard every write, not only an HTTP form (item 20) —
+  // these two disable that guard specifically for a block's own insert/update
+  // (interp.validateValues, and so every HTTP form test, would still be
+  // green: the guard it targets is the store's, reached only by a block or a
+  // seed row — see tests/interp.test.mjs's "a plugin block…"/"a built-in
+  // block (db.update)…" tests, which are the only things that catch these).
+  { name: 'item 20: a block\'s own insert has no path to the rule guard', file: 'runtime/store.mjs',
+    find: "    // The guard: every insert meets rules here, whatever wrote it (item 20).\n    const problems = this.checkRules(entity, values, null);\n    if (problems.length) throw new Error(problems[0]);",
+    replace: "" },
+  { name: 'item 20: a block\'s own update has no path to the rule guard', file: 'runtime/store.mjs',
+    find: "    // The guard: every update meets rules here too, against the row as it\n    // would be stored (existing row + these values) — item 20.\n    const problems = this.checkRules(entity, values, this.raw(entity, id));\n    if (problems.length) throw new Error(problems[0]);",
+    replace: "" },
   { name: 'uniqueness collides with the row itself', file: 'runtime/store.mjs',
     find: "    const sql = f?.type.exprKind === 'text' && typeof v === 'string'\n      ? `SELECT id FROM \"${entity.toLowerCase()}\" WHERE LOWER(\"${field}\")=LOWER(?) AND id!=?`\n      : `SELECT id FROM \"${entity.toLowerCase()}\" WHERE \"${field}\"=? AND id!=?`;\n    return Boolean(this.db.prepare(sql).get(v, Number(excludeId ?? 0)));",
     replace: "    const sql = f?.type.exprKind === 'text' && typeof v === 'string'\n      ? `SELECT id FROM \"${entity.toLowerCase()}\" WHERE LOWER(\"${field}\")=LOWER(?)`\n      : `SELECT id FROM \"${entity.toLowerCase()}\" WHERE \"${field}\"=?`;\n    return Boolean(this.db.prepare(sql).get(v));" },
@@ -257,9 +272,9 @@ const MUTATIONS = [
     find: "      return err(path, `unknown reference \"${v}\"`,", replace: "      return void err(null, `unknown reference \"${v}\"`," },
 
   // --- R3: the refactor's own new gates and fixes ---
-  { name: 'a throwing rule passes instead of refusing the write (fail-open regression)', file: 'runtime/interp.mjs',
-    find: "      catch (e) { trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); problems.push(rule.message); continue; }",
-    replace: "      catch (e) { trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); ok = true; }" },
+  { name: 'a throwing rule passes instead of refusing the write (fail-open regression)', file: 'runtime/store/rules.mjs',
+    find: "    catch (e) { this.trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); problems.push(rule.message); continue; }",
+    replace: "    catch (e) { this.trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); ok = true; }" },
   { name: 'anonymous access is never asked to sign in', file: 'runtime/server.mjs',
     find: "  if (ctx.perms.enabled && !ctx.role) { ctx.deny('Please sign in.'); return; }", replace: "" },
 
@@ -285,9 +300,9 @@ const MUTATIONS = [
   { name: "item 3: a related fill can't read the parent row again (@row.* resolves to nothing)", file: 'runtime/routes/rows.mjs',
     find: "  const fillRow = interp.resolve({ user, values: submitted, rowEntity: entity, id, row });",
     replace: "  const fillRow = interp.resolve({ user, values: submitted });" },
-  { name: 'item 4: a compound unique rule checks the submitted values instead of the stored row, and misses an untouched field', file: 'runtime/interp.mjs',
-    find: "        if (known && store.existsAll(entity, names, probe, existing?.id)) problems.push(rule.message || `${names.join(' + ')} must be unique together`);",
-    replace: "        if (known && store.existsAll(entity, names, values, existing?.id)) problems.push(rule.message || `${names.join(' + ')} must be unique together`);" },
+  { name: 'item 4: a compound unique rule checks the submitted values instead of the stored row, and misses an untouched field', file: 'runtime/store/rules.mjs',
+    find: "      if (known && this.existsAll(entity, names, probe, existing?.id)) problems.push(rule.message || `${names.join(' + ')} must be unique together`);",
+    replace: "      if (known && this.existsAll(entity, names, values, existing?.id)) problems.push(rule.message || `${names.join(' + ')} must be unique together`);" },
   { name: 'item 5: db.set ignores "entity" and updates the current row instead', file: 'runtime/blocks.mjs',
     find: "    run: ({ store, step, resolve }) => { store.update(step.entity, resolve({ v: step.id }).v, resolve(step.set)); return {}; },",
     replace: "    run: ({ store, entity, step, resolve }) => { store.update(entity, resolve({ v: step.id }).v, resolve(step.set)); return {}; }," },
@@ -368,11 +383,15 @@ for (const m of chosen) {
     survivors.push(m.name);
     continue;
   }
+  // An interrupted run must not leave the mutation in the source tree.
+  const restore = () => { fs.writeFileSync(m.file, original); process.exit(130); };
+  process.once('SIGINT', restore).once('SIGTERM', restore);
   fs.writeFileSync(m.file, original.replace(m.find, m.replace));
   const started = Date.now();
   const green = await run();
   const ms = Date.now() - started;
   fs.writeFileSync(m.file, original);
+  process.off('SIGINT', restore).off('SIGTERM', restore);
   // Close to TEST_TIMEOUT means the mutation hung a test rather than failing it —
   // still a kill (the process group is gone either way), but worth flagging.
   const slow = ms > TEST_TIMEOUT * 0.8 ? ` (${(ms / 1000).toFixed(1)}s — hung, not failed)` : '';

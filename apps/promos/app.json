@@ -25,7 +25,7 @@
     "Category":  [ { "unique": "name", "message": "This category already exists" } ],
     "Promotion": [ { "check": "len(title) >= 10", "message": "The title needs at least 10 characters" },
                    { "check": "discount >= 5 and discount <= 90", "message": "Discount must be between 5 and 90 percent" },
-                   { "check": "expiresAt >= today", "message": "The expiry date must not be in the past" } ],
+                   { "check": "status != 'live' or expiresAt >= today", "message": "The expiry date must not be in the past" } ],
     "Setting":   [ { "unique": "name", "message": "This setting already exists" } ]
   },
 

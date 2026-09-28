@@ -8,6 +8,7 @@ import { hashPassword, isHashed } from './auth.mjs';
 import { DEFAULT } from './registry.mjs';
 import * as query from './store/query.mjs';
 import * as state from './store/state.mjs';
+import * as rules from './store/rules.mjs';
 
 export class Store {
   constructor(graph, file, registry = DEFAULT) {
@@ -19,6 +20,13 @@ export class Store {
       this.fields[entity] = Object.entries(spec).map(([n, s]) => parseField(n, s, registry.fields, registry.functions));
     }
     this.migrations = [];
+    // No-op until createInterpreter() installs the real request-trace sink
+    // (item 20: "a guard installed into the store by interp at boot" — the
+    // guard itself, checkRules below, is unconditional from construction, so
+    // a seed row is checked before interp even exists; only the trace sink
+    // needs installing later). ruleExprs caches a rule's parsed expression.
+    this.trace = () => {};
+    this.ruleExprs = new Map();
     this.migrate();
   }
 
@@ -109,6 +117,9 @@ export class Store {
       cols.push(`"${f.name}"`);
       vals.push(use);
     }
+    // The guard: every insert meets rules here, whatever wrote it (item 20).
+    const problems = this.checkRules(entity, values, null);
+    if (problems.length) throw new Error(problems[0]);
     const st = this.db.prepare(cols.length
       ? `INSERT INTO "${entity.toLowerCase()}" (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`
       : `INSERT INTO "${entity.toLowerCase()}" DEFAULT VALUES`);
@@ -128,6 +139,10 @@ export class Store {
       sets.push(`"${k}"=?`); vals.push(use);
     }
     if (!sets.length) return;
+    // The guard: every update meets rules here too, against the row as it
+    // would be stored (existing row + these values) — item 20.
+    const problems = this.checkRules(entity, values, this.raw(entity, id));
+    if (problems.length) throw new Error(problems[0]);
     this.db.prepare(`UPDATE "${entity.toLowerCase()}" SET ${sets.join(',')} WHERE id=?`).run(...vals, Number(id));
   }
 
@@ -230,9 +245,10 @@ export class Store {
   }
 }
 
-// Queries/aggregation (runtime/store/query.mjs) and the outbox/session tables
-// (runtime/store/state.mjs) are plain functions run with `this` bound to the
-// Store instance — split out only to keep this file under the size budget;
-// they are as much "the store" as anything above.
-Object.assign(Store.prototype, query, state);
+// Queries/aggregation (runtime/store/query.mjs), the outbox/session tables
+// (runtime/store/state.mjs) and rule enforcement (runtime/store/rules.mjs)
+// are plain functions run with `this` bound to the Store instance — split
+// out only to keep this file under the size budget; they are as much "the
+// store" as anything above.
+Object.assign(Store.prototype, query, state, rules);
 

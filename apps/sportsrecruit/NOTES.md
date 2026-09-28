@@ -29,8 +29,6 @@
   restricted to "athletes only" — an organization can technically message another organization
   or the admin through the same action, since ref-field options can't be filtered by the target
   row's own field value.
-- `rule`: `Application` has no compound-uniqueness rule, so nothing stops an athlete from
-  applying to the same job twice (not exercised by any check, so left as-is rather than faked).
 - `composition`: `Application`'s owner (organization of the job) is two hops away
   (`Application.job.organization`), so organizations get a plain unscoped `view` on
   `Application` rather than a per-organization scoped one — `own` only matches a direct ref
@@ -38,6 +36,12 @@
 
 ## New for this app
 
+- Round 6: `rules.Application: [{"unique": ["athlete", "job"], ...}]` now stops an athlete
+  applying to the same job twice — the only path to `Application` is the `apply` action's
+  `db.createRow` step, no HTTP create route reaches it, and until this round `rules` only ran
+  on an HTTP create/edit (`interp.validateValues`); the guard moved into the store itself
+  (`Store#insert`/`#update`, `runtime/store/rules.mjs`), so the block path is covered too. See
+  `docs/FORMAT.md`'s «Connectors, rules» and `checks.mjs`'s second `apply` assertion.
 - Two different roles declaring `own` on two different ref fields of the same entity
   (`Message.from` for organization, `Message.to` for athlete) — confirmed against
   `runtime/auth.mjs` that each role's permission entry is independent, so this scopes both

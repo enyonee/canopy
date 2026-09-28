@@ -25,7 +25,7 @@
     "User":   [ { "unique": "email" } ],
     "Exam":   [ { "check": "status != 'submitted' or answered >= questions", "message": "Answer every question before submitting the exam" } ],
     "Answer": [ { "check": "exam.status != 'submitted'", "message": "This exam is already submitted; start a new exam to keep practising" },
-                { "check": "count(Answer: exam = row.exam and question = row.question) = 0", "message": "You already answered this question in this exam" } ]
+                { "unique": ["exam", "question"], "message": "You already answered this question in this exam" } ]
   },
 
   "roles": {

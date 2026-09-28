@@ -278,7 +278,14 @@ entirely — `verify/run.mjs` sets it, so an app's checks control every schedule
            "User": [ { "unique": "email", "message": "…" } ],
            "Follow": [ { "unique": ["follower", "category"], "message": "Already following this category" } ] }
 ```
-Rules run on create and edit; a failing rule re-renders the form with the message (400).
+Rules run on **every** write, not only an HTTP create/edit: the guard lives in the store itself
+(`Store#insert`/`Store#update`, the one place every write lands), so a block (`db.create`,
+`db.createRow`, `db.update`, `db.set`, `db.adjust`, `db.toggle`, `db.ensure`, a plugin's own
+`store.insert`/`store.update`) and a seed row at boot meet the same rules an HTTP form does —
+none of them has a path around it. A form still re-renders with the message (400); a block
+refuses the whole action the same way an unmet `db.adjust` floor does (rollback, 400, the
+rule's message); a seed row that violates a rule is a boot error naming the entity, the row and
+the rule, served the same way a statically invalid graph is — not a crash.
 `unique` may name a single field or, for a compound ("unique together") constraint, an array of fields — the
 combination must be unique, not each field alone; on an edit that only submits one of the fields, the other's
 existing stored value is used for the check.

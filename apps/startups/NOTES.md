@@ -23,13 +23,14 @@
   batch (apps/infosec's notes point back to this entry rather than repeating the explanation).
 - `composition`: a client-side share menu (social/email picker) cannot be expressed by a
   server-rendered form; the graph can only queue one outgoing request per click.
-- `rule`: no compound uniqueness, so `db.ensure` is what keeps `collect`/`markRead` idempotent
-  rather than a database constraint — fine here since both go through the ensure block, but
-  worth flagging as the general limitation (a bare `create` permission on a join entity would
-  allow duplicate rows).
-
 ## New for this app
 
+- Round 6: closed the "general limitation" flagged below — `rules.Collection`/
+  `rules.ReadHistory` now each declare `{"unique": ["user", "article"]}`. Rules run inside the
+  store itself now (`Store#insert`/`#update`, `runtime/store/rules.mjs`), so they guard *any*
+  write path, not only an HTTP form; `db.ensure` remains the reason `collect`/`markRead` stay a
+  no-op rather than being refused (it never reaches a duplicate insert), and the rule is a
+  backstop against a future write path (e.g. a bare `create` permission) that would.
 - `db.ensure` used purely for idempotency on a two-key join row (`{user: "@me", article:
   "@row.id"}`) with no extra `values`, so a repeated action is a no-op rather than a duplicate —
   applied to both the collection (`Collection`) and the reading-history (`ReadHistory`) join

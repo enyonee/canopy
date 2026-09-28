@@ -37,7 +37,15 @@ export const checks = [
       must(/added to your collection/.test(flashOf(after.html)), `no confirmation after collecting: ${flashOf(after.html)}`);
       const mine = rows(after.html);
       must(mine.length === 1 && /From 10 to 10,000 users/.test(mine[0]), `the collected article is not in "My collections": ${JSON.stringify(mine)}`);
-      return 'the collected article is added and shown in the dedicated My collections section';
+      // Round 6: rules.Collection now declares {"unique": ["user", "article"]} as a
+      // backstop — db.ensure already kept a repeat collect a no-op, and stays the
+      // reason it succeeds again (303) rather than being refused; the rule now
+      // also means any future write path to Collection cannot silently duplicate.
+      const again = await post(`/Article/${id}/action/collect`, {});
+      must(again.status === 303, `collecting the same article twice was refused instead of staying idempotent: ${again.status}`);
+      const stillMine = rows((await get(again.location)).html);
+      must(stillMine.length === 1, `collecting twice duplicated the collection row: ${JSON.stringify(stillMine)}`);
+      return 'the collected article is added and shown in the dedicated My collections section, and stays a single row when collected again';
     } },
 
   { task: 'Validate Article Sharing Capability',

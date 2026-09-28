@@ -15,7 +15,8 @@
   },
 
   "rules": {
-    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+    "User": [ { "unique": "email", "message": "This email is already registered" } ],
+    "Vote": [ { "unique": ["photo", "voter"], "message": "You have already voted for this photo" } ]
   },
 
   "connectors": { "mail": { "kind": "mail", "from": "hello@social-platform.test" } },

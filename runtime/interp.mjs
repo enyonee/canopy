@@ -5,7 +5,7 @@
 // request; tests/helpers.mjs and the CLI drive it without one at all.
 import { flush } from './outbox.mjs';
 import { parse as parseExpr, evaluate, isExpression, stripExpression } from './expr.mjs';
-import { coerce, defaultValue, formatMoney } from './spec.mjs';
+import { formatMoney } from './spec.mjs';
 
 // A block that refuses (not enough stock, no such row) is the application's
 // answer, not a crash: attempt() turns any thrown error into a Refused so the
@@ -13,6 +13,13 @@ import { coerce, defaultValue, formatMoney } from './spec.mjs';
 class Refused extends Error {}
 
 export function createInterpreter({ graph, store, registry, perms, meId, trace = (_event) => {}, fetchImpl }) {
+  // The store's write guard (Store#checkRules) traces a throwing rule's
+  // underlying error the same way any other request-time failure is traced —
+  // installed here, once, rather than known to the store from construction:
+  // "a guard installed into the store by interp at boot" (the guard itself
+  // is unconditional from Store's own construction, so a seed row is still
+  // checked before this ever runs — only the trace sink needs installing).
+  store.trace = trace;
   const CATALOG = registry.blocks;
   const exprCache = new Map();
   const compiled = (src) => { if (!exprCache.has(src)) exprCache.set(src, parseExpr(src, registry.functions)); return exprCache.get(src); };
@@ -144,36 +151,12 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
       if (bad) problems.push(bad);
     }
     if (problems.length) return problems;
-    // Rules see the row as it would be stored: the existing row under the submitted values.
-    const probe = { id: existing?.id ?? 0, ...(existing || {}) };
-    const asStored = (f, v) => (v === '' || v === undefined ? defaultValue(f) : coerce(f, v));
-    for (const f of fields) if (!f.derive && values[f.name] !== undefined) probe[f.name] = asStored(f, values[f.name]);
-    for (const f of fields) if (!f.derive && probe[f.name] === undefined) probe[f.name] = asStored(f, values[f.name]);
-    for (const rule of graph.rules?.[entity] || []) {
-      if (rule.unique !== undefined) {
-        if (!Array.isArray(rule.unique)) {
-          const v = values[rule.unique];
-          if (v !== undefined && v !== '' && store.exists(entity, rule.unique, v, existing?.id)) problems.push(rule.message || `${rule.unique} is already taken`);
-          continue;
-        }
-        // A compound unique rule may have only one of its fields on this submit
-        // (the other unchanged): "probe" already merged submitted values over the
-        // existing row, so it is the only place both halves of the pair are known.
-        const names = rule.unique;
-        const known = names.every((n) => probe[n] !== undefined && probe[n] !== null && probe[n] !== '');
-        if (known && store.existsAll(entity, names, probe, existing?.id)) problems.push(rule.message || `${names.join(' + ')} must be unique together`);
-        continue;
-      }
-      let ok;
-      // A rule checks the candidate row before it is stored: "probe" still holds the
-      // plain submitted value of any password field, never the hash a real row has.
-      // The checker makes a rule expression that throws unreachable for a valid graph;
-      // this stays fail-closed on purpose (a rule the runtime cannot evaluate refuses
-      // the write, it never lets it through) — see tests/interp.test.mjs.
-      try { ok = evaluate(compiled(rule.check), store.ctx(entity, probe, [], { allowSecret: true }), registry.functions); }
-      catch (e) { trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); problems.push(rule.message); continue; }
-      if (!ok) problems.push(rule.message);
-    }
+    // Rules (checks + uniqueness) are enforced once, in the store itself
+    // (Store#checkRules, runtime/store/rules.mjs) — every write meets them
+    // there: this form path, a block, and a seed row at boot all end up
+    // inside Store#insert/#update. Calling the same function here means the
+    // form path reports the exact messages it always has (item 20).
+    problems.push(...store.checkRules(entity, values, existing));
     return problems;
   };
   // What a client may set on this entity through a form. The form's declared field

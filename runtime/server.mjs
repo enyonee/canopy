@@ -75,8 +75,17 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
   const perms = permissions(graph, store);
   const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key'), store) : null;
 
-  const meId = bootstrapIdentity(graph, store);
-  bootstrapSeed(graph, store, path.dirname(graphFile), filesDir);
+  // A seed row is checked against the graph's own rules exactly like any other
+  // write (Store#insert/#update's guard, runtime/store/rules.mjs) — a
+  // violation is a boot error, not a crash: served the same way a statically
+  // invalid graph is (item 20).
+  let meId;
+  try {
+    meId = bootstrapIdentity(graph, store);
+    bootstrapSeed(graph, store, path.dirname(graphFile), filesDir);
+  } catch (e) {
+    return invalidGraphServer(graph, [{ path: '/seed', message: e.message }], port, host);
+  }
 
   const trace = (event) => {
     if (!traceFile) return;

@@ -15,6 +15,8 @@
   },
 
   "rules": {
+    "Collection": [ { "unique": ["user", "article"], "message": "Already saved to your collection" } ],
+    "ReadHistory": [ { "unique": ["user", "article"], "message": "Already in your reading history" } ],
     "User": [ { "unique": "email", "message": "This email is already registered" } ]
   },
 

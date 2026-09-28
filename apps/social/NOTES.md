@@ -31,13 +31,18 @@
 ## New for this app
 
 - Round 5: closed the "nothing stops a member voting on the same photo twice" Miss, but not
-  with `rules.unique` — a rule only ever runs inside `interp.validateValues`, which the HTTP
-  create/edit routes call and a step's own block (`db.createRow`, here) never does (steps are
+  with `rules.unique` — a rule only ever ran inside `interp.validateValues`, which the HTTP
+  create/edit routes call and a step's own block (`db.createRow`, here) never did (steps are
   trusted graph code; see `runtime/ARCHITECTURE.md`), so a compound-unique `Vote` rule would
   have been declared and silently never checked. `votePhoto`'s step is `db.ensure` instead of
   `db.createRow`: a repeat vote finds the existing `Vote` row instead of inserting a second one,
   so `Photo.votes := count(Vote)` never double-counts — idempotent by construction, not by a
-  rule that cannot reach this path.
+  rule that could reach this path.
+- Round 6: the above is fixed — rule enforcement moved into the store itself
+  (`Store#insert`/`#update`, `runtime/store/rules.mjs`), the one place every write lands, so it
+  now sees a block's own write too. `rules.Vote: [{"unique": ["photo", "voter"], ...}]` is
+  declared, as a backstop next to `db.ensure` (still the reason a repeat vote is a no-op rather
+  than a 400 — the rule only ever refuses a write `db.ensure` doesn't already avoid).
 - The same "saved list scoped to the login entity's own row" idiom from apps/sportsrecruit,
   this time doubling as the actual `home` redirect target rather than a secondary nav item —
   confirmed live that the `?ok=` flash query string survives the `/` → `/list/me` home redirect,

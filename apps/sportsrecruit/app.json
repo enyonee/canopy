@@ -17,6 +17,7 @@
   },
 
   "rules": {
+    "Application": [ { "unique": ["athlete", "job"], "message": "You have already applied to this job" } ],
     "User": [ { "unique": "email", "message": "This email is already registered" } ]
   },
 

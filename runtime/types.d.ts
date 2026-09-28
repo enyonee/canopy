@@ -201,10 +201,10 @@ export interface ViewContext {
   enabled?: boolean;
 }
 
-// store/query.mjs and store/state.mjs attach these to Store.prototype at
-// runtime (`Object.assign(Store.prototype, query, state)` in store.mjs) —
-// declared here, once, instead of on the class itself, purely for the
-// type checker; there is no other copy of this list.
+// store/query.mjs, store/state.mjs and store/rules.mjs attach these to
+// Store.prototype at runtime (`Object.assign(Store.prototype, query, state,
+// rules)` in store.mjs) — declared here, once, instead of on the class
+// itself, purely for the type checker; there is no other copy of this list.
 declare module './store.mjs' {
   interface Store {
     clauses(entity: string, where: Record<string, any>): { clauses: string[]; vals: any[]; later: [string, any][] };
@@ -219,5 +219,6 @@ declare module './store.mjs' {
     sessionSet(sid: string, userId: number): string;
     sessionUser(sid: string): number | null;
     sessionEnd(sid: string): void;
+    checkRules(entity: string, values: Record<string, any>, existing?: any): string[];
   }
 }

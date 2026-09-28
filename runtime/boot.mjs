@@ -41,18 +41,24 @@ export function bootstrapSeed(graph, store, appDir = '.', filesDir = null) {
   const remaining = new Set(seedEntities.filter((e) => !store.count(e)));
   const refFields = (e) => store.fields[e].filter((f) => f.kind === 'ref');
   const counter = { n: 0 };
+  // A seed row meets the same rules a block or a form write does (Store#insert/
+  // #update's own guard, runtime/store/rules.mjs) — a violation is a boot
+  // error, not a silent invariant break, so it is renamed here to name the
+  // entity and the row (by position in its /seed array) around the store's
+  // own message (the rule's).
+  const named = (entity, i, fn) => { try { return fn(); } catch (e) { throw new Error(`seed ${entity}[${i}]: ${e.message}`); } };
   const seedOne = (entity) => {
     const rows = graph.seed[entity].map((row) => materializeFiles(entity, row, store, appDir, filesDir, counter));
     const selfFields = refFields(entity).filter((f) => f.target === entity).map((f) => f.name);
-    const ids = rows.map((row) => {
+    const ids = rows.map((row, i) => named(entity, i, () => {
       if (!selfFields.length) return store.insert(entity, row);
       const rest = { ...row };
       for (const f of selfFields) delete rest[f];
       return store.insert(entity, rest);
-    });
+    }));
     rows.forEach((row, i) => {
       const patch = Object.fromEntries(selfFields.filter((f) => row[f] !== undefined).map((f) => [f, row[f]]));
-      if (Object.keys(patch).length) store.update(entity, ids[i], patch);
+      if (Object.keys(patch).length) named(entity, i, () => store.update(entity, ids[i], patch));
     });
     console.log(`seed: ${rows.length} row(s) into ${entity}`);
   };
