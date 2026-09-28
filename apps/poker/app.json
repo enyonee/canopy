@@ -1,0 +1,84 @@
+{
+  "app": "Poker",
+  "task": "webgen-bench/000007",
+  "note": "Texas Hold'em: a deterministic seeded shuffle + a real 7-card best-hand evaluator live in apps/poker/engine.mjs (kept out of plugins/, imported by both plugins/poker.mjs and checks.mjs — see apps/chess/engine.mjs for the same pattern and its rationale). Betting is simplified on purpose (see NOTES.md): one fixed bet per street, no re-raising — fold/check/call/bet(=big blind). Bots (simple: fold/call by hand strength, occasional bet, seeded) fill any empty seats and act immediately in the same request whenever it is their turn, same convention as the AI reply in apps/chess and apps/game2048.",
+  "theme": { "background": "azure", "accent": "midnightblue" },
+  "home": "/Room",
+  "plugins": ["./plugins/poker.mjs"],
+
+  "data": {
+    "User": { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,player]=player",
+              "handsPlayed": "int=0", "handsWon": "int=0" },
+    "Room": { "name": "text!", "maxSeats": "int=4", "smallBlind": "int=10", "bigBlind": "int=20",
+              "status": "enum[waiting,playing]=waiting", "handNumber": "int=0", "currentHand": "ref:Hand?" },
+    "Seat": { "room": "ref:Room!", "user": "ref:User?", "isBot": "bool=false", "position": "int=0", "label": "text!",
+              "chips": "int=1000", "holeCards": "text=", "committed": "int=0", "folded": "bool=false", "actedThisStreet": "bool=false" },
+    "Hand": { "room": "ref:Room!", "number": "int=1", "stage": "enum[preflop,flop,turn,river,done]=preflop",
+              "pot": "int=0", "community": "text=", "dealerPos": "int=0", "toActPos": "int=0", "currentBet": "int=0",
+              "deckIndex": "int=0", "winnerLabel": "text=", "winningHandName": "text=" },
+    "Chat": { "room": "ref:Room!", "user": "ref:User?", "authorLabel": "text!", "text": "text!", "createdAt": "time=now" }
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "player", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "player": { "Room": ["view", "create", "do:join", "do:startHand", "do:act"],
+                  "Seat": ["view"], "Hand": ["view"], "Chat": ["view", "create"], "User": ["view"] },
+      "guest":  { "Room": ["view"], "Seat": ["view"], "Hand": ["view"], "Chat": ["view"], "User": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User": [
+      { "email": "admin@poker.test", "password": "admin123", "name": "Admin", "role": "admin" },
+      { "email": "alice@poker.test", "password": "alice123", "name": "Alice", "handsPlayed": 12, "handsWon": 5 },
+      { "email": "bob@poker.test", "password": "bob12345", "name": "Bob", "handsPlayed": 9, "handsWon": 3 }
+    ],
+    "Room": [
+      { "name": "High Rollers", "maxSeats": 4, "smallBlind": 10, "bigBlind": 20, "status": "waiting", "handNumber": 0 },
+      { "name": "Friday Night", "maxSeats": 3, "smallBlind": 5, "bigBlind": 10, "status": "waiting", "handNumber": 0 }
+    ],
+    "Seat": [
+      { "room": 1, "user": 2, "isBot": false, "position": 0, "label": "Alice", "chips": 980, "holeCards": "", "committed": 0, "folded": false, "actedThisStreet": false },
+      { "room": 2, "user": 3, "isBot": false, "position": 0, "label": "Bob", "chips": 1000, "holeCards": "", "committed": 0, "folded": false, "actedThisStreet": false }
+    ],
+    "Chat": [
+      { "room": 1, "user": 2, "authorLabel": "Alice", "text": "Good luck all!" }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "User.list": { "title": "Players", "columns": ["name", "handsPlayed", "handsWon"], "create": false, "rowActions": ["view"] },
+    "User.detail": { "fields": ["name", "handsPlayed", "handsWon"] },
+    "Room.list": { "title": "Lobby", "columns": ["name", "status", "maxSeats", "handNumber", "smallBlind", "bigBlind"],
+                   "filters": [ { "name": "Status", "field": "status" } ],
+                   "createTitle": "Open a table", "fields": ["name", "maxSeats"],
+                   "rowActions": ["view", "join"] },
+    "Room.form": { "title": "Open a table", "fields": ["name", "maxSeats"], "after": "/Room/{id}", "confirm": "Table opened!" },
+    "Room.detail": { "fields": ["status", "maxSeats", "smallBlind", "bigBlind", "handNumber"],
+                     "widget": { "use": "poker" }, "actions": ["join", "startHand"],
+                     "related": [
+                       { "entity": "Seat", "via": "room", "title": "Seats", "columns": ["position", "label", "chips", "folded"], "form": false, "rowActions": [] },
+                       { "entity": "Chat", "via": "room", "title": "Chat", "columns": ["authorLabel", "text"], "form": ["text"], "fill": { "authorLabel": "@me.name", "user": "@me" }, "submit": "Send" }
+                     ] },
+    "Seat.list": { "hidden": true, "filters": [ { "name": "Room", "field": "room" } ] },
+    "Hand.list": { "hidden": true, "filters": [ { "name": "Room", "field": "room" } ] },
+    "Chat.list": { "hidden": true }
+  },
+
+  "actions": [
+    { "name": "join", "in": "Room", "after": "/Room/{id}", "confirm": "You joined {row.name}",
+      "do": [ { "block": "poker.join" } ] },
+    { "name": "startHand", "in": "Room", "after": "/Room/{id}", "confirm": "Hand #{row.handNumber} dealt",
+      "do": [ { "block": "poker.startHand" } ] },
+    { "name": "act", "in": "Room", "after": "/Room/{id}",
+      "do": [ { "block": "poker.act", "action": "= values.action" } ] }
+  ],
+
+  "events": [
+    { "on": "Room.created", "do": [ { "block": "poker.seatCreator" } ] }
+  ]
+}

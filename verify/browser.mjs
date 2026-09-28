@@ -23,7 +23,7 @@ export async function openBrowser(url, { cookie = '' } = {}) {
   if (!bin) throw new Error('no Chrome found (set AG_CHROME)');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-chrome-'));
   const chrome = spawn(bin, ['--headless=new', '--remote-debugging-port=0', '--no-first-run',
-    '--no-default-browser-check', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    '--no-default-browser-check', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'], detached: true });
   const port = await new Promise((resolve, reject) => {
     let log = '';
     const timer = setTimeout(() => reject(new Error(`Chrome did not start: ${log.slice(-300)}`)), 15000);
@@ -67,6 +67,14 @@ export async function openBrowser(url, { cookie = '' } = {}) {
   };
   const goto = async (to) => { await send('Page.navigate', { url: to }); await until(`document.readyState === 'complete'`); await wait(300); };
   await goto(url);
-  const close = async () => { ws.close(); chrome.kill('SIGKILL'); fs.rmSync(profile, { recursive: true, force: true }); };
+  // The profile is removed only after Chrome and its helpers have exited: while
+  // they run they keep writing there, and an rmSync racing them fails with ENOTEMPTY.
+  const exited = new Promise((r) => chrome.once('exit', r));
+  const close = async () => {
+    ws.close();
+    process.kill(-chrome.pid, 'SIGKILL'); // the whole group: renderers outlive a killed parent
+    await exited;
+    fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  };
   return { eval: evaluate, until, goto, close, errors };
 }

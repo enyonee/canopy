@@ -1,0 +1,54 @@
+{
+  "app": "2048",
+  "task": "webgen-bench/000013",
+  "note": "2048: the rules engine (slide/merge, deterministic id-seeded tile spawn, deadlock/win detection) is an app-local plugin (plugins/game2048.mjs) — pure functions plus two blocks and a widget, the same widget+JSON-answer shape apps/tictactoe proves. The server is the sole authority: the widget only renders the row JSON it is given and posts a direction, exactly like ttt.client.mjs posts a cell.",
+  "theme": { "background": "linen", "accent": "maroon" },
+  "home": "/page/home",
+  "plugins": ["./plugins/game2048.mjs"],
+
+  "data": {
+    "Game": {
+      "board": "text=0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+      "score": "int=0",
+      "status": "enum[playing,over]=playing",
+      "won": "bool=false",
+      "draws": "int=0"
+    }
+  },
+
+  "seed": {
+    "Game": [
+      { "board": "2,4,0,2,8,4,2,0,0,2,16,4,4,0,2,8", "score": 96, "status": "playing", "won": false, "draws": 6 },
+      { "board": "2,4,8,16,32,64,128,256,512,1024,2,4,8,16,32,64", "score": 4088, "status": "over", "won": true, "draws": 34 }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Game.list": { "title": "Games", "columns": ["id", "score", "status", "won"], "create": false, "rowActions": ["view", "delete"] },
+    "Game.detail": { "fields": ["score", "status", "won"], "widget": { "use": "game2048" } }
+  },
+
+  "actions": [
+    { "name": "newGame", "after": "/Game/{created}", "confirm": "New game started!",
+      "do": [ { "block": "game2048.newGame" } ] },
+    { "name": "move", "in": "Game", "after": "/Game/{id}",
+      "do": [ { "block": "game2048.move", "direction": "= values.direction" } ] }
+  ],
+
+  "events": [
+    { "on": "Game.updated", "do": [ { "block": "game2048.sync" } ] }
+  ],
+
+  "states": {
+    "Game": { "field": "status", "transitions": [
+      { "name": "giveUp", "from": ["playing"], "to": "over", "title": "Give up", "confirm": "Game over — you gave up." },
+      { "name": "revive", "from": ["over"], "to": "playing", "title": "Revive", "confirm": "Revived! The board is just as you left it — keep sliding." }
+    ] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "2048", "heading": "2048", "intro": "Slide tiles with the arrow keys or the on-screen buttons; merge equal numbers; reach the 2048 tile to win, or revive if you get stuck.",
+      "actions": ["newGame"], "links": [ { "label": "All games", "href": "/Game" } ] }
+  ]
+}

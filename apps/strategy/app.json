@@ -1,0 +1,174 @@
+{
+  "app": "Realms",
+  "task": "webgen-bench/000011",
+  "note": "A text-based strategy game. Resources accrue through a real schedule tick (docs/FORMAT.md's Round-4 'schedule' node) rather than being invented on page load; checks trigger it by hand with POST /schedule/tick/run instead of waiting on the clock. Every page named in the instruction (base/ranking/store/train/workers/upgrades/bank/messages/reports) is a real, separate route — base/train/workers/upgrades/bank are five differently-named saved lists over the same 'where: id=@me' single row (see NOTES.md), since a plain action button has no input fields of its own; picking a race, an item or an opponent is instead picking a ROW (Race/StoreItem/User), whose row action needs no extra input at all. Battles resolve by a stated formula (soldiers x rating, +/-20% jitter seeded by both sides' state, not Math.random()) in plugins/strategy.mjs.",
+  "theme": { "background": "seashell", "accent": "crimson" },
+  "home": "/list/base",
+
+  "plugins": ["./plugins/strategy.mjs"],
+
+  "data": {
+    "User": {
+      "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,player]=player",
+      "race": "ref:Race?",
+      "cityLevel": "int=1", "gold": "int=500", "iron": "int=200", "wood": "int=200", "wheat": "int=200",
+      "bankGold": "int=0", "workers": "int=10", "soldiers": "int=0", "attack": "int=10", "defense": "int=10",
+      "assignedTask": "enum[gold,iron,wood,wheat]=gold",
+      "points": "int := cityLevel * 100 + soldiers * 5 + workers"
+    },
+    "Race": {
+      "name": "text!", "goldBonus": "int=0", "ironBonus": "int=0", "woodBonus": "int=0", "wheatBonus": "int=0",
+      "description": "longtext"
+    },
+    "StoreItem": {
+      "name": "text!", "costGold": "int=0", "costIron": "int=0", "costWood": "int=0", "costWheat": "int=0",
+      "grantsWorkers": "int=0", "grantsSoldiers": "int=0", "stock": "int=1", "description": "text"
+    },
+    "Message": {
+      "toUser": "ref:User!", "fromUser": "ref:User?", "subject": "text!", "body": "longtext!",
+      "read": "bool=false", "sentAt": "time=now"
+    },
+    "Report": { "user": "ref:User!", "summary": "text!", "createdAt": "time=now" }
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "player",
+    "can": {
+      "admin": "*",
+      "player": {
+        "Race": ["view", "do:choose"],
+        "StoreItem": ["view", "do:buy"],
+        "User": ["view", "do:upgradeCity", "do:trainWorker", "do:trainSoldier", "do:upgradeSoldier",
+                 "do:depositGold", "do:assignGold", "do:assignIron", "do:assignWood", "do:assignWheat", "do:attack"],
+        "Message": ["view", "create"],
+        "Report": ["view"]
+      }
+    }
+  },
+
+  "seed": {
+    "Race": [
+      { "name": "Humans", "goldBonus": 5, "ironBonus": 5, "woodBonus": 5, "wheatBonus": 5, "description": "Balanced in every resource, masters of none." },
+      { "name": "Dragonborns", "goldBonus": -5, "ironBonus": 10, "woodBonus": -5, "wheatBonus": 0, "description": "Fierce warriors; strong iron mining fuels their forges, but gold and wood suffer." },
+      { "name": "Elves", "goldBonus": 0, "ironBonus": -10, "woodBonus": 15, "wheatBonus": 10, "description": "Forest-dwellers with abundant wood and wheat, but poor at mining iron." },
+      { "name": "Dwarfs", "goldBonus": 10, "ironBonus": 15, "woodBonus": -10, "wheatBonus": -5, "description": "Master miners: excellent gold and iron income, weak farming and forestry." }
+    ],
+    "User": [
+      { "email": "admin@realms.test", "password": "admin123", "name": "Admin", "role": "admin" },
+      { "email": "alice@realms.test", "password": "alice123", "name": "Alice", "race": 1, "cityLevel": 3, "gold": 800, "iron": 400, "wood": 300, "wheat": 350, "workers": 15, "soldiers": 8 },
+      { "email": "bob@realms.test", "password": "bob12345", "name": "Bob", "race": 4, "cityLevel": 2, "gold": 600, "iron": 500, "wood": 150, "wheat": 200, "workers": 12, "soldiers": 5 }
+    ],
+    "StoreItem": [
+      { "name": "Recruit a worker", "costGold": 60, "costWheat": 20, "grantsWorkers": 1, "stock": 2, "description": "Hires one more worker for your city. Limited stock." },
+      { "name": "Hire a mercenary", "costGold": 120, "costIron": 60, "grantsSoldiers": 1, "stock": 5, "description": "Adds one soldier to your garrison." }
+    ],
+    "Report": [
+      { "user": 2, "summary": "Your city produced its weekly harvest without incident." }
+    ],
+    "Message": [
+      { "toUser": 2, "fromUser": null, "subject": "Welcome to Realms", "body": "Choose your race on the Choose Race page to begin earning racial bonuses." }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Race.list": { "title": "Choose Race", "columns": ["name", "goldBonus", "ironBonus", "woodBonus", "wheatBonus", "description"], "create": false, "rowActions": ["choose"] },
+    "StoreItem.list": { "title": "Store", "columns": ["name", "costGold", "costIron", "costWood", "costWheat", "grantsWorkers", "grantsSoldiers", "stock"], "create": false, "where": { "stock": { "gt": 0 } }, "rowActions": ["buy"] },
+    "User.list": { "hidden": true },
+    "Message.list": { "title": "Messages", "where": { "toUser": "@me" }, "columns": ["fromUser", "subject", "sentAt"], "create": false, "sort": { "field": "sentAt", "dir": "desc" } },
+    "Report.list": { "title": "Reports", "where": { "user": "@me" }, "columns": ["summary", "createdAt"], "create": false, "sort": { "field": "createdAt", "dir": "desc" } }
+  },
+
+  "actions": [
+    { "name": "upgradeCity", "in": "User", "after": "/list/base", "confirm": "City upgraded to level {row.cityLevel}!",
+      "do": [
+        { "block": "strategy.requireSelf" },
+        { "block": "db.adjust", "field": "gold", "by": "= 0 - cityLevel * 100", "min": 0, "message": "Not enough gold to upgrade the city" },
+        { "block": "db.adjust", "field": "iron", "by": "= 0 - cityLevel * 50", "min": 0, "message": "Not enough iron to upgrade the city" },
+        { "block": "db.adjust", "field": "wood", "by": "= 0 - cityLevel * 30", "min": 0, "message": "Not enough wood to upgrade the city" },
+        { "block": "db.adjust", "field": "wheat", "by": "= 0 - cityLevel * 30", "min": 0, "message": "Not enough wheat to upgrade the city" },
+        { "block": "db.update", "set": { "cityLevel": "= cityLevel + 1" } }
+      ] },
+    { "name": "trainWorker", "in": "User", "after": "/list/train", "confirm": "Training complete: +1 worker",
+      "do": [
+        { "block": "strategy.requireSelf" },
+        { "block": "db.adjust", "field": "gold", "by": -50, "min": 0, "message": "Not enough gold to train a worker" },
+        { "block": "db.adjust", "field": "wheat", "by": -20, "min": 0, "message": "Not enough wheat to train a worker" },
+        { "block": "db.adjust", "field": "workers", "by": 1 }
+      ] },
+    { "name": "trainSoldier", "in": "User", "after": "/list/train", "confirm": "Training complete: +1 soldier",
+      "do": [
+        { "block": "strategy.requireSelf" },
+        { "block": "db.adjust", "field": "gold", "by": -100, "min": 0, "message": "Not enough gold to train a soldier" },
+        { "block": "db.adjust", "field": "iron", "by": -50, "min": 0, "message": "Not enough iron to train a soldier" },
+        { "block": "db.adjust", "field": "soldiers", "by": 1 }
+      ] },
+    { "name": "upgradeSoldier", "in": "User", "after": "/list/upgrades", "confirm": "Soldiers upgraded: +5 attack, +5 defense",
+      "do": [
+        { "block": "strategy.requireSelf" },
+        { "block": "db.adjust", "field": "gold", "by": -200, "min": 0, "message": "Not enough gold to upgrade your soldiers" },
+        { "block": "db.adjust", "field": "iron", "by": -100, "min": 0, "message": "Not enough iron to upgrade your soldiers" },
+        { "block": "db.adjust", "field": "attack", "by": 5 },
+        { "block": "db.adjust", "field": "defense", "by": 5 }
+      ] },
+    { "name": "depositGold", "in": "User", "after": "/list/bank", "confirm": "Deposited 100 gold; bank balance {row.bankGold}",
+      "do": [
+        { "block": "strategy.requireSelf" },
+        { "block": "db.adjust", "field": "gold", "by": -100, "min": 0, "message": "Not enough gold on hand to deposit" },
+        { "block": "db.adjust", "field": "bankGold", "by": 100 }
+      ] },
+    { "name": "assignGold", "in": "User", "after": "/list/workers", "confirm": "Workers assigned to gold",
+      "do": [ { "block": "strategy.requireSelf" }, { "block": "db.adjust", "field": "gold", "by": -20, "min": 0, "message": "Not enough gold to reassign workers" }, { "block": "db.update", "set": { "assignedTask": "gold" } } ] },
+    { "name": "assignIron", "in": "User", "after": "/list/workers", "confirm": "Workers assigned to iron",
+      "do": [ { "block": "strategy.requireSelf" }, { "block": "db.adjust", "field": "gold", "by": -20, "min": 0, "message": "Not enough gold to reassign workers" }, { "block": "db.update", "set": { "assignedTask": "iron" } } ] },
+    { "name": "assignWood", "in": "User", "after": "/list/workers", "confirm": "Workers assigned to wood",
+      "do": [ { "block": "strategy.requireSelf" }, { "block": "db.adjust", "field": "gold", "by": -20, "min": 0, "message": "Not enough gold to reassign workers" }, { "block": "db.update", "set": { "assignedTask": "wood" } } ] },
+    { "name": "assignWheat", "in": "User", "after": "/list/workers", "confirm": "Workers assigned to wheat",
+      "do": [ { "block": "strategy.requireSelf" }, { "block": "db.adjust", "field": "gold", "by": -20, "min": 0, "message": "Not enough gold to reassign workers" }, { "block": "db.update", "set": { "assignedTask": "wheat" } } ] },
+    { "name": "choose", "in": "Race", "after": "/list/base", "confirm": "You are now playing as the {row.name}",
+      "do": [ { "block": "strategy.chooseRace" } ] },
+    { "name": "buy", "in": "StoreItem", "after": "/StoreItem", "confirm": "Purchased {row.name}",
+      "do": [
+        { "block": "db.adjust", "field": "stock", "by": -1, "min": 0, "message": "This item is out of stock" },
+        { "block": "db.adjust", "entity": "User", "id": "@me", "field": "gold", "by": "= 0 - row.costGold", "min": 0, "message": "Not enough gold for that item" },
+        { "block": "db.adjust", "entity": "User", "id": "@me", "field": "iron", "by": "= 0 - row.costIron", "min": 0, "message": "Not enough iron for that item" },
+        { "block": "db.adjust", "entity": "User", "id": "@me", "field": "wood", "by": "= 0 - row.costWood", "min": 0, "message": "Not enough wood for that item" },
+        { "block": "db.adjust", "entity": "User", "id": "@me", "field": "wheat", "by": "= 0 - row.costWheat", "min": 0, "message": "Not enough wheat for that item" },
+        { "block": "db.adjust", "entity": "User", "id": "@me", "field": "workers", "by": "= row.grantsWorkers" },
+        { "block": "db.adjust", "entity": "User", "id": "@me", "field": "soldiers", "by": "= row.grantsSoldiers" }
+      ] },
+    { "name": "attack", "in": "User", "after": "/list/ranking", "confirm": "Attack resolved — see your Reports",
+      "do": [ { "block": "strategy.attack" } ] }
+  ],
+
+  "schedule": [
+    { "name": "tick", "every": "5m", "note": "resource accrual per player: base + city level + workers + an assigned-task bonus + race bonus",
+      "do": [ { "block": "db.each", "from": "User",
+        "do": [
+          { "block": "db.adjust", "entity": "User", "id": "@each.id", "field": "gold",
+            "by": "= 10 + each.cityLevel * 3 + each.workers + if(each.assignedTask = 'gold', each.workers * 2, 0) + coalesce(each.race.goldBonus, 0)" },
+          { "block": "db.adjust", "entity": "User", "id": "@each.id", "field": "iron",
+            "by": "= 5 + each.cityLevel * 3 + each.workers + if(each.assignedTask = 'iron', each.workers * 2, 0) + coalesce(each.race.ironBonus, 0)" },
+          { "block": "db.adjust", "entity": "User", "id": "@each.id", "field": "wood",
+            "by": "= 5 + each.cityLevel * 3 + each.workers + if(each.assignedTask = 'wood', each.workers * 2, 0) + coalesce(each.race.woodBonus, 0)" },
+          { "block": "db.adjust", "entity": "User", "id": "@each.id", "field": "wheat",
+            "by": "= 5 + each.cityLevel * 3 + each.workers + if(each.assignedTask = 'wheat', each.workers * 2, 0) + coalesce(each.race.wheatBonus, 0)" }
+        ] } ] }
+  ],
+
+  "lists": [
+    { "id": "base", "title": "Base", "entity": "User", "where": { "id": "@me" }, "roles": ["player"],
+      "columns": ["name", "race", "cityLevel", "gold", "iron", "wood", "wheat", "bankGold", "workers", "soldiers", "points"], "rowActions": ["upgradeCity"] },
+    { "id": "ranking", "title": "Ranking", "entity": "User", "roles": ["player"], "where": { "role": "player" },
+      "sort": { "field": "points", "dir": "desc" }, "columns": ["name", "race", "cityLevel", "points"], "rowActions": ["attack"] },
+    { "id": "train", "title": "Train", "entity": "User", "where": { "id": "@me" }, "roles": ["player"],
+      "columns": ["workers", "soldiers", "gold", "iron", "wheat"], "rowActions": ["trainWorker", "trainSoldier"] },
+    { "id": "workers", "title": "Workers", "entity": "User", "where": { "id": "@me" }, "roles": ["player"],
+      "columns": ["workers", "assignedTask", "gold"], "rowActions": ["assignGold", "assignIron", "assignWood", "assignWheat"] },
+    { "id": "upgrades", "title": "Upgrades", "entity": "User", "where": { "id": "@me" }, "roles": ["player"],
+      "columns": ["soldiers", "attack", "defense", "gold", "iron"], "rowActions": ["upgradeSoldier"] },
+    { "id": "bank", "title": "Bank", "entity": "User", "where": { "id": "@me" }, "roles": ["player"],
+      "columns": ["gold", "bankGold"], "rowActions": ["depositGold"] }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "app": "Baseball Manager",
+  "task": "webgen-bench/000012",
+  "note": "Team/roster/finance management plus a deterministic seeded game simulation (apps/baseball/engine.mjs — a real inning-by-inning sim with base-running, kept out of plugins/ and imported by both the server and checks.mjs, same pattern as apps/chess and apps/poker). Creating a Game (the standard entity form) immediately simulates it via a Game.created event: no accounts are named anywhere in the instruction, so — like apps/game2048 — this app has no /roles, everything is open.",
+  "theme": { "background": "floralwhite", "accent": "darkgoldenrod" },
+  "home": "/Team",
+
+  "plugins": ["./plugins/baseball.mjs"],
+
+  "data": {
+    "Team": {
+      "name": "text!", "budget": "int=100000", "trainingBudget": "int=20000",
+      "defenseStrategy": "enum[aggressive,balanced,conservative]=balanced",
+      "wins": "int=0", "losses": "int=0"
+    },
+    "Player": {
+      "team": "ref:Team!", "name": "text!", "position": "enum[P,C,1B,2B,3B,SS,LF,CF,RF]=1B",
+      "battingOrder": "int=1", "rating": "int=50",
+      "atBats": "int=0", "hits": "int=0", "homeRuns": "int=0", "rbis": "int=0",
+      "battingAvg": "int := if(atBats > 0, round(hits * 1000 / atBats, 0), 0)"
+    },
+    "Game": {
+      "home": "ref:Team!", "away": "ref:Team!", "innings": "int=9",
+      "status": "enum[scheduled,finished]=scheduled",
+      "homeScore": "int=0", "awayScore": "int=0",
+      "homeDefenseUsed": "enum[aggressive,balanced,conservative]=balanced",
+      "awayDefenseUsed": "enum[aggressive,balanced,conservative]=balanced"
+    },
+    "Play": {
+      "game": "ref:Game!", "seq": "int=1", "inning": "int=1", "half": "enum[top,bottom]=top",
+      "description": "text!", "homeScoreAfter": "int=0", "awayScoreAfter": "int=0"
+    }
+  },
+
+  "rules": {
+    "Team": [ { "check": "budget >= 0", "message": "Budget cannot go negative" },
+              { "check": "trainingBudget >= 0", "message": "Training budget cannot go negative" } ],
+    "Player": [ { "check": "rating >= 1 and rating <= 99", "message": "Rating must be between 1 and 99" } ],
+    "Game": [ { "check": "home != away", "message": "A team cannot play itself" } ]
+  },
+
+  "seed": {
+    "Team": [
+      { "name": "River City Rockets", "budget": 120000, "trainingBudget": 15000, "defenseStrategy": "balanced", "wins": 4, "losses": 2 },
+      { "name": "Bay Area Barracudas", "budget": 95000, "trainingBudget": 25000, "defenseStrategy": "aggressive", "wins": 3, "losses": 3 }
+    ],
+    "Player": [
+      { "team": 1, "name": "Miguel Ortiz", "position": "SS", "battingOrder": 1, "rating": 72, "atBats": 40, "hits": 14, "homeRuns": 2, "rbis": 9 },
+      { "team": 1, "name": "Dave Chen", "position": "1B", "battingOrder": 2, "rating": 80, "atBats": 42, "hits": 15, "homeRuns": 6, "rbis": 18 },
+      { "team": 1, "name": "Leo Park", "position": "CF", "battingOrder": 3, "rating": 65, "atBats": 38, "hits": 11, "homeRuns": 1, "rbis": 6 },
+      { "team": 2, "name": "Sam Rivera", "position": "3B", "battingOrder": 1, "rating": 68, "atBats": 39, "hits": 12, "homeRuns": 3, "rbis": 10 },
+      { "team": 2, "name": "Jordan Blake", "position": "RF", "battingOrder": 2, "rating": 75, "atBats": 41, "hits": 13, "homeRuns": 4, "rbis": 14 },
+      { "team": 2, "name": "Casey Wu", "position": "P", "battingOrder": 3, "rating": 55, "atBats": 20, "hits": 4, "homeRuns": 0, "rbis": 2 }
+    ],
+    "Game": [
+      { "home": 1, "away": 2, "innings": 9, "status": "finished", "homeScore": 5, "awayScore": 3, "homeDefenseUsed": "balanced", "awayDefenseUsed": "aggressive" }
+    ],
+    "Play": [
+      { "game": 1, "seq": 1, "inning": 1, "half": "top", "description": "Sam Rivera: single", "homeScoreAfter": 0, "awayScoreAfter": 0 },
+      { "game": 1, "seq": 2, "inning": 1, "half": "top", "description": "Jordan Blake: homerun (2 runs in)", "homeScoreAfter": 0, "awayScoreAfter": 2 },
+      { "game": 1, "seq": 3, "inning": 9, "half": "bottom", "description": "Dave Chen: single (1 run in)", "homeScoreAfter": 5, "awayScoreAfter": 3 }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Team.list": { "title": "Teams", "columns": ["name", "wins", "losses", "budget", "trainingBudget", "defenseStrategy"] },
+    "Team.form": { "fields": ["name", "budget", "trainingBudget", "defenseStrategy"], "afterEdit": "/Team/{id}", "confirmEdit": "Team updated" },
+    "Team.detail": { "fields": ["name", "wins", "losses", "budget", "trainingBudget", "defenseStrategy"],
+                     "related": [ { "entity": "Player", "via": "team", "title": "Roster", "columns": ["battingOrder", "name", "position", "rating", "battingAvg", "homeRuns", "rbis"], "form": ["name", "position", "battingOrder", "rating"], "submit": "Add player" } ] },
+    "Player.list": { "title": "Player Statistics", "columns": ["name", "team", "position", "battingAvg", "homeRuns", "rbis", "atBats", "hits"],
+                     "search": ["name"], "filters": [ { "name": "Team", "field": "team" }, { "name": "Position", "field": "position" } ] },
+    "Player.detail": { "fields": ["team", "position", "battingOrder", "rating", "atBats", "hits", "homeRuns", "rbis", "battingAvg"] },
+    "Game.list": { "title": "Game Simulation", "columns": ["home", "away", "status", "homeScore", "awayScore"], "createTitle": "Simulate a new game" },
+    "Game.form": { "title": "Simulate a new game", "fields": ["home", "away", "innings"], "after": "/Game/{id}", "confirm": "Game simulated!" },
+    "Game.detail": { "fields": ["home", "away", "status", "innings", "homeScore", "awayScore", "homeDefenseUsed", "awayDefenseUsed"],
+                     "related": [ { "entity": "Play", "via": "game", "title": "Play-by-play", "columns": ["seq", "inning", "half", "description", "homeScoreAfter", "awayScoreAfter"], "form": false, "rowActions": [] } ] },
+    "Play.list": { "hidden": true, "filters": [ { "name": "Game", "field": "game" } ] }
+  },
+
+  "events": [
+    { "on": "Game.created", "do": [ { "block": "baseball.simulate" } ] }
+  ],
+
+  "dashboards": [
+    { "id": "standings", "title": "Standings", "cards": [
+        { "title": "Teams", "entity": "Team", "fn": "count" },
+        { "title": "Games played", "entity": "Game", "fn": "count", "where": { "status": "finished" } },
+        { "title": "Total runs scored", "entity": "Game", "fn": "sum", "field": "homeScore", "where": { "status": "finished" } }
+      ],
+      "tables": [ { "title": "Team records", "entity": "Team", "groupBy": "name", "groupTitle": "Team",
+                    "metrics": [ { "fn": "sum", "field": "wins", "as": "w", "title": "Wins" }, { "fn": "sum", "field": "losses", "as": "l", "title": "Losses" } ] } ] }
+  ]
+}
