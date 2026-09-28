@@ -14,7 +14,7 @@
     "@types/node": "^22.20.4",
     "typescript": "^5.9.3"
   },
-  "description": "Applications as a closed graph of effects with pure leaves: one JSON document in, a working app out.",
+  "description": "A lightweight app runtime: one JSON document in, a working app out. Zero runtime dependencies.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -22,5 +22,14 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "keywords": [
+    "lightweight",
+    "low-code",
+    "app-generator",
+    "json",
+    "sqlite",
+    "llm",
+    "declarative"
+  ]
 }

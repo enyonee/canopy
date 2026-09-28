@@ -1,6 +1,10 @@
 # Canopy
 
-**Applications as a closed graph of effects with pure leaves.** A language model writes one
+**A lightweight app runtime: one JSON document in, a working application out.** Canopy is
+~4.4k lines of JavaScript with zero runtime dependencies. It runs one Node process and one
+SQLite file per app, with no build step, no framework and no frontend bundle.
+
+Applications are a closed graph of effects with pure leaves. A language model writes one
 JSON document per app. The runtime derives the schema, migrations, routes, screens, permissions
 and outgoing effects from that document. Changing the app later is a patch to one node, not
 another rewrite.
@@ -17,6 +21,29 @@ app.json ──► checker ──► SQLite schema + migrations
 ![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-blue)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 ![WebGen-Bench](https://img.shields.io/badge/WebGen--Bench-101%2F101%20tasks-brightgreen)
+
+## Lightweight by design
+
+Everything an app needs comes from the platform and one small runtime:
+
+| | |
+|---|---|
+| Runtime code | ~4.4k lines, 264 KB of source |
+| Runtime dependencies | **0**: Node 22 built-ins only (`node:sqlite`, `node:http`, `node:crypto`) |
+| Build step | none; no bundler, transpiler or frontend toolchain |
+| An app | one `app.json`: median **76 lines** (~5.7 KB) across the 104 apps in this repo |
+| Storage | one SQLite file per app, migrated from the graph on start |
+| Deploy unit | a directory: `app.json` + `data.sqlite` (+ plugins if the app has any) |
+| Start-up | ~0.3 s from `node runtime/run.mjs` to the first answer |
+| Memory | ~75 MB resident per app process, nearly all of it Node itself |
+| Frontend | server-rendered HTML; optional widgets are 1–9 KB of unminified JS each |
+
+`typescript` is the only dev dependency, used by the type gate. Nothing is installed to run an
+app.
+
+Being lightweight does not mean missing features. The same small runtime serves roles,
+ownership, state machines, dashboards with charts, an outbox for HTTP, mail, SMS and payments,
+a JSON API on every route and client widgets. All 101 WebGen-Bench tasks run on it.
 
 ## The invariant
 
