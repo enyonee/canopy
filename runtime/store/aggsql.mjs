@@ -26,7 +26,7 @@
 // `today`/`now` are the evaluation's one clock (evaluate()'s `clock`, or the page's
 // shared one, hydrate.mjs), bound as named parameters — never SQLite's own clock.
 import { exact } from '../expr.mjs';
-import { compileBody } from './aggexpr.mjs';
+import { compileBody, MAX_EXPANSIONS } from './aggexpr.mjs';
 
 // Kept equal to store/query.mjs's own IN_CHUNK (SQLite's bound-parameter
 // limit) but not imported from it — aggsql.mjs is a leaf query.mjs calls
@@ -54,16 +54,19 @@ export function compileAgg(store, entity, node) {
 function plan(store, entity, node) {
   const via = store.childVia(node.entity, entity, node.via);
   if (!via) return null; // no direct link back — the one case query.mjs always kept unbatched
-  const cx = { store, entity, depth: -1, stack: [], params: new Set() };
+  const cx = { store, entity, depth: -1, stack: [], params: new Set(), budget: { left: MAX_EXPANSIONS } };
   const b = compileBody(cx, node);
   if (!b) return null;
-  return { child: node.entity, via, fn: node.fn, exprSQL: b.exprSQL, condSQL: b.condSQL, scale: b.scale, text: Boolean(b.text), params: [...cx.params] };
+  const key = `${node.entity}|${via}|${node.fn}|${b.exprSQL}|${b.condSQL}`;
+  return { child: node.entity, via, fn: node.fn, exprSQL: b.exprSQL, condSQL: b.condSQL, scale: b.scale, text: Boolean(b.text), params: [...cx.params], key };
 }
 
 // Distinguishes two different aggregates that happen to share a (child, via)
 // pair — `total := sum(Item: qty*price)` and `count := count(Item)` on the
-// same Order both key off Item|order, but need separate cached maps.
-export const aggKey = (c) => `${c.child}|${c.via}|${c.fn}|${c.exprSQL}|${c.condSQL}`;
+// same Order both key off Item|order, but need separate cached maps. Built once
+// with the plan: a derived body can make the SQL text kilobytes long, and this is
+// asked for once per row per aggregate.
+export const aggKey = (c) => c.key;
 
 function selectCols(c) {
   if (c.fn === 'count') return 'COUNT(*) AS v';

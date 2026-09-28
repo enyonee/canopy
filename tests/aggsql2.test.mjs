@@ -130,7 +130,7 @@ test('a derived cycle or an over-deep chain is not compiled, and never loops the
   }, views: 'auto' }, ':memory:');
   no(store, 'Order', 'sum(Item: a)'); // a cycle: the JS path raises its own error, as it always did
   no(store, 'Order', 'sum(Item: d0)'); // 12 derived fields inside one another: past MAX_STACK
-  no(store, 'Order', 'sum(Item: x6)'); // 5^6 copies of one field: past MAX_SQL
+  no(store, 'Order', 'sum(Item: x6)'); // 5^6 copies of one field: past MAX_EXPANSIONS
   yes(store, 'Order', 'sum(Item: x2)');
   const o = store.insert('Order', {});
   store.insert('Item', { order: o, qty: 1 });
