@@ -101,7 +101,7 @@ const MUTATIONS = [
     find: "const esc = (s) => String(s ?? '').replace(/[&<>\"']/g, (c) =>",
     replace: "const esc = (s) => String(s ?? '').replace(/[\\u0000]/g, (c) =>" },
   { name: 'a reference renders as its raw id', file: 'runtime/fields.mjs',
-    find: "    format: (v, f, { esc, store }) => { const target = store.get(f.target, v); return target ? `<a href=\"/${f.target}/${target.id}\">${esc(store.label(f.target, target))}</a>` : '—'; },",
+    find: "    format: (v, f, { esc, store }) => { const lbl = store.labelOf(f.target, v); return lbl ? `<a href=\"/${f.target}/${v}\">${esc(lbl)}</a>` : '—'; },",
     replace: "    format: (v, f, { esc }) => esc(v)," },
   { name: 'appending to an array overwrites its first item', file: 'runtime/patch.mjs',
     find: "    else if (last === '-' && Array.isArray(node)) node.push(op.value);",
@@ -362,8 +362,8 @@ const MUTATIONS = [
     find: "    if (keep.has(name)) continue;\n    this.db.exec(`DROP INDEX IF EXISTS \"${name}\"`);",
     replace: "    if (true) continue;\n    this.db.exec(`DROP INDEX IF EXISTS \"${name}\"`);" },
   { name: "round 7: the batched child fetch's IN-list is never coerced to match a ref column's TEXT storage, so every group comes up empty", file: 'runtime/store/query.mjs',
-    find: "  const vals = ids.map(String);",
-    replace: "  const vals = ids;" },
+    find: "    const vals = ids.slice(i, i + IN_CHUNK).map(String);",
+    replace: "    const vals = ids.slice(i, i + IN_CHUNK);" },
   { name: 'round 7: a batched aggregate groups children by the wrong (uncoerced) key, so every group comes up empty', file: 'runtime/store/query.mjs',
     find: "      const grouped = new Map(ids.map((id) => [String(id), []]));\n      for (const r of rows) grouped.get(String(r[via]))?.push(r);",
     replace: "      const grouped = new Map(ids.map((id) => [id, []]));\n      for (const r of rows) grouped.get(r[via])?.push(r);" },
@@ -379,6 +379,16 @@ const MUTATIONS = [
   { name: 'round 7: the prepared-statement cache never actually reuses a statement (recompiles every call)', file: 'runtime/store.mjs',
     find: "  prepare(sql) {\n    const hit = this.stmts.get(sql);\n    if (hit) { this.stmts.delete(sql); this.stmts.set(sql, hit); return hit; }\n    const st = this.db.prepare(sql);\n    this.stmts.set(sql, st);\n    if (this.stmts.size > 200) this.stmts.delete(this.stmts.keys().next().value);\n    return st;\n  }",
     replace: "  prepare(sql) { return this.db.prepare(sql); }" },
+
+  // --- round 7, orchestrator review: item A/B/C fixes ---
+  { name: 'round 7 item A: labelOf hydrates the whole target row again instead of reading only the label field', file: 'runtime/store/query.mjs',
+    find: "  const v = f.derive ? this.derived(entity, row, f) : row[lf];",
+    replace: "  const v = this.hydrate(entity, row)[lf];" },
+  { name: 'round 7 item B: the IN-list is never chunked, so a big enough prefetch can exceed the bound-parameter limit', file: 'runtime/store/query.mjs',
+    find: 'const IN_CHUNK = 5000;', replace: 'const IN_CHUNK = Infinity;' },
+  { name: "round 7 item C: a batched child fetch drops the unbatched path's own order (ORDER BY id DESC), so a float sum can round differently", file: 'runtime/store/query.mjs',
+    find: '`SELECT * FROM "${table}" WHERE "${via}" IN (${vals.map(() => \'?\').join(\',\')}) ORDER BY id DESC`',
+    replace: '`SELECT * FROM "${table}" WHERE "${via}" IN (${vals.map(() => \'?\').join(\',\')})`' },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

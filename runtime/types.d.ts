@@ -209,6 +209,7 @@ declare module './store.mjs' {
   interface Store {
     clauses(entity: string, where: Record<string, any>): { clauses: string[]; vals: any[]; later: [string, any][] };
     listRaw(entity: string, opts?: Record<string, any>): any[];
+    labelOf(entity: string, id: any): string;
     listRawPage(entity: string, opts: Record<string, any>, limit: number, offset: number): any[];
     listRawIn(entity: string, via: string, ids: any[]): any[];
     countRaw(entity: string, opts?: Record<string, any>): number;

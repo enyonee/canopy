@@ -28,7 +28,7 @@ function dashboardCsv(ctx, d, mine, period) {
   for (const t of mine.tables) for (const r of store.aggregate(t.entity, { ...t, where: inPeriod(t.entity, t.where) })) {
     const g = t.groupBy ? store.field(t.entity, t.groupBy) : null;
     let grp = r.grp;
-    if (g?.kind === 'ref') grp = store.label(g.target, store.get(g.target, grp));
+    if (g?.kind === 'ref') grp = store.labelOf(g.target, grp);
     if (g?.kind === 'bool') grp = grp ? 'Yes' : 'No';
     for (const m of t.metrics || []) {
       const mf = m.field && store.field(t.entity, m.field);
@@ -39,7 +39,7 @@ function dashboardCsv(ctx, d, mine, period) {
     metrics: [{ fn: c.metric.fn, field: c.metric.field, as: 'v' }], sort: c.sort, limit: c.limit, where: inPeriod(c.entity, c.where) })) {
     const g = c.groupBy ? store.field(c.entity, c.groupBy) : null;
     let grp = r.grp;
-    if (g?.kind === 'ref') grp = store.label(g.target, store.get(g.target, grp));
+    if (g?.kind === 'ref') grp = store.labelOf(g.target, grp);
     if (g?.kind === 'bool') grp = grp ? 'Yes' : 'No';
     const mf = c.metric.field && store.field(c.entity, c.metric.field);
     lines.push([c.title, c.metric.fn, grp ?? '', mf?.kind === 'money' && c.metric.fn !== 'count' && r.v != null ? formatMoney(Math.round(r.v)) : (r.v ?? '')]);
