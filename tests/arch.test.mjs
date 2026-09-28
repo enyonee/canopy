@@ -202,7 +202,8 @@ const ALLOWED = {
   'runtime/routes/views.mjs': ['runtime/spec.mjs', 'runtime/render.mjs', 'runtime/render/pages.mjs', 'runtime/render/dashboard.mjs', 'runtime/render/list.mjs', 'runtime/render/search.mjs'],
   'runtime/routes/widgets.mjs': [],
   'runtime/driver.mjs': ['runtime/driver/sqlite.mjs'],
-  'runtime/driver/sqlite.mjs': [],
+  'runtime/driver/sqlite.mjs': ['runtime/driver/dialects.mjs'],
+  'runtime/driver/dialects.mjs': [],
   'runtime/run.mjs': ['runtime/cli.mjs'],
   'runtime/schedule.mjs': [],
   'runtime/server.mjs': ['runtime/validate.mjs', 'runtime/store.mjs', 'runtime/registry.mjs', 'runtime/auth.mjs', 'runtime/interp.mjs',
@@ -292,6 +293,19 @@ test('SQLite-only surface (DatabaseSync, .prepare/.exec, PRAGMA, sqlite_master, 
     for (const m of MASKED[f].matchAll(/\.prepare\(|\b(?:db|drv|store|this)\.exec\(|\b(?:this|store)\.db\b/g)) bad.push(`${f}:${lineOf(SOURCE[f], m.index)} (${m[0]})`);
   }
   assert.deepEqual(bad, [], `engine access outside runtime/driver/: ${bad.join(', ')}`);
+});
+
+// S2: the store builds SQL through `drv.dialect`; it never spells a construct only SQLite has.
+// Comments are stripped first — a comment may name what the code no longer does.
+test('runtime/store/** and runtime/store.mjs contain no SQLite-only keyword (they go through the dialect)', () => {
+  const only = /\b(IFNULL|strftime|INSERT\s+OR\s+(?:REPLACE|IGNORE)|AUTOINCREMENT|PRAGMA|sqlite_master|sqlite_sequence|lastInsertRowid|last_insert_rowid|GLOB|rowid)\b/i;
+  const bad = [];
+  for (const f of RUNTIME_FILES.filter((x) => x.startsWith('runtime/store/') || x === 'runtime/store.mjs')) {
+    const code = SOURCE[f].replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/.*$/gm, '');
+    const m = only.exec(code);
+    if (m) bad.push(`${f}:${lineOf(code, m.index)} (${m[1]})`);
+  }
+  assert.deepEqual(bad, [], `SQLite-only SQL outside runtime/driver/: ${bad.join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------

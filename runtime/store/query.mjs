@@ -2,36 +2,34 @@
 // (so every function here runs with `this` bound to the Store instance —
 // `this.drv`, `this.field(...)`, `this.fields[...]`). Structured query only:
 // the graph names fields and comparisons, never SQL.
-import { coerce } from '../spec.mjs';
+import { coerce, sqlType } from '../spec.mjs';
 
 const OPS = { gte: '>=', lte: '<=', gt: '>', lt: '<', ne: '!=' };
-// What the user typed is what is searched for: "50%" is a percent sign, not "anything".
-const likeSafe = (v) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
-const UNITS = { day: '%Y-%m-%d', month: '%Y-%m', year: '%Y' };
 const DEFAULT_PAGE_SIZE = 50;
 
 // where: { field: value } is equality; { field: { gte, lte, gt, lt, ne, in, like } } is a range.
 export function clauses(entity, where) {
+  const { quote: q, ph, phs, like, likeArg } = this.drv.dialect;
   const clauses = [], vals = [], later = [];
   for (const [field, cmp] of Object.entries(where)) {
     if (cmp === undefined || cmp === '') continue;
     const f = field === 'id' ? { kind: 'int', type: this.registry.fields.int } : this.field(entity, field);
     if (f?.derive) { later.push([field, cmp]); continue; }
-    if (cmp === null) { clauses.push(`"${field}" IS NULL`); continue; }
+    if (cmp === null) { clauses.push(`${q(field)} IS NULL`); continue; }
     if (typeof cmp === 'object' && !Array.isArray(cmp)) {
       for (const [op, v] of Object.entries(cmp)) {
         // { ne: null } is IS NOT NULL, item 16's fix — every other op ignores a
         // literal null (the checker refuses one being written at all; see check/scope.mjs).
-        if (op === 'ne' && v === null) { clauses.push(`"${field}" IS NOT NULL`); continue; }
+        if (op === 'ne' && v === null) { clauses.push(`${q(field)} IS NOT NULL`); continue; }
         if (v === undefined || v === '' || v === null) continue;
-        if (op === 'in') { const arr = Array.isArray(v) ? v : [v]; clauses.push(`"${field}" IN (${arr.map(() => '?').join(',')})`); arr.forEach((x) => vals.push(coerce(f, x))); }
-        else if (op === 'like') { clauses.push(`LOWER("${field}") LIKE ? ESCAPE '\\'`); vals.push(`%${likeSafe(String(v).toLowerCase())}%`); }
-        else if (OPS[op]) { clauses.push(`"${field}" ${OPS[op]} ?`); vals.push(coerce(f, v)); }
+        if (op === 'in') { const arr = Array.isArray(v) ? v : [v]; clauses.push(`${q(field)} IN (${phs(arr.length, vals.length + 1)})`); arr.forEach((x) => vals.push(coerce(f, x))); }
+        else if (op === 'like') { clauses.push(like(q(field), ph(vals.length + 1))); vals.push(likeArg(v)); }
+        else if (OPS[op]) { clauses.push(`${q(field)} ${OPS[op]} ${ph(vals.length + 1)}`); vals.push(coerce(f, v)); }
         else throw new Error(`unknown comparison "${op}" on ${entity}.${field}; known: ${Object.keys(OPS).join(', ')}, in, like`);
       }
       continue;
     }
-    clauses.push(`"${field}"=?`);
+    clauses.push(`${q(field)}=${ph(vals.length + 1)}`);
     vals.push(coerce(f, cmp));
   }
   return { clauses, vals, later };
@@ -61,23 +59,27 @@ function matches(row, field, cmp, f = null) {
 // the structured `where`, plus the free-text "q" over "search"'s field list.
 function buildWhere(store, entity, { search = [], q = '', where = {} } = {}) {
   const { clauses: cls, vals } = store.clauses(entity, where);
+  const { quote, ph, like, likeArg } = store.drv.dialect;
   if (q && search.length) {
-    cls.push('(' + search.map((f) => `LOWER("${f}") LIKE ? ESCAPE '\\'`).join(' OR ') + ')');
-    search.forEach(() => vals.push(`%${likeSafe(q.toLowerCase())}%`));
+    cls.push('(' + search.map((f) => { vals.push(likeArg(q)); return like(quote(f), ph(vals.length)); }).join(' OR ') + ')');
   }
   return { sql: cls.length ? ` WHERE ${cls.join(' AND ')}` : '', vals };
 }
+
+const isText = (f) => Boolean(f && sqlType(f).startsWith('TEXT'));
 
 // ORDER BY a real column (never a derived one — the caller falls back to a
 // full in-memory sort for those, matches() above's twin).
 function orderBy(store, entity, sort) {
   const sortField = sort ? store.field(entity, sort.field) : null;
-  return sort && !sortField?.derive ? `ORDER BY "${sort.field}" ${sort.dir === 'asc' ? 'ASC' : 'DESC'}` : 'ORDER BY id DESC';
+  const { quote, order } = store.drv.dialect;
+  return sort && !sortField?.derive
+    ? `ORDER BY ${order(quote(sort.field), sort.dir === 'asc' ? 'ASC' : 'DESC', { text: isText(sortField), tie: true })}` : 'ORDER BY id DESC';
 }
 
 export function listRaw(entity, opts = {}) {
   const { sql, vals } = buildWhere(this, entity, opts);
-  return this.drv.all(`SELECT * FROM "${entity.toLowerCase()}"${sql} ${orderBy(this, entity, opts.sort)}`, vals);
+  return this.drv.all(`SELECT * FROM ${this.drv.dialect.quote(entity.toLowerCase())}${sql} ${orderBy(this, entity, opts.sort)}`, vals);
 }
 
 // A page of raw (un-hydrated) rows, in the same order listRaw would give —
@@ -85,13 +87,14 @@ export function listRaw(entity, opts = {}) {
 // in-memory ("later") where forces the full-scan path (query.mjs's listPage).
 export function listRawPage(entity, opts, limit, offset) {
   const { sql, vals } = buildWhere(this, entity, opts);
-  return this.drv.all(`SELECT * FROM "${entity.toLowerCase()}"${sql} ${orderBy(this, entity, opts.sort)} LIMIT ? OFFSET ?`, [...vals, limit, offset]);
+  const { quote, ph } = this.drv.dialect;
+  return this.drv.all(`SELECT * FROM ${quote(entity.toLowerCase())}${sql} ${orderBy(this, entity, opts.sort)} LIMIT ${ph(vals.length + 1)} OFFSET ${ph(vals.length + 2)}`, [...vals, limit, offset]);
 }
 
 // How many rows would match, without fetching or hydrating any of them.
 export function countRaw(entity, opts = {}) {
   const { sql, vals } = buildWhere(this, entity, opts);
-  return Number(this.drv.get(`SELECT COUNT(*) AS n FROM "${entity.toLowerCase()}"${sql}`, vals).n);
+  return Number(this.drv.get(`SELECT COUNT(*) AS n FROM ${this.drv.dialect.quote(entity.toLowerCase())}${sql}`, vals).n);
 }
 
 // Bound well under SQLite's own SQLITE_MAX_VARIABLE_NUMBER (32766 since
@@ -117,11 +120,11 @@ const IN_CHUNK = 5000;
 // caching it would only evict statements that do.
 export function listRawIn(entity, via, ids) {
   if (!ids.length) return [];
-  const table = entity.toLowerCase();
+  const { quote, phs } = this.drv.dialect;
   const out = [];
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const vals = ids.slice(i, i + IN_CHUNK).map(String);
-    const sql = `SELECT * FROM "${table}" WHERE "${via}" IN (${vals.map(() => '?').join(',')}) ORDER BY id DESC`;
+    const sql = `SELECT * FROM ${quote(entity.toLowerCase())} WHERE ${quote(via)} IN (${phs(vals.length)}) ORDER BY id DESC`;
     out.push(...this.drv.all(sql, vals, { cache: false }));
   }
   return out;
@@ -189,19 +192,22 @@ export function aggregate(entity, { groupBy = null, groupUnit = null, metrics = 
   const usesDerived = (groupBy && this.field(entity, groupBy)?.derive) || metrics.some((m) => m.field && this.field(entity, m.field)?.derive)
     || this.clauses(entity, where).later.length;
   if (usesDerived) return this.aggregateInMemory(entity, { groupBy, groupUnit, metrics, sort, limit, where });
-  const table = entity.toLowerCase();
+  const { quote: q, bucket, order, collate } = this.drv.dialect;
   const cols = [];
-  if (groupBy) cols.push(groupUnit ? `strftime('${UNITS[groupUnit]}', "${groupBy}") AS grp` : `"${groupBy}" AS grp`);
+  if (groupBy) {
+    const grp = groupUnit ? bucket(q(groupBy), groupUnit) : q(groupBy);
+    cols.push(`${groupUnit || isText(this.field(entity, groupBy)) ? collate(grp) : grp} AS grp`);
+  }
   for (const m of metrics) {
     const fn = String(m.fn).toUpperCase();
-    const expr = fn === 'COUNT' ? 'COUNT(*)' : `${fn}("${m.field}")`;
-    cols.push(`${expr} AS "${m.as}"`);
+    const expr = fn === 'COUNT' ? 'COUNT(*)' : `${fn}(${q(m.field)})`;
+    cols.push(`${expr} AS ${q(m.as)}`);
   }
   const { clauses: cls, vals } = this.clauses(entity, where);
-  let sql = `SELECT ${cols.join(', ')} FROM "${table}"`;
+  let sql = `SELECT ${cols.join(', ')} FROM ${q(entity.toLowerCase())}`;
   if (cls.length) sql += ` WHERE ${cls.join(' AND ')}`;
   if (groupBy) sql += ' GROUP BY grp';
-  if (sort) sql += ` ORDER BY "${sort.field}" ${sort.dir === 'asc' ? 'ASC' : 'DESC'}`;
+  if (sort) sql += ` ORDER BY ${order(q(sort.field), sort.dir === 'asc' ? 'ASC' : 'DESC')}`;
   if (limit) sql += ` LIMIT ${Number(limit)}`;
   return this.drv.all(sql, vals).map((r) => ({ ...r }));
 }

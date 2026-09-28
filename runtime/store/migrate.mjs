@@ -14,7 +14,7 @@ function desiredIndexes(store, entity) {
   const specs = new Map();
   const add = (cols) => {
     const key = cols.join(',');
-    if (!specs.has(key)) specs.set(key, { name: `idx_${table}_${cols.join('_')}`, cols });
+    if (!specs.has(key)) specs.set(key, { name: store.drv.dialect.indexName(table, cols), cols });
   };
   for (const f of store.fields[entity] || []) if (f.kind === 'ref') add([f.name]);
   for (const r of store.graph.rules?.[entity] || []) if (r.unique !== undefined) add(Array.isArray(r.unique) ? r.unique : [r.unique]);

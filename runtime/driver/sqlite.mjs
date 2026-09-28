@@ -4,6 +4,7 @@
 // and another engine can implement the same object later. Synchronous today; the
 // contract says results "may be awaited", and no caller in this repo awaits.
 import { DatabaseSync } from 'node:sqlite';
+import { sqlite as dialect } from './dialects.mjs';
 
 // A prepared statement is reusable SQL text away from being re-parsed and
 // re-planned by SQLite; bounded so a long-lived process with many distinct ad-hoc
@@ -11,9 +12,6 @@ import { DatabaseSync } from 'node:sqlite';
 // Map iterates in insertion order; re-inserting on a hit moves an entry to the
 // end, so the entry evicted first is really the least recently used.
 export const CACHE_MAX = 200;
-
-const quote = (id) => `"${String(id).replaceAll('"', '""')}"`;
-export const dialect = { name: 'sqlite', quote };
 
 /**
  * @param {string} file a path, or ':memory:'
@@ -55,23 +53,21 @@ export function openSqlite(file) {
     },
     close() { db.close(); },
 
-    // --- schema helpers ---------------------------------------------------------
-    tables: () => drv.all(`SELECT name FROM sqlite_master WHERE type='table'`).map((r) => String(r.name)),
-    columns: (table) => drv.all(`PRAGMA table_info(${quote(table)})`).map((r) => ({ name: String(r.name), type: String(r.type) })),
+    // --- schema helpers: the SQL text is the dialect's, the driver only runs it -------
+    tables: () => { const q = dialect.tablesSql(); return drv.all(q.sql, q.params).map((r) => String(r.name)); },
+    columns(table) {
+      const q = dialect.columnsSql(table);
+      return drv.all(q.sql, q.params).map((r) => ({ name: String(r.name), type: String(r.type) }));
+    },
     indexes(table, prefix = '') {
-      const like = `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-      return drv.all(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=? AND name LIKE ? ESCAPE '\\'`, [table, like])
-        .map((r) => String(r.name));
+      const q = dialect.indexesSql(table, prefix);
+      return drv.all(q.sql, q.params).map((r) => String(r.name));
     },
     // `cols` is [name, type][]; `serial` puts an auto-numbered integer `id` first.
-    createTable(table, cols, { ifNotExists = false, serial = true } = {}) {
-      const defs = cols.map(([n, t]) => `${quote(n)} ${t}`);
-      if (serial) defs.unshift('id INTEGER PRIMARY KEY AUTOINCREMENT');
-      drv.exec(`CREATE TABLE ${ifNotExists ? 'IF NOT EXISTS ' : ''}${quote(table)} (${defs.join(', ')})`);
-    },
-    addColumn: (table, name, type) => drv.exec(`ALTER TABLE ${quote(table)} ADD COLUMN ${quote(name)} ${type}`),
-    createIndex: (name, table, cols) => drv.exec(`CREATE INDEX IF NOT EXISTS ${quote(name)} ON ${quote(table)} (${cols.map(quote).join(', ')})`),
-    dropIndex: (name) => drv.exec(`DROP INDEX IF EXISTS ${quote(name)}`),
+    createTable: (table, cols, opts) => drv.exec(dialect.createTable(table, cols, opts)),
+    addColumn: (table, name, type) => drv.exec(dialect.addColumn(table, name, type)),
+    createIndex: (name, table, cols) => drv.exec(dialect.createIndex(name, table, cols)),
+    dropIndex: (name) => drv.exec(dialect.dropIndex(name)),
   };
   return drv;
 }

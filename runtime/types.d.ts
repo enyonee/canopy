@@ -207,10 +207,43 @@ export interface ViewContext {
 // SQL-compiled aggregate (runtime/store/aggsql.mjs's aggKey).
 type AggCache = { groups: Map<string, Map<string, any[]>>; scalars: Map<string, Map<string, any>>; clock: Date };
 
+/** Every place the store's SQL text depends on the engine (runtime/driver/dialects.mjs). Pure text hooks. */
+export interface Dialect {
+  name: 'sqlite' | 'postgres';
+  quote(id: string): string;
+  /** The n-th (1-based) positional placeholder: `?` or `$n`. */
+  ph(n: number): string;
+  /** `count` placeholders from the `from`-th on, comma-joined. */
+  phs(count: number, from?: number): string;
+  idType: string;
+  returning: string;
+  colType(sql: string): string;
+  boolInt(cond: string): string;
+  like(col: string, ph: string): string;
+  lowerEq(col: string, ph: string): string;
+  likeArg(v: any): string;
+  escapeLike(v: any): string;
+  bucket(col: string, unit: 'day' | 'month' | 'year'): string;
+  collate(expr: string): string;
+  order(col: string, dir: 'ASC' | 'DESC', opts?: { text?: boolean; tie?: boolean }): string;
+  named(name: string, index: number): string;
+  args(names: string[], named: Record<string, any>, vals: any[]): any[];
+  insert(table: string, cols: string[]): string;
+  upsert(table: string, cols: string[], key?: string): string;
+  createTable(table: string, cols: Array<[string, string]>, opts?: { ifNotExists?: boolean; serial?: boolean }): string;
+  addColumn(table: string, col: string, type: string): string;
+  createIndex(name: string, table: string, cols: string[]): string;
+  dropIndex(name: string): string;
+  tablesSql(): { sql: string; params: any[] };
+  columnsSql(table: string): { sql: string; params: any[] };
+  indexesSql(table: string, prefix?: string): { sql: string; params: any[] };
+  indexName(table: string, cols: string[]): string;
+}
+
 /** What a Store talks to (runtime/driver/sqlite.mjs is the only implementation). Every
  * result "may be awaited" by contract; today's driver is synchronous and nothing awaits. */
 export interface Driver {
-  dialect: { name: string; quote(id: string): string };
+  dialect: Dialect;
   /** Called with the SQL text (and the call's options) of every statement the driver executes; tests count queries with it. */
   onQuery: ((sql: string, opts?: { cache?: boolean }) => void) | null;
   /** SQLite-only diagnostic: the prepared-statement LRU, oldest first. */
