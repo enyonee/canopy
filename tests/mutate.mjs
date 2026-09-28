@@ -42,8 +42,8 @@ const MUTATIONS = [
   { name: 'unknown fields in a view are accepted', file: 'runtime/check/scope.mjs',
     find: "    if (!known(e).includes(f)) {", replace: "    if (false) {" },
   { name: 'a related section may point anywhere', file: 'runtime/check/override.mjs',
-    find: "        else if (f.target !== entity) err(`${p}/via`, `\"${rel.via}\" points at ${f.target}, not ${entity}`);",
-    replace: "        else if (false) err(`${p}/via`, 'x');" },
+    find: "      else if (f.target !== entity) err(`${p}/via`, `\"${rel.via}\" points at ${f.target}, not ${entity}`);",
+    replace: "      else if (false) err(`${p}/via`, 'x');" },
   { name: 'block requirements are not enforced', file: 'runtime/check/steps.mjs',
     find: "        if (step[req] === undefined) err(p, `block \"${step.block}\" requires \"${req}\"`, block.summary);",
     replace: "        void req;" },
@@ -82,7 +82,7 @@ const MUTATIONS = [
     find: "  const ok = (to, msg) => redirect(msg ? `${to}${to.includes('?') ? '&' : '?'}ok=${encodeURIComponent(msg)}` : to);",
     replace: "  const ok = (to) => redirect(to);" },
   { name: 'a rejected form is stored anyway', file: 'runtime/routes/entity.mjs',
-    find: "  if (problems.length) { trace({ kind: 'rejected', entity, problems }); send(400, formView(graph, store, entity, fields, submitted, 'new', problems, vc)); return true; }",
+    find: "  if (problems.length) {\n    trace({ kind: 'rejected', entity, problems });\n    ctx.answer(400, formView(graph, store, entity, fields, submitted, 'new', problems, vc), { ok: false, status: 400, errors: problems });\n    return true;\n  }",
     replace: "  void problems;" },
 
   // Blocks
@@ -185,7 +185,7 @@ const MUTATIONS = [
     find: "          } else if (n.t === 'agg') { if (entities.includes(n.entity) && n.body) walk(n.body, n.entity, e); }", replace: "          } else if (n.t === 'agg') { if (entities.includes(n.entity) && n.body) walk(n.body, e, e); }" },
 
   { name: 'a refusal inside a created event is a crash', file: 'runtime/routes/entity.mjs',
-    find: "  } catch (e) { trace({ kind: 'refused', entity, message: e.message }); send(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc)); return true; }",
+    find: "  } catch (e) {\n    trace({ kind: 'refused', entity, message: e.message });\n    ctx.answer(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc), { ok: false, status: 400, errors: [e.message] });\n    return true;\n  }",
     replace: "  } catch (e) { throw e; }" },
 
   // --- round 3: lists, export, correlated aggregates, dates, images ---
@@ -261,6 +261,18 @@ const MUTATIONS = [
     replace: "      catch (e) { trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); ok = true; }" },
   { name: 'anonymous access is never asked to sign in', file: 'runtime/server.mjs',
     find: "  if (ctx.perms.enabled && !ctx.role) { ctx.deny('Please sign in.'); return; }", replace: "" },
+
+  // --- R2: widgets, JSON answers, charts, schedule ---
+  { name: 'a secret field reaches a JSON answer', file: 'runtime/render.mjs',
+    find: "  for (const f of fields) if (!f.type.secret) out[f.name] = toJSON(row[f.name], f);",
+    replace: "  for (const f of fields) out[f.name] = toJSON(row[f.name], f);" },
+  { name: 'a denied JSON request gets an HTML/redirect answer instead of a JSON body', file: 'runtime/routes/context.mjs',
+    find: "    if (wantsJSON) return sendJson(403, { ok: false, status: 403, errors: [message || 'You are not allowed to do this.'] });", replace: "" },
+  { name: 'anyone may run a schedule by hand, not only an operator', file: 'runtime/routes/schedule.mjs',
+    find: "  if (!vc.outbox) { ctx.deny('Only an operator may run a schedule by hand.'); return true; }", replace: "" },
+  { name: "a chart's axis label shows raw storage units instead of the money-formatted value", file: 'runtime/render/dashboard.mjs',
+    find: "  const maxDisplay = metricValue(store, chart.entity, chart.metric.fn === 'count' ? null : chart.metric.field, max);",
+    replace: "  const maxDisplay = String(max);" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

@@ -1,4 +1,7 @@
-// `/pages`: static pages at /page/<id>, optionally with global-action buttons.
+// `/pages`: static pages at /page/<id>, optionally with global-action buttons,
+// a widget, or an auto-refresh.
+import { checkWidget } from './util.mjs';
+
 export const NODES = ['pages'];
 
 export function check(graph, h) {
@@ -12,5 +15,8 @@ export function check(graph, h) {
       if (!act) err(`/pages/${i}/actions/${j}`, `unknown action "${a}"`, `declared: ${actionNames.join(', ') || '(none)'}`);
       else if (act.in) err(`/pages/${i}/actions/${j}`, `action "${a}" is bound to ${act.in}`, 'page buttons need a global action (no "in")');
     });
+    if (p.widget) checkWidget(h, p.widget, `/pages/${i}/widget`, null);
+    if (p.refresh !== undefined && !(Number.isInteger(p.refresh) && p.refresh > 0))
+      err(`/pages/${i}/refresh`, 'refresh must be a positive integer number of seconds');
   });
 }

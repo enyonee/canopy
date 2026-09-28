@@ -28,6 +28,7 @@ never work around the checker.
 | `actions` | named step sequences: on a row (`in`) or global |
 | `events` | steps that run on `Entity.created`, `.updated`, `.deleted` |
 | `states` | status transitions per entity (below) |
+| `schedule` | named timers the server runs on an interval (below) |
 | `connectors` | http and mail endpoints the app may send to |
 | `rules` | checks and uniqueness per entity |
 | `allowDestructive` | `true` lets a migration drop columns the graph no longer declares |
@@ -112,12 +113,22 @@ Saved lists and dashboards export too: `/list/<id>.csv`, `/dashboard/<id>.csv` (
 
 `lists`: `{ "id": "cart", "entity": "Order", "title": "Cart", "where": { "customer": "@me", "status": "cart" }, "columns": [...], "rowActions": [...], "sort": {…}, "search": [...], "create": true, "roles": ["customer"], "hidden": true }`.
 
-`dashboards`: `{ "id": "sales", "title": "Sales", "intro": "…", "roles": ["admin"], "period": { "Order": "createdAt" }, "cards": [...], "tables": [...] }`
-- `period` maps entities to their date/time field and adds a from/to form; every card and table on those entities is narrowed
+`dashboards`: `{ "id": "sales", "title": "Sales", "intro": "…", "roles": ["admin"], "refresh": 30, "period": { "Order": "createdAt" }, "cards": [...], "tables": [...], "charts": [...] }`
+- `period` maps entities to their date/time field and adds a from/to form; every card, table and chart on those entities is narrowed
 - card: `{ "title": "Revenue", "entity": "Order", "fn": "sum", "field": "total", "where": {…} }` — `fn` is `count` (default), `sum`, `avg`, `min`, `max`; money renders as money
 - table: `{ "title": "By status", "entity": "Order", "groupBy": "status", "groupTitle": "Status", "groupUnit": "month", "where": {…}, "metrics": [ { "fn": "count", "as": "n", "title": "Orders" }, { "fn": "sum", "field": "total", "as": "revenue", "title": "Total" } ], "sort": { "field": "revenue", "dir": "desc" }, "limit": 10 }` — `groupUnit` (`day`, `month`, `year`) buckets a date/time `groupBy`; `where` may use `"@me"`
+- chart: `{ "title": "By status", "entity": "Order", "type": "bar"|"line"|"pie", "groupBy": "status", "groupUnit"?: "month", "metric": { "fn": "sum", "field": "total" }, "where"?: {…}, "limit"?: 10, "sort"?: { "field": "v", "dir": "desc" } }` —
+  one metric, computed by the same `store.aggregate` a table uses (`fn` is `count`/`sum`/`avg`/`min`/`max`; `field` required unless `count`;
+  `sort.field` is `"grp"` or `"v"`, the chart's only metric). Rendered as an inline accessible SVG
+  (`<svg role="img" aria-label="…">` + `<title>`, bars/points/slices in the theme accent) immediately followed by
+  `<table class="chart-data">` with the same numbers, so a check or a screen reader reads values without decoding
+  the SVG — that table is also the chart's row in a CSV/JSON export (below).
 
-`pages`: `{ "id": "about", "title": "About", "heading": "…", "body": ["paragraph", …], "links": [ { "label": "Shop", "href": "/Product" } ], "actions": ["<global action>"], "roles": [...] }`.
+`pages`: `{ "id": "about", "title": "About", "heading": "…", "body": ["paragraph", …], "links": [ { "label": "Shop", "href": "/Product" } ], "actions": ["<global action>"], "roles": [...], "widget": {…}, "refresh": 30 }`.
+
+`refresh` (pages and dashboards, seconds, a positive integer): renders `<meta http-equiv="refresh" content="N">` —
+the page reloads itself every `N` seconds. JSON mode (below) is the real-time path for a widget that wants to
+poll or push without a full reload; `refresh` is for the plain scaffold page.
 
 ## Actions, steps, blocks
 
@@ -163,6 +174,20 @@ required. `by` restricts by role; otherwise the role needs `go:<name>` or `go:*`
 The transition is offered on the detail page (and in `rowActions` as `"go:<name>"`) only while the
 status is in `from`; `POST /Entity/:id/go/<name>` from another status answers 409.
 
+## Schedule
+
+```json
+"schedule": [ { "name": "tick", "every": "5m", "note": "…", "do": [ <step>… ] } ]
+```
+`every` is `<n>s|m|h|d` (e.g. `"30s"`, `"5m"`, `"1h"`, `"1d"`). The server runs each declared schedule on its
+own timer, inside a transaction just like a global action — the same interpreter, no row, no submitted values,
+effects through the outbox. `POST /schedule/<name>/run` runs one immediately: allowed for an operator (an
+admin role, or anyone at all when the app has no `/roles`) — the same rule `/outbox` already uses — so a check
+can trigger a schedule deterministically instead of waiting on the clock. Every run, timer or requested, is one
+trace entry (`{ "kind": "schedule", "name", "manual" }`). Timers are unref'd (never keep the process alive by
+themselves) and are stopped when the server closes. Set `AG_NO_TIMERS=1` to disable the automatic timers
+entirely — `verify/run.mjs` sets it, so an app's checks control every schedule run by hand.
+
 ## Roles
 
 ```json
@@ -193,9 +218,67 @@ Mail is recorded in the outbox (the stand has no SMTP); http is really sent.
 
 ## Routes the runtime serves
 
-`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `POST /action/<name>` · `/outbox`, `POST /outbox/:id/retry` · `/file/Entity/:id/<field>` · `/login`, `/register`, `POST /logout`.
+`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `POST /action/<name>` · `POST /schedule/<name>/run` · `/outbox`, `POST /outbox/:id/retry` · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
 
 Every successful POST answers 303 to a page with `?ok=<flash>`; validation failures answer 400 with the form and the messages; refusals 403; a transition from the wrong status 409.
+
+## JSON answers
+
+Any of the routes above that reads or writes an entity answers JSON instead of HTML when the request carries
+`accept: application/json` — one code path decides everything (permission checks, own scoping, validation,
+effects); the Accept header only picks the last step, how the same result is written down.
+
+- GET `/Entity`, `/list/<id>` → `{ "rows": [...], "total", "page", "pages" }`; GET `/Entity/:id` → the row itself,
+  flat (`{ "id", …fields }`). GET `/dashboard/<id>` → `{ "cards": [ { "title", "value" } ], "tables": [ { "title", "rows" } ], "charts": [ { "title", "type", "rows" } ] }` —
+  the same aggregates the HTML/CSV views compute.
+- A row's JSON always drops secret fields (`password`), always includes derived fields, and reads money as a
+  major-unit number (`12.34`, not `1234`); own-scoping and every permission check are identical to the HTML path.
+- POST (create, edit, delete, an action, a transition, a related add, a global action) →
+  `{ "ok": true, "id"?, "created"?, "flash", "row"? }` on success (`id`/`created`/`row` are present where the
+  HTML path's redirect target and confirmation would name them — a delete or a global action has no `row`) or
+  `{ "ok": false, "status", "errors": [...] }` on failure, with the exact status code the HTML path uses (400
+  validation, 403 refusal, 404 unknown, 409 wrong status).
+
+## Client widgets
+
+A widget is presentation + input only: it renders state it reads and sends intents to the graph's own
+actions/transitions; it never writes storage itself (game rules, if any, live in a plugin block on the server,
+which stays the authority — see `ttt.move` in `apps/tictactoe` for the whole path end to end).
+
+A plugin registers widgets in a fifth registry table, next to fields/blocks/transports/functions:
+```js
+widgets: { chess: { summary: 'a chess board', client: './chess.client.mjs', props: ['fen'], check(node, h) {…} } }
+```
+`client` is a path to the browser module, relative to the app directory (like a plugin path) — kept out of
+`plugins/`, which the registry-contract test blindly imports as server-side code; a browser file belongs next to
+the app instead (or in its own directory, just not inside `plugins/`). `props` names the keys the widget node
+must supply (missing one is a checker error naming the widget and the prop); `check(node, h)` is the same shape
+a block's `check(step, h)` gets, for anything `props` alone can't express.
+
+Attach a widget with `"widget": { "use": "chess", …props }` on `pages[].widget` (no row) or
+`"Entity.detail".widget` (given the row). The checker only knows what the widget declared: unknown widget or a
+missing required prop is an error with a hint, same as everywhere else.
+
+Rendered as:
+```html
+<div class="widget" data-widget="chess" data-props='{"fen":"…"}' data-row='{"id":3,…}'>
+  <noscript>This page needs JavaScript to show the chess widget.</noscript>
+</div>
+<script type="module" src="/widget/chess.mjs"></script>
+```
+`data-row` is the same JSON shape a JSON GET of that row returns (secrets dropped, derived fields included);
+absent on a page widget. The server serves the declared `client` file at `/widget/<name>.mjs`
+(`content-type: text/javascript`) — only a file a loaded plugin actually declared; the requested name is looked
+up in the registry, never turned into a filesystem path, so there is no traversal.
+
+Client contract: the module's default export is `mount(el, { props, row, api })`. `runtime/client/api.mjs`, a
+tiny shared helper served at `/widget/_api.mjs`, gives every widget module:
+- `api.get(path)` — fetches JSON from any route above (sets `accept: application/json`).
+- `api.post(path, body)` — posts `body` form-encoded (exactly what every `<form>` on the scaffold already posts)
+  and reads the JSON answer back.
+- `mountWidgets(name, mount)` — finds every `[data-widget="name"]` element the server rendered and calls
+  `mount(el, { props, row, api })` on each; a widget module's own last line is typically
+  `mountWidgets('chess', mount)`.
 
 ## Reading the HTML in checks
 
@@ -209,7 +292,7 @@ Every successful POST answers 303 to a page with `?ok=<flash>`; validation failu
 
 Classic code lives next to the application, never inside `app.json`. A plugin is an ES module
 listed under `"plugins": ["./plugins/loyalty.mjs"]` (paths relative to the app directory) whose
-default export registers entries in one or more of the four registries, with the same contracts
+default export registers entries in one or more of the five registries, with the same contracts
 the built-ins use. Node kinds (`roles`, `states`, …) are not extensible: they are the format.
 
 ```js
@@ -219,6 +302,7 @@ export default {
   functions:  { discount: { arity: 2, kind(argKinds), run(args) } },
   blocks:     { 'loyalty.award': { summary, effects, requires, connector?, check?(step, h), exposes?(step), nested?(step), run(ctx) } },
   transports: { log: { summary, validate(connector) → [[key, message, hint]], deliver(row, connector, opts) → { status, code, error } } },
+  widgets:    { chess: { summary, client, props?: [keys], check?(node, h) } },
 };
 ```
 
@@ -237,3 +321,7 @@ directory, e.g. `"plugins": ["../../plugins/payment.mjs"]`).
   the Luhn check; the test card `4000000000000002` is declined; a declined charge refuses the whole
   action, rolling it back) and queues the capture to the connector, visible in `/outbox`. Exposes
   `@authorization` (a reference string) and `@payment` (the delivery id).
+- `messaging.mjs` — SMS and WhatsApp alerts (the stand has no gateway, like mail: recorded in the
+  outbox, never actually sent). Connectors `{ "kind": "sms", "from": "+1555…" }` / `{ "kind": "whatsapp", "from": "+1555…" }`
+  (`from` must look like E.164). Block `sms.send { connector, to, text }`: `connector` may be either
+  kind, `to` must look like E.164 and `text` may never be empty; `{row.field}` placeholders in `text`.

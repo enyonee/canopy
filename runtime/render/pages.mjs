@@ -1,6 +1,6 @@
 // Small standalone pages: a static /page/<id>, the login and register forms,
 // and the outbox listing.
-import { esc, label, anyone, page, enctype } from '../render.mjs';
+import { esc, label, anyone, page, enctype, widgetBlock } from '../render.mjs';
 import { formFields } from './form.mjs';
 
 export function staticPage(graph, p, flash, vc = anyone) {
@@ -10,8 +10,9 @@ export function staticPage(graph, p, flash, vc = anyone) {
     const act = (graph.actions || []).find((x) => x.name === a);
     return `<form class="inline" method="post" action="/action/${esc(a)}"><button type="submit">${esc(act?.title || label(a))}</button></form>`;
   }).join(' ');
-  return page(graph, { title: p.title, flash, vc,
-    body: `<h2>${esc(p.heading || p.title)}</h2><div class="card">${body}${buttons ? `<p>${buttons}</p>` : ''}</div><p>${links}</p>` });
+  return page(graph, { title: p.title, flash, vc, refresh: p.refresh,
+    body: `<h2>${esc(p.heading || p.title)}</h2><div class="card">${body}${buttons ? `<p>${buttons}</p>` : ''}</div>
+      ${p.widget ? widgetBlock(p.widget) : ''}<p>${links}</p>` });
 }
 
 export function loginView(graph, { error = '', next = '', login = '' } = {}, vc = anyone) {

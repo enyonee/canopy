@@ -1,6 +1,6 @@
 // The detail view: the field table, edit/action buttons, transition forms,
 // and related child tables (each with its own inline add-form).
-import { esc, label, plural, anyone, page, fmt, cell, rowButtons, transitionsFor, enctype } from '../render.mjs';
+import { esc, label, plural, anyone, page, fmt, cell, rowButtons, transitionsFor, enctype, widgetBlock, rowJSON } from '../render.mjs';
 import { formFields } from './form.mjs';
 
 function transitionForms(graph, store, entity, fields, row, vc) {
@@ -43,6 +43,7 @@ export function detailView(graph, store, entity, fields, row, flash, vc = anyone
   return page(graph, {
     title: `${label(entity)} ${store.label(entity, row)}`, flash, vc,
     body: `<h2>${esc(store.label(entity, row))}</h2><table>${rows}</table>
+      ${ov.widget ? widgetBlock(ov.widget, { row: rowJSON(store, entity, fields, row) }) : ''}
       <p>${buttons}</p>${transitionForms(graph, store, entity, fields, row, vc)}${related}`,
   });
 }

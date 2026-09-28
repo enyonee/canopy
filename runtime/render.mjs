@@ -16,11 +16,12 @@ export { esc, label };
 /** @type {import('./types.d.ts').ViewContext} */
 export const anyone = { user: null, role: null, can: (_e, _op, _row) => true, canSee: (_item) => true, ownField: (_e) => null, ownWhere: (_e) => ({}), enabled: false };
 
-export function page(graph, { title, body, flash = '', vc = anyone }) {
+export function page(graph, { title, body, flash = '', vc = anyone, refresh = null }) {
   const bg = graph.theme?.background || 'white';
   const accent = graph.theme?.accent || 'navy';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${refresh ? `<meta http-equiv="refresh" content="${Number(refresh)}">` : ''}
 <title>${esc(title)} — ${esc(graph.app)}</title><style>
 body { background: ${bg}; color: #16181d; font: 16px/1.5 system-ui, sans-serif; margin: 0; }
 header { background: ${accent}; color: white; padding: 16px 24px; }
@@ -135,6 +136,40 @@ export function plain(store, entity, f, row, labels = {}) {
   if (f.kind === 'money') return formatMoney(v);
   if (f.type.secret) return '';
   return v ?? '';
+}
+
+// A field's JSON-answer value: structured data, not a display string (a ref
+// stays the raw id, money becomes a major-unit number, a bool a real boolean).
+// Secret fields are the caller's job to drop — rowJSON below does that once.
+function toJSON(v, f) {
+  if (v === null || v === undefined) return null;
+  if (f.kind === 'money') return Number(formatMoney(v));
+  if (f.kind === 'bool') return Boolean(v);
+  return v;
+}
+
+// The JSON shape of one row for the JSON-answers routes (docs/FORMAT.md's
+// «JSON answers») and for a detail widget's `data-row`: every stored and
+// derived field except secrets (derived values are already computed by
+// store.hydrate() by the time a route calls this).
+export function rowJSON(store, entity, fields, row) {
+  const out = { id: row.id };
+  for (const f of fields) if (!f.type.secret) out[f.name] = toJSON(row[f.name], f);
+  return out;
+}
+
+// `<div class="widget" data-widget="…" data-props='…' data-row='…'>` + a
+// noscript fallback + the module script tag — the one place both a page
+// widget (no row) and a detail widget (row given) build this markup.
+/** @param {{ row?: any }} [opts] */
+export function widgetBlock(node, opts) {
+  const { row } = opts || {};
+  const props = { ...node };
+  delete props.use;
+  const rowAttr = row !== undefined ? ` data-row='${esc(JSON.stringify(row))}'` : '';
+  return `<div class="widget" data-widget="${esc(node.use)}" data-props='${esc(JSON.stringify(props))}'${rowAttr}>
+    <noscript>This page needs JavaScript to show the ${esc(node.use)} widget.</noscript></div>
+    <script type="module" src="/widget/${esc(node.use)}.mjs"></script>`;
 }
 
 export function forbiddenPage(graph, vc = anyone, message = 'You are not allowed to do this.') {

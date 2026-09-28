@@ -5,7 +5,7 @@
 // is "no entity at /X", and an unmatched shape under a real entity really is
 // "no route". Row actions/transitions/related-add are routes/rows.mjs, called
 // from here once the row itself is resolved.
-import { errorPage, label } from '../render.mjs';
+import { errorPage, label, rowJSON } from '../render.mjs';
 import { listView } from '../render/list.mjs';
 import { formView } from '../render/form.mjs';
 import { detailView } from '../render/detail.mjs';
@@ -34,12 +34,13 @@ function listRoute(ctx, entity, fields, ov) {
   trace({ kind: 'query', entity, q, where, rows: all.length, who: user?.id ?? null });
   if (wantsCsv) { exportRows(entity, entity, all, ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name), ov.labels || {}); return true; }
   const pg = paged(all, ov);
-  send(200, listView(graph, store, entity, fields, pg.rows, { q, where, flash, vc, range, query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }));
+  ctx.answer(200, listView(graph, store, entity, fields, pg.rows, { q, where, flash, vc, range, query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }),
+    { rows: pg.rows.map((r) => rowJSON(store, entity, fields, r)), total: pg.total, page: pg.page, pages: pg.pages });
   return true;
 }
 
 async function createRoute(ctx, entity, fields, formOv) {
-  const { store, vc, user, perms, interp, trace, send, ok, graph } = ctx;
+  const { store, vc, user, perms, interp, trace, ok, graph } = ctx;
   if (!vc.can(entity, 'create')) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(entity, user, await ctx.body(), formOv.fields);
   interp.checkboxes(entity, submitted);
@@ -47,7 +48,11 @@ async function createRoute(ctx, entity, fields, formOv) {
   const own = perms.ownField(user, entity);
   if (own) values[own] = user.id;
   const problems = interp.validateValues(entity, values);
-  if (problems.length) { trace({ kind: 'rejected', entity, problems }); send(400, formView(graph, store, entity, fields, submitted, 'new', problems, vc)); return true; }
+  if (problems.length) {
+    trace({ kind: 'rejected', entity, problems });
+    ctx.answer(400, formView(graph, store, entity, fields, submitted, 'new', problems, vc), { ok: false, status: 400, errors: problems });
+    return true;
+  }
   let id;
   try {
     id = await interp.attempt(() => {
@@ -56,32 +61,46 @@ async function createRoute(ctx, entity, fields, formOv) {
       interp.fireEvents('created', entity, n, values, user);
       return n;
     });
-  } catch (e) { trace({ kind: 'refused', entity, message: e.message }); send(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc)); return true; }
-  const after = interp.afterPath(formOv.after || `/${entity}`, entity, id, { created: id });
-  ok(after, formOv.confirm || `${label(entity)} saved successfully`);
+  } catch (e) {
+    trace({ kind: 'refused', entity, message: e.message });
+    ctx.answer(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc), { ok: false, status: 400, errors: [e.message] });
+    return true;
+  }
+  const flash = formOv.confirm || `${label(entity)} saved successfully`;
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id, created: id, flash, row: rowJSON(store, entity, fields, store.get(entity, id)) }); return true; }
+  ok(interp.afterPath(formOv.after || `/${entity}`, entity, id, { created: id }), flash);
   return true;
 }
 
 async function updateRoute(ctx, entity, fields, formOv, id, row) {
-  const { store, vc, user, interp, trace, send, ok, graph } = ctx;
+  const { store, vc, user, interp, trace, ok, graph } = ctx;
   if (!vc.can(entity, 'edit', row)) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(entity, user, await ctx.body(), formOv.fields);
   interp.checkboxes(entity, submitted);
   const problems = interp.validateValues(entity, submitted, { partial: true, existing: store.raw(entity, id) });
-  if (problems.length) { send(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', problems, vc)); return true; }
+  if (problems.length) {
+    ctx.answer(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', problems, vc), { ok: false, status: 400, errors: problems });
+    return true;
+  }
   try {
     await interp.attempt(() => {
       store.update(entity, id, submitted);
       trace({ kind: 'update', entity, id, effects: ['db.write'], who: user?.id ?? null });
       interp.fireEvents('updated', entity, id, submitted, user);
     });
-  } catch (e) { trace({ kind: 'refused', entity, id, message: e.message }); send(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', [e.message], vc)); return true; }
-  ok(interp.afterPath(formOv.afterEdit || `/${entity}`, entity, id), formOv.confirmEdit || `${label(entity)} updated successfully`);
+  } catch (e) {
+    trace({ kind: 'refused', entity, id, message: e.message });
+    ctx.answer(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', [e.message], vc), { ok: false, status: 400, errors: [e.message] });
+    return true;
+  }
+  const flash = formOv.confirmEdit || `${label(entity)} updated successfully`;
+  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, flash, row: rowJSON(store, entity, fields, updated) }); return true; }
+  ok(interp.afterPath(formOv.afterEdit || `/${entity}`, entity, id), flash);
   return true;
 }
 
 async function deleteRoute(ctx, entity, fields, id, row) {
-  const { store, vc, user, interp, trace, send, ok, graph } = ctx;
+  const { store, vc, user, interp, trace, ok } = ctx;
   if (!vc.can(entity, 'delete', row)) { ctx.deny(); return true; }
   try {
     await interp.attempt(() => {
@@ -89,8 +108,14 @@ async function deleteRoute(ctx, entity, fields, id, row) {
       trace({ kind: 'delete', entity, id, effects: ['db.write'], who: user?.id ?? null });
       interp.fireEvents('deleted', entity, id, {}, user, row);
     });
-  } catch (e) { trace({ kind: 'refused', entity, id, message: e.message }); send(400, detailView(graph, store, entity, fields, row, e.message, vc)); return true; }
-  ok(`/${entity}`, `${label(entity)} deleted`);
+  } catch (e) {
+    trace({ kind: 'refused', entity, id, message: e.message });
+    ctx.answer(400, detailView(ctx.graph, store, entity, fields, row, e.message, vc), { ok: false, status: 400, errors: [e.message] });
+    return true;
+  }
+  const flash = `${label(entity)} deleted`;
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: row.id, flash }); return true; }
+  ok(`/${entity}`, flash);
   return true;
 }
 
@@ -103,8 +128,12 @@ function getRoutes(ctx, entity, fields, ov) {
   }
   if (parts.length === 2 || parts[2] === 'edit') {
     const row = store.get(entity, parts[1]);
-    if (!row) { send(404, errorPage(graph, `no ${entity} #${parts[1]}`)); return true; }
-    if (parts.length === 2) { if (vc.can(entity, 'view', row)) send(200, detailView(graph, store, entity, fields, row, flash, vc)); else ctx.deny(); return true; }
+    if (!row) { ctx.answer(404, errorPage(graph, `no ${entity} #${parts[1]}`), { ok: false, status: 404, errors: [`no ${entity} #${parts[1]}`] }); return true; }
+    if (parts.length === 2) {
+      if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
+      ctx.answer(200, detailView(graph, store, entity, fields, row, flash, vc), rowJSON(store, entity, fields, row));
+      return true;
+    }
     if (vc.can(entity, 'edit', row)) send(200, formView(graph, store, entity, fields, row, 'edit', [], vc, flash)); else ctx.deny();
     return true;
   }
@@ -112,9 +141,9 @@ function getRoutes(ctx, entity, fields, ov) {
 }
 
 export async function handle(ctx) {
-  const { graph, parts, req, send } = ctx;
+  const { graph, parts, req } = ctx;
   const entity = Object.keys(graph.data).find((e) => e.toLowerCase() === parts[0].toLowerCase());
-  if (!entity) { send(404, errorPage(graph, `no entity at /${parts[0]}`)); return true; }
+  if (!entity) { ctx.answer(404, errorPage(graph, `no entity at /${parts[0]}`), { ok: false, status: 404, errors: [`no entity at /${parts[0]}`] }); return true; }
   const fields = ctx.store.fields[entity];
   const ov = graph.override?.[`${entity}.list`] || {};
   const formOv = graph.override?.[`${entity}.form`] || {};
@@ -123,16 +152,16 @@ export async function handle(ctx) {
     const handled = getRoutes(ctx, entity, fields, ov);
     if (handled !== undefined) return handled;
   }
-  if (req.method !== 'POST') { send(404, errorPage(graph, 'no route')); return true; }
+  if (req.method !== 'POST') { ctx.answer(404, errorPage(graph, 'no route'), { ok: false, status: 404, errors: ['no route'] }); return true; }
 
   if (parts.length === 1) return createRoute(ctx, entity, fields, formOv);
   const id = parts[1];
   const row = ctx.store.get(entity, id);
-  if (!row) { send(404, errorPage(graph, `no ${entity} #${id}`)); return true; }
+  if (!row) { ctx.answer(404, errorPage(graph, `no ${entity} #${id}`), { ok: false, status: 404, errors: [`no ${entity} #${id}`] }); return true; }
 
   if (parts[2] === 'delete') return deleteRoute(ctx, entity, fields, id, row);
   if (['action', 'go', 'add'].includes(parts[2])) return handleRow(ctx, entity, fields, id, row);
   if (parts.length === 2) return updateRoute(ctx, entity, fields, formOv, id, row);
-  send(404, errorPage(graph, 'no route'));
+  ctx.answer(404, errorPage(graph, 'no route'), { ok: false, status: 404, errors: ['no route'] });
   return true;
 }

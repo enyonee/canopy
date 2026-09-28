@@ -32,6 +32,7 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     dbFile: flag('db', path.join(dir, 'data.sqlite')),
     traceFile: flag('trace', path.join(dir, 'trace.jsonl')),
     port, registry, pluginErrors,
+    noTimers: Boolean(process.env.AG_NO_TIMERS),
   });
   log(`${app.invalid ? 'invalid graph served at' : 'app running at'} http://127.0.0.1:${port}`);
   return { code: 0, app };

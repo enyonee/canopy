@@ -34,7 +34,10 @@ const loyalty = writePlugin('loyalty.mjs', `export default {
 
 test('the registry starts with the built-ins and refuses a second registration of a name', () => {
   const r = createRegistry();
-  for (const t of TABLES) assert.ok(Object.keys(r[t]).length, `${t} is not empty`);
+  // Every table but widgets ships built-ins; no core widget exists (see runtime/widgets.mjs) —
+  // an app registers its own through a plugin, same table, same conflict rule.
+  for (const t of TABLES) if (t !== 'widgets') assert.ok(Object.keys(r[t]).length, `${t} is not empty`);
+  assert.deepEqual(r.widgets, {});
   assert.equal(r.plugins.length, 0);
   assert.equal(DEFAULT.fields.money.sql, 'INTEGER');
   register(r, { fields: { percent: { sql: 'INTEGER' } } }, 'p1');

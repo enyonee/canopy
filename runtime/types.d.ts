@@ -153,17 +153,26 @@ export interface FunctionType {
   run: (args: any[]) => any;
 }
 
+/** A registry.widgets[name] entry — a client widget (docs/FORMAT.md's «Widgets» section). */
+export interface WidgetType {
+  summary: string;
+  client: string;
+  props?: string[];
+  check?: (node: Record<string, any>, h: any) => void;
+}
+
 export interface Registry {
   fields: Record<string, FieldType>;
   blocks: Record<string, BlockType>;
   transports: Record<string, TransportType>;
   functions: Record<string, FunctionType>;
+  widgets: Record<string, WidgetType>;
   plugins: string[];
 }
 
 /** The per-request object every route module receives — built once in routes/context.mjs. */
 export interface RequestContext {
-  req: any; res: any; url: URL; parts: string[]; flash: string; wantsCsv: boolean;
+  req: any; res: any; url: URL; parts: string[]; flash: string; wantsCsv: boolean; wantsJSON: boolean;
   graph: Graph; store: any; perms: any; sess: any; registry: Registry; interp: any;
   trace: (event: Record<string, any>) => void; filesDir: string; fetchImpl?: typeof fetch;
   user: any; role: string | null; vc: ViewContext; ownWhere: (entity: string) => Record<string, any>;
@@ -171,6 +180,7 @@ export interface RequestContext {
   send: (code: number, html: string) => void; redirect: (to: string) => void;
   ok: (to: string, msg?: string) => void; sendCsv: (name: string, header: string[], lines: any[][]) => void;
   exportRows: (name: string, entity: string, rows: any[], cols: string[], labels: Record<string, any>) => void;
+  sendJson: (code: number, data: any) => void; answer: (code: number, html: string, json: any) => void;
   body: () => Promise<Record<string, any>>; resolveTop: (obj: any) => any;
   paged: (rows: any[], ov: any) => { rows: any[]; total: number; page: number; pages: number };
   sortOf: (entity: string, ov: any) => { field: string; dir: 'asc' | 'desc' } | null;

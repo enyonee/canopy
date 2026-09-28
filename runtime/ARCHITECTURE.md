@@ -10,20 +10,21 @@
 
 | слой | модули | зачем |
 |---|---|---|
-| 0 | `fields.mjs`, `functions.mjs`, `transports.mjs`, `check/util.mjs` | листья: реестры дескрипторов, ничего не импортируют изнутри рантайма |
+| 0 | `fields.mjs`, `functions.mjs`, `transports.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
 | 1 | `expr.mjs`, `spec.mjs` | алгебра выражений и разбор спецификации поля |
 | 2 | `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
-| 3 | `registry.mjs` | сборка четырёх таблиц + загрузка плагинов |
+| 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
 | 4 | `store.mjs`, `outbox.mjs` | хранилище (SQLite) и исходящий ящик |
-| 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,connectors,rules,plugins}.mjs` | по чекеру на вид узла |
-| 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed; каркас рендера |
-| 7 | `render/{list,form,detail,dashboard,pages}.mjs` | сами экраны, поверх `render.mjs` |
-| 8 | `routes/{context,session,views,system,entity,rows}.mjs` | маршруты, поверх интерпретатора и рендера |
-| 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты |
+| 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
+| 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed; каркас рендера (плюс `rowJSON`/`widgetBlock`) |
+| 7 | `render/{list,form,detail,dashboard,pages}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики) |
+| 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule}.mjs` | маршруты, поверх интерпретатора и рендера |
+| 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний |
 | 10 | `cli.mjs`, `run.mjs` | точка входа |
 
 `node:` втроенные модули — по отдельной таблице в `tests/arch.test.mjs`: `node:sqlite`
-только в `store.mjs`; `node:http` только в `server.mjs`; `fs`/`path` — там же, где сегодня
+только в `store.mjs`; `node:http` только в `server.mjs`; `node:fs` также в `routes/widgets.mjs`
+(читает файл виджета, который назвал плагин); `fs`/`path` — там же, где сегодня
 (`auth.mjs`, `patch.mjs`, `server.mjs`, `cli.mjs`, `routes/context.mjs`, `routes/system.mjs`).
 
 ## Кто чем владеет
@@ -49,15 +50,21 @@
 - **`runtime/routes/*.mjs`** — один файл на группу маршрутов. Контракт: модуль
   экспортирует `handle(ctx) → true | undefined` (обработал / не мой маршрут) —
   `routes/context.mjs` строит `ctx` один раз на запрос (кто спрашивает, `send`/
-  `redirect`/`ok`/`deny`, разбор тела, пагинация, CSV). `routes/entity.mjs` —
+  `redirect`/`ok`/`deny`/`sendJson`/`answer`, разбор тела, пагинация, CSV;
+  `wantsJSON` — `accept: application/json` — решает HTML или JSON один раз и
+  только там, где маршрут и так уже отвечал). `routes/entity.mjs` —
   терминальный: к моменту, когда до него доходит очередь, `/page`, `/dashboard`,
-  `/list`, `/outbox`, `/file`, `/action` уже проверены, так что нерешённый путь —
-  либо неизвестная сущность, либо «нет такого маршрута»; он же вызывает
-  `routes/rows.mjs` для action/go/add на уже найденной строке.
+  `/list`, `/outbox`, `/file`, `/action`, `/widget`, `/schedule` уже проверены,
+  так что нерешённый путь — либо неизвестная сущность, либо «нет такого
+  маршрута»; он же вызывает `routes/rows.mjs` для action/go/add на уже
+  найденной строке. `routes/widgets.mjs` отдаёт `/widget/<name>.mjs` (файл,
+  который назвал плагин) и общий `/widget/_api.mjs`; `routes/schedule.mjs` —
+  ручной запуск `POST /schedule/<name>/run`, той же проверкой, что и `/outbox`.
 - **`runtime/server.mjs`** — только подъём: валидирует граф, поднимает `Store`,
-  права, сессии, интерпретатор, и на каждый запрос строит контекст и перебирает
-  модули маршрутов по порядку. Ни один маршрут не знает про HTTP-подъём; сам
-  `server.mjs` не знает про конкретные пути.
+  права, сессии, интерпретатор, заводит таймеры расписаний (`schedule.mjs`'s
+  `everyMs`, отключаемо `noTimers`), и на каждый запрос строит контекст и
+  перебирает модули маршрутов по порядку. Ни один маршрут не знает про
+  HTTP-подъём; сам `server.mjs` не знает про конкретные пути.
 
 ## Правило роста
 
@@ -66,9 +73,13 @@
 и `check(graph, h)`, и добавь тест, называющий узел по имени — `tests/arch.test.mjs`
 проверяет все три условия и валит сборку, если хоть одно пропущено.
 
-Новый блок/тип поля/транспорт/функция — реестр (`registry.mjs`), не вид узла:
+Новый блок/тип поля/транспорт/функция/виджет — реестр (`registry.mjs`), не вид узла:
 растёт каталог, не формат. Контракт обязателен (`tests/arch.test.mjs` проверяет
 и встроенные, и плагины из `plugins/` и `apps/*/plugins/`): у блока — `summary`,
 `effects`, `requires`, `run`; у типа поля — `sql`, `exprKind`, `def`, `coerce`,
 `validate`, `format`, `input`; у транспорта — `summary`, `validate`, `deliver`;
-у функции — `arity`, `kind`, `run`.
+у функции — `arity`, `kind`, `run`; у виджета — `summary`, `client` (`props`,
+`check` необязательны). Виджет привязывается к узлу (`pages[].widget`,
+`"Entity.detail".widget`) — это свойство существующих видов узлов, а не новый
+вид: `checkWidget` в `check/util.mjs` — общий код для `check/pages.mjs` и
+`check/override.mjs`, а не отдельный чекер.

@@ -46,16 +46,22 @@ function file(ctx) {
 }
 
 async function globalAction(ctx) {
-  const { graph, parts, req, send, ok, vc, role, perms, interp, trace, user } = ctx;
+  const { graph, parts, req, ok, vc, role, perms, interp, trace, user } = ctx;
   if (req.method !== 'POST') return undefined;
   const action = (graph.actions || []).find((a) => a.name === parts[1] && !a.in);
-  if (!action) { send(404, errorPage(graph, `no global action ${parts[1]}`)); return true; }
+  if (!action) { ctx.answer(404, errorPage(graph, `no global action ${parts[1]}`), { ok: false, status: 404, errors: [`no global action ${parts[1]}`] }); return true; }
   if (action.by ? !action.by.includes(role) : perms.enabled && !vc.can('*', `do:${action.name}`)) { ctx.deny(); return true; }
   const values = await ctx.body();
   let out;
   try { out = await interp.attempt(() => interp.runSteps(action.do, { rowEntity: null, id: null, values, user })); }
-  catch (e) { trace({ kind: 'refused', action: action.name, message: e.message }); send(400, noticePage(graph, vc, 'Not done', e.message)); return true; }
-  ok(interp.afterPath(action.after || '/', null, null, { created: out.created }), action.confirm ? interp.interpolate(action.confirm, out) : '');
+  catch (e) {
+    trace({ kind: 'refused', action: action.name, message: e.message });
+    ctx.answer(400, noticePage(graph, vc, 'Not done', e.message), { ok: false, status: 400, errors: [e.message] });
+    return true;
+  }
+  const flash = action.confirm ? interp.interpolate(action.confirm, out) : '';
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, created: out.created, flash }); return true; }
+  ok(interp.afterPath(action.after || '/', null, null, { created: out.created }), flash);
   return true;
 }
 

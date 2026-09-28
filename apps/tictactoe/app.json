@@ -1,0 +1,34 @@
+{
+  "app": "Tic-Tac-Toe",
+  "task": "reference",
+  "note": "Reference app, not a benchmark task: proves the widget + JSON-answers path end to end. A plugin block (ttt.move) validates and applies a move, refusing an illegal one; a plugin widget (ttt) renders the board and posts moves as the same JSON action-answer every app's JSON API already speaks; status is a real /states field (resign/draw/reset are genuine transitions), the win/draw resolution during ordinary play is the block's own business.",
+  "theme": { "background": "white", "accent": "teal" },
+  "home": "/Game",
+  "plugins": ["./plugins/ttt.mjs"],
+  "data": {
+    "Game": {
+      "board": "text=_________",
+      "turn": "enum[x,o]=x",
+      "status": "enum[playing,x_won,o_won,draw]=playing"
+    }
+  },
+  "seed": { "Game": [ {} ] },
+  "views": "auto",
+  "override": {
+    "Game.list": { "title": "Games", "columns": ["board", "turn", "status"] },
+    "Game.detail": { "fields": ["turn", "status"], "widget": { "use": "ttt" } }
+  },
+  "actions": [
+    { "name": "move", "in": "Game", "after": "/Game/{id}",
+      "do": [ { "block": "ttt.move", "cell": "= values.cell" } ] }
+  ],
+  "states": {
+    "Game": { "field": "status", "transitions": [
+      { "name": "resignX", "from": ["playing"], "to": "o_won", "title": "X resigns" },
+      { "name": "resignO", "from": ["playing"], "to": "x_won", "title": "O resigns" },
+      { "name": "declareDraw", "from": ["playing"], "to": "draw", "title": "Call it a draw" },
+      { "name": "reset", "from": ["x_won", "o_won", "draw"], "to": "playing", "title": "Play again",
+        "do": [ { "block": "db.update", "set": { "board": "_________", "turn": "x" } } ] }
+    ] }
+  }
+}

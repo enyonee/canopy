@@ -1,9 +1,33 @@
 // `/override` shapes the screens /views: auto derives (columns, search,
 // filters, sort, actions, related child tables…), all checked field-by-field
 // and action-by-action against the entity the key names.
+import { checkWidget } from './util.mjs';
+
 const VIEWS = ['list', 'form', 'detail'];
 
 export const NODES = ['override'];
+
+// A child table on a detail screen: its own entity/via/columns/rowActions/fill,
+// split out so check() stays under the function-size budget.
+function checkRelated(graph, entity, key, ov, h) {
+  const { err, checkEntity, checkField, fields, stateNames } = h;
+  (ov.related || []).forEach((rel, i) => {
+    const p = `/override/${key}/related/${i}`;
+    if (!checkEntity(rel.entity, `${p}/entity`)) return;
+    if (!rel.via) return err(`${p}/via`, 'related section needs "via" (the ref field on the child)');
+    if (checkField(rel.entity, rel.via, `${p}/via`)) {
+      const f = fields[rel.entity][rel.via];
+      if (f.kind !== 'ref') err(`${p}/via`, `"${rel.via}" is ${f.kind}, not a reference`, `declare it as "ref:${entity}"`);
+      else if (f.target !== entity) err(`${p}/via`, `"${rel.via}" points at ${f.target}, not ${entity}`);
+    }
+    (rel.columns || []).forEach((c) => c === 'id' || checkField(rel.entity, c, `${p}/columns`, { secret: true }));
+    (rel.rowActions || []).forEach((a, k) => {
+      if (['edit', 'delete', 'view'].includes(a) || (typeof a === 'string' && a.startsWith('go:') && stateNames(rel.entity).includes(a.slice(3)))) return;
+      if (!(graph.actions || []).some((x) => x.name === a && x.in === rel.entity)) err(`${p}/rowActions/${k}`, `unknown action "${a}" on ${rel.entity}`, 'built-in: view, edit, delete, go:<transition>, or an action with "in" set to this entity');
+    });
+    Object.keys(rel.fill || {}).forEach((c) => checkField(rel.entity, c, `${p}/fill/${c}`, { stored: true }));
+  });
+}
 
 export function check(graph, h) {
   const { err, checkEntity, checkField, checkWhere, fields, stateNames, actionNames } = h;
@@ -47,21 +71,7 @@ export function check(graph, h) {
         err(`/override/${key}/rowActions/${i}`, `unknown action "${a}"`,
           `built-in: view, edit, delete, go:<transition>; declared in /actions: ${actionNames.join(', ') || '(none)'}`);
     });
-    (ov.related || []).forEach((rel, i) => {
-      const p = `/override/${key}/related/${i}`;
-      if (!checkEntity(rel.entity, `${p}/entity`)) return;
-      if (!rel.via) return err(`${p}/via`, 'related section needs "via" (the ref field on the child)');
-      if (checkField(rel.entity, rel.via, `${p}/via`)) {
-        const f = fields[rel.entity][rel.via];
-        if (f.kind !== 'ref') err(`${p}/via`, `"${rel.via}" is ${f.kind}, not a reference`, `declare it as "ref:${entity}"`);
-        else if (f.target !== entity) err(`${p}/via`, `"${rel.via}" points at ${f.target}, not ${entity}`);
-      }
-      (rel.columns || []).forEach((c) => c === 'id' || checkField(rel.entity, c, `${p}/columns`, { secret: true }));
-      (rel.rowActions || []).forEach((a, k) => {
-        if (['edit', 'delete', 'view'].includes(a) || (typeof a === 'string' && a.startsWith('go:') && stateNames(rel.entity).includes(a.slice(3)))) return;
-        if (!(graph.actions || []).some((x) => x.name === a && x.in === rel.entity)) err(`${p}/rowActions/${k}`, `unknown action "${a}" on ${rel.entity}`, 'built-in: view, edit, delete, go:<transition>, or an action with "in" set to this entity');
-      });
-      Object.keys(rel.fill || {}).forEach((c) => checkField(rel.entity, c, `${p}/fill/${c}`, { stored: true }));
-    });
+    checkRelated(graph, entity, key, ov, h);
+    if (kind === 'detail' && ov.widget) checkWidget(h, ov.widget, `/override/${key}/widget`, entity);
   }
 }

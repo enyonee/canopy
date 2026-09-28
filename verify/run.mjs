@@ -46,8 +46,12 @@ let port = Number(process.env.AG_PORT || 8910), totalOk = 0, totalAll = 0;
 const nextPort = () => { port++; if (port === sinkPort) port++; };
 const summary = [];
 
+// AG_NO_TIMERS: a schedule's timer never fires on its own during a check run —
+// every schedule check triggers `POST /schedule/<name>/run` by hand, so a run
+// is deterministic and never races a background timer.
 const boot = (graphFile, p) => {
-  const child = spawn('node', ['--no-warnings', 'runtime/run.mjs', graphFile, '--port', String(p)], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn('node', ['--no-warnings', 'runtime/run.mjs', graphFile, '--port', String(p)],
+    { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, AG_NO_TIMERS: '1' } });
   child.log = '';
   child.stdout.on('data', (d) => { child.log += d; });
   child.stderr.on('data', (d) => { child.log += d; });

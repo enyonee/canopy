@@ -21,6 +21,9 @@ import * as session from './routes/session.mjs';
 import * as views from './routes/views.mjs';
 import * as system from './routes/system.mjs';
 import * as entity from './routes/entity.mjs';
+import * as widgets from './routes/widgets.mjs';
+import * as schedule from './routes/schedule.mjs';
+import { everyMs } from './schedule.mjs';
 
 function invalidGraphServer(graph, errors, port, host) {
   console.error(`graph is invalid:\n${formatErrors(errors)}`);
@@ -33,14 +36,34 @@ function invalidGraphServer(graph, errors, port, host) {
 }
 
 async function dispatch(ctx) {
+  if (widgets.handle(ctx)) return;
   if (await session.handle(ctx)) return;
   if (ctx.perms.enabled && !ctx.role) { ctx.deny('Please sign in.'); return; }
   if (await views.handle(ctx)) return;
   if (await system.handle(ctx)) return;
+  if (await schedule.handle(ctx)) return;
   await entity.handle(ctx); // terminal: answers even when nothing else matches
 }
 
-export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [] }) {
+// A schedule's steps run like a global action, on its own timer — unref'd
+// (never keeps the process alive by itself) and stopped when the server
+// closes. `noTimers` (cli.mjs sets it from AG_NO_TIMERS) is how verify/run.mjs
+// and tests keep every effect deterministic: only `POST /schedule/<name>/run`
+// runs them then.
+function startTimers(graph, interp, trace, server, noTimers) {
+  if (noTimers) return;
+  for (const sched of graph.schedule || []) {
+    const timer = setInterval(() => {
+      trace({ kind: 'schedule', name: sched.name, manual: false });
+      interp.attempt(() => interp.runSteps(sched.do, { rowEntity: null, id: null, values: {}, user: null }))
+        .catch((e) => trace({ kind: 'error', message: String(e && e.message) }));
+    }, everyMs(sched.every));
+    timer.unref();
+    server.on('close', () => clearInterval(timer));
+  }
+}
+
+export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [], noTimers = false }) {
   const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
   const errors = [...pluginErrors, ...validate(graph, registry)];
   if (errors.length) return invalidGraphServer(graph, errors, port, host);
@@ -74,6 +97,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     }
   });
 
+  startTimers(graph, interp, trace, server, noTimers);
   server.listen(port, host);
   return { server, graph, store, perms, invalid: false };
 }

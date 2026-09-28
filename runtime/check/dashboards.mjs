@@ -1,8 +1,35 @@
-// `/dashboards`: cards and grouped tables at /dashboard/<id>.
+// `/dashboards`: cards, grouped tables and charts at /dashboard/<id>.
 const FNS = ['count', 'sum', 'avg', 'min', 'max'];
 const UNITS = ['day', 'month', 'year'];
+const CHART_TYPES = ['bar', 'line', 'pie'];
 
 export const NODES = ['dashboards'];
+
+// One metric, one grouping, one chart — the same shape a table's single
+// metric would have, checked the same way (unknown fn, groupUnit needs a
+// temporal groupBy, a where clause like any other).
+function checkCharts(d, p, h) {
+  const { err, checkEntity, checkField, checkWhere, fields } = h;
+  (d.charts || []).forEach((c, j) => {
+    const cp = `${p}/charts/${j}`;
+    if (!c.title) err(`${cp}/title`, 'chart needs a title');
+    if (!checkEntity(c.entity, `${cp}/entity`)) return;
+    if (!CHART_TYPES.includes(c.type)) err(`${cp}/type`, `unknown chart type "${c.type}"`, `types: ${CHART_TYPES.join(', ')}`);
+    if (!c.groupBy) err(`${cp}/groupBy`, 'chart needs "groupBy"');
+    else checkField(c.entity, c.groupBy, `${cp}/groupBy`);
+    if (c.groupUnit) {
+      if (!UNITS.includes(c.groupUnit)) err(`${cp}/groupUnit`, `unknown unit "${c.groupUnit}"`, `units: ${UNITS.join(', ')}`);
+      const g = c.groupBy && fields[c.entity]?.[c.groupBy];
+      if (g && !g.type.temporal) err(`${cp}/groupUnit`, `groupUnit needs a date or time groupBy; "${c.groupBy}" is ${g.kind}`);
+    }
+    if (!c.metric || !FNS.includes(c.metric.fn)) err(`${cp}/metric/fn`, `unknown function "${c.metric?.fn}"`, `known: ${FNS.join(', ')}`);
+    else if (c.metric.fn !== 'count' && !c.metric.field) err(`${cp}/metric/field`, `"${c.metric.fn}" needs a field`);
+    if (c.metric?.field) checkField(c.entity, c.metric.field, `${cp}/metric/field`);
+    checkWhere(c.entity, c.where, `${cp}/where`);
+    if (c.limit !== undefined && !(Number.isInteger(c.limit) && c.limit > 0)) err(`${cp}/limit`, 'limit must be a positive integer');
+    if (c.sort && !['grp', 'v'].includes(c.sort.field)) err(`${cp}/sort/field`, 'sort must name "grp" or "v" (the chart\'s only metric)');
+  });
+}
 
 export function check(graph, h) {
   const { err, checkEntity, checkField, checkWhere, checkRoles, fields } = h;
@@ -10,6 +37,8 @@ export function check(graph, h) {
     const p = `/dashboards/${i}`;
     if (!d.id) err(`${p}/id`, 'dashboard needs an id (it becomes /dashboard/<id>)');
     checkRoles(d, p);
+    if (d.refresh !== undefined && !(Number.isInteger(d.refresh) && d.refresh > 0))
+      err(`${p}/refresh`, 'refresh must be a positive integer number of seconds');
     for (const [e, f] of Object.entries(d.period || {})) {
       if (!checkEntity(e, `${p}/period/${e}`)) continue;
       if (checkField(e, f, `${p}/period/${e}`) && !fields[e][f].type.temporal)
@@ -42,5 +71,6 @@ export function check(graph, h) {
         err(`${tp}/sort/field`, `sort must name a metric or "grp"`,
           `metrics here: ${(t.metrics || []).map((m) => m.as).join(', ')}`);
     });
+    checkCharts(d, p, h);
   });
 }
