@@ -1,7 +1,7 @@
 # Canopy
 
 **A lightweight app runtime: one JSON document in, a working application out.** Canopy is
-~4.4k lines of JavaScript with zero runtime dependencies. It runs one Node process and one
+~4.7k lines of JavaScript with zero runtime dependencies. It runs one Node process and one
 SQLite file per app, with no build step, no framework and no frontend bundle.
 
 Applications are a closed graph of effects with pure leaves. A language model writes one
@@ -28,7 +28,7 @@ Everything an app needs comes from the platform and one small runtime:
 
 | | |
 |---|---|
-| Runtime code | ~4.4k lines, 264 KB of source |
+| Runtime code | ~4.7k lines, 280 KB of source |
 | Runtime dependencies | **0**: Node 22 built-ins only (`node:sqlite`, `node:http`, `node:crypto`) |
 | Build step | none; no bundler, transpiler or frontend toolchain |
 | An app | one `app.json`: median **76 lines** (~5.7 KB) across the 104 apps in this repo |
@@ -60,10 +60,10 @@ nothing, so it cannot lie about what it does. Canopy closes **access**, not arit
 | WebGen-Bench tasks covered | **101 / 101**: one app per task, `webgen-bench/000001` … `000101` |
 | Apps in the repo | **104**: the 101 tasks, two hand-written references (`shop`, `crm`) with three patch-based changes each, and `tictactoe` (the widget reference) |
 | Acceptance checks | **699 / 699** green (`npm run verify`) |
-| Runtime tests | **251**, 100 % line coverage across 57 modules |
-| Mutation gate | **131 / 131** mutants killed |
+| Runtime tests | **256**, 100 % line coverage across 57 modules |
+| Mutation gate | **134 / 134** mutants killed |
 | Types | `tsc --checkJs`, clean |
-| Runtime size | ~4.6k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
+| Runtime size | ~4.7k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
 | Performance | indexes, page-before-hydrate, batched aggregates, prepared-statement cache; `/Order` list on a 500/2000/10000-row bench graph: 1590 ms → ~10-15 ms p50 (`npm run bench`, `TESTS.md`) |
 
 Each app ships `checks.mjs`, with one check per `ui_instruct` case of its benchmark task, and
@@ -205,13 +205,13 @@ failing test in `tests/arch.test.mjs`, part of `npm test`.
 
 ## Roadmap
 
-**Runtime performance** (in progress). Measured on 500 customers / 2000 orders / 10 000 items:
-a list with derived aggregates takes ~1.6 s and a dashboard ~3.6 s. That time goes to SQLite
-full scans and one aggregate query per row, not to JavaScript. The fixes: indexes derived from
-the graph, derived fields computed only for the visible page, batched child aggregates, and a
-prepared-statement cache. A query-count gate in the test suite will keep a list page at O(1)
-queries. Every number is measured before and after, and the JSON answers must stay
-byte-identical.
+**Runtime performance.** The first round shipped in 0.1.1: indexes derived from the graph,
+derived fields computed only for the visible page, batched child aggregates, labels without
+hydrating the target row, and a prepared-statement cache. A query-count gate keeps a list page
+at O(1) queries. On 2000 customers / 8000 orders / 40 000 items, an order list went from
+24.8 s to 3 ms and a dashboard from 51.6 s to 0.12 s, with JSON answers byte-identical before
+and after ([CHANGELOG.md](CHANGELOG.md)). Next: push single-parent aggregates into SQL. Under
+load, a row with tens of thousands of children still sums them in JavaScript on every request.
 
 **PostgreSQL as a second storage driver.** SQLite stays the default for development, tests and
 single-instance apps. Postgres is for deployments that need several instances, many concurrent
@@ -223,8 +223,8 @@ writers, replication or online backups. Graphs never contain SQL, so apps do not
 3. the full acceptance suite (699 checks) run against both drivers in CI, one schema per app;
 4. the same benchmark before and after, plus a load test.
 
-It has to come after the performance round. With one query per row, every round trip to a
-database server would multiply the current latency instead of removing it.
+It builds on the performance round: with O(1) queries per page, a round trip to a database
+server costs a constant, not one per row.
 
 **A production connector library.** Today the outbox knows HTTP, a stand mail transport, SMS/
 WhatsApp recorded in the outbox, and a sandbox card gateway. For anyone to run real apps on
