@@ -232,9 +232,11 @@ metrics into SQL, and streaming the CSV export.
 
 **PostgreSQL as a second storage driver.** SQLite stays the default for development, tests and
 single-instance apps. Postgres is for deployments that need several instances, many concurrent
-writers, replication or online backups. Graphs never contain SQL, so apps do not change. Plan:
+writers, replication or online backups. Graphs never contain SQL, so apps do not change. The design is accepted and staged in [docs/POSTGRES.md](docs/POSTGRES.md). Plan:
 1. an async driver interface over the current SQLite store, with everything still green (the
-   store, step interpreter, blocks and plugins are synchronous today; this is the main cost);
+   store, step interpreter, blocks and plugins are synchronous today; this is the main cost).
+   **In progress:** stage S1 landed (the store reaches SQLite only through a `Driver`,
+   `runtime/driver/sqlite.mjs`; still synchronous, behaviour byte-identical); S2 to S5 are next;
 2. a Postgres driver as an optional dependency, loaded only when configured (dialect: month
    bucketing, `LIKE … ESCAPE`, identity columns, stable ordering of ties);
 3. the full acceptance suite (699 checks) run against both drivers in CI, one schema per app;

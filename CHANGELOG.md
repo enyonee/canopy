@@ -5,6 +5,19 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **The Driver seam (PostgreSQL roadmap, step 1, stage S1).** The store no longer holds a
+  SQLite handle: it talks to a `Driver` (`runtime/driver/sqlite.mjs`, opened by
+  `runtime/driver.mjs`) through `this.drv`: `all/get/run/exec/transaction/close`, a `dialect`,
+  schema helpers (`tables/columns/indexes/createTable/addColumn/createIndex/dropIndex`) and an
+  `onQuery` hook. The prepared-statement LRU moved into the driver; `PRAGMA`, `sqlite_master`
+  and `AUTOINCREMENT` no longer appear outside it. `new Store(graph, file, registry, driver)`
+  accepts a driver. Still synchronous; no answer, schema, migration message or trace changes.
+  `Store#prepare` and `store.db` are gone.
+- Gates: `node:sqlite` only in `runtime/driver/sqlite.mjs`; new arch gate keeping SQLite-only
+  surface under `runtime/driver/`. Query counting in `perf.test.mjs` uses the driver hook.
+  Mutations re-pointed, ten new. `docs/POSTGRES.draft.md` is now `docs/POSTGRES.md` (design
+  accepted, status per stage).
+
 - **The outbox delivers each row once.** `flush` used to read every `queued` row, deliver them
   one by one and only then update them, so two overlapping flushes (two requests committing
   close together; later several instances) both delivered the same row. A row is now claimed by
