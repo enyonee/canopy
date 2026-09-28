@@ -7,6 +7,7 @@ import { evaluate } from './expr.mjs';
 import { hashPassword, isHashed } from './auth.mjs';
 import { DEFAULT } from './registry.mjs';
 import * as query from './store/query.mjs';
+import * as hydrate from './store/hydrate.mjs';
 import * as state from './store/state.mjs';
 import * as rules from './store/rules.mjs';
 import * as migrate from './store/migrate.mjs';
@@ -220,11 +221,12 @@ export class Store {
   // for a rule check on the row's own submitted values (still plain text, not yet
   // hashed, and never stored): it does not propagate through a hop or an
   // aggregate, so a referenced row's real password hash stays unreadable.
-  // `cache` (runtime/store/query.mjs's buildAggCache, via hydratePage) is a
-  // purely optional fast path for `rows()`: when it holds this exact (child,
-  // link) grouping already, that group is used instead of a fresh query — for
-  // any row this ctx was ever built for, correlated or not, nested or not, so
-  // no branch here needs to tell those cases apart. Nothing is ever wrong
+  // `cache` (runtime/store/hydrate.mjs's buildAggCache, via hydratePage) is a
+  // purely optional fast path for `rows()`/`agg()`: when it holds this exact
+  // (child, link) grouping (or, for a SQL-compilable aggregate, this exact
+  // scalar) already, that is used instead of a fresh query — for any row
+  // this ctx was ever built for, correlated or not, nested or not, so no
+  // branch here needs to tell those cases apart. Nothing is ever wrong
   // without it; a cache miss is exactly the query this method always ran.
   ctx(entity, row, stack = [], { allowSecret = false, cache = null } = {}) {
     const store = this;
@@ -255,6 +257,10 @@ export class Store {
         const raws = grouped?.has(key) ? grouped.get(key) : store.listRaw(child, { where: link ? { [link]: row.id } : {} });
         return raws.map((r) => store.ctx(child, r, stack, { cache }));
       },
+      // Tried by runtime/expr.mjs's evaluate() before it calls rows() at all;
+      // `undefined` means "not representable in SQL", which is exactly the
+      // signal that tells evaluate() to fall back to rows() as before.
+      agg(node) { return store.aggValue(entity, row, node, cache); },
     };
   }
 
@@ -288,5 +294,5 @@ export class Store {
 // are plain functions run with `this` bound to the Store instance — split
 // out only to keep this file under the size budget; they are as much "the
 // store" as anything above.
-Object.assign(Store.prototype, query, state, rules, migrate);
+Object.assign(Store.prototype, query, hydrate, state, rules, migrate);
 

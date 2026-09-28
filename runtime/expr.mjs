@@ -17,6 +17,13 @@ import { FUNCTIONS, truthy, family } from './functions.mjs';
 const AGG = new Set(['sum', 'count', 'avg', 'min', 'max']);
 const NUMERIC = new Set(['number', 'money']);
 
+// Money reaches the algebra in major units, so sums of cents pick up binary dust:
+// 10.10 + 20.20 must be 30.30, not 30.299999999999997. Exported so a SQL-side
+// aggregate (runtime/store/aggsql.mjs) finalizes its result through the exact
+// same rounding as this file's own sum/avg — never a re-implementation that
+// could drift a bit from this one.
+export const exact = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1e6) / 1e6 : x);
+
 // --- tokens ------------------------------------------------------------------
 const tokenize = (src) => {
   const out = [];
@@ -188,9 +195,6 @@ export function evaluate(ast, ctx, functions = FUNCTIONS) {
   // One clock per evaluation: "now = now" is a tautology, and an expression cannot
   // straddle midnight halfway through.
   const clock = ctx.clock || new Date();
-  // Money reaches the algebra in major units, so sums of cents pick up binary dust:
-  // 10.10 + 20.20 must be 30.30, not 30.299999999999997.
-  const exact = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1e6) / 1e6 : x);
   const ev = (n) => {
     switch (n.t) {
       case 'num': case 'str': case 'bool': return n.v;
@@ -226,6 +230,12 @@ export function evaluate(ast, ctx, functions = FUNCTIONS) {
       }
       case 'call': return functions[n.fn].run(n.args.map(ev));
       default: {
+        // A SQL-compilable aggregate (runtime/store/aggsql.mjs, wired in through
+        // Store#ctx's optional `agg`) answers in one query instead of fetching
+        // every child row — same value, computed the other way. `undefined`
+        // (no such hook, or this particular node was not representable in SQL)
+        // means "evaluate it here, the old way", exactly as before this hook existed.
+        if (ctx.agg) { const hit = ctx.agg(n); if (hit !== undefined) return hit; }
         const rows = ctx.rows(n.entity, n.via).map((r) => ({ get: (p) => (p[0] === 'row' && p.length > 1 ? ctx.get(p.slice(1)) : r.get(p)), rows: r.rows, clock }));
         if (n.fn === 'count') return n.body ? rows.filter((r) => truthy(evaluate(n.body, r, functions))).length : rows.length;
         const vals = rows.map((r) => evaluate(n.body, r, functions)).filter((v) => v !== null && v !== undefined);
