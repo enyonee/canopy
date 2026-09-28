@@ -183,7 +183,8 @@ test('a page of more than 32766 parent ids does not fail (item B, bulk insert)',
 
 // --- item C: batched children must follow the unbatched path's own order ---
 test('batched children are grouped in the same order the unbatched path reads them (item C)', () => {
-  const store = new Store(BENCH_GRAPH, ':memory:');
+  // `half` divides, so it is never compiled to SQL (runtime/store/aggsql.mjs) and still batches raw children.
+  const store = new Store({ ...BENCH_GRAPH, data: { ...BENCH_GRAPH.data, Customer: { ...BENCH_GRAPH.data.Customer, half: 'money := sum(Order: total / 2)' } } }, ':memory:');
   const c = store.insert('Customer', { name: 'Ann' });
   for (let i = 0; i < 30; i++) store.insert('Order', { customer: c, status: 'new' });
   const cache = store.buildAggCache('Customer', [c]);

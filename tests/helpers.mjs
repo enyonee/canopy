@@ -61,3 +61,11 @@ export const tmpGraph = (graph) => {
   fs.writeFileSync(file, JSON.stringify(graph));
   return file;
 };
+
+// Every `new Date()` reads `iso` until the returned restore function runs (`t.after(freezeClock())`):
+// the JS path's clock and a compiled aggregate's bound `today`/`now` are then one and the same.
+export const freezeClock = (iso = '2026-09-29T12:00:00.000Z') => {
+  const Real = globalThis.Date;
+  globalThis.Date = class extends Real { constructor(...a) { super(...(a.length ? a : [iso])); } static now() { return new Real(iso).getTime(); } };
+  return () => { globalThis.Date = Real; };
+};

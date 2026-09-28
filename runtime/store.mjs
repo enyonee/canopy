@@ -231,7 +231,7 @@ export class Store {
   ctx(entity, row, stack = [], { allowSecret = false, cache = null } = {}) {
     const store = this;
     return {
-      entity, row,
+      entity, row, clock: cache?.clock,
       get(path) {
         const [head, ...rest] = path;
         // "id" is read-only and always there (docs/FORMAT.md's «Expressions»): it is
@@ -260,7 +260,7 @@ export class Store {
       // Tried by runtime/expr.mjs's evaluate() before it calls rows() at all;
       // `undefined` means "not representable in SQL", which is exactly the
       // signal that tells evaluate() to fall back to rows() as before.
-      agg(node) { return store.aggValue(entity, row, node, cache); },
+      agg(node, clock) { return store.aggValue(entity, row, node, cache, clock); },
     };
   }
 
