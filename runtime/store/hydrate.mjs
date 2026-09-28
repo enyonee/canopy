@@ -35,7 +35,7 @@ function topAggs(node, out = []) {
 // way — or an entity already visited, `seen` guarding a derived-field cycle
 // same as `Store#derived` does), run the exact query they always would.
 // Correctness never depends on this cache existing.
-export function buildAggCache(entity, ids, cache = { groups: new Map(), scalars: new Map() }, seen = new Set()) {
+export function buildAggCache(entity, ids, cache = { groups: new Map(), scalars: new Map(), clock: new Date() }, seen = new Set()) {
   if (seen.has(entity) || !ids.length) return cache;
   seen.add(entity);
   for (const f of this.fields[entity] || []) {
@@ -44,7 +44,10 @@ export function buildAggCache(entity, ids, cache = { groups: new Map(), scalars:
       const compiled = compileAgg(this, entity, agg);
       if (compiled) {
         const key = aggKey(compiled);
-        if (!cache.scalars.has(key)) cache.scalars.set(key, runAggBatch(this, compiled, ids));
+        if (!cache.scalars.has(key)) {
+          const batch = runAggBatch(this, compiled, ids, cache.clock);
+          if (batch) cache.scalars.set(key, batch);
+        }
         continue; // the aggregate itself is the answer — no child row, nothing to recurse into
       }
       const via = this.childVia(agg.entity, entity, agg.via);
@@ -74,12 +77,14 @@ export function buildAggCache(entity, ids, cache = { groups: new Map(), scalars:
 // batch (`cache.scalars`, built above) is used when there is one; otherwise
 // (a lone `Store#get()`, or a row this particular cache never batched) one
 // small query answers just this row, still without fetching a single child.
-export function aggValue(entity, row, node, cache) {
+export function aggValue(entity, row, node, cache, clock) {
   const compiled = compileAgg(this, entity, node);
   if (!compiled) return undefined;
-  const batch = cache?.scalars?.get(aggKey(compiled));
+  // A batch was bound to the page's one clock: another clock (there is none today —
+  // ctx() hands the cache's own to evaluate()) would need its own query.
+  const batch = compiled.params.length && clock !== cache?.clock ? undefined : cache?.scalars?.get(aggKey(compiled));
   const hit = batch?.get(String(row.id));
-  return hit !== undefined ? hit : runAggOne(this, compiled, row.id);
+  return hit !== undefined ? hit : runAggOne(this, compiled, row.id, clock);
 }
 
 // How many parents' worth of aggregate cache to build and hydrate at once.

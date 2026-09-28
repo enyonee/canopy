@@ -33,6 +33,7 @@ const GRAPH = {
       divBody: 'money := sum(Child: price / 2)',
       fracLit: 'money := sum(Child: price * 1.5)',
       dateBody: 'date := max(Child: when)',
+      dateCount: "int := count(Child: when > '2026-01-01')",
       correlated: 'money := sum(Child: if(row.flag, price, 0))',
       textCmp: 'int := count(Child: label = "x")',
       hopBody: 'money := sum(Child: parent.flag)',
@@ -48,9 +49,9 @@ const GRAPH = {
 // Every field the SQL path is expected to reach parity on ("compilable" per
 // runtime/store/aggsql.mjs's documented scope) versus every field that must
 // fall back (documented right there too: division, fractional literals,
-// dates, text comparisons, correlated row., a hop through a ref).
-const COMPILABLE = ['total', 'totalIf', 'avgPrice', 'maxPrice', 'minPrice', 'n', 'activeCount', 'bigCount', 'discCmp', 'sumPlus', 'sumMinus', 'andCount', 'orCount', 'notCmp'];
-const FALLBACK = ['divBody', 'fracLit', 'dateBody', 'correlated', 'textCmp', 'hopBody'];
+// text comparisons, correlated row., a hop through a ref). Dates compile since R9.
+const COMPILABLE = ['total', 'totalIf', 'avgPrice', 'maxPrice', 'minPrice', 'n', 'activeCount', 'bigCount', 'discCmp', 'sumPlus', 'sumMinus', 'andCount', 'orCount', 'notCmp', 'dateBody', 'dateCount'];
+const FALLBACK = ['divBody', 'fracLit', 'correlated', 'textCmp', 'hopBody'];
 
 function withQueryCount(store, fn) {
   let n = 0;
@@ -72,6 +73,7 @@ const rand = () => { seed32 |= 0; seed32 = (seed32 + 0x6D2B79F5) | 0; let t = Ma
 const TRICKY = [0.1, 0.2, 0.7, 1.1, 2.2, 0.3, 0.01, 99.99, 0, -0.5, -12.34];
 const price = () => (rand() < 0.35 ? TRICKY[Math.floor(rand() * TRICKY.length)] : Number(((rand() < 0.5 ? -1 : 1) * rand() * 500).toFixed(2)));
 
+const DATES = ['2025-12-31', '2026-01-01', '2026-01-02', '2026-09-29', '2099-01-01'];
 function seedRandom(store, parents, maxChildren) {
   const ids = [];
   for (let p = 0; p < parents; p++) {
@@ -82,7 +84,7 @@ function seedRandom(store, parents, maxChildren) {
       store.insert('Child', {
         parent: pid, qty: Math.floor(rand() * 7) - 2, price: price(),
         discount: rand() < 0.3 ? '' : price(), // '' -> stored null (money.coerce)
-        active: rand() < 0.5, label: rand() < 0.5 ? 'x' : 'y',
+        active: rand() < 0.5, label: rand() < 0.5 ? 'x' : 'y', when: DATES[Math.floor(rand() * DATES.length)],
       });
     }
   }
@@ -110,8 +112,8 @@ test('empty children: sum/count are 0, avg/min/max are null — both paths, both
   const sqlRow = store.get('Parent', id);
   const jsRow = withSQLDisabled(store, () => store.get('Parent', id));
   assert.deepEqual(sqlRow, jsRow);
-  for (const f of COMPILABLE) if (!['avgPrice', 'maxPrice', 'minPrice'].includes(f)) assert.equal(sqlRow[f], 0, `${f} should default to 0 on an empty child set`);
-  assert.equal(sqlRow.avgPrice, null); assert.equal(sqlRow.maxPrice, null); assert.equal(sqlRow.minPrice, null);
+  for (const f of COMPILABLE) if (!['avgPrice', 'maxPrice', 'minPrice', 'dateBody'].includes(f)) assert.equal(sqlRow[f], 0, `${f} should default to 0 on an empty child set`);
+  assert.equal(sqlRow.avgPrice, null); assert.equal(sqlRow.maxPrice, null); assert.equal(sqlRow.minPrice, null); assert.equal(sqlRow.dateBody, null);
   const [listed] = store.list('Parent', {});
   assert.deepEqual(listed, sqlRow, 'a batched empty-children group must default the same way as a single-row query');
 });
@@ -127,7 +129,7 @@ test('a null field in the body propagates like JS: excluded from sum/avg, false 
   assert.equal(sqlRow.discCmp, 1, 'only the row with a real, smaller discount should count');
 });
 
-test('every documented fallback case still computes correctly (just not compiled) — division, fractional literal, date, text compare, correlated row., a ref hop', () => {
+test('every documented fallback case still computes correctly (just not compiled) — division, fractional literal, text compare, correlated row., a ref hop', () => {
   const store = new Store(GRAPH, ':memory:');
   const id = store.insert('Parent', { name: 'P', flag: true });
   for (let i = 0; i < 5; i++) store.insert('Child', { parent: id, qty: 1 + i, price: 3 + i, active: i % 2 === 0, label: i === 0 ? 'x' : 'y' });
@@ -246,11 +248,12 @@ test('compileAgg compiles exactly the documented shape — nothing more, nothing
     'count(Child)', 'count(Child: qty > 2)', 'count(Child: active and qty > 2)',
     'count(Child: active or qty > 2)', 'count(Child: not(active))',
     'sum(Child: if(active, qty * price, 0))', 'count(Child: price > discount)',
+    'max(Child: when)', 'min(Child: when)', "count(Child: when > '2026-01-01')",
   ];
   for (const src of yes) assert.ok(compileAgg(store, 'Parent', parse(src)), `expected "${src}" to compile`);
 
   const no = [
-    'sum(Child: price / 2)', 'sum(Child: price * 1.5)', 'max(Child: when)',
+    'sum(Child: price / 2)', 'sum(Child: price * 1.5)', 'sum(Child: when)', 'avg(Child: when)',
     'count(Child: label = "x")', 'sum(Child: if(row.flag, price, 0))',
     'sum(Child: parent.flag)', 'sum(Child: qty * price + when)',
   ];

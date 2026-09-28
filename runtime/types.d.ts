@@ -205,7 +205,7 @@ export interface ViewContext {
 // raw-child-rows-by-parent-id map per (child, via) pair — the pre-item-1
 // fallback; `scalars` holds an already-finalized value per parent id per
 // SQL-compiled aggregate (runtime/store/aggsql.mjs's aggKey).
-type AggCache = { groups: Map<string, Map<string, any[]>>; scalars: Map<string, Map<string, any>> };
+type AggCache = { groups: Map<string, Map<string, any[]>>; scalars: Map<string, Map<string, any>>; clock: Date };
 
 // store/query.mjs, store/hydrate.mjs, store/state.mjs and store/rules.mjs
 // attach these to Store.prototype at runtime (`Object.assign(Store.prototype,
@@ -223,7 +223,7 @@ declare module './store.mjs' {
     list(entity: string, opts?: Record<string, any>): any[];
     listPage(entity: string, opts?: Record<string, any>, page?: { page?: number; pageSize?: number }): { rows: any[]; total: number; page: number; pages: number };
     buildAggCache(entity: string, ids: any[], cache?: AggCache, seen?: Set<string>): AggCache;
-    aggValue(entity: string, row: any, node: any, cache: AggCache | null): any;
+    aggValue(entity: string, row: any, node: any, cache: AggCache | null, clock?: Date): any;
     hydratePage(entity: string, rows: any[]): any[];
     aggregate(entity: string, opts?: Record<string, any>): any[];
     aggregateInMemory(entity: string, opts: Record<string, any>): any[];
