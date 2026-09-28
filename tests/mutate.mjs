@@ -216,7 +216,7 @@ const MUTATIONS = [
   { name: 'csv cells are never quoted', file: 'runtime/render.mjs',
     find: "return /[\",\\n\\r]/.test(s) ? `\"${s.replace(/\"/g, '\"\"')}\"` : s;", replace: "return s;" },
   { name: 'a correlated aggregate reads the child instead of the outer row', file: 'runtime/expr.mjs',
-    find: "        const rows = ctx.rows(n.entity, n.via).map((r) => ({ get: (p) => (p[0] === 'row' && p.length > 1 ? ctx.get(p.slice(1)) : r.get(p)), rows: r.rows, clock }));",
+    find: "        const rows = ctx.rows(n.entity, n.via).map((r) => ({ get: (p) => (p[0] === 'row' && p.length > 1 ? ctx.get(p.slice(1)) : r.get(p)), rows: (e, v) => r.rows(e, v), clock }));",
     replace: "        const rows = ctx.rows(n.entity, n.via);" },
   { name: 'addDays subtracts', file: 'runtime/functions.mjs',
     find: "d.setUTCDate(d.getUTCDate() + Math.round(a[1]));", replace: "d.setUTCDate(d.getUTCDate() - Math.round(a[1]));" },

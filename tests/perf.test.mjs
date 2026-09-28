@@ -60,6 +60,21 @@ test('a list page issues the same number of queries at 100 rows and at 2000', ()
   assert.ok(c100 <= 6, `Customer list issued ${c100} queries for one page — expected a small constant even through a nested aggregate`);
 });
 
+// Customer.spent compiles to SQL now (runtime/store/aggsql.mjs), so it no longer needs the prefetch
+// below. `half` divides — never compiled — and still batches raw Orders, then must recurse into
+// Order so that Order.total (a compiled aggregate of its own) is answered per page, not per order.
+test('a non-compilable aggregate over a derived aggregate still batches every level, in O(1) queries', () => {
+  const graph = { ...BENCH_GRAPH, data: { ...BENCH_GRAPH.data, Customer: { name: 'text!', half: 'money := sum(Order: total / 2)' } } };
+  const small = new Store(graph, ':memory:');
+  seed(small, 25);
+  const big = new Store(graph, ':memory:');
+  seed(big, 500);
+  const page = (store) => withQueryCount(store, () => store.listPage('Customer', {}, { page: 1, pageSize: 50 }));
+  const c100 = page(small), c2000 = page(big);
+  assert.equal(c100, c2000, `Customer list issued ${c100} queries at 100 rows but ${c2000} at 2000 — not O(1)`);
+  assert.ok(c100 <= 6, `expected a small constant through the nested aggregate, got ${c100}`);
+});
+
 test('CSV export (hydrates every matching row) still issues O(1) queries, not one per row', () => {
   const small = new Store(BENCH_GRAPH, ':memory:');
   seed(small, 25);
