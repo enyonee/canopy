@@ -87,6 +87,18 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     catch (e) { if (e instanceof Refused) throw e; const r = new Refused(e.message); r.cause = e; throw r; }
   };
 
+  // A row a block creates (db.create/db.createRow/db.ensure) fires its entity's
+  // "created" event exactly like an HTTP create (item 14) — through this one
+  // callback, threaded into every block's run() ctx below, closed over the
+  // *current* step's own nesting so a chain of created events (A.created
+  // creates a B, B.created creates an A, …) is counted, not reset. A direct or
+  // indirect cycle refuses instead of recursing forever; a graph that is fine
+  // with "ensure a default row exists" (the created row is found, not made, on
+  // the very next pass) never gets close to the limit.
+  const MAX_EVENT_DEPTH = 8;
+  const fireCreatedFor = (ctx) => (entity, id, values) =>
+    fireEvents('created', entity, id, values, ctx.user, null, (ctx.eventDepth || 0) + 1);
+
   // --- steps run inside the caller's transaction; effects wait in the outbox -------------------
   const runSteps = (steps, ctx) => {
     if (ctx.rowEntity && ctx.id && !ctx.row) ctx.row = store.get(ctx.rowEntity, ctx.id);
@@ -96,6 +108,7 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
         store, graph, entity: ctx.rowEntity, id: ctx.id, values: ctx.values, step, user: ctx.user,
         resolve: resolve(ctx), text: (s) => interpolate(s, ctx),
         run: (sub, extra) => runSteps(sub, { ...ctx, ...extra }),
+        fireCreated: fireCreatedFor(ctx),
       });
       // A block's "id" is the row it created, never the row the action runs on.
       const { id: createdId, ...rest } = out;
@@ -109,11 +122,12 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     }
     return ctx;
   };
-  const fireEvents = (trigger, entity, id, values, user, snapshot = null) => {
+  const fireEvents = (trigger, entity, id, values, user, snapshot = null, depth = 0) => {
+    if (depth > MAX_EVENT_DEPTH) throw new Error(`too many nested "${trigger}" events — check for a cycle through ${entity}.${trigger}`);
     for (const ev of graph.events || []) {
       if (ev.on !== `${entity}.${trigger}`) continue;
       trace({ kind: 'event', on: ev.on, entity, id });
-      runSteps(ev.do, { rowEntity: entity, id, row: snapshot, values, user });
+      runSteps(ev.do, { rowEntity: entity, id, row: snapshot, values, user, eventDepth: depth });
     }
   };
 
@@ -137,8 +151,17 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     for (const f of fields) if (!f.derive && probe[f.name] === undefined) probe[f.name] = asStored(f, values[f.name]);
     for (const rule of graph.rules?.[entity] || []) {
       if (rule.unique !== undefined) {
-        const v = values[rule.unique];
-        if (v !== undefined && v !== '' && store.exists(entity, rule.unique, v, existing?.id)) problems.push(rule.message || `${rule.unique} is already taken`);
+        if (!Array.isArray(rule.unique)) {
+          const v = values[rule.unique];
+          if (v !== undefined && v !== '' && store.exists(entity, rule.unique, v, existing?.id)) problems.push(rule.message || `${rule.unique} is already taken`);
+          continue;
+        }
+        // A compound unique rule may have only one of its fields on this submit
+        // (the other unchanged): "probe" already merged submitted values over the
+        // existing row, so it is the only place both halves of the pair are known.
+        const names = rule.unique;
+        const known = names.every((n) => probe[n] !== undefined && probe[n] !== null && probe[n] !== '');
+        if (known && store.existsAll(entity, names, probe, existing?.id)) problems.push(rule.message || `${names.join(' + ')} must be unique together`);
         continue;
       }
       let ok;
@@ -160,6 +183,9 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   // because they own it (otherwise editing your profile promotes you to admin).
   const writable = (entity, user, allow = null) => {
     const statusField = graph.states?.[entity]?.field;
+    // Only the fillable own field (never a second-or-later own field like a
+    // message's "recipient", which is an ordinary user-chosen value) is banned:
+    // that is the one field a client could otherwise reassign away from itself.
     const own = perms.ownField(user, entity);
     const roleField = graph.roles?.entity === entity ? graph.roles.role : null;
     const banned = new Set([statusField, own].filter(Boolean));
@@ -184,9 +210,21 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     }
     return submitted;
   };
+  // A multipart file input always sends a part, even unselected: routes/context.mjs's
+  // parser turns an empty upload into "" rather than dropping it, so this decides what
+  // that means (item 13) — an optional file/image silently keeps its old value (or
+  // stays unset on create, exactly as before), but a required one is left as an
+  // explicit "" so the ordinary required-field check below refuses it for real,
+  // instead of a required file quietly vanishing as if it had never been asked for.
+  const dropEmptyUploads = (entity, submitted) => {
+    for (const f of store.fields[entity]) {
+      if (f.type.upload && submitted[f.name] === '' && !f.required) delete submitted[f.name];
+    }
+    return submitted;
+  };
 
   return {
     resolve, interpolate, afterPath, attempt, runSteps, fireEvents,
-    validateValues, writable, onlyWritable, checkboxes,
+    validateValues, writable, onlyWritable, checkboxes, dropEmptyUploads,
   };
 }

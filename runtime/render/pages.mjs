@@ -1,18 +1,50 @@
 // Small standalone pages: a static /page/<id>, the login and register forms,
 // and the outbox listing.
-import { esc, label, anyone, page, enctype, widgetBlock } from '../render.mjs';
+import { esc, label, plural, anyone, page, cell, enctype, widgetBlock } from '../render.mjs';
 import { formFields } from './form.mjs';
 
-export function staticPage(graph, p, flash, vc = anyone) {
+// One live section (item 6): an embedded saved list (read with the viewer's own
+// permissions, same as /list/<id>), an entity's create form (posting to the
+// normal /Entity route, same as Entity.form), or plain text. `store`/`resolveTop`
+// are only ever used here, so staticPage's other, far more common callers (every
+// existing test, and a page with no sections) need neither.
+function sectionHtml(graph, store, vc, resolveTop, s) {
+  if (s.text !== undefined) return `<div class="card"><p>${esc(s.text)}</p></div>`;
+  if (s.form !== undefined) {
+    if (!vc.can(s.form, 'create')) return '';
+    const entityFields = store.fields[s.form];
+    const ov = graph.override?.[`${s.form}.form`] || {};
+    return `<form class="card" method="post" action="/${s.form}"${enctype(entityFields)}>
+      ${formFields(store, s.form, entityFields, {}, ov.fields, { skip: Object.keys(ov.fill || {}) })}
+      <p><button type="submit">${esc(ov.submit || `Add ${label(s.form)}`)}</button></p></form>`;
+  }
+  const l = (graph.lists || []).find((x) => x.id === s.list);
+  if (!l || !vc.canSee(l) || !vc.can(l.entity, 'view')) return '';
+  const where = { ...resolveTop(l.where || {}), ...vc.ownWhere(l.entity) };
+  let rows = store.list(l.entity, { where, sort: l.sort, search: l.search || [] });
+  if (s.limit) rows = rows.slice(0, s.limit);
+  const listFields = store.fields[l.entity];
+  const cols = l.columns || listFields.filter((f) => !f.type.secret).map((f) => f.name);
+  const head = cols.map((c) => `<th>${esc(label(c))}</th>`).join('');
+  const body = rows.map((r) => `<tr>${cols.map((c) => cell(store, l.entity, listFields, r, c, l.labels || {}, vc)).join('')}</tr>`).join('');
+  return `<h3>${esc(l.title || plural(label(l.entity)))}</h3><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+export function staticPage(graph, p, flash, vc = anyone, store = null, resolveTop = (x) => x) {
   const body = (p.body || []).map((t) => `<p>${esc(t)}</p>`).join('');
   const links = (p.links || []).map((l) => `<a class="btn" href="${esc(l.href)}">${esc(l.label)}</a>`).join(' ');
   const buttons = (p.actions || []).map((a) => {
     const act = (graph.actions || []).find((x) => x.name === a);
-    return `<form class="inline" method="post" action="/action/${esc(a)}"><button type="submit">${esc(act?.title || label(a))}</button></form>`;
+    // Item 19: a global action has no entity to type its fields against, so
+    // each is just a required plain-text input.
+    const inputs = (act?.fields || []).map((f) =>
+      `<label for="f_${f}">${esc(label(f))}</label><input type="text" id="f_${f}" name="${f}" required>`).join('');
+    return `<form class="${inputs ? 'card' : 'inline'}" method="post" action="/action/${esc(a)}">${inputs}<button type="submit">${esc(act?.title || label(a))}</button></form>`;
   }).join(' ');
+  const sections = (p.sections || []).map((s) => sectionHtml(graph, store, vc, resolveTop, s)).join('');
   return page(graph, { title: p.title, flash, vc, refresh: p.refresh,
     body: `<h2>${esc(p.heading || p.title)}</h2><div class="card">${body}${buttons ? `<p>${buttons}</p>` : ''}</div>
-      ${p.widget ? widgetBlock(p.widget) : ''}<p>${links}</p>` });
+      ${p.widget ? widgetBlock(p.widget) : ''}${sections}<p>${links}</p>` });
 }
 
 export function loginView(graph, { error = '', next = '', login = '' } = {}, vc = anyone) {

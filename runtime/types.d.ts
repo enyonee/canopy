@@ -137,6 +137,7 @@ export interface BlockCtx {
   resolve: (obj: any) => any;
   text: (s: string) => string;
   run: (steps: StepSpec[], extra: Record<string, any>) => any;
+  fireCreated: (entity: string, id: number, values: Record<string, any>) => void;
 }
 
 /** A registry.transports[kind] entry — one per connector kind. */
@@ -175,7 +176,7 @@ export interface RequestContext {
   req: any; res: any; url: URL; parts: string[]; flash: string; wantsCsv: boolean; wantsJSON: boolean;
   graph: Graph; store: any; perms: any; sess: any; registry: Registry; interp: any;
   trace: (event: Record<string, any>) => void; filesDir: string; fetchImpl?: typeof fetch;
-  user: any; role: string | null; vc: ViewContext; ownWhere: (entity: string) => Record<string, any>;
+  user: any; role: string | null; vc: ViewContext; ownWhere: (entity: string, op?: string) => Record<string, any>;
   deny: (message?: string) => void;
   send: (code: number, html: string) => void; redirect: (to: string) => void;
   ok: (to: string, msg?: string) => void; sendCsv: (name: string, header: string[], lines: any[][]) => void;
@@ -193,7 +194,9 @@ export interface ViewContext {
   can: (entity: string, op: string, row?: any) => boolean;
   canSee: (item: { roles?: string[] }) => boolean;
   ownField: (entity: string) => string | null;
-  ownWhere: (entity: string) => Record<string, any>;
+  ownWhere: (entity: string, op?: string) => Record<string, any>;
+  ownOk: (entity: string, row: any, op?: string) => boolean;
+  isAdmin?: boolean;
   outbox?: boolean;
   enabled?: boolean;
 }

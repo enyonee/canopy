@@ -14,6 +14,13 @@ export function check(graph, h) {
         const p = `/seed/${entity}/${i}/${f}`;
         if (!checkField(entity, f, p, { stored: true })) return;
         const field = fields[entity][f];
+        // A seeded file/image may name a real file to copy in at boot (item 11)
+        // instead of a stored filename — the only field kind this shape is legal on.
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          if (!field.type.upload) err(p, `"${f}" is ${field.kind}; only a file or image field can seed { "from": <path> }`);
+          else if (typeof v.from !== 'string' || !v.from) err(`${p}/from`, 'a seeded file needs "from": a path to the file, relative to the app directory');
+          return;
+        }
         if (field.kind !== 'ref' || v === null || v === undefined || v === '') return;
         const n = Number(v);
         if (!Number.isInteger(n) || n < 1) return; // not id-shaped; the store reports it plainly at boot

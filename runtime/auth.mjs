@@ -60,52 +60,125 @@ export function sessions(keyFile, store = null) {
   return { sign, verify, token, start, read, end, setCookie, clearCookie };
 }
 
+// --- own: one or more paths, each a direct field or a one-hop "a.b" --------------
+// "author" -> [["author"]]; ["sender","recipient"] -> [["sender"],["recipient"]];
+// "profile.user" -> [["profile","user"]]. A row is owned if ANY path matches.
+const parseOwnPaths = (spec) => {
+  if (!spec) return null;
+  const names = Array.isArray(spec) ? spec : [spec];
+  return names.map((n) => String(n).split('.'));
+};
+
+// Does `row` match this one path? Direct: compare the field to the user id.
+// One-hop: follow the ref field on `row`, load that row, compare its subfield.
+function matchesPath(store, entity, row, path, userId) {
+  if (path.length === 1) return String(row[path[0]]) === String(userId);
+  if (!store) return false;
+  const [refField, subField] = path;
+  const f = store.field(entity, refField);
+  const refId = row[refField];
+  if (!f || refId === null || refId === undefined) return false;
+  const parent = store.raw(f.target, refId);
+  return parent ? String(parent[subField]) === String(userId) : false;
+}
+
+// The row-set version of matchesPath, for list/dashboard/related scoping: the ids
+// of `entity` owned by `userId` under one path, using only the public store API
+// (store.list, which already knows "in") — no raw SQL here.
+function idsForPath(store, entity, path, userId) {
+  if (path.length === 1) return store.list(entity, { where: { [path[0]]: userId } }).map((r) => r.id);
+  const [refField, subField] = path;
+  const f = store.field(entity, refField);
+  if (!f) return [];
+  const parentIds = store.list(f.target, { where: { [subField]: userId } }).map((r) => r.id);
+  if (!parentIds.length) return [];
+  return store.list(entity, { where: { [refField]: { in: parentIds } } }).map((r) => r.id);
+}
+
 // --- the permission matrix --------------------------------------------------------
-// /roles: { entity, login, password, role, register?, anonymous?, can: { <role>: "*" | { <Entity>|"*": [ops] | { own, can: [ops] } } } }
+// /roles: { entity, login, password, role, register?, anonymous?, can: { <role>: "*" |
+//   { <Entity>|"*": [ops] | { own, can: [ops], all?: [ops] } } } }
 // ops: view, create, edit, delete, go:<transition>|go:*, do:<action>|do:*, "*"
-export function permissions(graph) {
+// `own` scopes the ops in "can" to rows the viewer owns; ops in "all" are unscoped
+// (they see/reach every row) even when "own" is declared — item 1's fix for the old
+// all-or-nothing grant. `store` (the Store instance, threaded through every helper
+// below) is optional: it is only ever dereferenced for a one-hop `own` path or a
+// multi-path list-scoping query, so a plain single direct-field grant works without
+// it (existing unit tests rely on this).
+const opAllowed = (ops, op) => ops.includes('*') || ops.includes(op)
+  || (op.includes(':') && ops.includes(`${op.split(':')[0]}:*`));
+
+function entitySpecFor(spec, role, entity) {
+  const r = spec.can?.[role];
+  if (r === undefined) return null;
+  if (r === '*') return { own: null, ops: ['*'], all: [] };
+  const e = r[entity] ?? r['*'];
+  if (e === undefined) return null;
+  if (Array.isArray(e)) return { own: null, ops: e, all: [] };
+  return { own: parseOwnPaths(e.own), ops: e.can || [], all: e.all || [] };
+}
+
+const ownedMatch = (store, entity, row, paths, userId) => paths.some((p) => matchesPath(store, entity, row, p, userId));
+
+// May this user do `op` on `entity`, and on this particular row if one is given?
+function canOp(spec, store, roleOf, user, entity, op, row) {
+  if (!spec) return true;
+  const role = roleOf(user);
+  if (!role) return false;
+  const e = entitySpecFor(spec, role, entity);
+  if (!e) return false;
+  const unscoped = opAllowed(e.all, op);
+  if (!unscoped && !opAllowed(e.ops, op)) return false;
+  if (unscoped || !e.own || !row || op === 'create') return true;
+  return user ? ownedMatch(store, entity, row, e.own, user.id) : false;
+}
+
+// Does this row belong to the user, when the role is own-scoped? A "by"-gated
+// action still may not reach another user's row — unless `op` names an unscoped
+// ("all") operation, in which case "by" already settled it.
+function ownOkFor(spec, store, roleOf, user, entity, row, op) {
+  if (!spec || !row) return true;
+  const e = entitySpecFor(spec, roleOf(user), entity);
+  if (!e?.own) return true;
+  if (op && opAllowed(e.all, op)) return true;
+  return user ? ownedMatch(store, entity, row, e.own, user.id) : false;
+}
+
+// The single field a value may be silently filled into on create: the first own
+// path, and only when it is a direct reference (never a one-hop, never the
+// second-or-later field of a multi-field own).
+function ownFieldFor(spec, roleOf, user, entity) {
+  if (!spec) return null;
+  const e = entitySpecFor(spec, roleOf(user), entity);
+  const first = e?.own?.[0];
+  return first && first.length === 1 ? first[0] : null;
+}
+
+// A where-fragment that narrows a list/dashboard/related read to owned rows — {}
+// when the role has no own grant on this entity, or when `op` (default "view")
+// is one of its unscoped "all" operations.
+function ownWhereFor(spec, store, roleOf, user, entity, op) {
+  if (!spec) return {};
+  const e = entitySpecFor(spec, roleOf(user), entity);
+  if (!e?.own || opAllowed(e.all, op)) return {};
+  const userId = user ? user.id : -1;
+  if (e.own.length === 1 && e.own[0].length === 1) return { [e.own[0][0]]: userId };
+  if (!user) return { id: { in: [] } };
+  const ids = new Set(e.own.flatMap((p) => idsForPath(store, entity, p, userId)));
+  return { id: { in: [...ids] } };
+}
+
+export function permissions(graph, store = null) {
   const spec = graph.roles;
   const roleOf = (user) => (user ? String(user[spec.role]) : spec.anonymous || null);
-  const entitySpec = (role, entity) => {
-    const r = spec.can?.[role];
-    if (r === undefined) return null;
-    if (r === '*') return { own: null, ops: ['*'] };
-    const e = r[entity] ?? r['*'];
-    if (e === undefined) return null;
-    if (Array.isArray(e)) return { own: null, ops: e };
-    return { own: e.own || null, ops: e.can || [] };
-  };
-  const opAllowed = (ops, op) => ops.includes('*') || ops.includes(op)
-    || (op.includes(':') && ops.includes(`${op.split(':')[0]}:*`));
-
   return {
     enabled: Boolean(spec),
     roleOf,
     isAdmin: (user) => Boolean(spec) && spec.can?.[roleOf(user)] === '*',
-    // May this user do `op` on `entity`, and on this particular row if one is given?
-    can(user, entity, op, row = null) {
-      if (!spec) return true;
-      const role = roleOf(user);
-      if (!role) return false;
-      const e = entitySpec(role, entity);
-      if (!e || !opAllowed(e.ops, op)) return false;
-      if (e.own && row && op !== 'create') return user ? String(row[e.own]) === String(user.id) : false;
-      return true;
-    },
-    // Does this row belong to the user, when the role is own-scoped? A "by"-gated
-    // action still may not reach another user's row.
-    ownOk(user, entity, row) {
-      if (!spec || !row) return true;
-      const e = entitySpec(roleOf(user), entity);
-      if (!e?.own) return true;
-      return user ? String(row[e.own]) === String(user.id) : false;
-    },
-    // The reference field that scopes this role to its own rows, if any.
-    ownField(user, entity) {
-      if (!spec) return null;
-      const e = entitySpec(roleOf(user), entity);
-      return e?.own || null;
-    },
+    can: (user, entity, op, row = null) => canOp(spec, store, roleOf, user, entity, op, row),
+    ownOk: (user, entity, row, op = null) => ownOkFor(spec, store, roleOf, user, entity, row, op),
+    ownField: (user, entity) => ownFieldFor(spec, roleOf, user, entity),
+    ownWhere: (user, entity, op = 'view') => ownWhereFor(spec, store, roleOf, user, entity, op),
     // Pages, lists and dashboards carry an optional "roles" list; absent means everyone.
     canSee(user, item) {
       if (!spec || !item.roles) return true;

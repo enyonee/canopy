@@ -15,33 +15,32 @@
 
 ## Misses
 
-- `composition`: `own` applies uniformly to every operation (`view`, `edit`, `delete`, `go`,
-  `do:*`) for a given role+entity pair (confirmed by reading `runtime/auth.mjs`'s single
-  `entitySpec(role, entity)`), so "everyone can view, only the owner can edit" is not
-  expressible on one entity for one role. A real profile-edit feature would need either (a) a
-  second, `own`-scoped entity holding only the editable fields (as `apps/fooddist` does for
-  contact details, at the cost of the row no longer being the same one search filters over), or
-  (b) an admin-only edit path. Neither was needed here since no case tests self-edit, but it
-  would recur the moment one did.
-- `composition`: a saved `lists[]` entry ANDs its own fixed `where` with the acting role's
-  `ownWhere` (confirmed in `runtime/server.mjs`'s list route) — so a role that owns an entity by
-  field A cannot get a *second*, differently-scoped view of the same entity via a list with a
-  fixed `where` on field B; the list's own filter would be silently intersected with the wrong
-  ownership condition and return nothing. This is why per-user message privacy here uses `own`
-  directly on the entity (one field, `to`) rather than two saved lists — the two-list approach
-  (tried first while designing this batch) breaks exactly this way.
+- `composition`: `own` needs a `ref:<user entity>` field *on* the entity being scoped, and
+  `User` (the login entity) has none pointing at itself — round 5's `own`+`all` split (see
+  `apps/qna`/`apps/obituaries`) would let a role view everyone's profile unscoped while editing
+  only its own row, *if* `own` could target `User` at all; it still cannot. A real profile-edit
+  feature would need either (a) a second, `own`-scoped entity holding only the editable fields
+  (as `apps/fooddist` does for contact details, at the cost of the row no longer being the same
+  one search filters over), or (b) an admin-only edit path. Neither was needed here since no
+  case tests self-edit, but it would recur the moment one did.
 - `rule`: no rate limiting or anti-spam on `contact` — any member can message any other member
   any number of times; not exercised by any check.
 
 ## New for this app
 
-- Proved that a single `own` field on the *entity itself* (not a saved list) genuinely gives
-  two members of the *same* role private, symmetric messaging with no extra plumbing: member
-  role owns `Message` via `to` (`can: ["view"]`, no `create`), and the row is always created by
-  an action on the *other* user's row (`in: "User"`, `do:contact`) — the sender never needs
-  "own" or "create" permission on `Message` at all, only the `do:contact` operation on `User`.
-  Verified live that a third member's `/Message` is empty and a direct `/Message/:id` for
-  someone else's row 403s.
+- Proved that `own` on the *entity itself* (not a saved list) genuinely gives two members of
+  the *same* role private, symmetric messaging with no extra plumbing: the row is always
+  created by an action on the *other* user's row (`in: "User"`, `do:contact`) — the sender
+  never needs "create" permission on `Message` at all, only the `do:contact` operation on
+  `User`. Verified live that a third member's `/Message` is empty and a direct `/Message/:id`
+  for someone else's row 403s.
+- Round 5: `own` may now name several fields (a role owns a row if *any* one of them matches).
+  `member.Message` moved from `own: "to"` (only the recipient could ever see a conversation
+  through `/Message` — the previous workaround, and the reason per-user privacy here used one
+  `own` field rather than two saved lists with a fixed `where`, since a list's own `where` and
+  the role's `ownWhere` always AND together, never OR) to `own: ["to", "from"]`: the sender now
+  sees their own sent messages there too, symmetrically, with no second list and no change to
+  `do:contact` at all.
 - A rule expression combined with a plain default (`age >= 18` alongside `age=25` as the
   field's own default) — the first rule check in this batch that rejects on a computed
   condition over a freshly-filled registration field rather than a referenced/derived one.

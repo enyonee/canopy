@@ -18,6 +18,12 @@ export async function handle(ctx) {
     }
     headers['set-cookie'] = sess.setCookie(sess.start(found.id));
     trace({ kind: 'login', ok: true, who: found.id });
+    // A login event (row = the signed-in user) is a write, but — like a viewed
+    // event — must never lock someone out of their own session if it breaks.
+    if ((graph.events || []).some((ev) => ev.on === `${graph.roles.entity}.login`)) {
+      try { await interp.attempt(() => interp.fireEvents('login', graph.roles.entity, found.id, {}, found, found)); }
+      catch (e) { trace({ kind: 'error', message: `login event: ${e.message}` }); }
+    }
     ok(safeNext(form.next), `Welcome, ${found[graph.roles.login]}`);
     return true;
   }
@@ -33,7 +39,7 @@ export async function handle(ctx) {
   if (parts[0] === 'register' && parts.length === 1 && graph.roles.register) {
     const entity = graph.roles.entity, fields = store.fields[entity];
     if (req.method === 'GET') { send(200, registerView(graph, store, fields, {}, [], vc)); return true; }
-    const submitted = interp.checkboxes(entity, await ctx.body());
+    const submitted = interp.dropEmptyUploads(entity, interp.checkboxes(entity, await ctx.body()));
     delete submitted[graph.roles.role];
     const values = { ...submitted, [graph.roles.role]: graph.roles.register };
     const problems = interp.validateValues(entity, values);

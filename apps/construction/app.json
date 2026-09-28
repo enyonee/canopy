@@ -43,7 +43,7 @@
       "member": { "Project": ["view", "create", "edit"], "Task": ["view", "create", "edit", "go:*"],
                   "TimeEntry": { "own": "worker", "can": ["view", "create"] },
                   "CostItem": ["view", "create", "edit"], "Resource": ["view"], "ResourceAllocation": ["view", "create"],
-                  "Message": ["view", "create"], "Document": ["view", "create"] }
+                  "Message": { "own": ["sender", "recipient"], "can": ["view", "create"] }, "Document": ["view", "create"] }
     }
   },
 
@@ -100,7 +100,7 @@
                         "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view", "go:start", "go:complete"], "create": false },
     "Task.detail":    { "fields": ["project", "title", "description", "assignee", "dueDate", "status", "hoursLogged"],
                         "related": [ { "entity": "TimeEntry", "via": "task", "title": "Time Entries", "columns": ["worker", "date", "hours", "notes"],
-                                       "form": ["project", "date", "hours", "notes"], "submit": "Log time", "confirm": "Time logged",
+                                       "form": ["date", "hours", "notes"], "fill": { "project": "@row.project" }, "submit": "Log time", "confirm": "Time logged",
                                        "rowActions": ["delete"] } ] },
     "TimeEntry.list": { "hidden": true, "title": "Time Entries", "columns": ["project", "task", "worker", "date", "hours", "notes"], "create": false },
     "CostItem.list":  { "hidden": true, "title": "Cost Items", "columns": ["project", "category", "description", "estimatedAmount", "actualAmount"], "create": false },
@@ -112,9 +112,9 @@
                                        "form": ["project", "quantity"], "submit": "Allocate to project", "confirm": "Resource allocated",
                                        "rowActions": ["delete"] } ] },
     "ResourceAllocation.list": { "hidden": true, "create": false },
-    "Message.list":   { "title": "Team Messages", "intro": "Every message across the team.", "columns": ["sender", "recipient", "project", "body", "createdAt"],
+    "Message.list":   { "title": "Messages", "intro": "Messages you've sent or received.", "columns": ["sender", "recipient", "project", "body", "createdAt"],
                         "sort": { "field": "createdAt", "dir": "desc" }, "createTitle": "Send message" },
-    "Message.form":   { "title": "Send a message", "fields": ["recipient", "project", "body"], "fill": { "sender": "@me" },
+    "Message.form":   { "title": "Send a message", "fields": ["recipient", "project", "body"],
                         "submit": "Send", "confirm": "Message sent", "after": "/Message" },
     "Document.list":  { "title": "Documents", "columns": ["project", "title", "file", "uploadedBy", "uploadedAt"], "create": false },
     "User.list":      { "title": "Team", "columns": ["email", "name", "role"] }

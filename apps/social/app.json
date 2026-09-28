@@ -46,7 +46,7 @@
 
   "actions": [
     { "name": "votePhoto", "in": "Photo", "title": "Vote", "after": "/Photo/{id}", "confirm": "Thanks for your vote",
-      "do": [ { "block": "db.createRow", "entity": "Vote", "values": { "photo": "@row.id", "voter": "@me" } } ] }
+      "do": [ { "block": "db.ensure", "entity": "Vote", "where": { "photo": "@row.id", "voter": "@me" } } ] }
   ],
 
   "views": "auto",

@@ -1,6 +1,9 @@
 // Startup-only bootstrap, run once per serve(): the scaffold's one fake user
 // (/identity) and the declared starting rows (/seed). No HTTP knowledge and
 // no per-request state — this runs before the interpreter or any route exists.
+import fs from 'node:fs';
+import path from 'node:path';
+
 export function bootstrapIdentity(graph, store) {
   // Identity: one declared row stands for the current user. No login in the scaffold.
   // Created before seed data: a seed row (e.g. a booking for the one fake customer)
@@ -10,18 +13,36 @@ export function bootstrapIdentity(graph, store) {
   return rows.length ? rows[rows.length - 1].id : store.insert(graph.identity.entity, graph.identity.defaults || {});
 }
 
+// A seeded file/image field may be `{ "from": "seed/photo.jpg" }` (item 11): a path
+// relative to the app directory, copied into filesDir under a fresh name — the same
+// naming shape a real multipart upload gets (routes/context.mjs), so /file/Entity/:id/
+// <field> serves it exactly the same way either source produced it.
+function materializeFiles(entity, row, store, appDir, filesDir, counter) {
+  const out = { ...row };
+  for (const f of store.fields[entity]) {
+    const v = out[f.name];
+    if (!f.type.upload || !v || typeof v !== 'object') continue;
+    fs.mkdirSync(filesDir, { recursive: true });
+    const name = `${Date.now()}-${counter.n++}-${path.basename(v.from)}`;
+    fs.copyFileSync(path.join(appDir, v.from), path.join(filesDir, name));
+    out[f.name] = name;
+  }
+  return out;
+}
+
 // Seed: declared starting rows, inserted once per entity, only while it is empty.
 // Entities seed in reference order (topological over ref: fields) so a row may
 // point at a row seeded earlier. A self-reference — or a cycle between two seeded
 // entities that no order can resolve — is inserted with that reference blank, then
 // patched once every row it could point at exists; a reference the seed truly
 // cannot produce still fails with the store's own "there is no X #N".
-export function bootstrapSeed(graph, store) {
+export function bootstrapSeed(graph, store, appDir = '.', filesDir = null) {
   const seedEntities = Object.keys(graph.seed || {});
   const remaining = new Set(seedEntities.filter((e) => !store.count(e)));
   const refFields = (e) => store.fields[e].filter((f) => f.kind === 'ref');
+  const counter = { n: 0 };
   const seedOne = (entity) => {
-    const rows = graph.seed[entity];
+    const rows = graph.seed[entity].map((row) => materializeFiles(entity, row, store, appDir, filesDir, counter));
     const selfFields = refFields(entity).filter((f) => f.target === entity).map((f) => f.name);
     const ids = rows.map((row) => {
       if (!selfFields.length) return store.insert(entity, row);

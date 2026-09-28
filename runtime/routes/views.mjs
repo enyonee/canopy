@@ -1,11 +1,12 @@
 // Home redirect, static /page/<id>, /dashboard/<id> (with its CSV export),
-// and /list/<id> — every read that is not a declared entity's own routes
-// (routes/entity.mjs) or a row action (routes/rows.mjs).
+// /list/<id> and /search — every read that is not a declared entity's own
+// routes (routes/entity.mjs) or a row action (routes/rows.mjs).
 import { formatMoney } from '../spec.mjs';
 import { errorPage, rowJSON } from '../render.mjs';
 import { staticPage } from '../render/pages.mjs';
 import { dashboardView } from '../render/dashboard.mjs';
 import { listView } from '../render/list.mjs';
+import { searchView } from '../render/search.mjs';
 
 function dashboardCsv(ctx, d, mine, period) {
   const { store, sendCsv } = ctx;
@@ -85,11 +86,11 @@ function home(ctx) {
 }
 
 function page(ctx) {
-  const { graph, parts, send, flash, vc } = ctx;
+  const { graph, store, parts, send, flash, vc, resolveTop } = ctx;
   const p = (graph.pages || []).find((x) => x.id === parts[1]);
   if (!p) { send(404, errorPage(graph, `no page ${parts[1]}`)); return true; }
   if (!vc.canSee(p)) { ctx.deny(); return true; }
-  send(200, staticPage(graph, p, flash, vc));
+  send(200, staticPage(graph, p, flash, vc, store, resolveTop));
   return true;
 }
 
@@ -122,18 +123,38 @@ function list(ctx) {
   const cols = view.columns || store.fields[l.entity].filter((f) => !f.type.secret).map((f) => f.name);
   if (wantsCsv) { exportRows(l.id, l.entity, all, cols, view.labels || {}); return true; }
   const pg = paged(all, view);
-  if (ctx.wantsJSON) { ctx.sendJson(200, { rows: pg.rows.map((r) => rowJSON(store, l.entity, store.fields[l.entity], r)), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { rows: pg.rows.map((r) => rowJSON(store, l.entity, store.fields[l.entity], r, vc)), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
   const g = { ...graph, override: { ...graph.override, [`${l.entity}.list`]: view } };
   ctx.send(200, listView(g, store, l.entity, store.fields[l.entity], pg.rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, path: `/list/${l.id}`,
     query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }));
   return true;
 }
 
+// One result section per /search entity (item 7): each entity's own
+// Entity.list "search" fields, scoped by the viewer's own permissions —
+// nothing is queried until a real "q" arrives.
+function search(ctx) {
+  const { graph, store, vc, url } = ctx;
+  const q = url.searchParams.get('q') || '';
+  const results = graph.search.entities.filter((e) => vc.can(e, 'view')).map((entity) => {
+    const ov = graph.override?.[`${entity}.list`] || {};
+    const rows = q && (ov.search || []).length ? store.list(entity, { search: ov.search, q, where: vc.ownWhere(entity) }) : [];
+    return { entity, rows };
+  });
+  if (ctx.wantsJSON) {
+    ctx.sendJson(200, { results: results.map(({ entity, rows }) => ({ entity, rows: rows.map((r) => rowJSON(store, entity, store.fields[entity], r, vc)) })) });
+    return true;
+  }
+  ctx.send(200, searchView(graph, store, q, results, vc));
+  return true;
+}
+
 export function handle(ctx) {
-  const { parts } = ctx;
+  const { parts, graph } = ctx;
   if (!parts.length) return home(ctx);
   if (parts[0] === 'page') return page(ctx);
   if (parts[0] === 'dashboard') return dashboard(ctx);
   if (parts[0] === 'list') return list(ctx);
+  if (parts[0] === 'search' && graph.search) return search(ctx);
   return undefined;
 }

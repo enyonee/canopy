@@ -22,7 +22,7 @@
     "register": "member", "anonymous": "guest",
     "can": {
       "admin":  "*",
-      "member": { "Obituary": ["view", "create"], "Condolence": ["view", "create"], "Mortuary": ["view"] },
+      "member": { "Obituary": { "own": "owner", "can": ["edit", "delete"], "all": ["view", "create"] }, "Condolence": ["view", "create"], "Mortuary": ["view"] },
       "guest":  { "Obituary": ["view"], "Condolence": ["view", "create"], "Mortuary": ["view"] }
     }
   },
@@ -40,9 +40,9 @@
   "override": {
     "Obituary.list":    { "title": "Obituaries", "intro": "Published obituaries and funeral arrangements.",
                           "search": ["title", "content"], "columns": ["title", "funeralDate", "funeralLocation", "createdAt"],
-                          "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view"], "createTitle": "Publish an obituary" },
+                          "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view", "edit", "delete"], "createTitle": "Publish an obituary" },
     "Obituary.form":    { "title": "Publish an obituary", "fields": ["title", "content", "image", "funeralDate", "funeralLocation"],
-                          "fill": { "owner": "@me" }, "submit": "Publish", "confirm": "Obituary published", "after": "/list/my-obituaries" },
+                          "submit": "Publish", "confirm": "Obituary published", "after": "/list/my-obituaries" },
     "Obituary.detail":  { "fields": ["title", "content", "image", "owner", "funeralDate", "funeralLocation", "createdAt"],
                           "related": [ { "entity": "Condolence", "via": "obituary", "title": "Condolences", "columns": ["authorName", "message", "createdAt"],
                                          "form": ["authorName", "message"], "submit": "Leave a message", "confirm": "Condolence posted" } ] },
@@ -53,7 +53,7 @@
 
   "lists": [
     { "id": "my-obituaries", "entity": "Obituary", "title": "My Obituaries", "roles": ["member", "admin"],
-      "where": { "owner": "@me" }, "columns": ["title", "funeralDate", "createdAt"], "rowActions": ["view"] }
+      "where": { "owner": "@me" }, "columns": ["title", "funeralDate", "createdAt"], "rowActions": ["view", "edit", "delete"] }
   ],
 
   "dashboards": [

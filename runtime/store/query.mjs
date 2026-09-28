@@ -19,6 +19,9 @@ export function clauses(entity, where) {
     if (cmp === null) { clauses.push(`"${field}" IS NULL`); continue; }
     if (typeof cmp === 'object' && !Array.isArray(cmp)) {
       for (const [op, v] of Object.entries(cmp)) {
+        // { ne: null } is IS NOT NULL, item 16's fix — every other op ignores a
+        // literal null (the checker refuses one being written at all; see check/scope.mjs).
+        if (op === 'ne' && v === null) { clauses.push(`"${field}" IS NOT NULL`); continue; }
         if (v === undefined || v === '' || v === null) continue;
         if (op === 'in') { const arr = Array.isArray(v) ? v : [v]; clauses.push(`"${field}" IN (${arr.map(() => '?').join(',')})`); arr.forEach((x) => vals.push(coerce(f, x))); }
         else if (op === 'like') { clauses.push(`LOWER("${field}") LIKE ? ESCAPE '\\'`); vals.push(`%${likeSafe(String(v).toLowerCase())}%`); }
@@ -40,6 +43,7 @@ function matches(row, field, cmp, f = null) {
   if (cmp === null) return v === null;
   if (typeof cmp === 'object' && !Array.isArray(cmp)) {
     return Object.entries(cmp).every(([op, x]) => {
+      if (op === 'ne' && x === null) return v !== null;
       if (x === undefined || x === '' || x === null) return true;
       if (op === 'in') return (Array.isArray(x) ? x : [x]).map((y) => String(c(y))).includes(String(v));
       if (op === 'like') return String(v ?? '').toLowerCase().includes(String(x).toLowerCase());

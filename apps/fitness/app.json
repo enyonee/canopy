@@ -22,7 +22,7 @@
     "register": "user", "anonymous": "guest",
     "can": {
       "admin": "*",
-      "user":  { "Exercise": ["view", "create"], "DiaryEntry": ["view", "create"] },
+      "user":  { "Exercise": { "own": "user", "can": ["edit", "delete"], "all": ["view", "create"] }, "DiaryEntry": ["view", "create"] },
       "guest": { "Exercise": ["view"] }
     }
   },
@@ -42,9 +42,9 @@
     "Exercise.list":   { "title": "Activity Feed", "intro": "Every workout logged across the community.",
                          "columns": ["user", "type", "durationMinutes", "calories", "date"], "search": [],
                          "filters": [ { "name": "Type", "field": "type" } ], "sort": { "field": "date", "dir": "desc" },
-                         "rowActions": ["view"], "create": false },
+                         "rowActions": ["view", "edit", "delete"], "create": false },
     "Exercise.form":   { "title": "Record an exercise", "fields": ["type", "durationMinutes", "calories", "date", "notes"],
-                         "fill": { "user": "@me" }, "submit": "Save exercise", "confirm": "Exercise recorded", "after": "/list/my-exercises" },
+                         "submit": "Save exercise", "confirm": "Exercise recorded", "after": "/list/my-exercises" },
     "DiaryEntry.list": { "hidden": true, "create": false },
     "DiaryEntry.form": { "title": "New diary entry", "fields": ["title", "body", "mood", "date"], "fill": { "user": "@me" },
                          "submit": "Save entry", "confirm": "Diary entry saved", "after": "/list/my-diary" }
@@ -52,7 +52,7 @@
 
   "lists": [
     { "id": "my-exercises", "entity": "Exercise", "title": "My Exercises", "roles": ["user"], "where": { "user": "@me" },
-      "columns": ["type", "durationMinutes", "calories", "date"], "rowActions": ["view"], "create": true, "sort": { "field": "date", "dir": "desc" } },
+      "columns": ["type", "durationMinutes", "calories", "date"], "rowActions": ["view", "edit", "delete"], "create": true, "sort": { "field": "date", "dir": "desc" } },
     { "id": "my-diary", "entity": "DiaryEntry", "title": "My Fitness Diary", "roles": ["user"], "where": { "user": "@me" },
       "columns": ["title", "mood", "date"], "rowActions": ["view"], "create": true, "sort": { "field": "date", "dir": "desc" } }
   ],

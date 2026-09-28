@@ -52,6 +52,12 @@ async function globalAction(ctx) {
   if (!action) { ctx.answer(404, errorPage(graph, `no global action ${parts[1]}`), { ok: false, status: 404, errors: [`no global action ${parts[1]}`] }); return true; }
   if (action.by ? !action.by.includes(role) : perms.enabled && !vc.can('*', `do:${action.name}`)) { ctx.deny(); return true; }
   const values = await ctx.body();
+  if (action.fields?.length) {
+    // Item 19: no entity to type-check against for a global action, so its
+    // declared fields are just required (plain text) named inputs.
+    const problems = action.fields.filter((f) => values[f] === undefined || String(values[f]).trim() === '').map((f) => `${f} is required`);
+    if (problems.length) { ctx.answer(400, noticePage(graph, vc, 'Not done', problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
+  }
   let out;
   try { out = await interp.attempt(() => interp.runSteps(action.do, { rowEntity: null, id: null, values, user })); }
   catch (e) {

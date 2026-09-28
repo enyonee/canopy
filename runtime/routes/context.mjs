@@ -24,7 +24,10 @@ function parseBody(req, filesDir) {
       const out = {};
       for (const [k, v] of fd.entries()) {
         if (typeof v === 'string') { out[k] = v; continue; }
-        if (!v.size) continue;
+        // An empty upload still sends a part: record it as "" rather than dropping the
+        // key outright (item 13) — interp.mjs's dropEmptyUploads is what then decides,
+        // per field, whether that means "unchanged"/"none" or a required-field error.
+        if (!v.size) { out[k] = ''; continue; }
         if (v.size > MAX_UPLOAD) throw new TooBig(`${v.name || 'file'} is larger than ${Math.round(MAX_UPLOAD / 1024 / 1024)} MB`);
         fs.mkdirSync(filesDir, { recursive: true });
         const name = `${Date.now()}-${String(v.name || 'file').replace(/[^\w.-]/g, '_')}`;
@@ -42,7 +45,7 @@ const safeNext = (to) => (typeof to === 'string' && /^\/(?![/\\])[^\s\x00-\x1f]*
 
 // ?sort=&dir=&page= on any list, and its CSV export — split out only to keep
 // createContext() under the function-size budget.
-function createListHelpers(url, store, sendCsv) {
+function createListHelpers(url, store, sendCsv, vc) {
   const paged = (rows, ov) => {
     const size = ov.pageSize || 50;
     const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
@@ -57,7 +60,7 @@ function createListHelpers(url, store, sendCsv) {
   };
   const exportRows = (name, entity, rows, cols, labels) => {
     const fields = store.fields[entity];
-    const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels) : r[c]; };
+    const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels, vc) : r[c]; };
     return sendCsv(name, cols.map(label), rows.map((r) => cols.map((c) => pick(r, c))));
   };
   return { paged, sortOf, exportRows };
@@ -82,13 +85,15 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
 
   const user = sess ? store.get(graph.roles.entity, sess.read(req.headers.cookie)) : null;
   const role = perms.enabled ? perms.roleOf(user) : null;
-  const ownWhere = (entity) => { const own = perms.ownField(user, entity); return own ? { [own]: user ? user.id : -1 } : {}; };
+  const ownWhere = (entity, op = 'view') => perms.ownWhere(user, entity, op);
   const vc = {
     user, role,
     can: (e, op, row) => perms.can(user, e, op, row),
     canSee: (item) => perms.canSee(user, item),
+    isAdmin: !perms.enabled || perms.isAdmin(user),
     ownField: (e) => perms.ownField(user, e),
-    ownWhere: (e) => ownWhere(e),
+    ownWhere: (e, op) => ownWhere(e, op),
+    ownOk: (e, row, op) => perms.ownOk(user, e, row, op),
     outbox: !perms.enabled || perms.isAdmin(user),
   };
   const deny = (message) => {
@@ -101,7 +106,7 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
   let bodyOnce = null;
   const body = () => (bodyOnce ??= parseBody(req, filesDir));
   const resolveTop = interp.resolve({ user, values: {} });
-  const { paged, sortOf, exportRows } = createListHelpers(url, store, sendCsv);
+  const { paged, sortOf, exportRows } = createListHelpers(url, store, sendCsv, vc);
 
   return {
     req, res, url, parts, flash, wantsCsv, wantsJSON, headers,

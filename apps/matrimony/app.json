@@ -21,7 +21,7 @@
     "register": "member", "anonymous": "guest",
     "can": {
       "admin":  "*",
-      "member": { "User": ["view", "do:contact"], "Message": { "own": "to", "can": ["view"] } },
+      "member": { "User": ["view", "do:contact"], "Message": { "own": ["to", "from"], "can": ["view"] } },
       "guest":  {}
     }
   },
@@ -52,7 +52,7 @@
                       "sort": { "field": "age", "dir": "asc" }, "rowActions": ["view", "contact"], "create": false },
     "User.form":    { "fields": ["email", "password", "name", "age", "gender", "location", "interests", "bio", "photo"] },
     "User.detail":  { "fields": ["name", "age", "gender", "location", "interests", "bio", "photo"], "actions": ["contact"] },
-    "Message.list": { "title": "Messages", "intro": "Messages sent to you.", "columns": ["from", "body", "sentAt"],
+    "Message.list": { "title": "Messages", "intro": "Messages you've sent or received.", "columns": ["from", "to", "body", "sentAt"],
                       "sort": { "field": "sentAt", "dir": "desc" }, "rowActions": ["view"], "create": false }
   },
 

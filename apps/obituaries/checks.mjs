@@ -3,7 +3,7 @@ import { colorCheck } from '../../verify/lib.mjs';
 
 export const checks = [
   { task: 'Navigate to the obituary publishing section and submit a new obituary with a title, content, and image.',
-    run: async ({ login, upload, get, rows, idOf, must, flashOf }) => {
+    run: async ({ login, upload, get, post, asGuest, rows, idOf, must, flashOf }) => {
       must((await login('grace@obit.test', 'grace123')).status === 303, 'grace could not sign in');
       const r = await upload('/Obituary', { title: 'Remembering Eleanor Frost', content: 'Eleanor Frost, beloved teacher and friend to many, passed away peacefully at home.', funeralDate: '2026-10-05', funeralLocation: 'Maple Grove Cemetery' },
         { field: 'image', name: 'eleanor.jpg', content: 'fake-jpeg-bytes' });
@@ -14,7 +14,26 @@ export const checks = [
       const id = idOf(publicList.html, 'Remembering Eleanor Frost', 'Obituary');
       const detail = await get(`/Obituary/${id}`);
       must(detail.status === 200 && /Eleanor Frost, beloved teacher/.test(detail.html), 'the obituary is not accessible from the main obituaries page');
-      return `obituary #${id} appears on the dashboard and is publicly accessible`;
+      // Round 4: `own` grew `all`, so the member who published this can now edit it
+      // themselves (previously only the admin could) — but only this one, not anyone else's.
+      const edited = await post(`/Obituary/${id}`, { title: 'Remembering Eleanor Frost (updated)', content: 'Updated resting place details.', funeralDate: '2026-10-05', funeralLocation: 'Riverside Chapel' });
+      must(edited.status === 303, `grace could not edit her own obituary: ${edited.status}`);
+      asGuest();
+      const stranger = await post('/register', { email: 'stranger@obit.test', password: 'stranger123', name: 'A Stranger' });
+      must(stranger.status === 303, `a second member could not register: ${stranger.status}`);
+      const hijack = await post(`/Obituary/${id}`, { title: 'hijacked', content: 'x', funeralDate: '2026-10-05', funeralLocation: 'x' });
+      must(hijack.status === 403, `a different member could edit grace's obituary (status ${hijack.status})`);
+      // A second, throwaway obituary proves delete too, without disturbing the count the
+      // statistics check below relies on.
+      asGuest(); await login('grace@obit.test', 'grace123');
+      const toDelete = await upload('/Obituary', { title: 'Withdrawn draft', content: 'Posted by mistake and withdrawn.', funeralDate: '2026-10-06', funeralLocation: 'N/A' },
+        { field: 'image', name: 'x.jpg', content: 'fake-jpeg-bytes' });
+      must(toDelete.status === 303, `grace could not publish a second obituary: ${toDelete.status}`);
+      const withdrawnId = idOf((await get('/Obituary')).html, 'Withdrawn draft', 'Obituary');
+      const deleted = await post(`/Obituary/${withdrawnId}/delete`, {});
+      must(deleted.status === 303, `grace could not delete her own obituary: ${deleted.status}`);
+      must((await get(`/Obituary/${withdrawnId}`)).status === 404, 'the deleted obituary is still reachable');
+      return `obituary #${id} appears on the dashboard and is publicly accessible; its author (and only its author) may edit and delete their own obituaries`;
     } },
   { task: 'Look up the list of local mortuaries available on the website.',
     run: async ({ asGuest, get, rows, must }) => {

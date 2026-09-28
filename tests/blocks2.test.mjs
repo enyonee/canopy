@@ -14,7 +14,7 @@ const graph = {
 };
 const fresh = () => new Store(graph, ':memory:');
 const identity = (v) => v;
-const ctx = (store, extra = {}) => ({ store, graph, resolve: identity, text: identity, run: () => {}, ...extra });
+const ctx = (store, extra = {}) => ({ store, graph, resolve: identity, text: identity, run: () => {}, fireCreated: () => {}, ...extra });
 
 test('db.adjust adds to the current row or a named one, in money when the field is money, and refuses below "min"', () => {
   const store = fresh();
@@ -36,12 +36,16 @@ test('db.adjust adds to the current row or a named one, in money when the field 
   assert.equal(store.get('Product', nullable).stock, 1, 'null counts as 0');
 });
 
-test('db.ensure finds or creates and says which', () => {
+test('db.ensure finds or creates and says which; a made row fires "created" (item 14), a found one does not', () => {
   const store = fresh();
-  const first = CATALOG['db.ensure'].run(ctx(store, { step: { entity: 'Order', where: { customer: 'ann', status: 'cart' }, values: {} } }));
+  const created = [];
+  const fireCreated = (...a) => created.push(a);
+  const first = CATALOG['db.ensure'].run(ctx(store, { step: { entity: 'Order', where: { customer: 'ann', status: 'cart' }, values: {} }, fireCreated }));
   assert.equal(first.made, true); assert.equal(first.found.customer, 'ann'); assert.equal(first.found.status, 'cart');
-  const again = CATALOG['db.ensure'].run(ctx(store, { step: { entity: 'Order', where: { customer: 'ann', status: 'cart' } } }));
+  assert.deepEqual(created, [['Order', first.found.id, { customer: 'ann', status: 'cart' }]]);
+  const again = CATALOG['db.ensure'].run(ctx(store, { step: { entity: 'Order', where: { customer: 'ann', status: 'cart' } }, fireCreated }));
   assert.equal(again.made, false); assert.equal(again.found.id, first.found.id);
+  assert.equal(created.length, 1, 'found, not made: no event');
   assert.equal(store.count('Order'), 1);
   store.insert('Order', { customer: 'ann', status: 'cart' });
   assert.equal(CATALOG['db.ensure'].run(ctx(store, { step: { entity: 'Order', where: { customer: 'ann' } } })).found.id, first.found.id, 'the oldest match wins');
@@ -81,6 +85,6 @@ test('the catalog search finds the new blocks by name and by what they do', () =
   assert.ok(search('outbox').some((l) => l.startsWith('http.send(')));
   assert.ok(search('letter').some((l) => l.startsWith('mail.send(')));
   assert.ok(search('each').some((l) => l.includes('[db.read]')));
-  assert.equal(Object.keys(CATALOG).length, 13);
+  assert.equal(Object.keys(CATALOG).length, 14);
   for (const b of Object.values(CATALOG)) { assert.ok(Array.isArray(b.effects) && b.effects.length); assert.ok(Array.isArray(b.requires)); assert.ok(b.summary); }
 });

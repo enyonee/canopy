@@ -15,7 +15,7 @@ export const checks = [
       return 'leaderboard ranks kai@fitness.test (75 min, 2 sessions) above leah@fitness.test (20 min, 1 session); navigating away works';
     } },
   { task: 'Record a new exercise activity',
-    run: async ({ post, follow, rows, rowWith, must, flashOf }) => {
+    run: async ({ post, follow, get, login, idOf, rows, rowWith, must, flashOf }) => {
       const reg = await post('/register', { email: 'sam@fitness.test', password: 'sam123', name: 'Sam Ortiz' });
       must(reg.status === 303, `register returned ${reg.status}: ${reg.html.slice(0, 200)}`);
       const r = await follow('/Exercise', { type: 'running', durationMinutes: 25, calories: 220, date: '2026-09-25', notes: 'Morning jog' });
@@ -23,7 +23,18 @@ export const checks = [
       const mine = rows(r.html);
       must(mine.length === 1, `expected exactly 1 exercise under My Exercises, got ${mine.length}`);
       must(/running/.test(mine[0]) && /<td>25<\/td>/.test(mine[0]) && /<td>220<\/td>/.test(mine[0]), `recorded exercise row: ${mine[0]}`);
-      return 'a 25-minute run recorded and shown under My Exercises without discrepancies';
+      // Round 4: `own` grew `all`, so Sam may now edit/delete this exercise (the public feed
+      // stays unscoped for everyone), but Kai (another user, seeded with exercises of their own)
+      // may not touch it.
+      const feed = await get('/Exercise');
+      const exId = idOf(feed.html, 'sam@fitness.test', 'Exercise');
+      must(exId, 'could not find the recorded exercise\'s id in the public feed');
+      const editedBySam = await post(`/Exercise/${exId}`, { type: 'running', durationMinutes: 25, calories: 220, date: '2026-09-25', notes: 'Morning jog (edited)' });
+      must(editedBySam.status === 303, `Sam could not edit their own exercise: ${editedBySam.status}`);
+      await login('kai@fitness.test', 'kai123');
+      must((await post(`/Exercise/${exId}`, { type: 'running', durationMinutes: 1, calories: 1, date: '2026-09-25' })).status === 403, 'Kai could edit Sam\'s exercise');
+      await login('sam@fitness.test', 'sam123');
+      return 'a 25-minute run recorded and shown under My Exercises without discrepancies; only Sam may edit it';
     } },
   { task: 'Write and save a new entry in the fitness diary',
     run: async ({ follow, rows, must, flashOf }) => {

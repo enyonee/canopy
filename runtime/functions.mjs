@@ -4,7 +4,7 @@
 // are grammar, not functions, and stay in expr.mjs. A plugin adds a function
 // with the same shape.
 const NUMERIC = new Set(['number', 'money']);
-const dayMs = 86_400_000;
+const dayMs = 86_400_000, hourMs = 3_600_000, minuteMs = 60_000;
 // days() counts calendar days: a timestamp is its date, the hours never make a day negative.
 // An impossible date ("2026-13-45") must be null, never an Invalid Date: the algebra is total.
 const toDate = (v) => {
@@ -12,6 +12,15 @@ const toDate = (v) => {
   const d = new Date(`${String(v).slice(0, 10)}T00:00:00Z`);
   return Number.isNaN(d.getTime()) ? null : d;
 };
+// hours()/minutes() count real elapsed time (the full timestamp, not just the calendar
+// date days() reduces to): a "date" value is midnight of that day, so mixing a date and
+// a time still means something ("since midnight the order was placed").
+const toInstant = (v) => {
+  if (v == null || v === '') return null;
+  const d = new Date(String(v).length <= 10 ? `${v}T00:00:00Z` : v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+const needTimes = (fn, ks) => { for (const k of ks) if (!['date', 'time', 'any'].includes(k)) throw new Error(`${fn}() needs times, got ${k}`); return 'number'; };
 export const truthy = (v) => v !== null && v !== undefined && v !== false && v !== 0 && v !== '';
 const needNumber = (fn, k) => { if (!NUMERIC.has(k) && k !== 'any') throw new Error(`${fn}() needs a number, got ${k}`); };
 const needText = (fn, k) => { if (!['text', 'any'].includes(k)) throw new Error(`${fn}() needs text, got ${k}`); };
@@ -47,4 +56,8 @@ export const FUNCTIONS = {
   addDays: { arity: 2,
     kind: (ks) => { if (!['date', 'any'].includes(ks[0])) throw new Error(`addDays() needs a date first, got ${ks[0]}`); needNumber('addDays', ks[1]); return 'date'; },
     run: (a) => { const d = toDate(a[0]); if (!d || a[1] == null) return null; d.setUTCDate(d.getUTCDate() + Math.round(a[1])); return d.toISOString().slice(0, 10); } },
+  hours: { arity: 2, kind: (ks) => needTimes('hours', ks),
+    run: (a) => { const x = toInstant(a[0]), y = toInstant(a[1]); return x && y ? Math.round((+x - +y) / hourMs * 1e6) / 1e6 : null; } },
+  minutes: { arity: 2, kind: (ks) => needTimes('minutes', ks),
+    run: (a) => { const x = toInstant(a[0]), y = toInstant(a[1]); return x && y ? Math.round((+x - +y) / minuteMs * 1e6) / 1e6 : null; } },
 };

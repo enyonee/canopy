@@ -66,7 +66,12 @@ export const checks = [
       must(/Thanks for your vote/.test(flashOf(voted.html)), `no confirmation after voting: ${flashOf(voted.html)}`);
       const after = await get(`/Photo/${photoId}`);
       must(/<th>Votes<\/th><td>1<\/td>/.test(after.html), 'the vote count did not update to 1');
-      return 'vote registered; the photo\'s vote total updated from 0 to 1';
+      // Round 4: votePhoto uses db.ensure, not db.createRow, so a repeat vote by the same
+      // member is idempotent — it must not inflate the count a second time.
+      await follow(`/Photo/${photoId}/action/votePhoto`, {});
+      const again = await get(`/Photo/${photoId}`);
+      must(/<th>Votes<\/th><td>1<\/td>/.test(again.html), `voting twice inflated the count: ${again.html.match(/<th>Votes<\/th><td>\d+<\/td>/)}`);
+      return 'vote registered; the photo\'s vote total updated from 0 to 1, and stayed at 1 on a repeat vote';
     } },
 
   { task: 'Check the user points system by performing an action that earns points (e.g., logging in, uploading content) and verifying the points update',

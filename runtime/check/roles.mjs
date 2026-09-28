@@ -45,8 +45,38 @@ function checkRoleFields(graph, h) {
   return roleNames;
 }
 
+// One "own" path: a direct field ("author") or a one-hop "a.b" (the entity's own
+// ref field "a", then a ref-to-the-user-entity field "b" on whatever "a" targets).
+function checkOwnPath(roles, entity, raw, path, h) {
+  const { err, checkField, fields } = h;
+  const segs = String(raw).split('.');
+  if (segs.length > 2) return err(path, `"${raw}" has more than one hop`, 'an own path is a direct field ("author") or one hop ("profile.user")');
+  if (segs.length === 1) {
+    if (checkField(entity, segs[0], path)) {
+      const f = fields[entity][segs[0]];
+      if (f.kind !== 'ref' || f.target !== roles.entity) err(path, `"${segs[0]}" must be a "ref:${roles.entity}" field of ${entity}`);
+    }
+    return;
+  }
+  const [a, b] = segs;
+  if (!checkField(entity, a, path)) return;
+  const fa = fields[entity][a];
+  if (fa.kind !== 'ref') return err(path, `"${a}" is ${fa.kind}, not a reference`, `a one-hop own path needs "${a}" to be a "ref:<Entity>" field`);
+  if (checkField(fa.target, b, path)) {
+    const fb = fields[fa.target][b];
+    if (fb.kind !== 'ref' || fb.target !== roles.entity) err(path, `"${a}.${b}" must end in a "ref:${roles.entity}" field of ${fa.target}`);
+  }
+}
+
+function checkOwnGrant(roles, entity, ep, ops, h) {
+  if (entity === '*') return h.err(`${ep}/own`, '"own" needs a concrete entity, not "*"');
+  const names = Array.isArray(ops.own) ? ops.own : [ops.own];
+  if (!names.length) return h.err(`${ep}/own`, '"own" needs at least one field');
+  names.forEach((raw, i) => checkOwnPath(roles, entity, raw, `${ep}/own${Array.isArray(ops.own) ? `/${i}` : ''}`, h));
+}
+
 function checkCanMatrix(graph, h, roleNames, checkOp) {
-  const { err, checkEntity, checkField, fields } = h;
+  const { err, checkEntity } = h;
   const roles = graph.roles;
   if (!roles?.can || typeof roles.can !== 'object') return;
   for (const [role, spec] of Object.entries(roles.can)) {
@@ -58,15 +88,11 @@ function checkCanMatrix(graph, h, roleNames, checkOp) {
       const ep = `${p}/${entity}`;
       if (entity !== '*' && !checkEntity(entity, ep)) continue;
       const list = Array.isArray(ops) ? ops : ops?.can;
-      if (!Array.isArray(list)) { err(ep, 'operations must be an array, or {"own": <ref field>, "can": [...]}'); continue; }
+      if (!Array.isArray(list)) { err(ep, 'operations must be an array, or {"own": <field>, "can": [...], "all"?: [...]}'); continue; }
       list.forEach((op, i) => checkOp(entity, op, `${ep}/${Array.isArray(ops) ? i : `can/${i}`}`));
-      if (!Array.isArray(ops) && ops.own) {
-        if (entity === '*') err(`${ep}/own`, '"own" needs a concrete entity, not "*"');
-        else if (checkField(entity, ops.own, `${ep}/own`)) {
-          const f = fields[entity][ops.own];
-          if (f.kind !== 'ref' || f.target !== roles.entity) err(`${ep}/own`, `"${ops.own}" must be a "ref:${roles.entity}" field of ${entity}`);
-        }
-      }
+      if (Array.isArray(ops)) continue;
+      (ops.all || []).forEach((op, i) => checkOp(entity, op, `${ep}/all/${i}`));
+      if (ops.own) checkOwnGrant(roles, entity, ep, ops, h);
     }
   }
 }

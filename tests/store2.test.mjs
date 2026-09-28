@@ -60,6 +60,15 @@ test('reverse references are found, named, or refused with a hint', () => {
   assert.equal(store.fieldAt('A', ['n', 'deeper']), null, 'a text field has no fields');
 });
 
+test('item 12: expressions may read "id", read-only, on any entity', () => {
+  const store = new Store(G({ A: { n: 'text', code: "text := concat('A-', id)" } }), ':memory:');
+  const id = store.insert('A', { n: 'x' });
+  const row = store.raw('A', id);
+  assert.equal(store.ctx('A', row).get(['id']), id);
+  assert.throws(() => store.ctx('A', row).get(['id', 'nope']), /A\.id is a number, cannot read \.nope of it/);
+  assert.equal(store.get('A', id).code, `A-${id}`, 'a derived field may use it too');
+});
+
 test('a secret field is unreadable in expressions, except a rule checking the row\'s own not-yet-hashed value', () => {
   const store = new Store(G({ User: { email: 'text!', password: 'password!' } }), ':memory:');
   const id = store.insert('User', { email: 'ann@x.test', password: 'secret1' });
@@ -102,6 +111,8 @@ test('where clauses: ranges, sets, likes, null, and the same on derived fields i
   assert.deepEqual(ids({ where: { status: { ne: 'paid' } } }), [cheap, bare].sort());
   assert.deepEqual(ids({ where: { due: { like: '2026-01' } } }), [cheap]);
   assert.deepEqual(ids({ where: { customer: null } }), [bare]);
+  assert.deepEqual(ids({ where: { customer: { ne: null } } }), [cheap, dear].sort(), 'item 16: "ne: null" is IS NOT NULL, not silently dropped');
+  assert.deepEqual(ids({ where: { net: { ne: null } } }), [cheap, dear].sort(), 'the same on a derived field, in memory');
   assert.deepEqual(ids({ where: { customer: undefined, status: '' } }), [cheap, dear, bare].sort(), 'empty comparisons are dropped');
   assert.deepEqual(ids({ where: { due: { gte: '', lte: null } } }), [cheap, dear, bare].sort());
   assert.throws(() => store.list('Order', { where: { due: { between: 1 } } }), /unknown comparison "between" on Order\.due; known: gte, lte, gt, lt, ne, in, like/);

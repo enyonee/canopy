@@ -22,7 +22,7 @@
     "register": "member", "anonymous": "guest",
     "can": {
       "admin":  "*",
-      "member": { "Question": ["view", "create"], "Answer": ["view", "create", "do:upvote", "do:downvote"] },
+      "member": { "Question": { "own": "author", "can": ["edit", "delete"], "all": ["view", "create"] }, "Answer": ["view", "create", "do:upvote", "do:downvote"] },
       "guest":  { "Question": ["view"], "Answer": ["view"] }
     }
   },
@@ -48,8 +48,8 @@
   "override": {
     "Question.list":   { "title": "Questions", "columns": ["title", "author", "answers", "bestRating", "createdAt"],
                          "search": ["title", "body"], "sort": { "field": "createdAt", "dir": "desc" },
-                         "rowActions": ["view"], "createTitle": "Ask a question" },
-    "Question.form":   { "title": "Ask a question", "fields": ["title", "body"], "fill": { "author": "@me" }, "submit": "Post question",
+                         "rowActions": ["view", "edit", "delete"], "createTitle": "Ask a question" },
+    "Question.form":   { "title": "Ask a question", "fields": ["title", "body"], "submit": "Post question",
                          "confirm": "Your question has been posted", "after": "/Question/{id}" },
     "Question.detail": { "fields": ["title", "body", "author", "createdAt", "answers", "bestRating"],
                          "related": [ { "entity": "Answer", "via": "question", "title": "Answers", "columns": ["body", "author", "rating", "createdAt"],

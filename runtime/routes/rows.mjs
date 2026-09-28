@@ -1,17 +1,22 @@
 // Row-scoped POST routes on an already-resolved entity+row: a declared
 // action, a state transition ("go"), or an inline add to a related child
 // table. Called from routes/entity.mjs once it has the row in hand.
-import { errorPage, forbiddenPage, label, transitionsFor, rowJSON } from '../render.mjs';
+import { errorPage, forbiddenPage, label, transitionsFor, rowJSON, mayRunAction } from '../render.mjs';
 import { detailView } from '../render/detail.mjs';
 
 async function runAction(ctx, entity, fields, id, row) {
-  const { graph, store, vc, role, user, perms, interp, trace, ok, parts } = ctx;
+  const { graph, store, vc, user, interp, trace, ok, parts } = ctx;
   const action = graph.actions?.find((a) => a.name === parts[3] && a.in === entity);
   if (!action) { ctx.answer(404, errorPage(graph, `no action ${parts[3]} on ${entity}`), { ok: false, status: 404, errors: [`no action ${parts[3]} on ${entity}`] }); return true; }
-  // "by" names the roles; it never lifts the row scope an own-grant put there.
-  const mayRun = action.by ? action.by.includes(role) && perms.ownOk(user, entity, row) : vc.can(entity, `do:${action.name}`, row);
-  if (!mayRun) { ctx.deny(); return true; }
+  if (!mayRunAction(vc, entity, action, row)) { ctx.deny(); return true; }
   const submitted = await ctx.body();
+  if (action.fields?.length) {
+    // Item 19: a row action's declared fields are typed and required, exactly
+    // like a transition's own `fields`.
+    const problems = interp.validateValues(entity, submitted, { partial: true, existing: row });
+    for (const f of action.fields) if (submitted[f] === undefined || String(submitted[f]).trim() === '') problems.push(`${f} is required`);
+    if (problems.length) { ctx.answer(400, detailView(graph, store, entity, fields, row, problems.join('; '), vc), { ok: false, status: 400, errors: problems }); return true; }
+  }
   let out;
   try { out = await interp.attempt(() => interp.runSteps(action.do, { rowEntity: entity, id, row, values: submitted, user })); }
   catch (e) {
@@ -20,7 +25,7 @@ async function runAction(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = action.confirm ? interp.interpolate(action.confirm, out) : '';
-  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated) }); return true; }
+  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
   ok(interp.afterPath(action.after || `/${entity}`, entity, id, { created: out.created }), flash);
   return true;
 }
@@ -55,7 +60,7 @@ async function runTransition(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = t.confirm ? interp.interpolate(t.confirm, out) : `${label(entity)} is now ${t.to}`;
-  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated) }); return true; }
+  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
   ok(interp.afterPath(t.after || `/${entity}/${id}`, entity, id, { created: out.created }), flash);
   return true;
 }
@@ -68,7 +73,12 @@ async function addRelated(ctx, entity, fields, id, row) {
   if (!vc.can(entity, 'view', row) || !vc.can(child, 'create')) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(child, user, await ctx.body(), rel.form || null);
   interp.checkboxes(child, submitted);
-  const values = { ...submitted, [rel.via]: id, ...ctx.resolveTop(rel.fill || {}) };
+  interp.dropEmptyUploads(child, submitted);
+  // "@row.*" in a related fill is the parent row (item 3): the child's own values
+  // never had one, unlike a plain Entity.form's top-level "fill", which runs before
+  // any row of this new entity exists.
+  const fillRow = interp.resolve({ user, values: submitted, rowEntity: entity, id, row });
+  const values = { ...submitted, [rel.via]: id, ...fillRow(rel.fill || {}) };
   const own = perms.ownField(user, child);
   if (own) values[own] = user.id;
   const problems = interp.validateValues(child, values);
@@ -86,7 +96,7 @@ async function addRelated(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = rel.confirm || `${label(child)} added successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: kid, created: kid, flash, row: rowJSON(store, child, store.fields[child], store.get(child, kid)) }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: kid, created: kid, flash, row: rowJSON(store, child, store.fields[child], store.get(child, kid), vc) }); return true; }
   ok(`/${entity}/${id}`, flash);
   return true;
 }
