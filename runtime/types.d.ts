@@ -183,7 +183,7 @@ export interface RequestContext {
   exportRows: (name: string, entity: string, rows: any[], cols: string[], labels: Record<string, any>) => void;
   sendJson: (code: number, data: any) => void; answer: (code: number, html: string, json: any) => void;
   body: () => Promise<Record<string, any>>; resolveTop: (obj: any) => any;
-  paged: (rows: any[], ov: any) => { rows: any[]; total: number; page: number; pages: number };
+  paged: (entity: string, opts: Record<string, any>, ov: any) => { rows: any[]; total: number; page: number; pages: number };
   sortOf: (entity: string, ov: any) => { field: string; dir: 'asc' | 'desc' } | null;
   safeNext: (to: any) => string;
 }
@@ -209,7 +209,13 @@ declare module './store.mjs' {
   interface Store {
     clauses(entity: string, where: Record<string, any>): { clauses: string[]; vals: any[]; later: [string, any][] };
     listRaw(entity: string, opts?: Record<string, any>): any[];
+    listRawPage(entity: string, opts: Record<string, any>, limit: number, offset: number): any[];
+    listRawIn(entity: string, via: string, ids: any[]): any[];
+    countRaw(entity: string, opts?: Record<string, any>): number;
     list(entity: string, opts?: Record<string, any>): any[];
+    listPage(entity: string, opts?: Record<string, any>, page?: { page?: number; pageSize?: number }): { rows: any[]; total: number; page: number; pages: number };
+    buildAggCache(entity: string, ids: any[], cache?: { groups: Map<string, Map<string, any[]>> }, seen?: Set<string>): { groups: Map<string, Map<string, any[]>> };
+    hydratePage(entity: string, rows: any[]): any[];
     aggregate(entity: string, opts?: Record<string, any>): any[];
     aggregateInMemory(entity: string, opts: Record<string, any>): any[];
     enqueue(row: { kind: string; connector: string; target: string; payload: any }): number;
@@ -220,5 +226,6 @@ declare module './store.mjs' {
     sessionUser(sid: string): number | null;
     sessionEnd(sid: string): void;
     checkRules(entity: string, values: Record<string, any>, existing?: any): string[];
+    migrateIndexes(entity: string): void;
   }
 }

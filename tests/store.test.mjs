@@ -88,6 +88,70 @@ test('list filters, searches and sorts only through declared fields', () => {
   assert.equal(store.count('Task', { done: 'true' }), 1);
 });
 
+// --- round 7: indexes derived from the graph ---------------------------------
+test('every ref column, unique rule (single and compound), and status field gets an index', () => {
+  const store = new Store(G({
+    Customer: { name: 'text!' },
+    Order: { customer: 'ref:Customer!', status: 'enum[cart,paid]=cart', code: 'text!' },
+    Follow: { follower: 'ref:Customer', category: 'text!' },
+  }, {
+    rules: { Order: [{ unique: 'code' }], Follow: [{ unique: ['follower', 'category'] }] },
+    states: { Order: { field: 'status', transitions: [{ name: 'pay', to: 'paid' }] } },
+  }), ':memory:');
+  const names = (table) => store.db.prepare(
+    `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=?`).all(table).map((r) => r.name);
+  assert.deepEqual(names('order').sort(), ['idx_order_customer', 'idx_order_code', 'idx_order_status'].sort());
+  assert.deepEqual(names('follow').sort(), ['idx_follow_follower', 'idx_follow_follower_category'].sort(), 'the ref column and the compound rule are two different index tuples');
+  assert.ok(store.migrations.some((m) => m === 'index order.idx_order_customer (customer)'));
+  assert.ok(store.migrations.some((m) => m === 'index follow.idx_follow_follower_category (follower, category)'));
+});
+
+test('a where-key named in a saved list or a dashboard gets a best-effort index', () => {
+  const store = new Store(G({ Order: { status: 'enum[cart,paid]=cart', flagged: 'bool=false' } }, {
+    lists: [{ id: 'cart', entity: 'Order', where: { status: 'cart' } }],
+    dashboards: [{ id: 'd', title: 'D', cards: [{ title: 'x', entity: 'Order', where: { flagged: 1 } }] }],
+  }), ':memory:');
+  const names = store.db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='order'`).all().map((r) => r.name);
+  assert.deepEqual(names.sort(), ['idx_order_flagged', 'idx_order_status'].sort());
+});
+
+test('index migration is idempotent, and a no-longer-desired index is dropped, not just left orphaned', () => {
+  const file = tmp();
+  const withRule = new Store(G({ Order: { code: 'text!' } }, { rules: { Order: [{ unique: 'code' }] } }), file);
+  assert.ok(withRule.migrations.includes('index order.idx_order_code (code)'));
+  const again = new Store(G({ Order: { code: 'text!' } }, { rules: { Order: [{ unique: 'code' }] } }), file);
+  assert.deepEqual(again.migrations, [], 'a second boot with the same graph adds nothing');
+  const ruleDropped = new Store(G({ Order: { code: 'text!' } }), file);
+  assert.ok(ruleDropped.migrations.some((m) => m === 'dropped index idx_order_code on order'), ruleDropped.migrations.join('; '));
+  const names = ruleDropped.db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='order'`).all();
+  assert.deepEqual(names, []);
+});
+
+// --- round 7: prepared statement cache ---------------------------------------
+test('listPage: the full-scan fallback (derived sort or in-memory where) still returns one page, not every row', () => {
+  const store = new Store(G({ Task: { title: 'text!', score: 'int := 1' } }), ':memory:');
+  for (let i = 0; i < 10; i++) store.insert('Task', { title: `t${i}` });
+  const bySort = store.listPage('Task', { sort: { field: 'score', dir: 'asc' } }, { page: 1, pageSize: 3 });
+  assert.equal(bySort.rows.length, 3, 'a derived-field sort forces the fallback, which must still page');
+  assert.equal(bySort.total, 10);
+  assert.equal(bySort.pages, 4);
+  const page2 = store.listPage('Task', { sort: { field: 'score', dir: 'asc' } }, { page: 2, pageSize: 3 });
+  assert.equal(page2.rows.length, 3);
+  assert.notDeepEqual(page2.rows.map((r) => r.id), bySort.rows.map((r) => r.id), 'page 2 is not page 1');
+  const byWhere = store.listPage('Task', { where: { score: { gte: 0 } } }, { page: 1, pageSize: 4 });
+  assert.equal(byWhere.rows.length, 4, 'an in-memory (derived-field) where forces the fallback, which must still page');
+  assert.equal(byWhere.total, 10);
+});
+
+test('the same SQL text reuses one prepared statement, bounded', () => {
+  const store = new Store(G({ Task: { title: 'text!' } }), ':memory:');
+  const sql = `SELECT * FROM "task" WHERE "title"=?`;
+  const a = store.prepare(sql), b = store.prepare(sql);
+  assert.equal(a, b, 'the exact same statement object is reused');
+  for (let i = 0; i < 250; i++) store.prepare(`SELECT ${i} AS n`);
+  assert.ok(store.stmts.size <= 200, `cache grew to ${store.stmts.size}, expected it bounded at 200`);
+});
+
 test('aggregate groups, counts and sums exactly what the graph names', () => {
   const store = new Store(G({ R: { company: 'text!', revenue: 'int=0', profit: 'int=0' } }), ':memory:');
   store.insert('R', { company: 'A', revenue: 100, profit: 10 });

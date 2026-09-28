@@ -9,6 +9,7 @@ import { DEFAULT } from './registry.mjs';
 import * as query from './store/query.mjs';
 import * as state from './store/state.mjs';
 import * as rules from './store/rules.mjs';
+import * as migrate from './store/migrate.mjs';
 
 export class Store {
   constructor(graph, file, registry = DEFAULT) {
@@ -27,29 +28,46 @@ export class Store {
     // needs installing later). ruleExprs caches a rule's parsed expression.
     this.trace = () => {};
     this.ruleExprs = new Map();
+    // A prepared statement is reusable SQL text away from being re-parsed and
+    // re-planned by SQLite; bounded (item: "prepared statement cache") so a
+    // long-lived process with many distinct ad-hoc queries (a where clause per
+    // shape) never grows this without limit — oldest is evicted first (a plain
+    // Map iterates insertion order; re-inserting on hit moves an entry to the
+    // end, so eviction order is really least-recently-used).
+    this.stmts = new Map();
     this.migrate();
+  }
+
+  prepare(sql) {
+    const hit = this.stmts.get(sql);
+    if (hit) { this.stmts.delete(sql); this.stmts.set(sql, hit); return hit; }
+    const st = this.db.prepare(sql);
+    this.stmts.set(sql, st);
+    if (this.stmts.size > 200) this.stmts.delete(this.stmts.keys().next().value);
+    return st;
   }
 
   migrate() {
     for (const [entity, fields] of Object.entries(this.fields)) {
       const table = entity.toLowerCase();
       const stored = fields.filter(isStored);
-      const existing = this.db.prepare(
+      const existing = this.prepare(
         `SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table);
       if (!existing) {
         const cols = stored.map((f) => `"${f.name}" ${sqlType(f)}`).join(', ');
         this.db.exec(`CREATE TABLE "${table}" (id INTEGER PRIMARY KEY AUTOINCREMENT${cols ? ', ' + cols : ''})`);
         this.migrations.push(`create table ${table}`);
+        this.migrateIndexes(entity);
         continue;
       }
-      const live = this.db.prepare(`PRAGMA table_info("${table}")`).all().map((r) => r.name);
+      const live = this.prepare(`PRAGMA table_info("${table}")`).all().map((r) => r.name);
       for (const f of stored) {
         if (live.includes(f.name)) continue;
         this.db.exec(`ALTER TABLE "${table}" ADD COLUMN "${f.name}" ${sqlType(f)}`);
         // A declared default is a promise about every row, not only new ones.
         const seed = defaultValue(f);
         if (seed !== null) {
-          const n = this.db.prepare(
+          const n = this.prepare(
             `UPDATE "${table}" SET "${f.name}"=? WHERE "${f.name}" IS NULL`).run(seed).changes;
           this.migrations.push(`add column ${table}.${f.name} (+ backfilled ${n} row(s) with ${JSON.stringify(seed)})`);
         } else this.migrations.push(`add column ${table}.${f.name}`);
@@ -59,6 +77,7 @@ export class Store {
       if (orphan.length && !this.graph.allowDestructive) {
         this.migrations.push(`kept orphan columns ${orphan.join(', ')} (destructive change needs "allowDestructive": true)`);
       }
+      this.migrateIndexes(entity);
     }
     // The outbox: every effect that leaves the process is a row here first.
     this.db.exec(`CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT,
@@ -120,7 +139,7 @@ export class Store {
     // The guard: every insert meets rules here, whatever wrote it (item 20).
     const problems = this.checkRules(entity, values, null);
     if (problems.length) throw new Error(problems[0]);
-    const st = this.db.prepare(cols.length
+    const st = this.prepare(cols.length
       ? `INSERT INTO "${entity.toLowerCase()}" (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`
       : `INSERT INTO "${entity.toLowerCase()}" DEFAULT VALUES`);
     return Number(st.run(...vals).lastInsertRowid);
@@ -143,16 +162,16 @@ export class Store {
     // would be stored (existing row + these values) — item 20.
     const problems = this.checkRules(entity, values, this.raw(entity, id));
     if (problems.length) throw new Error(problems[0]);
-    this.db.prepare(`UPDATE "${entity.toLowerCase()}" SET ${sets.join(',')} WHERE id=?`).run(...vals, Number(id));
+    this.prepare(`UPDATE "${entity.toLowerCase()}" SET ${sets.join(',')} WHERE id=?`).run(...vals, Number(id));
   }
 
   remove(entity, id) {
-    this.db.prepare(`DELETE FROM "${entity.toLowerCase()}" WHERE id=?`).run(Number(id));
+    this.prepare(`DELETE FROM "${entity.toLowerCase()}" WHERE id=?`).run(Number(id));
   }
 
   raw(entity, id) {
     if (id === undefined || id === null || id === '') return null;
-    return this.db.prepare(`SELECT * FROM "${entity.toLowerCase()}" WHERE id=?`).get(Number(id));
+    return this.prepare(`SELECT * FROM "${entity.toLowerCase()}" WHERE id=?`).get(Number(id));
   }
 
   get(entity, id) { return this.hydrate(entity, this.raw(entity, id)); }
@@ -164,7 +183,7 @@ export class Store {
     const sql = f?.type.exprKind === 'text' && typeof v === 'string'
       ? `SELECT id FROM "${entity.toLowerCase()}" WHERE LOWER("${field}")=LOWER(?) AND id!=?`
       : `SELECT id FROM "${entity.toLowerCase()}" WHERE "${field}"=? AND id!=?`;
-    return Boolean(this.db.prepare(sql).get(v, Number(excludeId ?? 0)));
+    return Boolean(this.prepare(sql).get(v, Number(excludeId ?? 0)));
   }
 
   // Compound uniqueness: does another row already have this exact combination?
@@ -174,10 +193,20 @@ export class Store {
     const conds = names.map((n) => `"${n}"=?`).join(' AND ');
     const vals = names.map((n) => stored[n]);
     const sql = `SELECT id FROM "${entity.toLowerCase()}" WHERE ${conds} AND id!=?`;
-    return Boolean(this.db.prepare(sql).get(...vals, Number(excludeId ?? 0)));
+    return Boolean(this.prepare(sql).get(...vals, Number(excludeId ?? 0)));
   }
 
-  count(entity, where = {}) { return this.list(entity, { where }).length; }
+  // A count never needs a row hydrated — only when a where-clause targets a
+  // derived field (query.mjs's "later", in-memory-only comparisons) is there
+  // no SQL shortcut, and hydrating every matching row to filter it is the
+  // only correct way to know how many pass.
+  count(entity, where = {}) {
+    const { clauses: cls, vals, later } = this.clauses(entity, where);
+    if (later.length) return this.list(entity, { where }).length;
+    const table = entity.toLowerCase();
+    const row = this.prepare(`SELECT COUNT(*) AS n FROM "${table}"${cls.length ? ' WHERE ' + cls.join(' AND ') : ''}`).get(...vals);
+    return Number(row.n);
+  }
 
   transaction(fn) {
     this.db.exec('BEGIN');
@@ -191,7 +220,13 @@ export class Store {
   // for a rule check on the row's own submitted values (still plain text, not yet
   // hashed, and never stored): it does not propagate through a hop or an
   // aggregate, so a referenced row's real password hash stays unreadable.
-  ctx(entity, row, stack = [], { allowSecret = false } = {}) {
+  // `cache` (runtime/store/query.mjs's buildAggCache, via hydratePage) is a
+  // purely optional fast path for `rows()`: when it holds this exact (child,
+  // link) grouping already, that group is used instead of a fresh query — for
+  // any row this ctx was ever built for, correlated or not, nested or not, so
+  // no branch here needs to tell those cases apart. Nothing is ever wrong
+  // without it; a cache miss is exactly the query this method always ran.
+  ctx(entity, row, stack = [], { allowSecret = false, cache = null } = {}) {
     const store = this;
     return {
       entity, row,
@@ -207,15 +242,18 @@ export class Store {
         if (!f) throw new Error(`${entity} has no field "${head}"`);
         // A password hash is not a value the algebra may copy into an ordinary column.
         if (f.type.secret && !allowSecret) throw new Error(`${entity}.${head} is secret; expressions cannot read it`);
-        const v = toExpr(f, f.derive ? store.derived(entity, row, f, stack) : row[head]);
+        const v = toExpr(f, f.derive ? store.derived(entity, row, f, stack, cache) : row[head]);
         if (!rest.length) return v;
         if (f.kind !== 'ref') throw new Error(`${entity}.${head} is ${f.kind}, cannot read .${rest[0]} of it`);
         const target = store.raw(f.target, v);
-        return target ? store.ctx(f.target, target, stack).get(rest) : null;
+        return target ? store.ctx(f.target, target, stack, { cache }).get(rest) : null;
       },
       rows(child, via) {
         const link = store.childVia(child, entity, via);
-        return store.listRaw(child, { where: link ? { [link]: row.id } : {} }).map((r) => store.ctx(child, r, stack));
+        const grouped = cache?.groups.get(`${child}|${link}`);
+        const key = String(row.id);
+        const raws = grouped?.has(key) ? grouped.get(key) : store.listRaw(child, { where: link ? { [link]: row.id } : {} });
+        return raws.map((r) => store.ctx(child, r, stack, { cache }));
       },
     };
   }
@@ -231,16 +269,16 @@ export class Store {
     return f;
   }
 
-  derived(entity, row, f, stack = []) {
+  derived(entity, row, f, stack = [], cache = null) {
     const key = `${entity}.${f.name}`;
     if (stack.includes(key)) throw new Error(`derived field ${key} depends on itself (${[...stack, key].join(' → ')})`);
-    return fromExpr(f, evaluate(f.derive, this.ctx(entity, row, [...stack, key]), this.registry.functions));
+    return fromExpr(f, evaluate(f.derive, this.ctx(entity, row, [...stack, key], { cache }), this.registry.functions));
   }
 
-  hydrate(entity, row) {
+  hydrate(entity, row, cache = null) {
     if (!row) return row;
     const out = { ...row };
-    for (const f of this.fields[entity]) if (f.derive) out[f.name] = this.derived(entity, row, f);
+    for (const f of this.fields[entity]) if (f.derive) out[f.name] = this.derived(entity, row, f, [], cache);
     return out;
   }
 }
@@ -250,5 +288,5 @@ export class Store {
 // are plain functions run with `this` bound to the Store instance — split
 // out only to keep this file under the size budget; they are as much "the
 // store" as anything above.
-Object.assign(Store.prototype, query, state, rules);
+Object.assign(Store.prototype, query, state, rules, migrate);
 
