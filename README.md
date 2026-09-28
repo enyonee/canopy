@@ -130,11 +130,10 @@ registry ─ fields · blocks · transports · functions · widgets (built-ins +
 expr · spec · fields · functions ─ leaves
 ```
 
-## Guardrails against LLM slop
+## Architecture gates
 
-The runtime is itself written and extended by language models. Code written that way rots
-in familiar ways: god functions, swallowed errors, duplicated helpers, dead code. Canopy turns
-each of these into a failing test (`tests/arch.test.mjs`, part of `npm test`):
+The runtime's structure is enforced by tests rather than by review: each rule below is a
+failing test in `tests/arch.test.mjs`, part of `npm test`.
 
 - **Layering**: an explicit allow-list of which module may import which, plus which modules may
   touch `node:sqlite`, `node:http` and `fs`. No cycles.
