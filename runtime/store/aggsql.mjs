@@ -102,9 +102,10 @@ const clockParams = (c, clock) => Object.fromEntries(c.params.map((p) => [p, p =
 // SQL text is fixed for a given compiled shape (only the bound id varies),
 // so this goes through the driver's statement cache like every other read.
 export function runAggOne(store, compiled, parentId, clock = new Date()) {
-  let sql = `SELECT ${selectCols(compiled)} FROM "${compiled.child.toLowerCase()}" AS t0 WHERE t0."${compiled.via}"=?`;
+  const { quote: q, ph, args } = store.drv.dialect;
+  let sql = `SELECT ${selectCols(compiled)} FROM ${q(compiled.child.toLowerCase())} AS t0 WHERE t0.${q(compiled.via)}=${ph(compiled.params.length + 1)}`;
   if (compiled.condSQL) sql += ` AND (${compiled.condSQL} <> 0)`;
-  return guarded(() => finalizeOne(compiled, store.drv.get(sql, [clockParams(compiled, clock), String(parentId)])));
+  return guarded(() => finalizeOne(compiled, store.drv.get(sql, args(compiled.params, clockParams(compiled, clock), [String(parentId)]))));
 }
 
 // Every parent id's value in one query per IN_CHUNK-sized slice, instead of
@@ -115,14 +116,15 @@ export function runAggOne(store, compiled, parentId, clock = new Date()) {
 export function runAggBatch(store, compiled, ids, clock = new Date()) {
   const empty = compiled.fn === 'sum' || compiled.fn === 'count' ? 0 : null;
   const map = new Map(ids.map((id) => [String(id), empty]));
-  const table = compiled.child.toLowerCase();
+  const { quote: q, phs, args } = store.drv.dialect;
+  const via = `t0.${q(compiled.via)}`;
   const named = clockParams(compiled, clock);
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK).map(String);
-    let sql = `SELECT t0."${compiled.via}" AS grp, ${selectCols(compiled)} FROM "${table}" AS t0 WHERE t0."${compiled.via}" IN (${chunk.map(() => '?').join(',')})`;
+    let sql = `SELECT ${via} AS grp, ${selectCols(compiled)} FROM ${q(compiled.child.toLowerCase())} AS t0 WHERE ${via} IN (${phs(chunk.length, compiled.params.length + 1)})`;
     if (compiled.condSQL) sql += ` AND (${compiled.condSQL} <> 0)`;
-    sql += ` GROUP BY t0."${compiled.via}"`;
-    if (guarded(() => { for (const row of store.drv.all(sql, [named, ...chunk], { cache: false })) map.set(String(row.grp), finalizeOne(compiled, row)); return true; }) === undefined) return undefined;
+    sql += ` GROUP BY ${via}`;
+    if (guarded(() => { for (const row of store.drv.all(sql, args(compiled.params, named, chunk), { cache: false })) map.set(String(row.grp), finalizeOne(compiled, row)); return true; }) === undefined) return undefined;
   }
   return map;
 }

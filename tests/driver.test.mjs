@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { open } from '../runtime/driver.mjs';
-import { openSqlite, CACHE_MAX, dialect } from '../runtime/driver/sqlite.mjs';
+import { openSqlite, CACHE_MAX } from '../runtime/driver/sqlite.mjs';
+import { sqlite as dialect } from '../runtime/driver/dialects.mjs';
 import { Store } from '../runtime/store.mjs';
 
 const fresh = () => {

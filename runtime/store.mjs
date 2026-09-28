@@ -50,8 +50,9 @@ export class Store {
         // A declared default is a promise about every row, not only new ones.
         const seed = defaultValue(f);
         if (seed !== null) {
+          const { quote: q, ph } = this.drv.dialect;
           const n = this.drv.run(
-            `UPDATE "${table}" SET "${f.name}"=? WHERE "${f.name}" IS NULL`, [seed]).changes;
+            `UPDATE ${q(table)} SET ${q(f.name)}=${ph(1)} WHERE ${q(f.name)} IS NULL`, [seed]).changes;
           this.migrations.push(`add column ${table}.${f.name} (+ backfilled ${n} row(s) with ${JSON.stringify(seed)})`);
         } else this.migrations.push(`add column ${table}.${f.name}`);
       }
@@ -114,18 +115,17 @@ export class Store {
       const given = values[f.name];
       const use = given === undefined || given === '' ? defaultValue(f) : Store.prepareValue(f, this.checkValue(entity, f, given));
       if (f.required && (use === null || use === undefined || use === '')) throw new Error(`${f.name} is required`);
-      cols.push(`"${f.name}"`);
+      cols.push(f.name);
       vals.push(use);
     }
     // The guard: every insert meets rules here, whatever wrote it (item 20).
     const problems = this.checkRules(entity, values, null);
     if (problems.length) throw new Error(problems[0]);
-    return this.drv.run(cols.length
-      ? `INSERT INTO "${entity.toLowerCase()}" (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`
-      : `INSERT INTO "${entity.toLowerCase()}" DEFAULT VALUES`, vals).lastId;
+    return this.drv.run(this.drv.dialect.insert(entity.toLowerCase(), cols), vals).lastId;
   }
 
   update(entity, id, values) {
+    const { quote: q, ph } = this.drv.dialect;
     const sets = [], vals = [];
     for (const [k, v] of Object.entries(values)) {
       const f = this.field(entity, k);
@@ -135,23 +135,25 @@ export class Store {
       // A blank box means the declared default, on an edit exactly as on a create.
       const use = v === undefined || v === '' ? defaultValue(f) : Store.prepareValue(f, this.checkValue(entity, f, v));
       if (f.required && (use === null || use === undefined || use === '')) throw new Error(`${f.name} is required`);
-      sets.push(`"${k}"=?`); vals.push(use);
+      vals.push(use); sets.push(`${q(k)}=${ph(vals.length)}`);
     }
     if (!sets.length) return;
     // The guard: every update meets rules here too, against the row as it
     // would be stored (existing row + these values) — item 20.
     const problems = this.checkRules(entity, values, this.raw(entity, id));
     if (problems.length) throw new Error(problems[0]);
-    this.drv.run(`UPDATE "${entity.toLowerCase()}" SET ${sets.join(',')} WHERE id=?`, [...vals, Number(id)]);
+    this.drv.run(`UPDATE ${q(entity.toLowerCase())} SET ${sets.join(',')} WHERE id=${ph(vals.length + 1)}`, [...vals, Number(id)]);
   }
 
   remove(entity, id) {
-    this.drv.run(`DELETE FROM "${entity.toLowerCase()}" WHERE id=?`, [Number(id)]);
+    const { quote: q, ph } = this.drv.dialect;
+    this.drv.run(`DELETE FROM ${q(entity.toLowerCase())} WHERE id=${ph(1)}`, [Number(id)]);
   }
 
   raw(entity, id) {
     if (id === undefined || id === null || id === '') return null;
-    return this.drv.get(`SELECT * FROM "${entity.toLowerCase()}" WHERE id=?`, [Number(id)]);
+    const { quote: q, ph } = this.drv.dialect;
+    return this.drv.get(`SELECT * FROM ${q(entity.toLowerCase())} WHERE id=${ph(1)}`, [Number(id)]);
   }
 
   get(entity, id) { return this.hydrate(entity, this.raw(entity, id)); }
@@ -160,9 +162,9 @@ export class Store {
     const f = this.field(entity, field);
     const v = coerce(f, value);
     // Two logins that differ only in case are one login.
-    const sql = f?.type.exprKind === 'text' && typeof v === 'string'
-      ? `SELECT id FROM "${entity.toLowerCase()}" WHERE LOWER("${field}")=LOWER(?) AND id!=?`
-      : `SELECT id FROM "${entity.toLowerCase()}" WHERE "${field}"=? AND id!=?`;
+    const { quote: q, ph, lowerEq } = this.drv.dialect;
+    const col = q(field);
+    const sql = `SELECT id FROM ${q(entity.toLowerCase())} WHERE ${f?.type.exprKind === 'text' && typeof v === 'string' ? lowerEq(col, ph(1)) : `${col}=${ph(1)}`} AND id!=${ph(2)}`;
     return Boolean(this.drv.get(sql, [v, Number(excludeId ?? 0)]));
   }
 
@@ -170,9 +172,10 @@ export class Store {
   // `stored` holds already-storage-form values (interp.mjs's "probe"), never raw
   // submitted text — unlike exists() above, this never re-coerces them.
   existsAll(entity, names, stored, excludeId = null) {
-    const conds = names.map((n) => `"${n}"=?`).join(' AND ');
+    const { quote: q, ph } = this.drv.dialect;
+    const conds = names.map((n, i) => `${q(n)}=${ph(i + 1)}`).join(' AND ');
     const vals = names.map((n) => stored[n]);
-    const sql = `SELECT id FROM "${entity.toLowerCase()}" WHERE ${conds} AND id!=?`;
+    const sql = `SELECT id FROM ${q(entity.toLowerCase())} WHERE ${conds} AND id!=${ph(names.length + 1)}`;
     return Boolean(this.drv.get(sql, [...vals, Number(excludeId ?? 0)]));
   }
 
@@ -183,8 +186,7 @@ export class Store {
   count(entity, where = {}) {
     const { clauses: cls, vals, later } = this.clauses(entity, where);
     if (later.length) return this.list(entity, { where }).length;
-    const table = entity.toLowerCase();
-    const row = this.drv.get(`SELECT COUNT(*) AS n FROM "${table}"${cls.length ? ' WHERE ' + cls.join(' AND ') : ''}`, vals);
+    const row = this.drv.get(`SELECT COUNT(*) AS n FROM ${this.drv.dialect.quote(entity.toLowerCase())}${cls.length ? ' WHERE ' + cls.join(' AND ') : ''}`, vals);
     return Number(row.n);
   }
 

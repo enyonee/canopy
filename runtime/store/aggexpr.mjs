@@ -36,6 +36,7 @@ const CMP = ['=', '!=', '<', '<=', '>', '>='];
 const isPlainPath = (n) => n.t === 'path' && n.p.length === 1;
 const isNum = (v) => !v.text && v.scale !== null;
 const int = (sql) => ({ sql, scale: 1 });
+const dia = (cx) => cx.store.drv.dialect;
 
 // scale === null is the wildcard of a bare `null` literal: it stays unscaled
 // (SQL NULL times anything is still NULL) and never forces the other side's scale.
@@ -60,13 +61,15 @@ function compileValue(cx, n) {
 // `today` / `now` are the evaluation's one clock, bound as a named parameter
 // (aggsql.mjs) — the same Date evaluate() reads, never SQLite's own clock.
 function compileField(cx, name) {
-  if (name === 'today') { cx.params.add('$today'); return { sql: '$today', text: true }; }
-  if (name === 'now') { cx.params.add('$now'); return { sql: '$now', text: true }; }
-  if (name === 'id') return int('"id"');
+  if (name === 'today' || name === 'now') {
+    cx.params.add(`$${name}`);
+    return { sql: dia(cx).named(`$${name}`, [...cx.params].indexOf(`$${name}`)), text: true };
+  }
+  if (name === 'id') return int(dia(cx).quote('id'));
   const f = cx.store.field(cx.entity, name);
   if (!f) return null;
   if (f.derive) return compileDerived(cx, f);
-  const sql = `"${f.name}"`;
+  const sql = dia(cx).quote(f.name);
   if (f.kind === 'money') return { sql, scale: 100 };
   if (f.kind === 'int' || f.kind === 'bool') return int(sql);
   return f.kind === 'date' || f.kind === 'time' ? { sql, text: true } : null;
@@ -119,12 +122,12 @@ function compileBool(cx, n) {
   if (isPlainPath(n)) {
     const f = cx.store.field(cx.entity, n.p[0]);
     if (!f || f.kind !== 'bool') return null;
-    return f.derive ? compileDerived(cx, f)?.sql ?? null : `(IFNULL("${f.name}",0) != 0)`;
+    return f.derive ? compileDerived(cx, f)?.sql ?? null : dia(cx).boolInt(`COALESCE(${dia(cx).quote(f.name)},0) <> 0`);
   }
-  if (n.t === 'un' && n.op === 'not') { const a = compileBool(cx, n.a); return a && `(NOT (${a}))`; }
+  if (n.t === 'un' && n.op === 'not') { const a = compileBool(cx, n.a); return a && dia(cx).boolInt(`${a} = 0`); }
   if (n.t === 'bin' && (n.op === 'and' || n.op === 'or')) {
     const a = compileBool(cx, n.a), b = compileBool(cx, n.b);
-    return a && b && `(${a} ${n.op.toUpperCase()} ${b})`;
+    return a && b && dia(cx).boolInt(`${a} <> 0 ${n.op.toUpperCase()} ${b} <> 0`);
   }
   return n.t === 'bin' && CMP.includes(n.op) ? compileCmp(cx, n) : null;
 }
@@ -133,9 +136,11 @@ function compileCmp(cx, n) {
   const a = compileValue(cx, n.a), b = compileValue(cx, n.b);
   if (!a || !b || !agree(a, b)) return null;
   const scale = a.text || b.text ? undefined : commonScale(a, b), as = scaleTo(a, scale), bs = scaleTo(b, scale);
-  if (n.op === '=') return `(CASE WHEN ${as} IS NULL AND ${bs} IS NULL THEN 1 WHEN ${as} IS NULL OR ${bs} IS NULL THEN 0 ELSE (${as} = ${bs}) END)`;
-  if (n.op === '!=') return `(CASE WHEN ${as} IS NULL AND ${bs} IS NULL THEN 0 WHEN ${as} IS NULL OR ${bs} IS NULL THEN 1 ELSE (${as} != ${bs}) END)`;
-  return `(CASE WHEN ${as} IS NULL OR ${bs} IS NULL THEN 0 ELSE (${as} ${n.op} ${bs}) END)`;
+  const eq = n.op === '=', loose = eq || n.op === '!=';
+  const nulls = loose
+    ? `WHEN ${as} IS NULL AND ${bs} IS NULL THEN ${eq ? 1 : 0} WHEN ${as} IS NULL OR ${bs} IS NULL THEN ${eq ? 0 : 1}`
+    : `WHEN ${as} IS NULL OR ${bs} IS NULL THEN 0`;
+  return `(CASE ${nulls} WHEN ${as} ${n.op} ${bs} THEN 1 ELSE 0 END)`;
 }
 
 // The pieces of `node` (an `agg` AST node evaluated in the scope of cx.entity, whose
@@ -165,7 +170,8 @@ export function compileBody(cx, node) {
 function compileSubAgg(cx, n) {
   const b = compileBody(cx, n);
   if (!b || n.fn === 'avg') return null;
-  const from = `FROM "${n.entity.toLowerCase()}" AS t${cx.depth + 1} WHERE t${cx.depth + 1}."${b.via}" = CAST(t${cx.depth}."id" AS TEXT)`
+  const q = dia(cx).quote;
+  const from = `FROM ${q(n.entity.toLowerCase())} AS t${cx.depth + 1} WHERE t${cx.depth + 1}.${q(b.via)} = CAST(t${cx.depth}.${q('id')} AS TEXT)`
     + (b.condSQL ? ` AND (${b.condSQL} <> 0)` : '');
   if (n.fn === 'count') return int(`(SELECT COUNT(*) ${from})`);
   if (n.fn === 'sum') return { sql: `COALESCE((SELECT SUM(${b.exprSQL}) ${from}), 0)`, scale: b.scale };
