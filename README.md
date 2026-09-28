@@ -64,7 +64,7 @@ nothing, so it cannot lie about what it does. Canopy closes **access**, not arit
 | Mutation gate | **142 / 142** mutants killed |
 | Types | `tsc --checkJs`, clean |
 | Runtime size | ~4.9k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
-| Performance | indexes, page-before-hydrate, batched aggregates compiled into SQL where exact, prepared-statement cache; `/Order` list on a 500/2000/10000-row bench graph: 1590 ms → ~10-15 ms p50; an order with 20 000 items: 30.7 ms → 2.0 ms p50 (`npm run bench`, `TESTS.md`) |
+| Performance | indexes, page-before-hydrate, batched aggregates compiled into SQL where exact (stored and derived fields, nested aggregates, dates), prepared-statement cache; `/Order` list on a 500/2000/10000-row bench graph: 1590 ms → ~10-15 ms p50; an order with 20 000 items: 30.7 ms → 2.0 ms p50 (`npm run bench`, `TESTS.md`) |
 
 Each app ships `checks.mjs`, with one check per `ui_instruct` case of its benchmark task, and
 `NOTES.md`, which records every case that was weakened and every gap in the format. The
@@ -215,10 +215,20 @@ over a child's own stored fields into SQL (a `GROUP BY` for a page, one query fo
 row) instead of fetching every child row and summing in JS — an order with 20 000 items:
 30.7 ms → 2.0 ms (p50) — and fixed the round-1 memory regression along with it (RSS growth
 after a heavy dashboard/CSV request at 40 000 orders: +87 MB → +17 MB), with the same
-byte-identical JSON guarantee. What still falls back to JS: a derived field or a hop through a
-reference inside the aggregate body, a correlated `row.*` reference, dates, and division
-(right now excluded on purpose — see `TESTS.md` for why). Next: the same push-down for a
-derived-field body where it is exact, and dates.
+byte-identical JSON guarantee. The third round widened what compiles: a **derived scalar
+field** of the child in the body (`Item.line := qty * price`), a **derived or written-out
+aggregate** of the child as a correlated subquery (`Customer.spent := sum(Order: total)`
+where `total := sum(Item: qty * price)`), and **dates and times** — stored `date`/`time`
+fields and ISO literals in comparisons and `if(...)`, `min`/`max` over a date, `today` and
+`now` bound from the evaluation's one clock. A customer with 5000 orders: `GET /Customer/<id>`
+146 → 14 ms, `GET /Customer.csv` 75 → 18 ms (p50, `npm run bench`, scenario 4), answers
+byte-identical, parity with the JS path checked by a property test over random expression trees.
+What still falls back to JS: division and fractional literals (excluded on purpose — see
+`TESTS.md`), a hop through a reference, a correlated `row.*`, text/enum comparisons, any
+function but `if`, an `avg` inside an aggregate body (a fraction), a derived money*money
+product, a nested `min`/`max` over a raw money product, and dashboard/chart metrics over a
+derived field (they still hydrate every row before grouping). Next: pushing those dashboard
+metrics into SQL, and streaming the CSV export.
 
 **PostgreSQL as a second storage driver.** SQLite stays the default for development, tests and
 single-instance apps. Postgres is for deployments that need several instances, many concurrent
