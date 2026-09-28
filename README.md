@@ -161,6 +161,8 @@ failing test in `tests/arch.test.mjs`, part of `npm test`.
 | `verify/` | the acceptance harness, an HTTP sink for outgoing effects, and a zero-dependency headless-Chrome driver |
 | `tests/` | runtime tests, architecture gates, coverage and mutation gates |
 | `REPORT.md`, `TESTS.md` | round-by-round report and test inventory (Russian) |
+| `AGENTS.md`, `CONTRIBUTING.md` | how to work on the repo: layout, gates, rules for agents, pull requests, versions |
+| `CHANGELOG.md` | release notes |
 | `docs/PLAN.ru.md` | the original plan: experiment design, decisions and open questions (Russian) |
 
 ## What Canopy does not promise
@@ -256,6 +258,10 @@ Not done yet: the head-to-head experiment. That means the same tasks written as 
 and with a batteries-included framework, the benchmark's own hidden tests run by a browser
 agent, and token and regression curves per stage. Until those numbers exist, Canopy's advantage
 is a claim, not a result.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md); coding agents start with [AGENTS.md](AGENTS.md).
 
 ## License
 

@@ -1,0 +1,23 @@
+name: Format or runtime proposal
+description: Propose a format capability, a runtime change or a roadmap item. Discuss before implementing.
+labels: [proposal]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What cannot be expressed today
+      description: The app or task that needs it, and how it is worked around now (a NOTES.md "Misses" line is a good start).
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: How it would look in app.json, and which kind of change it is (node kind, block, field kind, function, transport, widget, runtime-only).
+    validations:
+      required: true
+  - type: textarea
+    id: invariant
+    attributes:
+      label: Effects and the invariant
+      description: Which effects it has, and how the graph stays closed ("every effect is a node, every computation a pure leaf").

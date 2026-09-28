@@ -1,0 +1,29 @@
+name: Bug report
+description: The runtime, the checker or an app behaves incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The smallest app.json (or the app name) and the requests or clicks that show it.
+      render: json
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0 or a commit hash
+  - type: textarea
+    id: logs
+    attributes:
+      label: Checker output, trace.jsonl lines or stack trace
+      render: text

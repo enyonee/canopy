@@ -1,0 +1,22 @@
+name: Connector request
+description: Ask for a ready-made connector (payments, email, messaging, sign-in, storage, …)
+labels: [connector]
+body:
+  - type: input
+    id: service
+    attributes:
+      label: Service
+      placeholder: e.g. Stripe, SendGrid, Telegram, Google OAuth
+    validations:
+      required: true
+  - type: textarea
+    id: operations
+    attributes:
+      label: Operations and inbound events you need
+      description: e.g. create checkout session, refund; webhook payment_intent.succeeded
+    validations:
+      required: true
+  - type: textarea
+    id: usecase
+    attributes:
+      label: The app that needs it
