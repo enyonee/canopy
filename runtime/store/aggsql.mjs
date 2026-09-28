@@ -23,8 +23,9 @@
 // function but `if`. All of those fall back to the row-fetching path this module is
 // an alternative to. Every decline is a plain `null`, never an error.
 //
-// `today`/`now` are the evaluation's one clock (evaluate()'s `clock`, or the page's
-// shared one, hydrate.mjs), bound as named parameters — never SQLite's own clock.
+// `today`/`now` are the evaluation's one clock — Store#derived reads it once (or takes the
+// page's, hydrate.mjs's cache.clock) and hands it to every derived field, hop and child row
+// below, evaluate() hands it to `ctx.agg` — bound here as named parameters, never SQLite's own.
 import { exact } from '../expr.mjs';
 import { compileBody, MAX_EXPANSIONS } from './aggexpr.mjs';
 

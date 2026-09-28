@@ -213,3 +213,22 @@ test('known 0.1.2 divergence: a comparison of a raw money product against an exa
   // What this round adds does not widen it: a nested min/max over such a product is not compiled.
   no(store, 'P', 'sum(D: min(E: qty * price))');
 });
+
+// A clock that moves on every `new Date()`: an evaluation that read it once per derived field
+// would see `late` and `at > now` on different instants. One evaluation, one clock — in the JS
+// path (handed down through every derived field, hop and row) and in the compiled one.
+test('a derived field inside an aggregate reads the same `now` as the aggregate around it', (t) => {
+  const store = new Store({ app: 'tick', data: { O: { diff: 'int := count(I: late) - count(I: at > now)', dd: 'int := sum(I: if(late, 1, 0)) - sum(I: if(at > now, 1, 0))' }, I: { o: 'ref:O!', at: 'time', late: 'bool := at > now' } }, views: 'auto' }, ':memory:');
+  const o = store.insert('O', {});
+  const base = Date.UTC(2026, 8, 29, 12);
+  for (let j = 0; j < 30; j++) store.insert('I', { o, at: new Date(base + j).toISOString() });
+  const Real = globalThis.Date;
+  let k = 0;
+  globalThis.Date = class extends Real { constructor(...a) { super(...(a.length ? a : [base + (k++ % 30)])); } };
+  t.after(() => { globalThis.Date = Real; });
+  for (let i = 0; i < 60; i++) {
+    assert.deepEqual([store.get('O', o).diff, store.get('O', o).dd], [0, 0]);
+    assert.deepEqual([jsOnly(store, () => store.get('O', o)).diff, jsOnly(store, () => store.get('O', o)).dd], [0, 0]);
+  }
+  assert.ok(k > 100, 'the clock really did move');
+});

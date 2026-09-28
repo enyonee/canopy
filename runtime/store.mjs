@@ -218,8 +218,9 @@ export class Store {
 
   // --- derived fields ----------------------------------------------------------
   // The evaluation context of a row — runtime/store/ctx.mjs.
-  ctx(entity, row, stack = [], { allowSecret = false, cache = null } = {}) {
-    return new RowCtx(this, entity, row, stack, allowSecret, cache);
+  /** @param {string} entity @param {any} row @param {string[]} [stack] @param {{ allowSecret?: boolean, cache?: any, clock?: Date }} [opts] */
+  ctx(entity, row, stack = [], { allowSecret = false, cache = null, clock = undefined } = {}) {
+    return new RowCtx(this, entity, row, stack, allowSecret, cache, clock);
   }
 
   // The field a dotted path ends in, following references; null when it leads nowhere.
@@ -233,10 +234,13 @@ export class Store {
     return f;
   }
 
-  derived(entity, row, f, stack = [], cache = null) {
+  // One clock per evaluation, however many derived fields it reaches: read here once
+  // (or the page's, cache.clock) and handed down, so `today`/`now` agree with each other and
+  // with the value a compiled aggregate (runtime/store/aggsql.mjs) binds.
+  derived(entity, row, f, stack = [], cache = null, clock = cache?.clock ?? new Date()) {
     const key = `${entity}.${f.name}`;
     if (stack.includes(key)) throw new Error(`derived field ${key} depends on itself (${[...stack, key].join(' → ')})`);
-    return fromExpr(f, evaluate(f.derive, this.ctx(entity, row, [...stack, key], { cache }), this.registry.functions));
+    return fromExpr(f, evaluate(f.derive, this.ctx(entity, row, [...stack, key], { cache, clock }), this.registry.functions));
   }
 
   hydrate(entity, row, cache = null) {
