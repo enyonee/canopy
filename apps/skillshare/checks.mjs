@@ -3,7 +3,7 @@ import { colorCheck, navCheck } from '../../verify/lib.mjs';
 
 export const checks = [
   { task: 'Verify that a user can create a profile and add skills and certifications',
-    run: async ({ post, follow, get, must, flashOf }) => {
+    run: async ({ post, follow, get, login, idOf, must, flashOf }) => {
       const reg = await post('/register', { email: 'jo@skillshare.test', password: 'jo123456', name: 'Jo Ellis', bio: 'Learning to code.' });
       must(reg.status === 303, `registration returned ${reg.status}`);
       const skill = await follow('/Skill', { name: 'Python', level: 'beginner' });
@@ -12,7 +12,19 @@ export const checks = [
       const cert = await follow('/Certification', { name: 'CS50', issuer: 'Harvard', year: '2025' });
       must(/Certification added to your profile/.test(flashOf(cert.html)), `no confirmation after adding a certification: ${flashOf(cert.html)}`);
       must(/CS50/.test(cert.html) && /Harvard/.test(cert.html), 'the added certification is not shown on the profile');
-      return "Jo's profile shows the Python skill and the CS50 certification she just added";
+      // Round 4: `own` grew `all` (Skill/Certification stay unscoped for view/create) plus a
+      // compound unique rule — Jo edits her own skill, cannot list "Python" twice, and another
+      // member cannot touch her skill at all.
+      const dup = await post('/Skill', { name: 'Python', level: 'expert' });
+      must(dup.status === 400 && /already listed this skill/.test(dup.html), `a duplicate skill was accepted: ${dup.status}`);
+      const skillList = await get('/Skill?q=Python');
+      const skillId = idOf(skillList.html, 'Python', 'Skill');
+      const editedByOwner = await post(`/Skill/${skillId}`, { name: 'Python', level: 'expert' });
+      must(editedByOwner.status === 303, `Jo could not edit her own skill: ${editedByOwner.status}`);
+      await login('wren@skillshare.test', 'wren12345');
+      must((await post(`/Skill/${skillId}`, { name: 'hijacked', level: 'expert' })).status === 403, 'a different member could edit Jo\'s skill');
+      await login('jo@skillshare.test', 'jo123456');
+      return "Jo's profile shows the Python skill and the CS50 certification she just added, and only she may edit or duplicate-guard them";
     } },
 
   { task: 'Test the search feature by searching for a user based on a specific skill',

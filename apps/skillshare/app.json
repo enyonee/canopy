@@ -1,7 +1,7 @@
 {
   "app": "skillshare",
   "task": "webgen-bench/000092",
-  "note": "Skill-sharing directory: members add skills and certifications as their own top-level rows (fill: {owner: \"@me\"} on the create form, which always wins over whatever a client submits — confirmed against runtime/server.mjs — so no per-row 'own' scoping is needed to keep authorship honest), browsable read-only on every profile page. Contact reuses the own:\"to\" action-based messaging idiom proven in apps/matrimony.",
+  "note": "Skill-sharing directory: members add skills and certifications as their own top-level rows, browsable unscoped (own's \"all\": [\"view\", \"create\"]) on every profile page, editable/deletable only by their owner (own's \"can\": [\"edit\", \"delete\"], auto-filled on create). Contact reuses the own:\"to\" action-based messaging idiom proven in apps/matrimony.",
   "theme": { "background": "cornsilk", "accent": "peru" },
   "home": "/User",
 
@@ -13,7 +13,8 @@
   },
 
   "rules": {
-    "User": [ { "unique": "email", "message": "This email is already registered" } ]
+    "User": [ { "unique": "email", "message": "This email is already registered" } ],
+    "Skill": [ { "unique": ["owner", "name"], "message": "You already listed this skill" } ]
   },
 
   "roles": {
@@ -21,7 +22,9 @@
     "register": "member", "anonymous": "guest",
     "can": {
       "admin":  "*",
-      "member": { "User": ["view", "do:contact"], "Skill": ["view", "create"], "Certification": ["view", "create"],
+      "member": { "User": ["view", "do:contact"],
+                  "Skill": { "own": "owner", "can": ["edit", "delete"], "all": ["view", "create"] },
+                  "Certification": { "own": "owner", "can": ["edit", "delete"], "all": ["view", "create"] },
                   "Message": { "own": "to", "can": ["view"] } },
       "guest":  { "User": ["view"], "Skill": ["view"], "Certification": ["view"] }
     }
@@ -63,12 +66,12 @@
                                         { "entity": "Certification", "via": "owner", "title": "Certifications", "columns": ["name", "issuer", "year"], "form": false } ] },
     "Skill.list":        { "title": "Skills", "intro": "Search members by a skill they've listed.",
                            "columns": ["name", "level", "owner"], "search": ["name"],
-                           "filters": [ { "name": "Level", "field": "level" } ], "createTitle": "Add a skill", "rowActions": ["view"] },
-    "Skill.form":        { "title": "Add a skill", "fields": ["name", "level"], "fill": { "owner": "@me" },
+                           "filters": [ { "name": "Level", "field": "level" } ], "createTitle": "Add a skill", "rowActions": ["view", "edit", "delete"] },
+    "Skill.form":        { "title": "Add a skill", "fields": ["name", "level"],
                            "submit": "Add skill", "confirm": "Skill added to your profile", "after": "/User/{owner}" },
     "Certification.list": { "title": "Certifications", "columns": ["name", "issuer", "year", "owner"], "search": ["name", "issuer"],
-                           "createTitle": "Add a certification", "rowActions": ["view"] },
-    "Certification.form": { "title": "Add a certification", "fields": ["name", "issuer", "year"], "fill": { "owner": "@me" },
+                           "createTitle": "Add a certification", "rowActions": ["view", "edit", "delete"] },
+    "Certification.form": { "title": "Add a certification", "fields": ["name", "issuer", "year"],
                            "submit": "Add certification", "confirm": "Certification added to your profile", "after": "/User/{owner}" },
     "Message.list":      { "title": "Messages", "intro": "Messages sent to you.", "columns": ["from", "body", "sentAt"],
                            "sort": { "field": "sentAt", "dir": "desc" }, "rowActions": ["view"], "create": false }
