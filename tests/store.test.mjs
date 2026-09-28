@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../runtime/store.mjs';
+import { tmpDir } from './helpers.mjs';
 
-const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ag-')), 'data.sqlite');
+const tmp = () => path.join(tmpDir('ag-'), 'data.sqlite');
 const G = (data, extra = {}) => ({ app: 't', data, ...extra });
 
 test('schema is derived from the graph, not written by hand', () => {

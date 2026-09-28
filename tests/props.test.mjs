@@ -2,13 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
 import { validate } from '../runtime/validate.mjs';
 import { Store } from '../runtime/store.mjs';
 import { parseField, coerce, defaultValue } from '../runtime/spec.mjs';
 import { serve } from '../runtime/server.mjs';
+import { tmpDir } from './helpers.mjs';
 
 // A tiny deterministic generator: the same seed always produces the same graphs.
 let seed = 20260822;
@@ -32,7 +32,7 @@ test('any graph the checker accepts also boots, migrates and serves', async () =
   for (let i = 0; i < 25; i++) {
     const graph = randomGraph(i);
     assert.deepEqual(validate(graph), [], `generated graph ${i} must be valid by construction`);
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-prop-'));
+    const dir = tmpDir('ag-prop-');
     const file = path.join(dir, 'app.json');
     fs.writeFileSync(file, JSON.stringify(graph));
     const app = serve({ graphFile: file, dbFile: path.join(dir, 'd.sqlite'), traceFile: null, port: 0 });
@@ -53,7 +53,7 @@ test('any graph the checker accepts also boots, migrates and serves', async () =
 test('migration is idempotent for any generated graph', () => {
   for (let i = 0; i < 25; i++) {
     const graph = randomGraph(i);
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ag-mig-')), 'd.sqlite');
+    const file = path.join(tmpDir('ag-mig-'), 'd.sqlite');
     new Store(graph, file);
     assert.deepEqual(new Store(graph, file).migrations, [], `graph ${i} migrated twice`);
     assert.deepEqual(new Store(graph, file).migrations, []);
@@ -64,7 +64,7 @@ test('growing a graph never loses rows and always fills the new default', () => 
   for (let i = 0; i < 15; i++) {
     const graph = randomGraph(i);
     const entity = Object.keys(graph.data)[0];
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ag-grow-')), 'd.sqlite');
+    const file = path.join(tmpDir('ag-grow-'), 'd.sqlite');
     const before = new Store(graph, file);
     // "text!" fields with no default are required: give every one a value, or the
     // store's own required check (correctly) refuses the row.
@@ -106,7 +106,7 @@ test('a stored row reads back exactly what was declared or sent, for every kind'
 });
 
 test('the trace of a run replays to the same state', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-replay-'));
+  const dir = tmpDir('ag-replay-');
   const run = async (folder) => {
     const app = serve({ graphFile: 'tests/fixtures/kitchen.json', dbFile: path.join(folder, 'd.sqlite'),
       traceFile: path.join(folder, 't.jsonl'), port: 0 });

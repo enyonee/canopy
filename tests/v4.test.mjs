@@ -8,7 +8,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
-import os from 'node:os';
 import { Store } from '../runtime/store.mjs';
 import { validate } from '../runtime/validate.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
@@ -19,12 +18,12 @@ import { dashboardView, chartBlock } from '../runtime/render/dashboard.mjs';
 import { api, mountWidgets } from '../runtime/client/api.mjs';
 import { validEvery, everyMs } from '../runtime/schedule.mjs';
 import messaging from '../plugins/messaging.mjs';
-import { boot, rows, tmpGraph } from './helpers.mjs';
+import { boot, rows, tmpGraph, tmpDir } from './helpers.mjs';
 
 // ---------------------------------------------------------------------------
 // Widgets: the registry table, the checker, the markup, the serving routes.
 // ---------------------------------------------------------------------------
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-widget-'));
+const dir = tmpDir('ag-widget-');
 const writeFile = (name, source) => { const f = path.join(dir, name); fs.writeFileSync(f, source); return f; };
 const chessPlugin = writeFile('chess.mjs', `export default {
   widgets: { chess: { summary: 'a chess board', client: './chess.client.mjs', props: ['fen'],

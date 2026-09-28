@@ -41,7 +41,10 @@ function parseLcov(text) {
 // app verify/run.mjs boots, just not under this in-process coverage instrumentation.
 const EXEMPT = new Set(['runtime/run.mjs']);
 const runtimeFiles = walk('runtime').filter((f) => !f.endsWith('.d.ts') && !EXEMPT.has(f));
-const lcovFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cov-')), 'coverage.lcov');
+const covDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cov-'));
+const lcovFile = path.join(covDir, 'coverage.lcov');
+// The suite runs with a private TMPDIR: whatever it leaves there is a leak, and the gate fails.
+const suiteTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-suitetmp-'));
 const testFiles = fs.readdirSync('tests').filter((f) => f.endsWith('.test.mjs')).map((f) => `tests/${f}`);
 
 const run = spawnSync('node', [
@@ -51,11 +54,15 @@ const run = spawnSync('node', [
   '--test-reporter=tap', '--test-reporter-destination=stdout',
   '--test-reporter=lcov', `--test-reporter-destination=${lcovFile}`,
   '--test', ...testFiles,
-], { stdio: ['ignore', 'inherit', 'inherit'] });
+], { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, TMPDIR: suiteTmp } });
+const leaked = fs.readdirSync(suiteTmp);
+fs.rmSync(suiteTmp, { recursive: true, force: true });
 
+if (leaked.length) { console.error(`\nthe suite left ${leaked.length} temp entries behind (${leaked.slice(0, 5).join(', ')}…): every test directory must be removed (tmpDir in tests/helpers.mjs)`); fs.rmSync(covDir, { recursive: true, force: true }); process.exit(1); }
 if (run.status !== 0) { console.error('\nthe suite is red; fix that before coverage means anything'); process.exit(run.status || 1); }
 
 const files = parseLcov(fs.readFileSync(lcovFile, 'utf8'));
+fs.rmSync(covDir, { recursive: true, force: true });
 let bad = false;
 
 for (const f of runtimeFiles) {

@@ -5,6 +5,7 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Tests no longer leak temp directories.** Every test directory goes through `tmpDir` and is removed on exit; the coverage gate fails if the suite leaves anything in a private `TMPDIR`, and each mutation run gets (and loses) its own.
 - **The Driver seam (PostgreSQL roadmap, step 1, stage S1).** The store no longer holds a
   SQLite handle: it talks to a `Driver` (`runtime/driver/sqlite.mjs`, opened by
   `runtime/driver.mjs`) through `this.drv`: `all/get/run/exec/transaction/close`, a `dialect`,

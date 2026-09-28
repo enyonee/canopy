@@ -4,15 +4,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { createRegistry, register, loadPlugins, DEFAULT, TABLES } from '../runtime/registry.mjs';
 import { validate } from '../runtime/validate.mjs';
 import { Store } from '../runtime/store.mjs';
 import { deliver } from '../runtime/outbox.mjs';
-import { boot, rows, tmpGraph, fakeFetch } from './helpers.mjs';
+import { boot, rows, tmpGraph, fakeFetch, tmpDir } from './helpers.mjs';
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-plug-'));
+const dir = tmpDir('ag-plug-');
 const writePlugin = (name, source) => { const f = path.join(dir, name); fs.writeFileSync(f, source); return f; };
 
 const loyalty = writePlugin('loyalty.mjs', `export default {

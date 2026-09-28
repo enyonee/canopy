@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
 import { main } from '../runtime/cli.mjs';
+import { tmpDir } from './helpers.mjs';
 
 const capture = () => { const out = []; return { sink: { log: (m) => out.push(String(m)), err: (m) => out.push(String(m)) }, out }; };
 
@@ -13,7 +13,7 @@ test('--check passes a valid graph and fails a broken one', async () => {
   assert.equal((await main(['apps/todo/app.json', '--check'], a.sink)).code, 0);
   assert.match(a.out.join('\n'), /✓ apps\/todo\/app.json is valid/);
 
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-'));
+  const dir = tmpDir('ag-cli-');
   const file = path.join(dir, 'bad.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'b', data: { A: { x: 'text!' } }, override: { 'A.list': { columns: ['y'] } } }));
   const b = capture();
@@ -28,7 +28,7 @@ test('without a file it explains itself', async () => {
 });
 
 test('it boots an app on the port it was given, with the db and trace it was given', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-'));
+  const dir = tmpDir('ag-cli-');
   const db = path.join(dir, 'x.sqlite');
   const trace = path.join(dir, 'x.jsonl');
   const c = capture();
@@ -46,7 +46,7 @@ test('it boots an app on the port it was given, with the db and trace it was giv
 });
 
 test('an invalid graph is reported and still served', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-'));
+  const dir = tmpDir('ag-cli-');
   const file = path.join(dir, 'bad.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'b', data: { A: { x: 'datetime!' } } }));
   const c = capture();
