@@ -4,7 +4,7 @@
 // transaction and never blocks a commit.
 import { DEFAULT } from './registry.mjs';
 
-export async function deliver(store, graph, row, { fetchImpl = fetch, trace = (_event) => {}, registry = DEFAULT } = {}) {
+export async function deliver(store, graph, row, { fetchImpl = fetch, trace = (_event) => {}, registry = DEFAULT, claimedAt = null } = {}) {
   const connector = graph.connectors?.[row.connector] || {};
   const patch = { attempts: (row.attempts || 0) + 1 };
   const transport = registry.transports[row.kind];
@@ -15,7 +15,13 @@ export async function deliver(store, graph, row, { fetchImpl = fetch, trace = (_
     patch.status = 'failed';
     patch.error = String(e && e.message);
   }
-  store.outboxUpdate(row.id, patch);
+  // A delivery that came from a flush finishes only while it still holds its claim;
+  // one whose lease ran out and was re-claimed is dropped, not written over the new owner.
+  if (claimedAt !== null && !store.outboxFinish(row.id, claimedAt, patch)) {
+    trace({ kind: 'delivery', id: row.id, via: row.kind, connector: row.connector, target: row.target, stale: true });
+    return 'stale';
+  }
+  if (claimedAt === null) store.outboxUpdate(row.id, patch);
   trace({ kind: 'delivery', id: row.id, via: row.kind, connector: row.connector, target: row.target, status: patch.status, code: patch.code ?? null });
   return patch.status;
 }
@@ -32,7 +38,8 @@ export async function flush(store, graph, opts = {}) {
   const { now = Date.now, leaseMs = LEASE_MS } = opts;
   const out = [];
   for (const row of store.outboxDue(now(), leaseMs)) {
-    if (store.outboxClaim(row.id, now(), leaseMs)) out.push(await deliver(store, graph, row, opts));
+    const claimedAt = now();
+    if (store.outboxClaim(row.id, claimedAt, leaseMs)) out.push(await deliver(store, graph, row, { ...opts, claimedAt }));
   }
   return out;
 }

@@ -199,6 +199,8 @@ committing together, later several instances) never deliver one row twice. A row
 `sending` for longer than the 60 s lease (the process died mid-delivery) is claimed again. So
 delivery is exactly-once, except across a crash, where it is at-least-once: a connector should
 send an idempotency key (the outbox row id, `@delivery`) that its receiver can deduplicate on.
+A delivery that outlives its lease and finds the row re-claimed does not write its result: the
+newer claim owns the row.
 
 A row that `db.create`/`db.createRow`/`db.ensure` makes fires its entity's own `created` event,
 exactly like an HTTP create — so `events` sees every row however it was made, including one a

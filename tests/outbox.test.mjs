@@ -133,6 +133,41 @@ test('a stale sending row is delivered again after the lease and not before', as
   assert.deepEqual(await flush(store, graph, { registry, now: () => 1000 + 5 * LEASE_MS }), [], 'and then it is done');
 });
 
+test('a slow delivery whose lease ran out and was re-claimed cannot overwrite the new owner', async () => {
+  const store = fresh();
+  const [id] = queue(store, 1);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let n = 0;
+  const registry = { ...DEFAULT, transports: { ...DEFAULT.transports, http: { deliver: async () => {
+    const mine = ++n;
+    if (mine === 1) await gate;
+    return { status: mine === 1 ? 'failed' : 'sent', code: mine === 1 ? 500 : 200, error: mine === 1 ? 'slow' : null };
+  } } } };
+  const events = [];
+  const first = flush(store, graph, { registry, now: () => 1000, trace: (e) => events.push(e) });
+  await sleep(5);
+  assert.deepEqual(await flush(store, graph, { registry, now: () => 1000 + LEASE_MS, trace: (e) => events.push(e) }), ['sent']);
+  release();
+  assert.deepEqual(await first, ['stale'], 'the late delivery reports that it lost the claim');
+  const row = store.outboxGet(id);
+  assert.deepEqual([row.status, row.code, row.error, row.claimedAt, row.attempts], ['sent', 200, null, 1000 + LEASE_MS, 1]);
+  assert.deepEqual(events.filter((e) => e.stale).map((e) => [e.kind, e.id]), [['delivery', id]]);
+  assert.equal(events.filter((e) => !e.stale).length, 1, 'only the winner is traced as a result');
+});
+
+test('outboxFinish writes only while the claim is the caller\'s', () => {
+  const store = fresh();
+  const [id] = queue(store, 1);
+  assert.equal(store.outboxFinish(id, 1000, { status: 'sent' }), false, 'not claimed yet');
+  store.outboxClaim(id, 1000, LEASE_MS);
+  assert.equal(store.outboxFinish(id, 999, { status: 'sent' }), false, 'someone else\'s claim time');
+  assert.equal(store.outboxGet(id).status, 'sending');
+  assert.equal(store.outboxFinish(id, 1000, { status: 'sent' }), true);
+  assert.equal(store.outboxFinish(id, 1000, { status: 'failed' }), false, 'already finished');
+  assert.equal(store.outboxGet(id).status, 'sent');
+});
+
 test('a database made before "claimedAt" existed is upgraded in place, rows kept', () => {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'outbox-')), 'old.sqlite');
   const old = new DatabaseSync(file);

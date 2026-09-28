@@ -233,6 +233,7 @@ declare module './store.mjs' {
     outboxClaim(id: any, now: number, leaseMs: number): boolean;
     outboxGet(id: any): any;
     outboxUpdate(id: any, patch: Record<string, any>): void;
+    outboxFinish(id: any, claimedAt: number, patch: Record<string, any>): boolean;
     sessionSet(sid: string, userId: number): string;
     sessionUser(sid: string): number | null;
     sessionEnd(sid: string): void;

@@ -13,6 +13,10 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 - **Lease recovery.** A row stuck in `sending` for more than 60 s (the process died
   mid-delivery) is claimed again. Delivery is therefore exactly-once, and at-least-once across
   a crash; connectors should send an idempotency key.
+- **A late result cannot overwrite a re-claim.** The final write of a flush's delivery is
+  conditional on still holding its claim (`Store#outboxFinish`: `WHERE id=? AND claimedAt=?
+  AND status='sending'`). If the lease ran out and another flush took the row, the slow
+  first delivery is dropped and traced (`kind:'delivery', stale:true`), not an error.
 - New column `_outbox.claimedAt`, added in place to databases made by earlier versions.
 - Tests: concurrent flushes, lease before/after, in-place upgrade from the old DDL; six new
   mutations.
