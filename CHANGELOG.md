@@ -30,6 +30,10 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
     (this round), measured with the same script before and after a forced GC.
   - `npm run bench` extended with both scenarios (`bench/run.mjs`); numbers above and the full
     table are in `TESTS.md`.
+- **Fix**: `GET /dashboard/<id>` JSON answered a money card/table/chart aggregate in raw
+  minor units (`6500000`) instead of the major units the rest of the JSON contract promises
+  (`65000.00`); the HTML and CSV dashboard views were already correct. Cards, table metrics
+  and chart metrics now convert the same way `rowJSON` already does for an ordinary field.
 
 ## 0.1.1 (2026-09-28)
 

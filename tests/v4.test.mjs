@@ -249,33 +249,42 @@ test('JSON PUT-like edit and delete answer {ok,row}/{ok}, and a viewer denied a 
   } finally { s.close(); }
 });
 
-test('a saved list and a dashboard answer JSON too (rows/total/page/pages, cards/tables/charts)', async () => {
+test('a saved list and a dashboard answer JSON too (rows/total/page/pages, cards/tables/charts), money in major units', async () => {
   const g = { ...jsonGraph, data: { ...jsonGraph.data, Order: { ...jsonGraph.data.Order, createdAt: 'time=now' } },
     lists: [{ id: 'mine', entity: 'Order', title: 'Mine', where: { customer: '@me' } }],
     dashboards: [{ id: 'd', title: 'D', roles: ['admin'], period: { Order: 'createdAt' },
-      cards: [{ title: 'Orders', entity: 'Order', fn: 'count' }],
-      tables: [{ title: 'By status', entity: 'Order', groupBy: 'status', metrics: [{ fn: 'count', as: 'n' }] }],
-      charts: [{ title: 'By status', entity: 'Order', type: 'bar', groupBy: 'status', metric: { fn: 'count' } }] }] };
+      cards: [{ title: 'Orders', entity: 'Order', fn: 'count' }, { title: 'Revenue', entity: 'Order', fn: 'sum', field: 'total' }],
+      tables: [{ title: 'By status', entity: 'Order', groupBy: 'status', metrics: [{ fn: 'count', as: 'n' }, { fn: 'sum', field: 'total', as: 'revenue' }] }],
+      charts: [{ title: 'By status', entity: 'Order', type: 'bar', groupBy: 'status', metric: { fn: 'sum', field: 'total' } }] }] };
   const s = await boot(tmpGraph(g));
   try {
     const c = withCookies(s.base);
     await c.login('ann@x.test', 'annpw');
     await c.jpost('/Order', { total: '10' });
+    await c.jpost('/Order', { total: '20' });
     const list = await c.jget('/list/mine');
     assert.equal(list.status, 200);
-    assert.equal(list.body.rows.length, 1);
-    assert.equal(list.body.total, 1);
+    assert.equal(list.body.rows.length, 2);
+    assert.equal(list.body.total, 2);
     c.logout(); await c.login('admin@x.test', 'adminpw');
     const dash = await c.jget('/dashboard/d');
     assert.equal(dash.status, 200);
     assert.equal(dash.body.cards[0].title, 'Orders');
+    assert.equal(dash.body.cards[0].value, 2);
+    // The bug this test guards: a card/table/chart money aggregate must
+    // answer JSON in major units (30), like every other money field in the
+    // JSON contract — not the raw minor-unit storage value (3000).
+    assert.equal(dash.body.cards[1].title, 'Revenue');
+    assert.equal(dash.body.cards[1].value, 30, 'a money card sum is major units, not minor');
     assert.ok(dash.body.tables[0].rows.length >= 1);
+    assert.equal(dash.body.tables[0].rows[0].revenue, 30, 'a money table metric is major units, not minor');
     assert.ok(dash.body.charts[0].rows.length >= 1);
+    assert.equal(dash.body.charts[0].rows[0].v, 30, 'a money chart metric is major units, not minor');
     // A period narrows a JSON dashboard exactly like the HTML one: both
     // in-range (from+to) and out-of-range are exercised, hitting the same
     // narrowing code the CSV export and the HTML view already share.
     const inRange = await c.jget('/dashboard/d?from=2000-01-01&to=2999-01-01');
-    assert.equal(inRange.body.cards[0].value, 1);
+    assert.equal(inRange.body.cards[0].value, 2);
     const outOfRange = await c.jget('/dashboard/d?from=2000-01-01&to=2000-01-02');
     assert.equal(outOfRange.body.cards[0].value, 0);
     assert.equal((await c.jget('/dashboard/ghost')).status, 404);
