@@ -1,0 +1,11 @@
+{ "app": "bench", "data": {
+  "Customer": { "name": "text!", "orders": "int := count(Order)", "spent": "money := sum(Order: total)" },
+  "Order": { "customer": "ref:Customer!", "status": "enum[new,paid]=new", "total": "money := sum(Item: qty * price)" },
+  "Item": { "order": "ref:Order!", "title": "text!", "qty": "int=1", "price": "money=1" } },
+  "views": "auto",
+  "dashboards": [
+    { "id": "sales", "title": "Sales",
+      "cards": [ { "title": "Orders", "entity": "Order", "fn": "count" }, { "title": "Revenue", "entity": "Order", "fn": "sum", "field": "total" } ],
+      "tables": [ { "title": "By status", "entity": "Order", "groupBy": "status",
+        "metrics": [ { "fn": "count", "as": "n", "title": "Orders" }, { "fn": "sum", "field": "total", "as": "revenue", "title": "Revenue" } ] } ] } ]
+}

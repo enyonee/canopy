@@ -8,6 +8,7 @@
     "mutate": "node tests/mutate.mjs",
     "types": "tsc -p .",
     "verify": "node verify/run.mjs",
+    "bench": "node --no-warnings bench/run.mjs",
     "gate": "npm run test && npm run coverage && npm run types && npm run mutate"
   },
   "devDependencies": {
