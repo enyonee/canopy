@@ -415,6 +415,10 @@ const MUTATIONS = [
   { name: 'R8 item 2: hydratePage no longer chunks a big page, so a full CSV export holds every batched child in memory for the whole request again', file: 'runtime/store/hydrate.mjs',
     find: '  if (rows.length <= HYDRATE_CHUNK) return hydratePageChunk.call(this, entity, rows);\n  const out = [];\n  for (let i = 0; i < rows.length; i += HYDRATE_CHUNK) out.push(...hydratePageChunk.call(this, entity, rows.slice(i, i + HYDRATE_CHUNK)));\n  return out;',
     replace: '  return hydratePageChunk.call(this, entity, rows);' },
+  // --- round 8: dashboard JSON money ---
+  { name: "round 8: a dashboard JSON card/table/chart money aggregate answers raw minor units instead of major units", file: 'runtime/routes/views.mjs',
+    find: "  return f?.kind === 'money' ? Number(formatMoney(Math.round(v))) : v;",
+    replace: "  return v;" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

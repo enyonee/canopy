@@ -47,6 +47,17 @@ function dashboardCsv(ctx, d, mine, period) {
   return sendCsv(d.id, ['Section', 'Metric', 'Group', 'Value'], lines);
 }
 
+// A money aggregate, converted to the major-unit number every JSON row
+// already promises (docs/FORMAT.md's «JSON answers»: money is `12.34`, never
+// `1234`) — `count` names no field and is never money. Rounded first, like
+// the HTML (`metricValue()` in render/dashboard.mjs) and CSV paths above,
+// because `avg` can land between minor units.
+function moneyAggregate(store, entity, fieldName, fn, v) {
+  if (v === null || v === undefined) return v;
+  const f = fieldName && fn !== 'count' ? store.field(entity, fieldName) : null;
+  return f?.kind === 'money' ? Number(formatMoney(Math.round(v))) : v;
+}
+
 // The same numbers dashboardView()/dashboardCsv() compute, as JSON: one
 // metric per card/chart, one row per group in a table/chart.
 function dashboardJson(ctx, d, mine, period) {
@@ -62,12 +73,14 @@ function dashboardJson(ctx, d, mine, period) {
   };
   const cards = mine.cards.map((c) => {
     const [row] = store.aggregate(c.entity, { metrics: [{ fn: c.fn || 'count', field: c.field, as: 'v' }], where: inPeriod(c.entity, c.where) });
-    return { title: c.title, value: row?.v ?? 0 };
+    return { title: c.title, value: moneyAggregate(store, c.entity, c.field, c.fn || 'count', row?.v) ?? 0 };
   });
-  const grouped = (t) => store.aggregate(t.entity, { ...t, where: inPeriod(t.entity, t.where) });
+  const grouped = (t) => store.aggregate(t.entity, { ...t, where: inPeriod(t.entity, t.where) })
+    .map((r) => { const out = { ...r }; for (const m of t.metrics || []) out[m.as] = moneyAggregate(store, t.entity, m.field, m.fn, r[m.as]); return out; });
   const tables = mine.tables.map((t) => ({ title: t.title, rows: grouped(t) }));
   const charts = (mine.charts || []).map((c) => ({ title: c.title, type: c.type,
-    rows: store.aggregate(c.entity, { groupBy: c.groupBy, groupUnit: c.groupUnit, metrics: [{ fn: c.metric.fn, field: c.metric.field, as: 'v' }], sort: c.sort, limit: c.limit, where: inPeriod(c.entity, c.where) }) }));
+    rows: store.aggregate(c.entity, { groupBy: c.groupBy, groupUnit: c.groupUnit, metrics: [{ fn: c.metric.fn, field: c.metric.field, as: 'v' }], sort: c.sort, limit: c.limit, where: inPeriod(c.entity, c.where) })
+      .map((r) => ({ ...r, v: moneyAggregate(store, c.entity, c.metric.field, c.metric.fn, r.v) })) }));
   ctx.sendJson(200, { cards, tables, charts });
 }
 
