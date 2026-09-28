@@ -30,10 +30,16 @@ function listRoute(ctx, entity, fields, ov) {
   Object.assign(where, ownWhere(entity)); // a filter may narrow the row set, never widen it
   const q = url.searchParams.get('q') || '';
   const sort = sortOf(entity, ov);
-  const all = store.list(entity, { search: ov.search || [], q, where, sort });
-  trace({ kind: 'query', entity, q, where, rows: all.length, who: user?.id ?? null });
-  if (wantsCsv) { exportRows(entity, entity, all, ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name), ov.labels || {}); return true; }
-  const pg = paged(all, ov);
+  const opts = { search: ov.search || [], q, where, sort };
+  // CSV hydrates every matching row (store.list, already batched — item 3); the
+  // HTML/JSON page hydrates only the rows it shows (store.listPage — item 2).
+  if (wantsCsv) {
+    const all = store.list(entity, opts);
+    exportRows(entity, entity, all, ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name), ov.labels || {});
+    return true;
+  }
+  const pg = paged(entity, opts, ov);
+  trace({ kind: 'query', entity, q, where, rows: pg.total, who: user?.id ?? null });
   ctx.answer(200, listView(graph, store, entity, fields, pg.rows, { q, where, flash, vc, range, query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }),
     { rows: pg.rows.map((r) => rowJSON(store, entity, fields, r, vc)), total: pg.total, page: pg.page, pages: pg.pages });
   return true;

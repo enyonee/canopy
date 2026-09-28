@@ -21,8 +21,10 @@ function sectionHtml(graph, store, vc, resolveTop, s) {
   const l = (graph.lists || []).find((x) => x.id === s.list);
   if (!l || !vc.canSee(l) || !vc.can(l.entity, 'view')) return '';
   const where = { ...resolveTop(l.where || {}), ...vc.ownWhere(l.entity) };
-  let rows = store.list(l.entity, { where, sort: l.sort, search: l.search || [] });
-  if (s.limit) rows = rows.slice(0, s.limit);
+  const opts = { where, sort: l.sort, search: l.search || [] };
+  // A limited preview hydrates only the rows it shows (item 2); unlimited
+  // stays store.list's full (still batched — item 3) fetch, as before.
+  const rows = s.limit ? store.listPage(l.entity, opts, { page: 1, pageSize: s.limit }).rows : store.list(l.entity, opts);
   const listFields = store.fields[l.entity];
   const cols = l.columns || listFields.filter((f) => !f.type.secret).map((f) => f.name);
   const head = cols.map((c) => `<th>${esc(label(c))}</th>`).join('');
