@@ -178,66 +178,10 @@ export function listPage(entity, opts = {}, { page = 1, pageSize = DEFAULT_PAGE_
   return { rows: this.hydratePage(entity, raw), total, page: at, pages };
 }
 
-// --- batched aggregate hydration (item 3) -------------------------------------
-// Every `agg` node directly in scope of the entity being hydrated — not one
-// nested inside another aggregate's own body, which is scoped against the
-// *child* entity instead and is exactly what the recursive prefetch below
-// reaches on its own. `sum(x) + count(y)` yields both; `count(y)`'s own body
-// is never descended into here.
-function topAggs(node, out = []) {
-  if (!node) return out;
-  if (node.t === 'agg') { out.push(node); return out; }
-  if (node.t === 'bin') { topAggs(node.a, out); topAggs(node.b, out); }
-  else if (node.t === 'un') topAggs(node.a, out);
-  else if (node.t === 'call') node.args.forEach((a) => topAggs(a, out));
-  return out;
-}
-
-// Prefetches, for every plain child-aggregate declared directly on `entity`,
-// the children of all `ids` in one query each — grouped by parent id — then
-// recurses into the child entity with the ids just fetched, so a chain of
-// aggregates (a customer's spend, over each order's own total, over each
-// order's own items) batches at every level, not only the first. `cache` is
-// purely additive: `Store#ctx()`'s `rows()` consults it first and, on a miss
-// (no `via` — an aggregate over unrelated/sibling rows, item 3's one
-// documented fallback — or an entity already visited, `seen` guarding a
-// derived-field cycle same as `Store#derived` does), runs the exact query it
-// always would. Correctness never depends on this cache existing.
-export function buildAggCache(entity, ids, cache = { groups: new Map() }, seen = new Set()) {
-  if (seen.has(entity) || !ids.length) return cache;
-  seen.add(entity);
-  for (const f of this.fields[entity] || []) {
-    if (!f.derive) continue;
-    for (const agg of topAggs(f.derive)) {
-      const via = this.childVia(agg.entity, entity, agg.via);
-      if (!via) continue; // no direct link back — the one case left unbatched
-      const key = `${agg.entity}|${via}`;
-      if (cache.groups.has(key)) continue;
-      const rows = this.listRawIn(agg.entity, via, ids);
-      // A `ref` column is stored as TEXT (runtime/fields.mjs's ref.sql), so a
-      // child's raw via-value is a string even though the parent's own `id` is
-      // a real number (the rowid) — grouped by the string form of both, or
-      // every group would come up empty against a SQL-correct (and thus
-      // type-coercing) equality that never noticed the mismatch.
-      const grouped = new Map(ids.map((id) => [String(id), []]));
-      for (const r of rows) grouped.get(String(r[via]))?.push(r);
-      cache.groups.set(key, grouped);
-      const childIds = rows.map((r) => r.id);
-      if (childIds.length) this.buildAggCache(agg.entity, childIds, cache, seen);
-    }
-  }
-  return cache;
-}
-
-// Hydrates a whole page of rows of the same entity in a bounded number of
-// queries instead of one per row per aggregate derived field: one query per
-// distinct (child, via) pair reached from `entity`, at every depth, however
-// many rows are on the page.
-export function hydratePage(entity, rows) {
-  if (!rows.length) return [];
-  const cache = this.buildAggCache(entity, rows.map((r) => r.id));
-  return rows.map((r) => this.hydrate(entity, r, cache));
-}
+// Batched aggregate hydration (buildAggCache, aggValue, hydratePage) lives in
+// runtime/store/hydrate.mjs — kept out of this file only to stay under the
+// module line budget; it is attached to the same Store.prototype and calls
+// straight back into listRaw/listRawIn/childVia/hydrate above via `this`.
 
 // Declarative aggregation: the graph names the function and the field, never SQL.
 // groupUnit (day | month | year) buckets a date or time field.

@@ -201,10 +201,17 @@ export interface ViewContext {
   enabled?: boolean;
 }
 
-// store/query.mjs, store/state.mjs and store/rules.mjs attach these to
-// Store.prototype at runtime (`Object.assign(Store.prototype, query, state,
-// rules)` in store.mjs) — declared here, once, instead of on the class
-// itself, purely for the type checker; there is no other copy of this list.
+// buildAggCache's (runtime/store/hydrate.mjs) return shape: `groups` holds a
+// raw-child-rows-by-parent-id map per (child, via) pair — the pre-item-1
+// fallback; `scalars` holds an already-finalized value per parent id per
+// SQL-compiled aggregate (runtime/store/aggsql.mjs's aggKey).
+type AggCache = { groups: Map<string, Map<string, any[]>>; scalars: Map<string, Map<string, any>> };
+
+// store/query.mjs, store/hydrate.mjs, store/state.mjs and store/rules.mjs
+// attach these to Store.prototype at runtime (`Object.assign(Store.prototype,
+// query, hydrate, state, rules)` in store.mjs) — declared here, once, instead
+// of on the class itself, purely for the type checker; there is no other
+// copy of this list.
 declare module './store.mjs' {
   interface Store {
     clauses(entity: string, where: Record<string, any>): { clauses: string[]; vals: any[]; later: [string, any][] };
@@ -215,7 +222,8 @@ declare module './store.mjs' {
     countRaw(entity: string, opts?: Record<string, any>): number;
     list(entity: string, opts?: Record<string, any>): any[];
     listPage(entity: string, opts?: Record<string, any>, page?: { page?: number; pageSize?: number }): { rows: any[]; total: number; page: number; pages: number };
-    buildAggCache(entity: string, ids: any[], cache?: { groups: Map<string, Map<string, any[]>> }, seen?: Set<string>): { groups: Map<string, Map<string, any[]>> };
+    buildAggCache(entity: string, ids: any[], cache?: AggCache, seen?: Set<string>): AggCache;
+    aggValue(entity: string, row: any, node: any, cache: AggCache | null): any;
     hydratePage(entity: string, rows: any[]): any[];
     aggregate(entity: string, opts?: Record<string, any>): any[];
     aggregateInMemory(entity: string, opts: Record<string, any>): any[];
