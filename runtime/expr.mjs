@@ -17,8 +17,10 @@ import { FUNCTIONS, truthy, family } from './functions.mjs';
 const AGG = new Set(['sum', 'count', 'avg', 'min', 'max']);
 const NUMERIC = new Set(['number', 'money']);
 
-// Money reaches the algebra in major units, so sums of cents pick up binary dust:
-// 10.10 + 20.20 must be 30.30, not 30.299999999999997. Exported so a SQL-side
+// Money reaches the algebra in major units, so arithmetic on cents picks up binary dust:
+// 10.10 + 20.20 must be 30.30, not 30.299999999999997, and 3 * 0.1 must be 0.3, not
+// 0.30000000000000004 — so every `+ - *` and every sum/avg is finalized through this
+// (division is the one operator that is not: a quotient is a fraction, see FORMAT.md). Exported so a SQL-side
 // aggregate (runtime/store/aggsql.mjs) finalizes its result through the exact
 // same rounding as this file's own sum/avg — never a re-implementation that
 // could drift a bit from this one.
@@ -220,7 +222,7 @@ export function evaluate(ast, ctx, functions = FUNCTIONS) {
         switch (n.op) {
           case '+': return exact(a + b);
           case '-': return exact(a - b);
-          case '*': return a * b;
+          case '*': return exact(a * b);
           case '/': return b === 0 ? null : a / b;
           case '<': return a < b;
           case '<=': return a <= b;

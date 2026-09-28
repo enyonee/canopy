@@ -43,13 +43,12 @@ const GRAND_NUM = ['qty', 'n', 'price', 'disc', 'line', 'id'];
 const NOW = '2026-09-29T12:00:00.000Z';
 const DAYS = ['2019-12-31', '2020-02-29', '2024-06-15', '2026-01-05', '2026-01-05', '2026-09-29', '2030-01-01', '2099-12-31'];
 const STAMPS = ['2026-09-29T12:00:00.000Z', '2026-09-29T11:59:59.999Z', '2026-09-29T12:00:00Z', '2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00Z', '2026-01-05 10:00:00', '2026-01-05T09:59:59.999Z', '2024-03-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z', '2001-01-01T00:00:00.000Z'];
-const PRICES = [0.1, 0.2, 0.07, 0.7, 1.1, 2.2, 0.3, 0.01, 99.99, 0, -0.5, -12.34, 5, 10, 100, 7.5];
+// Includes the exact products of the others (3 * 0.1 = 0.3, 3 * 0.7 = 2.1, 2 * 0.07 = 0.14…): ties for `qty * price OP disc`.
+const PRICES = [0.1, 0.2, 0.07, 0.7, 1.1, 2.2, 0.3, 0.01, 99.99, 0, -0.5, -12.34, 5, 10, 100, 7.5, 0.6, 2.1, 0.14, 0.21, 7.7, 0.4, 0.28, 3.3];
 
-// Expressions are generated as [source, { money, dusty }]. `dusty` marks a raw money product
-// (qty * price…): JS multiplies major-unit doubles, the compiler exact integers, so comparing
-// such a value against an exactly equal one differs on that tie (a divergence 0.1.2 shipped
-// with, kept on purpose — see runtime/store/aggexpr.mjs). The generator never puts a dusty
-// operand into a comparison, so this test pins everything else; a targeted test pins the tie.
+// Expressions are generated as [source, { money }]. Raw money products (qty * price…) go into
+// comparisons, nested min/max and int-typed aggregates like everything else: since R12 evaluate()
+// finalizes `*` through exact(), so JS == SQL on the ties (3 * 0.1 > 0.3) that 0.1.2 diverged on.
 const MONEY = new Set(['price', 'disc', 'line', 'total', 'gsum', 'top', 'low', 'mix', 'avgP', 'half', 'sq']);
 function generator(rand) {
   const pick = (xs) => xs[Math.floor(rand() * xs.length)];
@@ -69,21 +68,20 @@ function generator(rand) {
     }
     if (r < 0.55) {
       const op = pick(['+', '-', '*']), [a, x] = num(fields, depth - 1), [b, y] = num(fields, depth - 1);
-      const money = Boolean(x.money || y.money);
-      return [`(${a} ${op} ${b})`, { money, dusty: op === '*' ? Boolean(money || x.dusty || y.dusty) : false }];
+      return [`(${a} ${op} ${b})`, { money: Boolean(x.money || y.money) }];
     }
     if (r < 0.62) { const [a, x] = num(fields, depth - 1); return [`-${a}`, x]; }
-    if (r < 0.7) { const [a] = num(fields, depth - 1), [b] = num(fields, depth - 1); return [`(${a} / ${b})`, { money: true, dusty: true }]; }
+    if (r < 0.7) { const [a] = num(fields, depth - 1), [b] = num(fields, depth - 1); return [`(${a} / ${b})`, { money: true }]; }
     if (r < 0.85) {
       const [a, x] = num(fields, depth - 1), [b, y] = num(fields, depth - 1);
-      return [`if(${cond(fields, depth - 1)}, ${a}, ${b})`, { money: Boolean(x.money || y.money), dusty: Boolean(x.dusty || y.dusty) }];
+      return [`if(${cond(fields, depth - 1)}, ${a}, ${b})`, { money: Boolean(x.money || y.money) }];
     }
     return fields.sub ? nested(fields, depth - 1) : num(fields, 0);
   };
-  const clean = (fields, depth) => { for (let i = 0; i < 8; i++) { const e = num(fields, depth); if (!e[1].dusty) return e[0]; } return '1'; };
   const cmp = (fields, depth) => {
     const op = pick(['=', '!=', '<', '<=', '>', '>=']);
-    return chance(0.35) ? `${dateExpr(fields, depth)} ${op} ${dateExpr(fields, depth)}` : `${clean(fields, depth)} ${op} ${clean(fields, depth)}`;
+    if (fields.tie && chance(0.3)) return `${pick(['qty * price', 'price * qty', 'line'])} ${op} ${pick(['disc', 'disc', 'price', '3'])}`;
+    return chance(0.35) ? `${dateExpr(fields, depth)} ${op} ${dateExpr(fields, depth)}` : `${num(fields, depth)[0]} ${op} ${num(fields, depth)[0]}`;
   };
   function cond(fields, depth) {
     const r = rand();
@@ -94,23 +92,22 @@ function generator(rand) {
     return `not(${cond(fields, depth - 1)})`;
   }
   // An aggregate written out inside a Child-level body: over Grand, with Grand's own fields.
-  const grandFields = { num: GRAND_NUM, bool: ['on'], date: ['d', 't'] };
+  const grandFields = { tie: true, num: GRAND_NUM, bool: ['on'], date: ['d', 't'] };
   function nested(fields, depth) {
     const fn = pick(['sum', 'count', 'min', 'max', 'avg']);
     if (fn === 'count') return [chance(0.5) ? 'count(Grand)' : `count(Grand: ${cond(grandFields, depth)})`, {}];
     const [body, x] = num(grandFields, depth);
-    return [`${fn}(Grand: ${body})`, { money: x.money, dusty: fn !== 'sum' && x.dusty }];
+    return [`${fn}(Grand: ${body})`, { money: x.money }];
   }
   // One Parent field: [name, spec].
   function parentField(i) {
-    const child = { num: CHILD_NUM, bool: CHILD_BOOL, date: CHILD_DATE, sub: true };
+    const child = { tie: true, num: CHILD_NUM, bool: CHILD_BOOL, date: CHILD_DATE, sub: true };
     const depth = 1 + Math.floor(rand() * 3);
     const fn = pick(['count', 'sum', 'sum', 'min', 'max', 'avg']);
     if (fn === 'count') return [`f${i}`, `int := count(Child${chance(0.9) ? `: ${cond(child, depth)}` : ''})`];
     if (chance(0.25) && (fn === 'min' || fn === 'max')) return [`f${i}`, `${pick(['date', 'time'])} := ${fn}(Child: ${dateExpr(child, depth)})`];
-    const [body, x] = num(child, depth);
-    // A raw double from min/max, declared int, would round a .5 tie the other way: money keeps the cents.
-    const kind = x.dusty && (fn === 'min' || fn === 'max') ? 'money' : pick(['money', 'money', 'int']);
+    const [body] = num(child, depth);
+    const kind = pick(['money', 'money', 'int']);
     return [`f${i}`, `${kind} := ${fn}(Child: ${body})`];
   }
   return { parentField };
@@ -118,10 +115,12 @@ function generator(rand) {
 
 function seedRows(store, rand) {
   const pick = (xs) => xs[Math.floor(rand() * xs.length)];
-  const row = (extra) => ({
-    qty: Math.floor(rand() * 7) - 2, n: rand() < 0.3 ? '' : Math.floor(rand() * 5) - 1, price: pick(PRICES), disc: rand() < 0.3 ? '' : pick(PRICES),
-    on: rand() < 0.5, d: rand() < 0.15 ? '' : pick(DAYS), t: rand() < 0.15 ? '' : pick(STAMPS), ...extra,
-  });
+  const row = (extra) => {
+    const qty = Math.floor(rand() * 7) - 2, price = pick(PRICES);
+    // A quarter of the rows have disc exactly equal to qty * price at cent scale: the tie the doubles get wrong.
+    const disc = rand() < 0.25 ? Number((qty * price).toFixed(2)) : rand() < 0.3 ? '' : pick(PRICES);
+    return { qty, n: rand() < 0.3 ? '' : Math.floor(rand() * 5) - 1, price, disc, on: rand() < 0.5, d: rand() < 0.15 ? '' : pick(DAYS), t: rand() < 0.15 ? '' : pick(STAMPS), ...extra };
+  };
   for (let p = 0; p < 24; p++) {
     const pid = store.insert('Parent', { name: `P${p}` });
     const kids = p % 6 === 0 ? 0 : Math.floor(rand() * 6); // some parents are empty groups

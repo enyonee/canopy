@@ -54,7 +54,7 @@ const REJECT = {
   meanSum: 'money := sum(Order: mean)', writtenAvg: 'money := sum(Order: avg(Item: price))', halfSum: 'money := sum(Order: hsum)',
   sqSum: 'money := sum(Order: vsum)', dateSum: 'money := sum(Order: placed)', dateAvg: 'money := avg(Order: placed)', dateVsNumber: 'int := count(Order: placed > 5)',
   dateTruthy: 'int := count(Order: placed)', badLiteral: "int := count(Order: placed > 'later')", textLiteralEq: "int := count(Order: placed = 'x')", hop: 'int := count(Order: customer.name = 1)',
-  correlated: 'money := sum(Order: if(row.name = 1, total, 0))', minOverDust: 'money := sum(Order: min(Item: qty * price))', quadruple: 'money := sum(Order: sum(Item: price * price * price * price))',
+  correlated: 'money := sum(Order: if(row.name = 1, total, 0))', quadruple: 'money := sum(Order: sum(Item: price * price * price * price))',
   scaleOverflowPlus: 'money := sum(Order: sum(Item: price * price * price * price + 1))', division: 'money := sum(Order: total / 2)',
 };
 
@@ -114,7 +114,7 @@ test('the subquery is joined through the ref index, not a scan per order', () =>
 test('the accept/reject boundary of the new shapes', () => {
   const store = new Store({ ...GRAPH, data: { ...GRAPH.data, Customer: { name: 'text!', ...REJECT } } }, ':memory:');
   for (const [name, spec] of Object.entries(REJECT)) no(store, 'Customer', spec.split(':= ')[1]);
-  for (const src of ['sum(Order: total)', 'sum(Order: gross)', 'max(Order: lastShip)', 'sum(Order: cheapest)', "count(Order: placed > '2026-01-01')", 'count(Order: placed < today)']) yes(store, 'Customer', src);
+  for (const src of ['sum(Order: total)', 'sum(Order: gross)', 'max(Order: lastShip)', 'sum(Order: cheapest)', "count(Order: placed > '2026-01-01')", 'count(Order: placed < today)', 'sum(Order: min(Item: qty * price))', 'sum(Order: max(Item: qty * price))']) yes(store, 'Customer', src);
   // Item level: a scalar derived field inlines, unless rounding it to cents would need real work.
   for (const src of ['sum(Item: line)', 'sum(Item: line + 1)', 'count(Item: both)', 'count(Item: bulk and line > 10)', "max(Item: shipped)", 'min(Item: at)', 'sum(Item: if(bulk, line, 0))']) yes(store, 'Order', src);
   // exact() rounds each row's `+`/`-` to 6 decimals: four money factors have 8, so the integers would no longer match.
@@ -199,19 +199,37 @@ test('integers past 2^53 or SQLite\'s SUM range decline to the JS path at run ti
   assert.throws(() => runAggOne(store, { ...compiled, exprSQL: 'nonsense(' }, small), /syntax|no such|nonsense/i, 'any other SQL error is a bug and must surface');
 });
 
-// KNOWN DIVERGENCE, shipped in 0.1.2 and left as it was (a performance round changes no answer):
-// evaluate() multiplies major-unit doubles, so 3 * 0.1 is 0.30000000000000004 and beats 0.3,
-// where the compiler's exact integers say equal. Pinned here so it is visible and cannot widen;
-// the fix (refuse to compile a comparison of a raw money product) is one condition in aggexpr.mjs
-// and this test flips with it.
-test('known 0.1.2 divergence: a comparison of a raw money product against an exactly equal value', () => {
-  const store = new Store({ app: 'dust', data: { P: { gt: 'int := count(C: qty * price > disc)', mn: 'money := sum(D: min(E: qty * price))' }, C: { p: 'ref:P!', qty: 'int', price: 'money', disc: 'money' }, D: { p: 'ref:P!' }, E: { d: 'ref:D!', qty: 'int', price: 'money' } }, views: 'auto' }, ':memory:');
+// R12: what was the "known 0.1.2 divergence" is a parity now. evaluate() finalizes every `*`
+// through exact() (like `+`, `-` and sums), so 3 * 0.1 is 0.3 in JS, as it is in the compiler's
+// exact integers and in decimal arithmetic. JS == SQL == exact decimal, including the nested
+// min/max over a raw money product, which compiles because it is proven equal.
+test('a comparison of a raw money product against an exactly equal value: JS == SQL == exact decimal', () => {
+  const store = new Store({ app: 'dust', data: { P: { gt: 'int := count(C: qty * price > disc)', ge: 'int := count(C: qty * price >= disc)', eq: 'int := count(C: qty * price = disc)', mn: 'money := sum(D: min(E: qty * price))', mx: 'money := sum(D: max(E: qty * price))' }, C: { p: 'ref:P!', qty: 'int', price: 'money', disc: 'money' }, D: { p: 'ref:P!' }, E: { d: 'ref:D!', qty: 'int', price: 'money' } }, views: 'auto' }, ':memory:');
   const p = store.insert('P', {});
-  store.insert('C', { p, qty: 3, price: 0.1, disc: 0.3 });
-  assert.equal(store.get('P', p).gt, 0, 'SQL path: decimal arithmetic says 0.3 is not greater than 0.3');
-  assert.equal(jsOnly(store, () => store.get('P', p)).gt, 1, 'JS path: doubles say 0.30000000000000004 > 0.3');
-  // What this round adds does not widen it: a nested min/max over such a product is not compiled.
-  no(store, 'P', 'sum(D: min(E: qty * price))');
+  const cases = [[3, 0.1, 0.3], [100, 0.07, 7], [3, 0.7, 2.1], [7, 1.1, 7.7], [3, 0.2, 0.6], [1, 0.1, 0.3], [3, 0.11, 0.3]];
+  const d = store.insert('D', { p });
+  for (const [qty, price, disc] of cases) { store.insert('C', { p, qty, price, disc }); store.insert('E', { d, qty, price }); }
+  const cents = (x) => BigInt(Math.round(x * 100));
+  const truth = (fn) => cases.filter(([q, pr, di]) => fn(BigInt(q) * cents(pr), cents(di) * 1n)).length;
+  const want = { gt: truth((x, y) => x > y), ge: truth((x, y) => x >= y), eq: truth((x, y) => x === y) };
+  assert.deepEqual(want, { gt: 1, ge: 6, eq: 5 });
+  const sql = store.get('P', p), js = jsOnly(store, () => store.get('P', p));
+  for (const k of ['gt', 'ge', 'eq']) { assert.equal(sql[k], want[k], `SQL ${k}`); assert.equal(js[k], want[k], `JS ${k}`); }
+  assert.equal(sql.mn, 10, 'min of the exact products, in minor units'); assert.equal(js.mn, 10);
+  assert.equal(sql.mx, 770); assert.equal(js.mx, 770);
+  yes(store, 'P', 'sum(D: min(E: qty * price))');
+  same(store, 'P');
+});
+
+// A product with more decimals than exact() keeps (money * money * money * money) is not compiled:
+// JS rounds it at 6 decimals, the compiler would stay exact at 8 — the two must not round apart.
+test('a product beyond exact()\'s 6 decimals is left to the JS path', () => {
+  const store = new Store({ app: 'wide', data: { P: { a: 'money := sum(C: price * price * price)', b: 'money := sum(C: price * price * price * price)' }, C: { p: 'ref:P!', price: 'money' } }, views: 'auto' }, ':memory:');
+  const p = store.insert('P', {});
+  store.insert('C', { p, price: 1.11 });
+  yes(store, 'P', 'sum(C: price * price * price)');
+  no(store, 'P', 'sum(C: price * price * price * price)');
+  same(store, 'P');
 });
 
 // A clock that moves on every `new Date()`: an evaluation that read it once per derived field
