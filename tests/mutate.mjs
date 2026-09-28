@@ -182,7 +182,7 @@ const MUTATIONS = [
   { name: 'S1: an uncached call ({ cache: false }) fills the cache anyway', file: 'runtime/driver/sqlite.mjs',
     find: "if (opts?.cache === false) return db.prepare(sql);", replace: "if (false) return db.prepare(sql);" },
   { name: 'S1: the query hook is never called', file: 'runtime/driver/sqlite.mjs',
-    find: "    if (drv.onQuery) drv.onQuery(sql);\n    if (opts?.cache", replace: "    if (opts?.cache" },
+    find: "    if (drv.onQuery) drv.onQuery(sql, opts);\n    if (opts?.cache", replace: "    if (opts?.cache" },
   { name: 'the outbox is never flushed after a commit', file: 'runtime/interp.mjs',
     find: "    const out = store.transaction(fn);\n    await flush(store, graph, { fetchImpl, trace, registry });\n    return out;", replace: "    return store.transaction(fn);" },
   { name: 'a non-2xx answer counts as delivered', file: 'runtime/transports.mjs',
