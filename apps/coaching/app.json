@@ -17,10 +17,10 @@
                        "specialty": "enum[career,life,executive,wellness]=career",
                        "preferredClientType": "enum[Dominance,Influence,Steadiness,Conscientiousness]=Influence",
                        "hourlyRate": "money!", "active": "bool=true" },
-    "Suggestion":    { "client": "ref:User!", "profile": "ref:ClientProfile!", "coachAccount": "ref:User!", "coach": "ref:CoachProfile!",
+    "Suggestion":    { "profile": "ref:ClientProfile!", "coach": "ref:CoachProfile!",
                        "suitability": "int := suitability(profile.goalArea, profile.profileType, coach.specialty, coach.preferredClientType)",
                        "isSuitable": "bool := suitability >= 60" },
-    "Session":       { "client": "ref:User!", "coach": "ref:CoachProfile!", "coachAccount": "ref:User!",
+    "Session":       { "client": "ref:User!", "coach": "ref:CoachProfile!",
                        "scheduledAt": "time!", "topic": "text", "status": "enum[scheduled,completed,cancelled]=scheduled", "createdAt": "time=now" },
     "Goal":          { "user": "ref:User!", "title": "text!", "targetDate": "date", "progress": "int=0", "notes": "longtext" }
   },
@@ -37,12 +37,12 @@
       "admin": "*",
       "user":  { "ClientProfile": { "own": "user", "can": ["view", "create", "edit", "go:submitAssessment"] },
                  "CoachProfile": ["view", "do:schedule"],
-                 "Suggestion": { "own": "client", "can": ["view"] },
+                 "Suggestion": { "own": "profile.user", "can": ["view"] },
                  "Session": { "own": "client", "can": ["view"] },
                  "Goal": { "own": "user", "can": ["view", "create", "edit"] } },
       "coach": { "CoachProfile": { "own": "user", "can": ["view", "create", "edit"] },
-                 "Suggestion": { "own": "coachAccount", "can": ["view"] },
-                 "Session": { "own": "coachAccount", "can": ["view"] } },
+                 "Suggestion": { "own": "coach.user", "can": ["view"] },
+                 "Session": { "own": "coach.user", "can": ["view"] } },
       "guest": { "CoachProfile": ["view"] }
     }
   },
@@ -59,15 +59,15 @@
 
   "events": [
     { "on": "ClientProfile.created", "do": [ { "block": "db.each", "from": "CoachProfile", "where": { "active": 1 },
-        "do": [ { "block": "db.ensure", "entity": "Suggestion", "where": { "client": "@row.user", "profile": "@row.id", "coachAccount": "@each.user", "coach": "@each.id" } } ] } ] },
+        "do": [ { "block": "db.ensure", "entity": "Suggestion", "where": { "profile": "@row.id", "coach": "@each.id" } } ] } ] },
     { "on": "CoachProfile.created", "do": [ { "block": "db.each", "from": "ClientProfile",
-        "do": [ { "block": "db.ensure", "entity": "Suggestion", "where": { "client": "@each.user", "profile": "@each.id", "coachAccount": "@row.user", "coach": "@row.id" } } ] } ] }
+        "do": [ { "block": "db.ensure", "entity": "Suggestion", "where": { "profile": "@each.id", "coach": "@row.id" } } ] } ] }
   ],
 
   "actions": [
     { "name": "schedule", "in": "CoachProfile", "title": "Schedule a session", "after": "/Session",
       "confirm": "Session requested with {row.name} — you will both get a confirmation notification",
-      "do": [ { "block": "db.createRow", "entity": "Session", "values": { "client": "@me", "coach": "@row.id", "coachAccount": "@row.user",
+      "do": [ { "block": "db.createRow", "entity": "Session", "values": { "client": "@me", "coach": "@row.id",
                 "scheduledAt": "@values.scheduledAt", "topic": "@values.topic" } },
               { "block": "mail.send", "connector": "mail", "to": "@row.user.email", "subject": "New coaching session booked",
                 "text": "{me.name} booked a session with you for {values.scheduledAt}." },
@@ -101,7 +101,7 @@
                             "labels": { "isSuitable": ["Not suitable", "Suitable"] },
                             "filters": [ { "name": "Suitable", "field": "isSuitable" } ],
                             "sort": { "field": "suitability", "dir": "desc" }, "rowActions": ["view"], "create": false },
-    "Suggestion.detail":  { "fields": ["client", "profile", "coach", "suitability", "isSuitable"] },
+    "Suggestion.detail":  { "fields": ["profile", "coach", "suitability", "isSuitable"] },
     "Session.list":       { "title": "Sessions", "columns": ["client", "coach", "scheduledAt", "topic", "status"],
                             "sort": { "field": "scheduledAt", "dir": "asc" }, "rowActions": ["view"], "create": false },
     "Goal.list":          { "title": "My Goals", "columns": ["title", "targetDate", "progress", "notes"], "createTitle": "Set a new goal" },

@@ -17,10 +17,12 @@
 
 ## Misses
 
-- `block` — same gap as `apps/attendance` and `apps/studentportal`: no block updates an arbitrary
-  already-resolved row, only the current action/transition row (`db.update`) or the current row's
-  *own* numeric field on another entity by id (`db.adjust`). It didn't bite this app as hard,
-  because `db.each` + `db.ensure` (idempotent creation) was enough for the matching join table.
+- `block` (round 5 closed this: `db.set`, an update on an arbitrary found/each/referenced row —
+  see `docs/FORMAT.md`) — at the time this app was built, no block updated an arbitrary
+  already-resolved row, only the current action/transition row (`db.update`) or the current
+  row's *own* numeric field on another entity by id (`db.adjust`). It didn't bite this app as
+  hard, because `db.each` + `db.ensure` (idempotent creation) was enough for the matching join
+  table, so there is no obvious `db.set` use site to retrofit here.
 - `function` — no "which of these numbers is biggest, and what do I call it" primitive
   (`max(a, b)` takes two numbers and returns a number, not a label); classifying the assessment
   into one of four named types needed the plugin's `discType`.
@@ -41,6 +43,13 @@
   whose own row (`CoachProfile`) is one hop from the address the mail actually needs (`User`) —
   `store.ctx(...).get(path)` resolves an arbitrarily long reference chain at *run time* even
   though a *declared* expression (a derived field or a rule) is statically limited to one hop.
+- Round 5: `own` may now be a one-hop path, so `Suggestion` no longer carries a `client`/
+  `coachAccount` `ref:User` pair that duplicated `profile`/`coach` purely for permission
+  scoping (the same fix as `apps/studentportal`, whose `Match` had the identical shape):
+  `own: "profile.user"` / `own: "coach.user"` reads the same `ref:ClientProfile`/`ref:CoachProfile`
+  fields the score expression already needed. `Session` keeps its own direct `client` (it has no
+  `ClientProfile` reference to hop through at all), but drops `coachAccount` the same way, via
+  `coach.user`.
 - The `studentportal` matching shape (own-scoped join entity, self-populating via a pair of
   mirrored `X.created` events, plugin-scored, differentiated with a derived bool) reused for a
   different domain with a different score formula — evidence the shape is a pattern, not a
