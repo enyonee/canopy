@@ -192,6 +192,14 @@ Steps run inside one transaction; a block that refuses (not enough stock, no suc
 everything back and answers 400 with its message. Outgoing effects wait in the outbox and are
 delivered after the commit; `/outbox` shows every delivery with its status and a retry button.
 
+Delivery statuses: `queued` (waiting) → `sending` (claimed by one flush, request in flight) →
+`sent` or `failed` (`failed` gets the retry button, which sets it back to `queued`). A row is
+claimed by one atomic update before it is delivered, so overlapping flushes (two requests
+committing together, later several instances) never deliver one row twice. A row that stays in
+`sending` for longer than the 60 s lease (the process died mid-delivery) is claimed again. So
+delivery is exactly-once, except across a crash, where it is at-least-once: a connector should
+send an idempotency key (the outbox row id, `@delivery`) that its receiver can deduplicate on.
+
 A row that `db.create`/`db.createRow`/`db.ensure` makes fires its entity's own `created` event,
 exactly like an HTTP create — so `events` sees every row however it was made, including one a
 `created` event's own steps go on to make, of the same or another entity. A chain of these

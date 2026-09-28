@@ -279,8 +279,10 @@ process on one core sustains ~1.8k reads/s and ~1.7k writes/s at 50 concurrent c
 (p99 ≈ 70 ms). The single SQLite writer is not the limit yet; the one process is. Next steps:
 - **several instances of one app behind a load balancer** on the Postgres driver. Sessions
   already live in the database rather than in memory, so any instance can serve any request;
-- **outbox delivery by workers**: claim rows with `FOR UPDATE SKIP LOCKED`, keep delivering
-  after the request returns, retry with backoff, deliver once across instances;
+- **outbox delivery by workers**: the claim part is done (a row is claimed by one atomic
+  `UPDATE` before delivery, `queued → sending → sent|failed`, a 60 s lease recovers rows of a dead
+  process: exactly-once, at-least-once across a crash). Next: claim with `FOR UPDATE SKIP LOCKED`
+  on Postgres, keep delivering after the request returns, retry with backoff;
 - **schedules with one leader** (an advisory lock), so a timer fires once per cluster;
 - **files in object storage** (S3-compatible) instead of the app directory;
 - **many apps per process** for dense hosting. Each process costs ~75 MB of Node baseline, and

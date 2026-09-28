@@ -37,6 +37,15 @@
   колонки, идемпотентно. `Store#prepare` — bounded LRU кэш подготовленных
   SQL-запросов по тексту, им пользуются все запросы, включая `store/query.mjs`
   и `store/rules.mjs`.
+  **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
+  `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
+  истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.
+  `outbox.mjs#flush` доставляет лишь то, что сам захватил (статусы
+  `queued → sending → sent|failed`); строка, застрявшая в `sending` дольше
+  `LEASE_MS` (60 с, часы внедряются через `opts.now`), захватывается снова —
+  доставка ровно один раз, а при падении процесса — минимум один раз, поэтому
+  коннектору нужен ключ идемпотентности. Колонка `claimedAt` (epoch мс) добавляется
+  `migrate.mjs#migrateOutbox` на месте, в старых базах тоже.
   **Раунд 8–9, батчинг и агрегаты** — `hydrate.mjs`: `hydratePage`/`buildAggCache`/
   `aggValue`. Для каждого агрегатного производного поля прямо на сущности сперва
   пробуется `aggsql.mjs`'s `compileAgg` (входная точка, запуск, кэш планов; сам
