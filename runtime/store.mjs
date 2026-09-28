@@ -81,9 +81,7 @@ export class Store {
       }
       this.migrateIndexes(entity);
     }
-    // The outbox: every effect that leaves the process is a row here first.
-    this.db.exec(`CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT,
-      target TEXT, payload TEXT, status TEXT, code INTEGER, error TEXT, attempts INTEGER DEFAULT 0, at TEXT, updatedAt TEXT)`);
+    this.migrateOutbox();
     // Sessions: the cookie names a row here, so signing out really ends the session.
     this.db.exec(`CREATE TABLE IF NOT EXISTS "_session" (id TEXT PRIMARY KEY, user INTEGER, at TEXT)`);
   }
