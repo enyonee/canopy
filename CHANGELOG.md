@@ -5,8 +5,13 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.1.3 (2026-09-29)
+
 Runtime performance, round 3. No change to any answer: the JSON responses and CSV exports of
-the benchmark routes are byte-identical to 0.1.2 at both data sizes.
+the benchmark routes are byte-identical to 0.1.2 at both data sizes. One deliberate change in
+the JS path: nested derived fields now share their caller's clock instead of reading their own
+`new Date()`, as `runtime/expr.mjs` always promised ("an expression cannot cross midnight
+halfway").
 
 - **Derived fields and dates pushed into SQL** (`runtime/store/aggsql.mjs`, and the new
   `aggexpr.mjs` for the expression compiler). The body of `count`/`sum`/`avg`/`min`/`max` over
@@ -47,6 +52,22 @@ the benchmark routes are byte-identical to 0.1.2 at both data sizes.
   (ints, money, bools, dates, nullable columns, derived scalar and aggregate fields, `+ - *`,
   comparisons, `and`/`or`/`not`, `if`) over random rows, empty groups and NULLs, with a fixed
   seed, and asserts the SQL path equals the JS path for every function.
+
+Measured by the maintainer with an independent script (200 customers × 10 orders × 5 items plus
+one customer with 2000 orders × 10 items; fields with derived and nested aggregates, date
+conditions, `max` over a date), p50 ms, two runs each, one Node process. Answers byte-identical to
+0.1.2 at ×1 and ×4; `today`/`now` and five ISO shapes of `time` checked separately against the
+0.1.2 JS path:
+
+| route | 0.1.2 | 0.1.3 |
+|---|---|---|
+| `GET /Customer` | 102–106 | 14.5 |
+| `GET /Customer/<2000 orders>` | 142–148 | 10.2 |
+| `GET /Customer.csv` | 151–156 | 21 |
+| `GET /Customer?sort=spent` | 144–147 | 21 |
+| `GET /Order.csv` | 127–129 | 60 |
+| `GET /Order?sort=total` | 103–105 | 40 |
+| RSS after these requests (after GC) | 338 MB | 170 MB |
 
 ## 0.1.2 (2026-09-28)
 
