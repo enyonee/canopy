@@ -14,7 +14,7 @@ export const plural = (word) => /[^aeiou]y$/i.test(word) ? word.slice(0, -1) + '
 export { esc, label };
 
 /** @type {import('./types.d.ts').ViewContext} */
-export const anyone = { user: null, role: null, can: (_e, _op, _row) => true, canSee: (_item) => true, ownField: (_e) => null, ownWhere: (_e) => ({}), enabled: false };
+export const anyone = { user: null, role: null, can: (_e, _op, _row) => true, canSee: (_item) => true, ownField: (_e) => null, ownWhere: (_e) => ({}), ownOk: (_e, _row, _op) => true, enabled: false };
 
 export function page(graph, { title, body, flash = '', vc = anyone, refresh = null }) {
   const bg = graph.theme?.background || 'white';
@@ -56,8 +56,16 @@ form.inline { display: inline; }
 th a { color: white; }
 .pages a { margin-right: 12px; }
 </style></head><body>
-<header><h1>${esc(graph.app)}</h1><nav>${navLinks(graph, vc)}${whoBox(graph, vc)}</nav></header>
+<header><h1>${esc(graph.app)}</h1><nav>${navLinks(graph, vc)}${searchBox(graph)}${whoBox(graph, vc)}</nav></header>
 <main>${flash ? `<p class="flash">${esc(flash)}</p>` : ''}${body}</main></body></html>`;
+}
+
+// The header search box (item 7's "/search?q=" node): present whenever the graph
+// declares /search, regardless of role — /search itself narrows every section by
+// the viewer's own permissions, same as any other read.
+function searchBox(graph) {
+  if (!graph.search) return '';
+  return `<form class="who" method="get" action="/search"><input type="text" name="q" placeholder="${esc(graph.search.title || 'Search')}"></form>`;
 }
 
 function whoBox(graph, vc) {
@@ -91,6 +99,19 @@ export const cell = (store, entity, fields, r, c, labels = {}) => {
   return `<td>${f ? fmt(store, entity, f, r, labels) : esc(r[c])}</td>`;
 };
 
+// Whether this viewer may run this declared action on this row — the one
+// predicate both a row's action button and routes/rows.mjs's POST handler
+// consult, so a button is never offered for a request the server would then
+// refuse (item 2's fix: rowButtons used to ask the matrix alone, ignoring a
+// "by" grant, and could render a button the handler then rejected — or hide
+// one the handler would have allowed). "by" names the roles directly and
+// still leaves the row scoped by any "own" grant on the entity, unless the
+// action's own op ("do:<name>") is itself one of that grant's "all" ops.
+export function mayRunAction(vc, entity, action, row) {
+  if (action.by) return action.by.includes(vc.role) && vc.ownOk(entity, row, `do:${action.name}`);
+  return vc.can(entity, `do:${action.name}`, row);
+}
+
 // The buttons a row offers: built-ins, declared actions and state transitions.
 export function rowButtons(graph, store, entity, r, actions, vc) {
   return actions.map((a) => {
@@ -101,8 +122,11 @@ export function rowButtons(graph, store, entity, r, actions, vc) {
       const t = transitionsFor(graph, entity, r, vc).find((x) => x.name === a.slice(3));
       return t ? `<form class="inline" method="post" action="/${entity}/${r.id}/go/${t.name}"><button type="submit">${esc(t.title || label(t.name))}</button></form>` : '';
     }
-    if (!vc.can(entity, `do:${a}`, r)) return '';
     const act = (graph.actions || []).find((x) => x.name === a);
+    // No declaration to consult (only reachable with a hand-built graph that
+    // skipped the checker, which requires "a" to be a real action): fall back
+    // to the matrix alone, same as before item 2.
+    if (!(act ? mayRunAction(vc, entity, act, r) : vc.can(entity, `do:${a}`, r))) return '';
     const toggled = act?.do?.find((s) => s.block === 'db.toggle');
     const caption = toggled && r[toggled.field] ? (act.altTitle || act.title || label(a)) : (act?.title || label(a));
     return `<form class="inline" method="post" action="/${entity}/${r.id}/action/${a}"><button type="submit">${esc(caption)}</button></form>`;

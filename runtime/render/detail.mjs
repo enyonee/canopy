@@ -1,6 +1,6 @@
 // The detail view: the field table, edit/action buttons, transition forms,
 // and related child tables (each with its own inline add-form).
-import { esc, label, plural, anyone, page, fmt, cell, rowButtons, transitionsFor, enctype, widgetBlock, rowJSON } from '../render.mjs';
+import { esc, label, plural, anyone, page, fmt, cell, rowButtons, transitionsFor, enctype, widgetBlock, rowJSON, mayRunAction } from '../render.mjs';
 import { formFields } from './form.mjs';
 
 function transitionForms(graph, store, entity, fields, row, vc) {
@@ -33,7 +33,10 @@ export function detailView(graph, store, entity, fields, row, flash, vc = anyone
 
   const buttons = [
     vc.can(entity, 'edit', row) ? `<a class="btn" href="/${entity}/${row.id}/edit">Edit</a>` : '',
-    ...(ov.actions || []).filter((a) => vc.can(entity, `do:${a}`, row)).map((a) => {
+    ...(ov.actions || []).filter((a) => {
+      const act = (graph.actions || []).find((x) => x.name === a);
+      return act ? mayRunAction(vc, entity, act, row) : vc.can(entity, `do:${a}`, row);
+    }).map((a) => {
       const act = (graph.actions || []).find((x) => x.name === a);
       return `<form class="inline" method="post" action="/${entity}/${row.id}/action/${a}"><button type="submit">${esc(act?.title || label(a))}</button></form>`;
     }),

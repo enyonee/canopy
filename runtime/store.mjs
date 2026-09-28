@@ -152,6 +152,16 @@ export class Store {
     return Boolean(this.db.prepare(sql).get(v, Number(excludeId ?? 0)));
   }
 
+  // Compound uniqueness: does another row already have this exact combination?
+  // `stored` holds already-storage-form values (interp.mjs's "probe"), never raw
+  // submitted text — unlike exists() above, this never re-coerces them.
+  existsAll(entity, names, stored, excludeId = null) {
+    const conds = names.map((n) => `"${n}"=?`).join(' AND ');
+    const vals = names.map((n) => stored[n]);
+    const sql = `SELECT id FROM "${entity.toLowerCase()}" WHERE ${conds} AND id!=?`;
+    return Boolean(this.db.prepare(sql).get(...vals, Number(excludeId ?? 0)));
+  }
+
   count(entity, where = {}) { return this.list(entity, { where }).length; }
 
   transaction(fn) {
@@ -172,6 +182,12 @@ export class Store {
       entity, row,
       get(path) {
         const [head, ...rest] = path;
+        // "id" is read-only and always there (docs/FORMAT.md's «Expressions»): it is
+        // never a declared field, so it is resolved here rather than looked up below.
+        if (head === 'id') {
+          if (rest.length) throw new Error(`${entity}.id is a number, cannot read .${rest[0]} of it`);
+          return row.id;
+        }
         const f = store.field(entity, head);
         if (!f) throw new Error(`${entity} has no field "${head}"`);
         // A password hash is not a value the algebra may copy into an ordinary column.

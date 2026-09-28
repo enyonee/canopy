@@ -21,8 +21,10 @@ test('every block declares a summary, effects and requirements', () => {
 
 test('db.create, db.update, db.delete, db.toggle', () => {
   const store = fresh();
-  const { id } = CATALOG['db.create'].run({ store, entity: 'Task', values: { title: 'a' } });
+  const created = [];
+  const { id } = CATALOG['db.create'].run({ store, entity: 'Task', values: { title: 'a' }, fireCreated: (...a) => created.push(a) });
   assert.equal(store.get('Task', id).title, 'a');
+  assert.deepEqual(created, [['Task', id, { title: 'a' }]], 'item 14: db.create fires the entity\'s created event');
   CATALOG['db.update'].run({ store, entity: 'Task', id, step: { set: { title: 'b' } } });
   assert.equal(store.get('Task', id).title, 'b');
   CATALOG['db.toggle'].run({ store, entity: 'Task', id, step: { field: 'done' } });
@@ -33,14 +35,17 @@ test('db.create, db.update, db.delete, db.toggle', () => {
   assert.equal(store.get('Task', id), undefined);
 });
 
-test('db.createRow writes into another entity and resolves references', () => {
+test('db.createRow writes into another entity, resolves references, and fires its created event (item 14)', () => {
   const store = fresh();
   const task = store.insert('Task', { title: 'parent' });
+  const created = [];
   const out = CATALOG['db.createRow'].run({
     store, step: { entity: 'Log', values: { note: 'x', task: '@row.id' } },
     resolve: (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v === '@row.id' ? task : v])),
+    fireCreated: (...a) => created.push(a),
   });
   assert.equal(store.get('Log', out.id).task, String(task));
+  assert.deepEqual(created, [['Log', out.id, { note: 'x', task }]]);
 });
 
 test('random.pick honours weights and refuses an empty table', () => {

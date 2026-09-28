@@ -26,7 +26,21 @@ function checkRelated(graph, entity, key, ov, h) {
       if (!(graph.actions || []).some((x) => x.name === a && x.in === rel.entity)) err(`${p}/rowActions/${k}`, `unknown action "${a}" on ${rel.entity}`, 'built-in: view, edit, delete, go:<transition>, or an action with "in" set to this entity');
     });
     Object.keys(rel.fill || {}).forEach((c) => checkField(rel.entity, c, `${p}/fill/${c}`, { stored: true }));
+    // "@row.*" in a related fill is the parent row (item 3), not the child being created.
+    h.checkValues(rel.fill || {}, { row: entity }, `${p}/fill`);
   });
+}
+
+// A form's byRole entirely replaces the default field list for that role (item 10) —
+// both rendering and writability, so it is checked exactly like the default "fields".
+function checkByRole(entity, key, ov, h) {
+  const { err, checkField, roleNames } = h;
+  for (const [role, spec] of Object.entries(ov.byRole || {})) {
+    const rp = `/override/${key}/byRole/${role}`;
+    if (!roleNames.includes(role)) err(rp, `"${role}" is not a role`, `roles: ${roleNames.join(', ')}`);
+    if (!spec || typeof spec !== 'object' || !Array.isArray(spec.fields)) { err(rp, 'a byRole entry needs "fields": the field list for that role'); continue; }
+    spec.fields.forEach((f) => checkField(entity, f, `${rp}/fields`, { stored: true }));
+  }
 }
 
 export function check(graph, h) {
@@ -35,6 +49,7 @@ export function check(graph, h) {
     const [entity, kind] = key.split('.');
     if (!checkEntity(entity, `/override/${key}`)) continue;
     if (!VIEWS.includes(kind)) { err(`/override/${key}`, `unknown view "${kind}"`, `views are: ${VIEWS.join(', ')}`); continue; }
+    if (kind === 'form' && ov.byRole) checkByRole(entity, key, ov, h);
     (ov.columns || []).forEach((f) => f === 'id' || checkField(entity, f, `/override/${key}/columns`, { secret: true }));
     (ov.search || []).forEach((f) => checkField(entity, f, `/override/${key}/search`, { stored: true }));
     (ov.fields || []).forEach((f) => checkField(entity, f, `/override/${key}/fields`, { stored: kind === 'form', secret: kind === 'detail' }));

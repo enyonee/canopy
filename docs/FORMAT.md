@@ -17,22 +17,23 @@ never work around the checker.
 | `theme` | `{ "background": <css colour>, "accent": <css colour> }` — all components use the accent |
 | `home` | path the root redirects to, e.g. `"/Product"`, `"/page/about"`, `"/dashboard/sales"` |
 | `data` | entities and their fields (below) |
-| `seed` | starting rows, inserted once while the table is empty: `{ "Entity": [ {field: value} ] }` |
+| `seed` | starting rows, inserted once while the table is empty: `{ "Entity": [ {field: value} ] }`; a `file`/`image` field may be `{ "from": "seed/photo.jpg" }` (path relative to the app directory) — the runtime copies it into `files/` at boot |
 | `identity` | one fake current user, no login: `{ "entity": "Profile", "defaults": {…} }` — cannot be combined with `roles` |
 | `roles` | real login, sessions and a permission matrix (below) |
 | `views` | must be `"auto"`: list, form and detail of every entity are derived |
 | `override` | shapes the derived screens (below) |
 | `lists` | named saved lists at `/list/<id>` |
 | `dashboards` | cards and grouped tables at `/dashboard/<id>` |
-| `pages` | static pages at `/page/<id>` |
+| `pages` | static pages at `/page/<id>`, optionally with live `sections` (below) |
 | `actions` | named step sequences: on a row (`in`) or global |
-| `events` | steps that run on `Entity.created`, `.updated`, `.deleted` |
+| `events` | steps that run on `Entity.created`/`.updated`/`.deleted`, on login, or on view (below) |
 | `states` | status transitions per entity (below) |
 | `schedule` | named timers the server runs on an interval (below) |
 | `connectors` | http and mail endpoints the app may send to |
-| `rules` | checks and uniqueness per entity |
+| `rules` | checks and uniqueness (single field or a compound list) per entity |
 | `allowDestructive` | `true` lets a migration drop columns the graph no longer declares |
 | `plugins` | ES modules next to the app that add field kinds, blocks, transports and functions (see Plugins) |
+| `search` | site-wide search: `{ "entities": ["Article", "Thread"], "title": "Search" }` → `/search?q=` (below) |
 
 ## Fields (`data`)
 
@@ -48,7 +49,7 @@ never work around the checker.
 | `time=now` | ISO timestamp; never on forms; `now` is a default |
 | `enum[a,b,c]=a` | closed set with a default; renders as a select and as a filter |
 | `ref:Entity!` | reference; renders as a select of the target's label (its first text field) |
-| `file` | an uploaded file; forms become multipart; the value renders as a download link |
+| `file` | an uploaded file; forms become multipart; the value renders as a download link. An empty upload leaves an optional field unset (or unchanged on edit, exactly like a blank password); a **required** file/image field with an empty upload is a validation error ("… is required"), including on edit — leaving it blank never silently keeps a required file |
 | `image` | an uploaded image; rendered inline as a thumbnail linking to the file |
 | `password!` | secret; stored as a salted hash, never rendered, blank on edit keeps the old one |
 | `money := <expression>` | derived field: computed on every read, never stored, never on forms |
@@ -64,14 +65,16 @@ Used in derived fields, `rules[].check`, and inside steps as `"= <expression>"`.
 
 - Arithmetic `+ - * /`, comparisons `= != < <= > >=`, `and or not`, parentheses.
 - Fields of the current row by name: `qty * price`. One hop through a reference: `customer.discount`.
+- `id`: the current row's own id (a number, read-only) — a reference code like `concat('BK-', id)` is derivable.
 - Aggregates over rows that reference this one: `sum(OrderItem: qty * price)`, `count(Activity)`,
   `count(Activity: not done)`, `avg/min/max(Child: field)`; `min`/`max` also over dates. The child must
   have exactly one `ref` to this entity, or name it: `count(Pair.first)`. Inside the body `row.x` is
   the outer row — a correlated aggregate. An entity with no reference to this one aggregates over all
   its rows, so siblings are reachable: `count(Booking: car = row.car and start <= row.end and end >= row.start)`.
-- Functions: `if(cond, a, b)`, `days(later, earlier)` (calendar days), `addDays(date, n)`, `round(x, n)`, `abs(x)`,
-  `min(a, b)`, `max(a, b)`, `coalesce(a, b, …)`, `len(text)`, `lower(text)`, `upper(text)`,
-  `concat(a, b, …)`.
+- Functions: `if(cond, a, b)`, `days(later, earlier)` (calendar days), `hours(later, earlier)` and
+  `minutes(later, earlier)` (real elapsed time over full timestamps, not just calendar days),
+  `addDays(date, n)`, `round(x, n)`, `abs(x)`, `min(a, b)`, `max(a, b)`, `coalesce(a, b, …)`,
+  `len(text)`, `lower(text)`, `upper(text)`, `concat(a, b, …)`.
 - Clock: `today` (date), `now` (time).
 - Money is in major units inside expressions (`price > 100` means 100.00).
 - Null propagates through arithmetic; comparisons with null are false except `= null` / `!= null`.
@@ -99,13 +102,15 @@ Keys are `"Entity.list"`, `"Entity.form"`, `"Entity.detail"`.
 
 `Entity.form`:
 - `title`, `intro`, `submit` (button caption), `fields` (stored fields to show), `fill` (values set silently on create, e.g. `{ "author": "@me" }`)
-- `confirm` (flash after create), `after` (path after create, `{id}`, `{created}` or `{field}` substituted), `afterEdit`, `confirmEdit`
-- the status field of an entity with `states` is never on the form; the owner field of a role with `own` is never on the form
+- `confirm` (flash after create), `after` (path after create, `{id}`, `{created}` or `{field}` substituted), `afterEdit`, `confirmEdit` —
+  `confirm`/`confirmEdit` interpolate `{row.field}` (the just-written row) and `{id}`/`{created}`, exactly like an action's `confirm`
+- the status field of an entity with `states` is never on the form; the fillable `own` field (below) of the viewer's role is never on the form — a second-or-later own field (e.g. a message's `recipient` in `own: ["sender", "recipient"]`) is an ordinary field a submit may set
+- `byRole`: `{ "admin": { "fields": [...] } }` — that role's field list entirely replaces `fields` above, for both rendering and writability (a field left out is not writable by that role, even by editing the request directly); a role with no entry keeps the default `fields`
 
 `Entity.detail`:
 - `fields` (which to show; derived allowed), `labels`
 - `actions`: row actions shown as buttons
-- `related`: `[ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": [...], "form": ["qty"] | false, "fill": {…}, "submit": "Add", "confirm": "…", "rowActions": ["edit", "delete"] } ]` — a child table with an inline add form
+- `related`: `[ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": [...], "form": ["qty"] | false, "fill": {…}, "submit": "Add", "confirm": "…", "rowActions": ["edit", "delete"] } ]` — a child table with an inline add form; `fill` resolves `@row.*` against the **parent** row (the one the detail page is showing), unlike `Entity.form`'s top-level `fill`, which runs before any row of the new entity exists and has no `@row`
 
 ## Lists, dashboards, pages
 
@@ -124,7 +129,15 @@ Saved lists and dashboards export too: `/list/<id>.csv`, `/dashboard/<id>.csv` (
   `<table class="chart-data">` with the same numbers, so a check or a screen reader reads values without decoding
   the SVG — that table is also the chart's row in a CSV/JSON export (below).
 
-`pages`: `{ "id": "about", "title": "About", "heading": "…", "body": ["paragraph", …], "links": [ { "label": "Shop", "href": "/Product" } ], "actions": ["<global action>"], "roles": [...], "widget": {…}, "refresh": 30 }`.
+`pages`: `{ "id": "about", "title": "About", "heading": "…", "body": ["paragraph", …], "links": [ { "label": "Shop", "href": "/Product" } ], "actions": ["<global action>"], "roles": [...], "widget": {…}, "refresh": 30, "sections": [...] }`.
+
+`sections` embeds live data inside an otherwise-static page — one of, per entry:
+- `{ "list": "<saved list id>", "limit"?: 5 }` — a read-only preview table of that saved list, read with the
+  viewer's own permissions (own-scoping and `roles` both apply, exactly like `/list/<id>`); `limit` caps the
+  rows shown (unlimited without it).
+- `{ "form": "Entity" }` — that entity's create form, posting to the normal `POST /Entity` route (the same
+  validation, `fill` and permission check a real `/Entity/new` gets); the viewer needs `create` on it.
+- `{ "text": "…" }` — a plain paragraph.
 
 `refresh` (pages and dashboards, seconds, a positive integer): renders `<meta http-equiv="refresh" content="N">` —
 the page reloads itself every `N` seconds. JSON mode (below) is the real-time path for a widget that wants to
@@ -134,20 +147,25 @@ poll or push without a full reload; `refresh` is for the plain scaffold page.
 
 `actions`: `{ "name": "addToCart", "in": "Product", "title": "Add to cart", "by": ["customer"], "after": "/list/cart", "confirm": "{row.name} added", "do": [ <step>… ] }`.
 An action with `in` runs on a row (`POST /Entity/:id/action/<name>`, offered through `rowActions` or `detail.actions`); without `in` it is global (`POST /action/<name>`, offered through `pages[].actions`).
-`by` names the roles that may run it; without `by`, the role needs `do:<name>` (or `do:*`) on the entity (global actions: on `"*"`).
+`by` names the roles that may run it (still scoped by any `own` grant on the entity, unless the action's
+`do:<name>` is itself in that grant's `all`); without `by`, the role needs `do:<name>` (or `do:*`) on the
+entity (global actions: on `"*"`). A row's action button uses the exact same predicate as the `POST` handler
+that runs it — it is never offered where the server would then refuse, and never hidden where the server
+would allow it.
 `confirm` interpolates `{row.field}`, `{found.field}`, `{created}`, `{made}`, `{delivery}`, `{me}`; money formats as `12.34`.
 
 Every step is `{ "block": "<name>", …parameters }`. Values may be literals, `"@row.field"`, `"@each.field"`, `"@found.id"`, `"@picked.field"`, `"@values.name"`, `"@me"`, `"@created"`, `"@now"`, `"@today"`, or `"= <expression>"`.
 
 | block | parameters | does |
 |---|---|---|
-| `db.create` | — | creates a row of the action entity from the submitted values |
-| `db.createRow` | `entity`, `values` | creates a row of `entity` from literal/resolved values; `@created` is its id |
+| `db.create` | — | creates a row of the action entity from the submitted values; fires its `created` event |
+| `db.createRow` | `entity`, `values` | creates a row of `entity` from literal/resolved values; `@created` is its id; fires `entity`'s `created` event, like any other create |
 | `db.update` | `set` | updates the current row |
+| `db.set` | `entity`, `id`, `set` | updates an arbitrary row named by `entity` + `id` (e.g. `@found.id`, `@each.id`, `@row.ref`) — like `db.update`, but not limited to the current row |
 | `db.delete` | — | deletes the current row |
 | `db.toggle` | `field` | flips a boolean of the current row |
 | `db.adjust` | `field`, `by`, optional `entity` + `id`, `min`, `message` | adds `by` to an int/money field (stock, balances); refuses below `min` |
-| `db.ensure` | `entity`, `where`, optional `values` | finds the first row matching `where` or creates it; `@found` is the row, `@made` says which |
+| `db.ensure` | `entity`, `where`, optional `values` | finds the first row matching `where` or creates it; `@found` is the row, `@made` says which; a made row fires `entity`'s `created` event |
 | `db.each` | `from`, optional `where`, `do` | runs the nested steps once per row; the row is `@each` |
 | `random.pick` | `from`, optional `weight` | picks a random row; `@picked` |
 | `check.matchRef` | `ref`, `field`, `against`, `into` | compares a field with one on a referenced row, writes 1/0 |
@@ -159,7 +177,21 @@ Steps run inside one transaction; a block that refuses (not enough stock, no suc
 everything back and answers 400 with its message. Outgoing effects wait in the outbox and are
 delivered after the commit; `/outbox` shows every delivery with its status and a retry button.
 
-`events`: `{ "on": "Lead.created", "do": [ <step>… ] }` — `created`, `updated` (after a form edit), `deleted` (the row is `@row` as it was).
+A row that `db.create`/`db.createRow`/`db.ensure` makes fires its entity's own `created` event,
+exactly like an HTTP create — so `events` sees every row however it was made, including one a
+`created` event's own steps go on to make, of the same or another entity. A chain of these
+(`A.created` makes a `B`, `B.created` makes an `A`, …) is bounded: past a fixed nesting depth the
+whole action refuses with a named error instead of recursing forever. A `created` event that
+unconditionally makes another row of its own entity always hits that limit; one that `db.ensure`s a
+row that then already exists (a fixed "default row" pattern) settles after one extra round and never
+comes close to it.
+
+`events`: `{ "on": "Lead.created", "do": [ <step>… ] }` — `created`, `updated` (after a form edit), `deleted` (the
+row is `@row` as it was); `{ "on": "User.login", "do": [...] }` (the roles entity only; row = the user who just
+signed in); `{ "on": "Article.viewed", "do": [...] }` (any entity; row = the row a `GET` detail just read — a
+**write on read**, run inside a transaction like any other event, so its own steps commit or roll back
+together). Both fire best-effort: a failing `login`/`viewed` event is traced, never surfaced — a broken hook
+must not lock anyone out of signing in or of viewing a page.
 
 ## States
 
@@ -194,14 +226,31 @@ entirely — `verify/run.mjs` sets it, so an app's checks control every schedule
 "roles": { "entity": "User", "login": "email", "password": "password", "role": "role",
   "register": "customer", "anonymous": "guest",
   "can": { "admin": "*",
-           "customer": { "Product": ["view", "do:addToCart"], "Order": { "own": "customer", "can": ["view", "create", "go:pay"] }, "*": ["do:ping"] },
+           "customer": { "Product": ["view", "do:addToCart"],
+                          "Order": { "own": "customer", "can": ["view", "create", "go:pay"], "all": ["view"] },
+                          "*": ["do:ping"] },
            "guest": { "Product": ["view"] } } }
 ```
 - `entity` has a `text` login, a `password` field and an `enum` role field; seed users with plain passwords.
 - `register` (optional): the role a visitor gets from `/register`; without it there is no self-registration.
 - `anonymous` (optional): the role of a visitor without a session; without it every page asks for login.
 - Operations: `view`, `create`, `edit`, `delete`, `go:<transition>`/`go:*`, `do:<action>`/`do:*`, `*`; entity `"*"` is the fallback.
-- `own`: a `ref:<user entity>` field; the role sees, edits and transitions only rows where it equals the session user, and the field is filled from the session on create.
+- `own`: scopes the operations in `can` to rows the role owns — **not** all-or-nothing (below). Fired from the
+  session on create, into the field named by `own` (see "the fillable field", below), and checked on every
+  read/write of an owned operation.
+  - a single field: `"own": "author"` (a `ref:<user entity>` field of this entity) — owner if it equals the session user.
+  - several fields: `"own": ["sender", "recipient"]` — owner if **any** of them matches (each still a `ref:<user
+    entity>` field of this entity).
+  - a one-hop path: `"own": "profile.user"` — this entity has a `ref:<X>` field (`profile`); `X` has the
+    `ref:<user entity>` field (`user`) that names the owner. Only one hop; the checker rejects `"a.b.c"`.
+  - **the fillable field**: create only ever silently fills the *first* name in `own`, and only when it is a
+    direct field (not a one-hop) — `["sender", "recipient"]` fills `sender`; a bare one-hop `own` fills nothing
+    (the graph must collect it some other way, e.g. through `Entity.form`'s `fill`).
+  - `all`: operations that apply to **every** row regardless of `own` — `{"own": "customer", "can": ["create",
+    "go:pay"], "all": ["view"]}` means a customer only creates and pays for their own orders, but may `view`
+    any order. Without `all`, every operation in `can` is owned-only (the old all-or-nothing behaviour is
+    `can` with no `all`). A saved list, dashboard card/table/chart or related child table still narrows to
+    owned rows only for an operation that is actually owned — a `view` granted through `all` is never narrowed.
 - Lists, dashboards and pages take `"roles": [...]`; the menu shows only what the viewer may open.
 - Routes: `/login`, `/register`, `POST /logout`. A signed-in user is shown in the header. A denied GET redirects to `/login?next=…` when anonymous, else 403.
 
@@ -211,14 +260,29 @@ entirely — `verify/run.mjs` sets it, so an app's checks control every schedule
 "connectors": { "crmHook": { "kind": "http", "url": "http://127.0.0.1:8999/hooks/crm", "method": "POST", "headers": {…} },
                 "mail": { "kind": "mail", "from": "shop@example.test" } }
 "rules": { "OrderItem": [ { "check": "qty > 0", "message": "Quantity must be at least 1" } ],
-           "User": [ { "unique": "email", "message": "…" } ] }
+           "User": [ { "unique": "email", "message": "…" } ],
+           "Follow": [ { "unique": ["follower", "category"], "message": "Already following this category" } ] }
 ```
 Rules run on create and edit; a failing rule re-renders the form with the message (400).
+`unique` may name a single field or, for a compound ("unique together") constraint, an array of fields — the
+combination must be unique, not each field alone; on an edit that only submits one of the fields, the other's
+existing stored value is used for the check.
 Mail is recorded in the outbox (the stand has no SMTP); http is really sent.
+
+## Search
+
+```json
+"search": { "entities": ["Article", "Thread"], "title": "Search" }
+```
+`/search?q=` renders one result section per named entity, using that entity's own `Entity.list`'s `search`
+fields and the viewer's permissions (own-scoping applies exactly as it does on that entity's own list) — no
+query, no sections. A search box appears in the page header whenever `/search` is declared, for every viewer
+(each section still narrows or disappears by permission). `title` (optional) captions both the header box and
+the `/search` page itself.
 
 ## Routes the runtime serves
 
-`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `POST /action/<name>` · `POST /schedule/<name>/run` · `/outbox`, `POST /outbox/:id/retry` · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
+`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `/outbox`, `POST /outbox/:id/retry` · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
 
 Every successful POST answers 303 to a page with `?ok=<flash>`; validation failures answer 400 with the form and the messages; refusals 403; a transition from the wrong status 409.
 
@@ -230,7 +294,8 @@ effects); the Accept header only picks the last step, how the same result is wri
 
 - GET `/Entity`, `/list/<id>` → `{ "rows": [...], "total", "page", "pages" }`; GET `/Entity/:id` → the row itself,
   flat (`{ "id", …fields }`). GET `/dashboard/<id>` → `{ "cards": [ { "title", "value" } ], "tables": [ { "title", "rows" } ], "charts": [ { "title", "type", "rows" } ] }` —
-  the same aggregates the HTML/CSV views compute.
+  the same aggregates the HTML/CSV views compute. GET `/search?q=` → `{ "results": [ { "entity", "rows" } ] }`,
+  one entry per `/search` entity the viewer may see (empty `rows` without a `q`).
 - A row's JSON always drops secret fields (`password`), always includes derived fields, and reads money as a
   major-unit number (`12.34`, not `1234`); own-scoping and every permission check are identical to the HTML path.
 - POST (create, edit, delete, an action, a transition, a related add, a global action) →

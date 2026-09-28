@@ -67,6 +67,12 @@ function createFieldScope(h, known) {
   const fieldScope = (entity) => ({
     field(path) {
       const [head, ...rest] = path;
+      // "id" is read-only and always there, on every entity; it is never in
+      // /data, so it needs a special case ahead of the real-field lookup.
+      if (head === 'id') {
+        if (rest.length) throw new Error(`${entity}.id is a number, cannot read .${rest[0]} of it`);
+        return 'number';
+      }
       const f = fields[entity]?.[head];
       if (!f) {
         const n = near(head, known(entity));

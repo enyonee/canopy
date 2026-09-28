@@ -72,11 +72,11 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
   filesDir = filesDir || path.join(dir, 'files');
   const store = new Store(graph, dbFile, registry);
   store.migrations.forEach((m) => console.log(`migration: ${m}`));
-  const perms = permissions(graph);
+  const perms = permissions(graph, store);
   const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key'), store) : null;
 
   const meId = bootstrapIdentity(graph, store);
-  bootstrapSeed(graph, store);
+  bootstrapSeed(graph, store, path.dirname(graphFile), filesDir);
 
   const trace = (event) => {
     if (!traceFile) return;

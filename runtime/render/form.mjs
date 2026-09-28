@@ -11,8 +11,13 @@ export function formFields(store, entity, fields, row, only, { skip = [] } = {})
       `<label for="f_${f.name}">${esc(label(f.name))}${f.required ? ' *' : ''}</label>${f.type.input(f, row?.[f.name], { esc, store, entity, row })}`).join('');
 }
 
+// A role's own field list (item 10) entirely replaces the default one, for both
+// rendering (formView, below) and writability (routes/entity.mjs's onlyWritable call).
+export const formFieldsFor = (ov, role) => ov.byRole?.[role]?.fields ?? ov.fields;
+
 export function formView(graph, store, entity, fields, row, mode, errors = [], vc = anyone, flash = '') {
   const ov = graph.override?.[`${entity}.form`] || {};
+  const only = formFieldsFor(ov, vc.role);
   const action = mode === 'new' ? `/${entity}` : `/${entity}/${row.id}`;
   const title = ov.title || (mode === 'new' ? `Add ${label(entity)}` : `Edit ${label(entity)}`);
   const problems = errors.length
@@ -24,7 +29,7 @@ export function formView(graph, store, entity, fields, row, mode, errors = [], v
   return page(graph, {
     title, vc, flash,
     body: `<h2>${esc(title)}</h2>${problems}${ov.intro ? `<p>${esc(ov.intro)}</p>` : ''}
-      <form class="card" method="post" action="${action}"${enctype(fields)}>${formFields(store, entity, fields, row, ov.fields, { skip })}
+      <form class="card" method="post" action="${action}"${enctype(fields)}>${formFields(store, entity, fields, row, only, { skip })}
       <p><button type="submit">${esc(ov.submit || (mode === 'new' ? 'Submit' : 'Save'))}</button>
       <a class="btn" href="/${entity}">Cancel</a></p></form>`,
   });

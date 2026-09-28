@@ -27,7 +27,7 @@ export function createStepsChecker(h) {
       const target = step.entity || entity;
       if (step.field && target) checkField(target, step.field, `${p}/field`, { stored: true });
       if (step.via && step.entity) checkField(step.entity, step.via, `${p}/via`);
-      if (step.set && entity) Object.keys(step.set).forEach((f) => checkField(entity, f, `${p}/set/${f}`, { stored: true }));
+      if (step.set && target) Object.keys(step.set).forEach((f) => checkField(target, f, `${p}/set/${f}`, { stored: true }));
       if (step.values && step.entity) Object.keys(step.values).forEach((f) => checkField(step.entity, f, `${p}/values/${f}`, { stored: true }));
       if (step.where && step.entity) checkWhere(step.entity, step.where, `${p}/where`);
       if (step.where && step.block === 'db.each' && step.from) checkWhere(step.from, step.where, `${p}/where`);

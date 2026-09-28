@@ -15,17 +15,18 @@
 | 2 | `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
 | 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
 | 4 | `store.mjs`, `outbox.mjs` | хранилище (SQLite) и исходящий ящик |
-| 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
-| 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed; каркас рендера (плюс `rowJSON`/`widgetBlock`) |
-| 7 | `render/{list,form,detail,dashboard,pages}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики) |
+| 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
+| 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 4); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
+| 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 4) |
 | 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule}.mjs` | маршруты, поверх интерпретатора и рендера |
 | 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний |
 | 10 | `cli.mjs`, `run.mjs` | точка входа |
 
 `node:` втроенные модули — по отдельной таблице в `tests/arch.test.mjs`: `node:sqlite`
 только в `store.mjs`; `node:http` только в `server.mjs`; `node:fs` также в `routes/widgets.mjs`
-(читает файл виджета, который назвал плагин); `fs`/`path` — там же, где сегодня
-(`auth.mjs`, `patch.mjs`, `server.mjs`, `cli.mjs`, `routes/context.mjs`, `routes/system.mjs`).
+(читает файл виджета, который назвал плагин) и в `boot.mjs` (копирует сидируемый файл в
+`files/`, раунд 4); `fs`/`path` — там же, где сегодня
+(`auth.mjs`, `patch.mjs`, `server.mjs`, `cli.mjs`, `routes/context.mjs`, `routes/system.mjs`, `boot.mjs`).
 
 ## Кто чем владеет
 

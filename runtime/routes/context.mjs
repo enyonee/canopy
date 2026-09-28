@@ -24,7 +24,10 @@ function parseBody(req, filesDir) {
       const out = {};
       for (const [k, v] of fd.entries()) {
         if (typeof v === 'string') { out[k] = v; continue; }
-        if (!v.size) continue;
+        // An empty upload still sends a part: record it as "" rather than dropping the
+        // key outright (item 13) — interp.mjs's dropEmptyUploads is what then decides,
+        // per field, whether that means "unchanged"/"none" or a required-field error.
+        if (!v.size) { out[k] = ''; continue; }
         if (v.size > MAX_UPLOAD) throw new TooBig(`${v.name || 'file'} is larger than ${Math.round(MAX_UPLOAD / 1024 / 1024)} MB`);
         fs.mkdirSync(filesDir, { recursive: true });
         const name = `${Date.now()}-${String(v.name || 'file').replace(/[^\w.-]/g, '_')}`;
@@ -82,13 +85,14 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
 
   const user = sess ? store.get(graph.roles.entity, sess.read(req.headers.cookie)) : null;
   const role = perms.enabled ? perms.roleOf(user) : null;
-  const ownWhere = (entity) => { const own = perms.ownField(user, entity); return own ? { [own]: user ? user.id : -1 } : {}; };
+  const ownWhere = (entity, op = 'view') => perms.ownWhere(user, entity, op);
   const vc = {
     user, role,
     can: (e, op, row) => perms.can(user, e, op, row),
     canSee: (item) => perms.canSee(user, item),
     ownField: (e) => perms.ownField(user, e),
-    ownWhere: (e) => ownWhere(e),
+    ownWhere: (e, op) => ownWhere(e, op),
+    ownOk: (e, row, op) => perms.ownOk(user, e, row, op),
     outbox: !perms.enabled || perms.isAdmin(user),
   };
   const deny = (message) => {

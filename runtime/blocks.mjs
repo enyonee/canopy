@@ -16,12 +16,17 @@ export const CATALOG = {
   'db.create': {
     summary: 'create a row of the action entity from submitted values',
     effects: ['db.write'], requires: [],
-    run: ({ store, entity, values }) => ({ id: store.insert(entity, values) }),
+    run: ({ store, entity, values, fireCreated }) => { const id = store.insert(entity, values); fireCreated(entity, id, values); return { id }; },
   },
   'db.update': {
     summary: 'update the current row with the given "set" values',
     effects: ['db.write'], requires: ['set'],
     run: ({ store, entity, id, step, resolve = (x) => x }) => { store.update(entity, id, resolve(step.set)); return {}; },
+  },
+  'db.set': {
+    summary: 'update "set" values of an arbitrary row named by "entity" + "id" (e.g. "@found.id", "@each.id", "@row.ref") — like db.update, but not limited to the current row',
+    effects: ['db.write'], requires: ['entity', 'id', 'set'],
+    run: ({ store, step, resolve }) => { store.update(step.entity, resolve({ v: step.id }).v, resolve(step.set)); return {}; },
   },
   'db.delete': {
     summary: 'delete the current row',
@@ -53,9 +58,14 @@ export const CATALOG = {
     },
   },
   'db.createRow': {
-    summary: 'create a row of "entity" from literal "values" ("@field" reads the current row)',
+    summary: 'create a row of "entity" from literal "values" ("@field" reads the current row); fires its "created" event, like any other create',
     effects: ['db.write'], requires: ['entity', 'values'],
-    run: ({ store, step, resolve }) => ({ id: store.insert(step.entity, resolve(step.values)) }),
+    run: ({ store, step, resolve, fireCreated }) => {
+      const values = resolve(step.values);
+      const id = store.insert(step.entity, values);
+      fireCreated(step.entity, id, values);
+      return { id };
+    },
   },
   'check.matchRef': {
     summary: 'compare "field" of the current row with "against" on the row it references through "ref"; write 1/0 into "into"',
@@ -96,14 +106,16 @@ export const CATALOG = {
     },
   },
   'db.ensure': {
-    summary: 'find the first row of "entity" matching "where", or create it from where + "values"; exposes it as @found, and @made says whether it was created',
+    summary: 'find the first row of "entity" matching "where", or create it from where + "values"; exposes it as @found, and @made says whether it was created — a made row fires its "created" event',
     effects: ['db.write'], requires: ['entity', 'where'],
     exposes: (step) => ({ found: step.entity }),
-    run: ({ store, step, resolve }) => {
+    run: ({ store, step, resolve, fireCreated }) => {
       const where = resolve(step.where);
       const [hit] = store.list(step.entity, { where, sort: { field: 'id', dir: 'asc' } });
       if (hit) return { found: hit, made: false };
-      const id = store.insert(step.entity, { ...where, ...resolve(step.values || {}) });
+      const values = { ...where, ...resolve(step.values || {}) };
+      const id = store.insert(step.entity, values);
+      fireCreated(step.entity, id, values);
       return { found: store.get(step.entity, id), made: true };
     },
   },

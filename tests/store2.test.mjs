@@ -60,6 +60,15 @@ test('reverse references are found, named, or refused with a hint', () => {
   assert.equal(store.fieldAt('A', ['n', 'deeper']), null, 'a text field has no fields');
 });
 
+test('item 12: expressions may read "id", read-only, on any entity', () => {
+  const store = new Store(G({ A: { n: 'text', code: "text := concat('A-', id)" } }), ':memory:');
+  const id = store.insert('A', { n: 'x' });
+  const row = store.raw('A', id);
+  assert.equal(store.ctx('A', row).get(['id']), id);
+  assert.throws(() => store.ctx('A', row).get(['id', 'nope']), /A\.id is a number, cannot read \.nope of it/);
+  assert.equal(store.get('A', id).code, `A-${id}`, 'a derived field may use it too');
+});
+
 test('a secret field is unreadable in expressions, except a rule checking the row\'s own not-yet-hashed value', () => {
   const store = new Store(G({ User: { email: 'text!', password: 'password!' } }), ':memory:');
   const id = store.insert('User', { email: 'ann@x.test', password: 'secret1' });

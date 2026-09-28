@@ -24,6 +24,7 @@ import * as states from './check/states.mjs';
 import * as connectors from './check/connectors.mjs';
 import * as rules from './check/rules.mjs';
 import * as schedule from './check/schedule.mjs';
+import * as search from './check/search.mjs';
 
 // The top-level node kinds this format understands. Order matters here only
 // for the "did you mean" and "nodes are: …" hints in an unknown-key message —
@@ -31,7 +32,7 @@ import * as schedule from './check/schedule.mjs';
 // exported `NODES` must union to exactly this set (tests/arch.test.mjs checks
 // it against docs/FORMAT.md's «Top-level nodes» table too).
 export const TOP = ['app', 'task', 'note', 'theme', 'home', 'data', 'seed', 'identity', 'roles', 'views', 'override', 'lists',
-  'dashboards', 'pages', 'actions', 'events', 'states', 'schedule', 'connectors', 'rules', 'allowDestructive', 'plugins'];
+  'dashboards', 'pages', 'actions', 'events', 'states', 'schedule', 'connectors', 'rules', 'allowDestructive', 'plugins', 'search'];
 
 export function validate(graph, registry = DEFAULT) {
   const errors = [];
@@ -66,6 +67,7 @@ export function validate(graph, registry = DEFAULT) {
   schedule.check(graph, h);
   connectors.check(graph, h);
   rules.check(graph, h);
+  search.check(graph, h);
 
   return errors;
 }

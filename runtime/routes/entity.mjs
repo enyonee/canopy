@@ -7,7 +7,7 @@
 // from here once the row itself is resolved.
 import { errorPage, label, rowJSON } from '../render.mjs';
 import { listView } from '../render/list.mjs';
-import { formView } from '../render/form.mjs';
+import { formView, formFieldsFor } from '../render/form.mjs';
 import { detailView } from '../render/detail.mjs';
 import { handleRow } from './rows.mjs';
 
@@ -40,10 +40,11 @@ function listRoute(ctx, entity, fields, ov) {
 }
 
 async function createRoute(ctx, entity, fields, formOv) {
-  const { store, vc, user, perms, interp, trace, ok, graph } = ctx;
+  const { store, vc, role, user, perms, interp, trace, ok, graph } = ctx;
   if (!vc.can(entity, 'create')) { ctx.deny(); return true; }
-  const submitted = interp.onlyWritable(entity, user, await ctx.body(), formOv.fields);
+  const submitted = interp.onlyWritable(entity, user, await ctx.body(), formFieldsFor(formOv, role));
   interp.checkboxes(entity, submitted);
+  interp.dropEmptyUploads(entity, submitted);
   const values = { ...submitted, ...ctx.resolveTop(formOv.fill || {}) };
   const own = perms.ownField(user, entity);
   if (own) values[own] = user.id;
@@ -66,17 +67,21 @@ async function createRoute(ctx, entity, fields, formOv) {
     ctx.answer(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
-  const flash = formOv.confirm || `${label(entity)} saved successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id, created: id, flash, row: rowJSON(store, entity, fields, store.get(entity, id)) }); return true; }
+  // item 15: "{row.field}" in confirm/confirmEdit interpolates the just-written
+  // row, exactly like an action/transition's confirm already does.
+  const createdRow = store.get(entity, id);
+  const flash = formOv.confirm ? interp.interpolate(formOv.confirm, { rowEntity: entity, row: createdRow, id, created: id }) : `${label(entity)} saved successfully`;
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id, created: id, flash, row: rowJSON(store, entity, fields, createdRow) }); return true; }
   ok(interp.afterPath(formOv.after || `/${entity}`, entity, id, { created: id }), flash);
   return true;
 }
 
 async function updateRoute(ctx, entity, fields, formOv, id, row) {
-  const { store, vc, user, interp, trace, ok, graph } = ctx;
+  const { store, vc, role, user, interp, trace, ok, graph } = ctx;
   if (!vc.can(entity, 'edit', row)) { ctx.deny(); return true; }
-  const submitted = interp.onlyWritable(entity, user, await ctx.body(), formOv.fields);
+  const submitted = interp.onlyWritable(entity, user, await ctx.body(), formFieldsFor(formOv, role));
   interp.checkboxes(entity, submitted);
+  interp.dropEmptyUploads(entity, submitted);
   const problems = interp.validateValues(entity, submitted, { partial: true, existing: store.raw(entity, id) });
   if (problems.length) {
     ctx.answer(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', problems, vc), { ok: false, status: 400, errors: problems });
@@ -93,8 +98,9 @@ async function updateRoute(ctx, entity, fields, formOv, id, row) {
     ctx.answer(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', [e.message], vc), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
-  const flash = formOv.confirmEdit || `${label(entity)} updated successfully`;
-  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, flash, row: rowJSON(store, entity, fields, updated) }); return true; }
+  const updated = store.get(entity, id);
+  const flash = formOv.confirmEdit ? interp.interpolate(formOv.confirmEdit, { rowEntity: entity, row: updated, id }) : `${label(entity)} updated successfully`;
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: updated.id, flash, row: rowJSON(store, entity, fields, updated) }); return true; }
   ok(interp.afterPath(formOv.afterEdit || `/${entity}`, entity, id), flash);
   return true;
 }
@@ -119,7 +125,19 @@ async function deleteRoute(ctx, entity, fields, id, row) {
   return true;
 }
 
-function getRoutes(ctx, entity, fields, ov) {
+// A viewed event is a write, but a broken one must not block the page it fires
+// from (docs/FORMAT.md's «Events»): traced, never surfaced, like a broken
+// schedule tick. Re-fetches the row after: the event's own steps may have
+// changed it (a view counter), and the page must show that, not the stale read.
+async function fireViewed(ctx, entity, row) {
+  const { graph, store, interp, trace, user } = ctx;
+  if (!(graph.events || []).some((ev) => ev.on === `${entity}.viewed`)) return row;
+  try { await interp.attempt(() => interp.fireEvents('viewed', entity, row.id, {}, user, row)); }
+  catch (e) { trace({ kind: 'error', message: `viewed event: ${e.message}` }); }
+  return store.get(entity, row.id);
+}
+
+async function getRoutes(ctx, entity, fields, ov) {
   const { parts, vc, store, flash, send, graph } = ctx;
   if (parts.length === 1) return listRoute(ctx, entity, fields, ov);
   if (parts[1] === 'new') {
@@ -131,7 +149,8 @@ function getRoutes(ctx, entity, fields, ov) {
     if (!row) { ctx.answer(404, errorPage(graph, `no ${entity} #${parts[1]}`), { ok: false, status: 404, errors: [`no ${entity} #${parts[1]}`] }); return true; }
     if (parts.length === 2) {
       if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
-      ctx.answer(200, detailView(graph, store, entity, fields, row, flash, vc), rowJSON(store, entity, fields, row));
+      const current = await fireViewed(ctx, entity, row);
+      ctx.answer(200, detailView(graph, store, entity, fields, current, flash, vc), rowJSON(store, entity, fields, current));
       return true;
     }
     if (vc.can(entity, 'edit', row)) send(200, formView(graph, store, entity, fields, row, 'edit', [], vc, flash)); else ctx.deny();
@@ -149,7 +168,7 @@ export async function handle(ctx) {
   const formOv = graph.override?.[`${entity}.form`] || {};
 
   if (req.method === 'GET') {
-    const handled = getRoutes(ctx, entity, fields, ov);
+    const handled = await getRoutes(ctx, entity, fields, ov);
     if (handled !== undefined) return handled;
   }
   if (req.method !== 'POST') { ctx.answer(404, errorPage(graph, 'no route'), { ok: false, status: 404, errors: ['no route'] }); return true; }

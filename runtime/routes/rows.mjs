@@ -1,16 +1,14 @@
 // Row-scoped POST routes on an already-resolved entity+row: a declared
 // action, a state transition ("go"), or an inline add to a related child
 // table. Called from routes/entity.mjs once it has the row in hand.
-import { errorPage, forbiddenPage, label, transitionsFor, rowJSON } from '../render.mjs';
+import { errorPage, forbiddenPage, label, transitionsFor, rowJSON, mayRunAction } from '../render.mjs';
 import { detailView } from '../render/detail.mjs';
 
 async function runAction(ctx, entity, fields, id, row) {
-  const { graph, store, vc, role, user, perms, interp, trace, ok, parts } = ctx;
+  const { graph, store, vc, user, interp, trace, ok, parts } = ctx;
   const action = graph.actions?.find((a) => a.name === parts[3] && a.in === entity);
   if (!action) { ctx.answer(404, errorPage(graph, `no action ${parts[3]} on ${entity}`), { ok: false, status: 404, errors: [`no action ${parts[3]} on ${entity}`] }); return true; }
-  // "by" names the roles; it never lifts the row scope an own-grant put there.
-  const mayRun = action.by ? action.by.includes(role) && perms.ownOk(user, entity, row) : vc.can(entity, `do:${action.name}`, row);
-  if (!mayRun) { ctx.deny(); return true; }
+  if (!mayRunAction(vc, entity, action, row)) { ctx.deny(); return true; }
   const submitted = await ctx.body();
   let out;
   try { out = await interp.attempt(() => interp.runSteps(action.do, { rowEntity: entity, id, row, values: submitted, user })); }
@@ -68,7 +66,12 @@ async function addRelated(ctx, entity, fields, id, row) {
   if (!vc.can(entity, 'view', row) || !vc.can(child, 'create')) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(child, user, await ctx.body(), rel.form || null);
   interp.checkboxes(child, submitted);
-  const values = { ...submitted, [rel.via]: id, ...ctx.resolveTop(rel.fill || {}) };
+  interp.dropEmptyUploads(child, submitted);
+  // "@row.*" in a related fill is the parent row (item 3): the child's own values
+  // never had one, unlike a plain Entity.form's top-level "fill", which runs before
+  // any row of this new entity exists.
+  const fillRow = interp.resolve({ user, values: submitted, rowEntity: entity, id, row });
+  const values = { ...submitted, [rel.via]: id, ...fillRow(rel.fill || {}) };
   const own = perms.ownField(user, child);
   if (own) values[own] = user.id;
   const problems = interp.validateValues(child, values);
