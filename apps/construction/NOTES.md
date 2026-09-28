@@ -5,33 +5,30 @@
 - **Case 1 (project timeline / project calendar).** There is no calendar or Gantt view; "the
   project timeline" is the project's start/end date plus its `Task` list (each with a `dueDate`),
   read as a plain sortable table rather than a calendar grid.
-- **Case 2 (communication tool).** `Message` has no true per-conversation privacy: `own` scopes a
-  role to a single reference field, and a two-party inbox needs "sender OR recipient" visibility,
-  which isn't expressible. Every signed-in member can read every message (a shared team log); the
-  check only asserts what's true either way — the message really does land in the recipient's
-  personal "My Inbox" saved list (`where: {recipient: "@me"}`), correctly timestamped.
 - **Case 5 (resource availability charts).** No chart node exists in the runtime; "the chart" is
   the `Resource` list's `capacity`/`allocated`/`available` columns and an admin dashboard table
   grouped by resource kind — both plain tables, not a rendered graphic.
 
 ## Misses
 
-- `composition` — a related child add-form's `fill` cannot read the parent row's own fields.
-  `runtime/server.mjs`'s handler for `POST /Entity/:id/add/Child` resolves `fill` through the same
-  top-level `resolveTop` used for a plain `Entity.form.fill` (`{user, values: {}}`, no `row` in
-  scope), so `"fill": {"project": "@row.project"}` on the Task → TimeEntry related form silently
-  resolves to nothing — confirmed empirically (the field stayed null after a real POST). Worked
-  around by making the child pick `project` itself on the form and adding a rule,
-  `task.project = project`, so the two must agree; the transition/action `do:` steps *do* have a
-  real `row` in scope (`@row.field` there works, e.g. in `confirm` strings and `db.createRow`
-  values across the reference apps) — only the related-add-form's `fill` lacks it.
 - `node kind` — no chart node (see Weakened case 5); no calendar/Gantt node (see Weakened case 1).
-- `composition` — `own` supports exactly one reference field, so a message inbox cannot be scoped
-  to "sender OR recipient" (see Weakened case 2).
 - `field kind` — hours are logged as whole `int` hours (matching the reference apps' `hours`/
   `minutes` fields elsewhere, e.g. `hospital.DailyReport.hours`), not fractional decimal hours.
 
 ## New for this app
+
+- Round 5 (item 3): a related child add-form's `fill` now reads the parent row's own fields
+  (`"@row.project"`) — the Task → TimeEntry related form no longer needs the worked-around
+  "let the child pick `project` itself, and add a rule to catch a mismatch" shape this app used
+  before: `fill: {"project": "@row.project"}` sets it silently and correctly, `project` is off
+  the visible form, and the `"task.project = project"` rule stays as a harmless, now-unreachable
+  belt-and-braces check (removing a check was not the ask).
+- Round 5 (item 1): `own` may now name several fields, closing the "sender OR recipient" Miss.
+  `member.Message` is now `{"own": ["sender", "recipient"], "can": ["view", "create"]}` — a
+  real two-party inbox instead of the "shared team log" every member could read before; the
+  recipient's fixed-`where` "My Inbox" saved list is unaffected (its own filter and the role's
+  own-scoping now agree instead of one substituting for the other). `Message.form`'s
+  `fill: {"sender": "@me"}` was dropped too: `own` auto-fills the same field.
 
 - A rule that hops through a reference to compare against a *sibling* field on the same row:
   `TimeEntry` rule `"task.project = project"` — not a bound/derived check like `fooddist`'s

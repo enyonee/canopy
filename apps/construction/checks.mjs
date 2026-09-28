@@ -28,6 +28,10 @@ export const checks = [
       const before = Date.now();
       const sent = await follow('/Message', { recipient: 3, project: 1, body: 'Please bring the updated drawings tomorrow.' });
       must(/Message sent/.test(flashOf(sent.html)), `flash: ${flashOf(sent.html)}`);
+      // Round 4 (item 1): own may now name several fields, so Maria (the sender) sees her own
+      // sent message too — a real two-party inbox, not the old shared team log.
+      const mariaOwn = await get('/Message');
+      must(rowWith(mariaOwn.html, 'Please bring the updated drawings tomorrow.'), 'Maria (the sender) cannot see the message she just sent');
       asGuest();
       must((await login('sam@construction.test', 'sam123')).status === 303, 'the recipient could not log in');
       const inbox = await get('/list/inbox');
@@ -36,7 +40,8 @@ export const checks = [
       must(row && /maria@construction\.test/.test(row), `inbox row: ${row}`);
       const ts = /<td>(20\d\d-\d\d-\d\dT[\d:.]+Z)<\/td>/.exec(row)[1];
       must(new Date(ts).getTime() >= before, `the message timestamp looks wrong: ${ts}`);
-      return "Maria's message to Sam appears in Sam's inbox, correctly timestamped and attributed to Maria";
+      must(rowWith((await get('/Message')).html, 'Please bring the updated drawings tomorrow.'), 'Sam (the recipient) cannot see it through the base /Message route either, only the fixed-where inbox list');
+      return "Maria's message to Sam appears in Sam's inbox, correctly timestamped and attributed to Maria, and in Sam's own /Message too";
     } },
 
   { task: 'Input estimated project costs using the estimating feature',
@@ -55,17 +60,25 @@ export const checks = [
     run: async ({ get, post, follow, rowWith, must, flashOf }) => {
       const before = await get('/Project/1');
       const beforeHours = Number(/<th>Total Hours<\/th><td>(\d+)<\/td>/.exec(before.html)[1]);
-      const mismatch = await post('/Task/3/add/TimeEntry', { project: 2, date: '2026-09-25', hours: 4, notes: 'Wrong project' });
-      must(mismatch.status === 400 && /must match the project of this task/.test(mismatch.html), `logging time under the wrong project was accepted: ${mismatch.status}`);
-      const r = await follow('/Task/3/add/TimeEntry', { project: 1, date: '2026-09-25', hours: 5, notes: 'HVAC ductwork rough-in' });
+      // Round 4 (item 3): the related form no longer asks for "project" at all — it is
+      // silently filled from the parent Task's own row — so there is no "wrong project" to
+      // submit any more; attempting one (a client posting a stray "project" directly) is
+      // simply ignored in favour of the real one, not merely caught by the rule afterwards.
+      const overridden = await post('/Task/3/add/TimeEntry', { project: 2, date: '2026-09-25', hours: 4, notes: 'Attempted override' });
+      must(overridden.status === 303, `logging time was refused even though "project" cannot mismatch any more: ${overridden.status}`);
+      const sheetAfterOverride = await get('/list/my-timesheet');
+      const overriddenRow = rowWith(sheetAfterOverride.html, 'Attempted override');
+      must(overriddenRow && /Riverside Office Tower/.test(overriddenRow) && !/Maple Street Renovation/.test(overriddenRow),
+        `the submitted "project: 2" leaked through instead of being silently replaced by the task's own: ${overriddenRow}`);
+      const r = await follow('/Task/3/add/TimeEntry', { date: '2026-09-25', hours: 5, notes: 'HVAC ductwork rough-in' });
       must(/Time logged/.test(flashOf(r.html)), `flash: ${flashOf(r.html)}`);
       must(rowWith(r.html, 'HVAC ductwork rough-in'), 'the new time entry is not shown on the task');
       const after = await get('/Project/1');
       const afterHours = Number(/<th>Total Hours<\/th><td>(\d+)<\/td>/.exec(after.html)[1]);
-      must(afterHours === beforeHours + 5, `expected total hours ${beforeHours} + 5, got ${afterHours}`);
+      must(afterHours === beforeHours + 4 + 5, `expected total hours ${beforeHours} + 4 + 5, got ${afterHours}`);
       const sheet = await get('/list/my-timesheet');
       must(rowWith(sheet.html, 'HVAC ductwork rough-in'), 'the logged time is not accessible for review in the timesheet');
-      return `5 hours logged on the HVAC task; the project's total hours went from ${beforeHours} to ${afterHours}; visible in My Timesheet`;
+      return `9 hours logged on the HVAC task (4 with an ignored project override, 5 plain); the project's total hours went from ${beforeHours} to ${afterHours}; visible in My Timesheet`;
     } },
 
   { task: 'Access and manage resources in the resource management section',
