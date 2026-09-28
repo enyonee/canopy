@@ -60,10 +60,11 @@ nothing, so it cannot lie about what it does. Canopy closes **access**, not arit
 | WebGen-Bench tasks covered | **101 / 101**: one app per task, `webgen-bench/000001` … `000101` |
 | Apps in the repo | **104**: the 101 tasks, two hand-written references (`shop`, `crm`) with three patch-based changes each, and `tictactoe` (the widget reference) |
 | Acceptance checks | **699 / 699** green (`npm run verify`) |
-| Runtime tests | **240**, 100 % line coverage across 56 modules |
-| Mutation gate | **122 / 122** mutants killed |
+| Runtime tests | **251**, 100 % line coverage across 57 modules |
+| Mutation gate | **131 / 131** mutants killed |
 | Types | `tsc --checkJs`, clean |
-| Runtime size | ~4.4k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
+| Runtime size | ~4.6k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
+| Performance | indexes, page-before-hydrate, batched aggregates, prepared-statement cache; `/Order` list on a 500/2000/10000-row bench graph: 1590 ms → ~10-15 ms p50 (`npm run bench`, `TESTS.md`) |
 
 Each app ships `checks.mjs`, with one check per `ui_instruct` case of its benchmark task, and
 `NOTES.md`, which records every case that was weakened and every gap in the format. The
@@ -152,7 +153,8 @@ cli / server ─ thin HTTP shell
 routes/      ─ one module per route group, handle(ctx) → true | undefined
 render/      ─ list, form, detail, dashboard, pages          interp.mjs ─ step interpreter, no HTTP
 check/       ─ one checker per node kind                     boot.mjs   ─ identity + seed
-store.mjs + store/ (query, state, rules) ─ SQLite, the only writer, rules on every write
+store.mjs + store/ (query, state, rules, migrate) ─ SQLite, the only writer, rules on every write,
+                          indexes derived from the graph, prepared-statement cache, batched aggregates
 registry ─ fields · blocks · transports · functions · widgets (built-ins + plugins)
 expr · spec · fields · functions ─ leaves
 ```
