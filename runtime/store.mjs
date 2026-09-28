@@ -1,11 +1,11 @@
 // Storage. The schema is derived from /data, never written by hand; a migration
 // is the diff between the graph and the live table. Destructive steps need a marker.
 // Derived fields never touch the schema: they are computed on every read.
-import { DatabaseSync } from 'node:sqlite';
 import { parseField, sqlType, defaultValue, coerce, isStored, fromExpr } from './spec.mjs';
 import { evaluate } from './expr.mjs';
 import { hashPassword, isHashed } from './auth.mjs';
 import { DEFAULT } from './registry.mjs';
+import { open } from './driver.mjs';
 import * as query from './store/query.mjs';
 import * as hydrate from './store/hydrate.mjs';
 import * as state from './store/state.mjs';
@@ -14,10 +14,10 @@ import * as migrate from './store/migrate.mjs';
 import { RowCtx } from './store/ctx.mjs';
 
 export class Store {
-  constructor(graph, file, registry = DEFAULT) {
+  constructor(graph, file, registry = DEFAULT, driver = null) {
     this.graph = graph;
     this.registry = registry;
-    this.db = new DatabaseSync(file);
+    this.drv = open(driver ?? file);
     this.fields = {};
     for (const [entity, spec] of Object.entries(graph.data)) {
       this.fields[entity] = Object.entries(spec).map(([n, s]) => parseField(n, s, registry.fields, registry.functions));
@@ -30,47 +30,28 @@ export class Store {
     // needs installing later). ruleExprs caches a rule's parsed expression.
     this.trace = () => {};
     this.ruleExprs = new Map();
-    // A prepared statement is reusable SQL text away from being re-parsed and
-    // re-planned by SQLite; bounded (item: "prepared statement cache") so a
-    // long-lived process with many distinct ad-hoc queries (a where clause per
-    // shape) never grows this without limit — oldest is evicted first (a plain
-    // Map iterates insertion order; re-inserting on hit moves an entry to the
-    // end, so eviction order is really least-recently-used).
-    this.stmts = new Map();
     this.migrate();
-  }
-
-  prepare(sql) {
-    const hit = this.stmts.get(sql);
-    if (hit) { this.stmts.delete(sql); this.stmts.set(sql, hit); return hit; }
-    const st = this.db.prepare(sql);
-    this.stmts.set(sql, st);
-    if (this.stmts.size > 200) this.stmts.delete(this.stmts.keys().next().value);
-    return st;
   }
 
   migrate() {
     for (const [entity, fields] of Object.entries(this.fields)) {
       const table = entity.toLowerCase();
       const stored = fields.filter(isStored);
-      const existing = this.prepare(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table);
-      if (!existing) {
-        const cols = stored.map((f) => `"${f.name}" ${sqlType(f)}`).join(', ');
-        this.db.exec(`CREATE TABLE "${table}" (id INTEGER PRIMARY KEY AUTOINCREMENT${cols ? ', ' + cols : ''})`);
+      if (!this.drv.tables().includes(table)) {
+        this.drv.createTable(table, stored.map((f) => [f.name, sqlType(f)]));
         this.migrations.push(`create table ${table}`);
         this.migrateIndexes(entity);
         continue;
       }
-      const live = this.prepare(`PRAGMA table_info("${table}")`).all().map((r) => r.name);
+      const live = this.drv.columns(table).map((r) => r.name);
       for (const f of stored) {
         if (live.includes(f.name)) continue;
-        this.db.exec(`ALTER TABLE "${table}" ADD COLUMN "${f.name}" ${sqlType(f)}`);
+        this.drv.addColumn(table, f.name, sqlType(f));
         // A declared default is a promise about every row, not only new ones.
         const seed = defaultValue(f);
         if (seed !== null) {
-          const n = this.prepare(
-            `UPDATE "${table}" SET "${f.name}"=? WHERE "${f.name}" IS NULL`).run(seed).changes;
+          const n = this.drv.run(
+            `UPDATE "${table}" SET "${f.name}"=? WHERE "${f.name}" IS NULL`, [seed]).changes;
           this.migrations.push(`add column ${table}.${f.name} (+ backfilled ${n} row(s) with ${JSON.stringify(seed)})`);
         } else this.migrations.push(`add column ${table}.${f.name}`);
       }
@@ -83,7 +64,7 @@ export class Store {
     }
     this.migrateOutbox();
     // Sessions: the cookie names a row here, so signing out really ends the session.
-    this.db.exec(`CREATE TABLE IF NOT EXISTS "_session" (id TEXT PRIMARY KEY, user INTEGER, at TEXT)`);
+    this.drv.createTable('_session', [['id', 'TEXT PRIMARY KEY'], ['user', 'INTEGER'], ['at', 'TEXT']], { ifNotExists: true, serial: false });
   }
 
   field(entity, name) { return (this.fields[entity] || []).find((f) => f.name === name); }
@@ -139,10 +120,9 @@ export class Store {
     // The guard: every insert meets rules here, whatever wrote it (item 20).
     const problems = this.checkRules(entity, values, null);
     if (problems.length) throw new Error(problems[0]);
-    const st = this.prepare(cols.length
+    return this.drv.run(cols.length
       ? `INSERT INTO "${entity.toLowerCase()}" (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`
-      : `INSERT INTO "${entity.toLowerCase()}" DEFAULT VALUES`);
-    return Number(st.run(...vals).lastInsertRowid);
+      : `INSERT INTO "${entity.toLowerCase()}" DEFAULT VALUES`, vals).lastId;
   }
 
   update(entity, id, values) {
@@ -162,16 +142,16 @@ export class Store {
     // would be stored (existing row + these values) — item 20.
     const problems = this.checkRules(entity, values, this.raw(entity, id));
     if (problems.length) throw new Error(problems[0]);
-    this.prepare(`UPDATE "${entity.toLowerCase()}" SET ${sets.join(',')} WHERE id=?`).run(...vals, Number(id));
+    this.drv.run(`UPDATE "${entity.toLowerCase()}" SET ${sets.join(',')} WHERE id=?`, [...vals, Number(id)]);
   }
 
   remove(entity, id) {
-    this.prepare(`DELETE FROM "${entity.toLowerCase()}" WHERE id=?`).run(Number(id));
+    this.drv.run(`DELETE FROM "${entity.toLowerCase()}" WHERE id=?`, [Number(id)]);
   }
 
   raw(entity, id) {
     if (id === undefined || id === null || id === '') return null;
-    return this.prepare(`SELECT * FROM "${entity.toLowerCase()}" WHERE id=?`).get(Number(id));
+    return this.drv.get(`SELECT * FROM "${entity.toLowerCase()}" WHERE id=?`, [Number(id)]);
   }
 
   get(entity, id) { return this.hydrate(entity, this.raw(entity, id)); }
@@ -183,7 +163,7 @@ export class Store {
     const sql = f?.type.exprKind === 'text' && typeof v === 'string'
       ? `SELECT id FROM "${entity.toLowerCase()}" WHERE LOWER("${field}")=LOWER(?) AND id!=?`
       : `SELECT id FROM "${entity.toLowerCase()}" WHERE "${field}"=? AND id!=?`;
-    return Boolean(this.prepare(sql).get(v, Number(excludeId ?? 0)));
+    return Boolean(this.drv.get(sql, [v, Number(excludeId ?? 0)]));
   }
 
   // Compound uniqueness: does another row already have this exact combination?
@@ -193,7 +173,7 @@ export class Store {
     const conds = names.map((n) => `"${n}"=?`).join(' AND ');
     const vals = names.map((n) => stored[n]);
     const sql = `SELECT id FROM "${entity.toLowerCase()}" WHERE ${conds} AND id!=?`;
-    return Boolean(this.prepare(sql).get(...vals, Number(excludeId ?? 0)));
+    return Boolean(this.drv.get(sql, [...vals, Number(excludeId ?? 0)]));
   }
 
   // A count never needs a row hydrated — only when a where-clause targets a
@@ -204,14 +184,12 @@ export class Store {
     const { clauses: cls, vals, later } = this.clauses(entity, where);
     if (later.length) return this.list(entity, { where }).length;
     const table = entity.toLowerCase();
-    const row = this.prepare(`SELECT COUNT(*) AS n FROM "${table}"${cls.length ? ' WHERE ' + cls.join(' AND ') : ''}`).get(...vals);
+    const row = this.drv.get(`SELECT COUNT(*) AS n FROM "${table}"${cls.length ? ' WHERE ' + cls.join(' AND ') : ''}`, vals);
     return Number(row.n);
   }
 
   transaction(fn) {
-    this.db.exec('BEGIN');
-    try { const out = fn(); this.db.exec('COMMIT'); return out; }
-    catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    return this.drv.transaction(fn);
   }
 
   // --- derived fields ----------------------------------------------------------

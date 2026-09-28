@@ -201,13 +201,15 @@ const ALLOWED = {
   'runtime/routes/system.mjs': ['runtime/outbox.mjs', 'runtime/render.mjs', 'runtime/render/pages.mjs'],
   'runtime/routes/views.mjs': ['runtime/spec.mjs', 'runtime/render.mjs', 'runtime/render/pages.mjs', 'runtime/render/dashboard.mjs', 'runtime/render/list.mjs', 'runtime/render/search.mjs'],
   'runtime/routes/widgets.mjs': [],
+  'runtime/driver.mjs': ['runtime/driver/sqlite.mjs'],
+  'runtime/driver/sqlite.mjs': [],
   'runtime/run.mjs': ['runtime/cli.mjs'],
   'runtime/schedule.mjs': [],
   'runtime/server.mjs': ['runtime/validate.mjs', 'runtime/store.mjs', 'runtime/registry.mjs', 'runtime/auth.mjs', 'runtime/interp.mjs',
     'runtime/boot.mjs', 'runtime/render.mjs', 'runtime/routes/context.mjs', 'runtime/routes/session.mjs', 'runtime/routes/views.mjs',
     'runtime/routes/system.mjs', 'runtime/routes/entity.mjs', 'runtime/routes/widgets.mjs', 'runtime/routes/schedule.mjs', 'runtime/schedule.mjs'],
   'runtime/spec.mjs': ['runtime/expr.mjs', 'runtime/fields.mjs'],
-  'runtime/store.mjs': ['runtime/spec.mjs', 'runtime/expr.mjs', 'runtime/auth.mjs', 'runtime/registry.mjs', 'runtime/store/query.mjs', 'runtime/store/hydrate.mjs', 'runtime/store/state.mjs', 'runtime/store/rules.mjs', 'runtime/store/migrate.mjs', 'runtime/store/ctx.mjs'],
+  'runtime/store.mjs': ['runtime/spec.mjs', 'runtime/expr.mjs', 'runtime/auth.mjs', 'runtime/registry.mjs', 'runtime/driver.mjs', 'runtime/store/query.mjs', 'runtime/store/hydrate.mjs', 'runtime/store/state.mjs', 'runtime/store/rules.mjs', 'runtime/store/migrate.mjs', 'runtime/store/ctx.mjs'],
   'runtime/store/aggexpr.mjs': [],
   'runtime/store/ctx.mjs': ['runtime/spec.mjs'],
   'runtime/store/aggsql.mjs': ['runtime/expr.mjs', 'runtime/store/aggexpr.mjs'],
@@ -234,7 +236,7 @@ const NODE_BUILTINS = {
   'runtime/routes/system.mjs': ['node:fs', 'node:path'],
   'runtime/routes/widgets.mjs': ['node:fs'],
   'runtime/server.mjs': ['node:http', 'node:fs', 'node:path'],
-  'runtime/store.mjs': ['node:sqlite'],
+  'runtime/driver/sqlite.mjs': ['node:sqlite'],
 };
 
 function resolveSpecifier(fromFile, spec) {
@@ -275,6 +277,21 @@ test('layering: no import cycles', () => {
   };
   for (const f of Object.keys(ALLOWED)) if (visit(f)) break;
   assert.deepEqual(cycle, [], `import cycle: ${cycle.join(' -> ')}`);
+});
+
+// ---------------------------------------------------------------------------
+// The driver seam: SQLite is reached only through runtime/driver/. Nothing else in
+// runtime/ names the engine, prepares a statement, runs DDL through a raw handle or
+// asks sqlite_master / PRAGMA — the store speaks the Driver contract (types.d.ts).
+// ---------------------------------------------------------------------------
+test('SQLite-only surface (DatabaseSync, .prepare/.exec, PRAGMA, sqlite_master, AUTOINCREMENT, .db) stays under runtime/driver/', () => {
+  const bad = [];
+  for (const f of RUNTIME_FILES) {
+    if (f.startsWith('runtime/driver/')) continue;
+    for (const m of SOURCE[f].matchAll(/\b(DatabaseSync|PRAGMA|sqlite_master|AUTOINCREMENT)\b/g)) bad.push(`${f}:${lineOf(SOURCE[f], m.index)} (${m[1]})`);
+    for (const m of MASKED[f].matchAll(/\.prepare\(|\b(?:db|drv|store|this)\.exec\(|\b(?:this|store)\.db\b/g)) bad.push(`${f}:${lineOf(SOURCE[f], m.index)} (${m[0]})`);
+  }
+  assert.deepEqual(bad, [], `engine access outside runtime/driver/: ${bad.join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------

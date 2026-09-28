@@ -55,9 +55,8 @@ const FALLBACK = ['divBody', 'fracLit', 'correlated', 'textCmp', 'hopBody'];
 
 function withQueryCount(store, fn) {
   let n = 0;
-  const orig = store.prepare;
-  store.prepare = function counted(sql) { n++; return orig.call(this, sql); };
-  try { return { result: fn(), n }; } finally { store.prepare = orig; }
+  store.drv.onQuery = () => { n++; };
+  try { return { result: fn(), n }; } finally { store.drv.onQuery = null; }
 }
 
 // Forces every field to go through the pre-item-1 path (ctx.rows()-based),

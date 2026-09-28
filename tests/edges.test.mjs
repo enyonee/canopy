@@ -17,7 +17,7 @@ import { boot, rows, flash } from './helpers.mjs';
 
 test('an entity with no fields still gets a table, and unknown entities answer emptily', () => {
   const store = new Store({ app: 'x', data: { Empty: {}, A: { n: 'int' } } }, ':memory:');
-  assert.deepEqual(store.db.prepare(`PRAGMA table_info("empty")`).all().map((c) => c.name), ['id']);
+  assert.deepEqual(store.drv.columns('empty').map((c) => c.name), ['id']);
   assert.equal(store.field('Ghost', 'x'), undefined);
   assert.equal(store.labelField('Ghost'), null, 'an unknown entity simply has no label field');
   assert.equal(store.labelField('A'), null, 'an entity without a text field has no label field');

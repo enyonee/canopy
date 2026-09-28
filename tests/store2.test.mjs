@@ -14,7 +14,7 @@ const shop = () => new Store(G({
 
 test('derived fields are computed on read, in money and through references, and never stored', () => {
   const store = shop();
-  assert.ok(!store.db.prepare(`PRAGMA table_info("order")`).all().some((c) => c.name === 'total'), 'no column for a derived field');
+  assert.ok(!store.drv.columns('order').some((c) => c.name === 'total'), 'no column for a derived field');
   const c = store.insert('Customer', { name: 'Ann', tier: 'gold', discount: 10 });
   const o = store.insert('Order', { customer: c, status: 'cart' });
   store.insert('Item', { order: o, qty: 2, price: 12.5 });
@@ -208,7 +208,7 @@ test('the outbox is a table with a status, filtered and updated by id', () => {
 
 test('money, date and file columns: storage types, defaults and coercion through the store', () => {
   const store = new Store(G({ P: { price: 'money=9.99', day: 'date=today', on: 'date=2026-01-01', doc: 'file', pin: 'money' } }), ':memory:');
-  const cols = Object.fromEntries(store.db.prepare(`PRAGMA table_info("p")`).all().map((c) => [c.name, c.type]));
+  const cols = Object.fromEntries(store.drv.columns('p').map((c) => [c.name, c.type]));
   assert.equal(cols.price, 'INTEGER'); assert.equal(cols.day, 'TEXT'); assert.equal(cols.doc, 'TEXT');
   const id = store.insert('P', { doc: '123-x.txt' });
   const row = store.get('P', id);

@@ -100,11 +100,11 @@ const clockParams = (c, clock) => Object.fromEntries(c.params.map((p) => [p, p =
 // One parent's value — used when no page-level batch (hydrate.mjs's
 // buildAggCache) already computed it, e.g. Store#get() on a single row. The
 // SQL text is fixed for a given compiled shape (only the bound id varies),
-// so this goes through Store#prepare's cache like every other read.
+// so this goes through the driver's statement cache like every other read.
 export function runAggOne(store, compiled, parentId, clock = new Date()) {
   let sql = `SELECT ${selectCols(compiled)} FROM "${compiled.child.toLowerCase()}" AS t0 WHERE t0."${compiled.via}"=?`;
   if (compiled.condSQL) sql += ` AND (${compiled.condSQL} <> 0)`;
-  return guarded(() => finalizeOne(compiled, store.prepare(sql).get(clockParams(compiled, clock), String(parentId))));
+  return guarded(() => finalizeOne(compiled, store.drv.get(sql, [clockParams(compiled, clock), String(parentId)])));
 }
 
 // Every parent id's value in one query per IN_CHUNK-sized slice, instead of
@@ -122,7 +122,7 @@ export function runAggBatch(store, compiled, ids, clock = new Date()) {
     let sql = `SELECT t0."${compiled.via}" AS grp, ${selectCols(compiled)} FROM "${table}" AS t0 WHERE t0."${compiled.via}" IN (${chunk.map(() => '?').join(',')})`;
     if (compiled.condSQL) sql += ` AND (${compiled.condSQL} <> 0)`;
     sql += ` GROUP BY t0."${compiled.via}"`;
-    if (guarded(() => { for (const row of store.db.prepare(sql).all(named, ...chunk)) map.set(String(row.grp), finalizeOne(compiled, row)); return true; }) === undefined) return undefined;
+    if (guarded(() => { for (const row of store.drv.all(sql, [named, ...chunk], { cache: false })) map.set(String(row.grp), finalizeOne(compiled, row)); return true; }) === undefined) return undefined;
   }
   return map;
 }

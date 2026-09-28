@@ -29,14 +29,15 @@ function seed(store, customers) {
   }
 }
 
-// Counts every query the store issues (Store#prepare — every read/write call
-// site prepares immediately before executing, so this is exactly "how many
-// round trips to SQLite this operation made", cache hit or not).
+// Counts the statements the store sends to the driver (its `onQuery` hook fires once
+// per all/get/run/exec, cache hit or not): "how many round trips to SQLite this
+// operation made". Chunked IN-lists (`{ cache: false }`: one statement per
+// IN_CHUNK ids, so ceil(ids / chunk), never one per row) are what the count has
+// always left out, and still does.
 function withQueryCount(store, fn) {
   let n = 0;
-  const orig = store.prepare;
-  store.prepare = function counted(sql) { n++; return orig.call(this, sql); };
-  try { fn(); } finally { store.prepare = orig; }
+  store.drv.onQuery = (sql, opts) => { if (opts?.cache !== false) n++; };
+  try { fn(); } finally { store.drv.onQuery = null; }
   return n;
 }
 
@@ -116,9 +117,9 @@ test('a child lookup by its ref column uses the index item 1 adds', () => {
   const c = store.insert('Customer', { name: 'Ann' });
   const o = store.insert('Order', { customer: c, status: 'new' });
   store.insert('Item', { order: o, title: 'x', qty: 1, price: 1 });
-  const plan = store.db.prepare(`EXPLAIN QUERY PLAN SELECT * FROM "item" WHERE "order" IN (?)`).all(String(o));
+  const plan = store.drv.all(`EXPLAIN QUERY PLAN SELECT * FROM "item" WHERE "order" IN (?)`, [String(o)]);
   assert.ok(plan.some((r) => /USING INDEX idx_item_order/.test(r.detail)), `expected idx_item_order in the plan, got: ${JSON.stringify(plan)}`);
-  const planOrder = store.db.prepare(`EXPLAIN QUERY PLAN SELECT * FROM "order" WHERE "customer" IN (?)`).all(String(c));
+  const planOrder = store.drv.all(`EXPLAIN QUERY PLAN SELECT * FROM "order" WHERE "customer" IN (?)`, [String(c)]);
   assert.ok(planOrder.some((r) => /USING INDEX idx_order_customer/.test(r.detail)), `expected idx_order_customer in the plan, got: ${JSON.stringify(planOrder)}`);
 });
 
@@ -176,11 +177,10 @@ test('a ref label reads only the label field, never the target row\'s other deri
 test('listRawIn chunks the IN-list instead of binding every id in one query (item B)', () => {
   const store = new Store(BENCH_GRAPH, ':memory:');
   let prepares = 0;
-  const orig = store.db.prepare.bind(store.db);
-  store.db.prepare = (sql) => { prepares++; return orig(sql); };
+  store.drv.onQuery = () => { prepares++; };
   const ids = Array.from({ length: 12000 }, (_, i) => i + 1); // synthetic — no matching rows needed
   let rows;
-  try { rows = store.listRawIn('Item', 'order', ids); } finally { store.db.prepare = orig; }
+  try { rows = store.listRawIn('Item', 'order', ids); } finally { store.drv.onQuery = null; }
   assert.deepEqual(rows, []);
   assert.equal(prepares, 3, `expected ceil(12000/5000)=3 chunked queries, got ${prepares}`);
 });

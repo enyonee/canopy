@@ -53,7 +53,7 @@ test('random.pick honours weights and refuses an empty table', () => {
   assert.throws(() => CATALOG['random.pick'].run({ store, step: { from: 'Task' } }), /Task is empty/);
   store.insert('Task', { title: 'never' });
   store.insert('Task', { title: 'always' });
-  store.db.exec(`UPDATE task SET done = CASE title WHEN 'always' THEN 1 ELSE 0 END`);
+  store.drv.exec(`UPDATE task SET done = CASE title WHEN 'always' THEN 1 ELSE 0 END`);
   const picks = new Set();
   for (let i = 0; i < 40; i++) picks.add(CATALOG['random.pick'].run({ store, step: { from: 'Task', weight: 'done' } }).picked.title);
   assert.deepEqual([...picks], ['always'], 'a zero weight must never be picked');

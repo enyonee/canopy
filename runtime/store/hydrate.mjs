@@ -1,5 +1,5 @@
 // Batched aggregate hydration (round 7's item 3, round 8's item 1/2),
-// attached to Store.prototype by store.mjs (`this.db`, `this.field(...)`,
+// attached to Store.prototype by store.mjs (`this.drv`, `this.field(...)`,
 // `this.fields[...]`, `this.childVia`, `this.listRawIn`, `this.hydrate` —
 // query.mjs's own listing functions, a sibling on the same prototype).
 // Split out of store/query.mjs only to keep that module under the line
