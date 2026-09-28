@@ -23,9 +23,6 @@
   nothing in `events` can hook "user logged in". Any "points for logging in" reading of case 7
   is unavailable; the check exercises the upload path the brief's own example (b) offers
   instead.
-- `rule`: no compound-uniqueness, so nothing stops a member voting on the same photo twice
-  (each vote is a fresh `Vote` row via the `votePhoto` action) — not exercised by the check,
-  left honest rather than faked with a rule that doesn't exist in the format.
 - `composition`: a member cannot edit their own `User` row (name/email) because `own` requires
   a `ref:User` field *on* the entity being scoped, and `User` has none pointing at itself — the
   same gap noted in apps/sportsrecruit's NOTES. Only `admin` can edit a member's profile fields;
@@ -33,6 +30,14 @@
 
 ## New for this app
 
+- Round 5: closed the "nothing stops a member voting on the same photo twice" Miss, but not
+  with `rules.unique` — a rule only ever runs inside `interp.validateValues`, which the HTTP
+  create/edit routes call and a step's own block (`db.createRow`, here) never does (steps are
+  trusted graph code; see `runtime/ARCHITECTURE.md`), so a compound-unique `Vote` rule would
+  have been declared and silently never checked. `votePhoto`'s step is `db.ensure` instead of
+  `db.createRow`: a repeat vote finds the existing `Vote` row instead of inserting a second one,
+  so `Photo.votes := count(Vote)` never double-counts — idempotent by construction, not by a
+  rule that cannot reach this path.
 - The same "saved list scoped to the login entity's own row" idiom from apps/sportsrecruit,
   this time doubling as the actual `home` redirect target rather than a secondary nav item —
   confirmed live that the `?ok=` flash query string survives the `/` → `/list/me` home redirect,
