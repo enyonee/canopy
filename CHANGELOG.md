@@ -20,6 +20,15 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 - New column `_outbox.claimedAt`, added in place to databases made by earlier versions.
 - Tests: concurrent flushes, lease before/after, in-place upgrade from the old DDL; six new
   mutations.
+- **Fix: money arithmetic in expressions is exact.** `runtime/expr.mjs` evaluated money as
+  doubles in major units, so `qty * price` with 3 and 0.1 was 0.30000000000000004 and
+  `qty * price > 0.3` was true in the JS path while the SQL path (exact integers in minor
+  units) said false. Every `*` now goes through the same `exact()` (6 decimals) that `+`,
+  `-`, `sum` and `avg` already used, so JS, SQL and decimal arithmetic agree. Division is
+  unchanged (a quotient is a fraction; it stays JS-only). This changes an answer in edge
+  cases: ties like the one above, and values with more than 6 decimals, now come out
+  rounded. A nested `min`/`max` over a raw money product now compiles to SQL; a product of
+  more than 6 decimals (four money factors) is left to the JS path.
 
 ## 0.1.3 (2026-09-29)
 

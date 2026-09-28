@@ -4,7 +4,7 @@
 // runtime/expr.mjs's evaluate() computes — null is always safe, the row-fetching
 // path answers instead.
 //
-// A value is { sql, scale, text?, dusty? }. Numbers stay exact SQLite INTEGERs in
+// A value is { sql, scale, text? }. Numbers stay exact SQLite INTEGERs in
 // their own scale (money = raw minor units, scale 100; int/bool/literal, scale 1;
 // `a * b` multiplies scales, `a + b` brings both to the larger one) and are only
 // divided once, by the caller, at the very end — never inside a body. `text` marks
@@ -12,15 +12,11 @@
 // strings: SQLite's BINARY collation is code-unit order for ASCII). `scale: null`
 // is the wildcard of a bare `null` literal.
 //
-// `dusty`: evaluate() multiplies the *major-unit doubles* (qty * 0.07 is
-// 7.000000000000001), while this compiler multiplies exact integers. A sum absorbs
-// that (evaluate() rounds it, `exact()`), and so do `+`/`-` and a derived field's
-// storage rounding. A comparison of a raw product against an exactly equal value does
-// not: `qty * price > disc` is true in JS and false here when qty=3, price=0.1,
-// disc=0.3 — the SQL answer is the decimal one. That divergence shipped in 0.1.2 and
-// is kept as it is (the answers of a route do not change in a performance round; see
-// CHANGELOG). What this round adds never widens it: a nested min/max over a dusty
-// body, whose raw double would meet a comparison, is not compiled.
+// Money multiplies exactly on both sides: this compiler multiplies exact integers and
+// evaluate() finalizes every `*` (like `+`/`-` and sums) through exact(), so
+// `qty * price > disc` is the decimal answer in JS too (3 * 0.1 > 0.3 is false). A
+// product whose scale passes MAX_SCALE (more than the 6 decimals exact() keeps) is not
+// compiled, so the two never round at different places.
 //
 // A derived field of the child is inlined (its own expression compiled in the
 // child's scope), a derived or written-out aggregate over a grandchild becomes a
@@ -88,24 +84,20 @@ function compileDerived(cx, f) {
   if (f.kind === 'bool') { const c = compileBool(inner, f.derive); return c && int(c); }
   const v = compileValue(inner, f.derive);
   if (!v) return null;
-  const clean = { ...v, dusty: false };
-  if (f.kind === 'date' || f.kind === 'time') return v.text ? clean : null;
+  if (f.kind === 'date' || f.kind === 'time') return v.text ? v : null;
   if (v.text || (f.kind !== 'int' && f.kind !== 'money')) return null;
   const s = v.scale ?? 1;
-  if (f.kind === 'int') return s === 1 ? clean : null;
-  return s === 1 ? { sql: `(${v.sql} * 100)`, scale: 100 } : s === 100 ? clean : null;
+  if (f.kind === 'int') return s === 1 ? v : null;
+  return s === 1 ? { sql: `(${v.sql} * 100)`, scale: 100 } : s === 100 ? v : null;
 }
 
 function compileBin(cx, n) {
   if (n.op !== '+' && n.op !== '-' && n.op !== '*') return null; // division and comparisons are never a value
   const a = compileValue(cx, n.a), b = compileValue(cx, n.b);
   if (!a || !b || a.text || b.text) return null;
-  if (n.op === '*') {
-    const dusty = Boolean(a.dusty || b.dusty || (a.scale ?? 1) > 1 || (b.scale ?? 1) > 1);
-    return { sql: `(${a.sql} * ${b.sql})`, scale: (a.scale ?? 1) * (b.scale ?? 1), dusty };
-  }
-  const scale = commonScale(a, b);
-  return scale > MAX_SCALE ? null : { sql: `(${scaleTo(a, scale)} ${n.op} ${scaleTo(b, scale)})`, scale };
+  const scale = n.op === '*' ? (a.scale ?? 1) * (b.scale ?? 1) : commonScale(a, b);
+  if (scale > MAX_SCALE) return null; // beyond the 6 decimals exact() keeps, JS would round where SQL stays exact
+  return { sql: n.op === '*' ? `(${a.sql} * ${b.sql})` : `(${scaleTo(a, scale)} ${n.op} ${scaleTo(b, scale)})`, scale };
 }
 
 function compileIf(cx, n) {
@@ -114,7 +106,7 @@ function compileIf(cx, n) {
   if (!cond || !a || !b || !agree(a, b)) return null;
   const scale = a.text || b.text ? undefined : commonScale(a, b);
   const sql = `(CASE WHEN ${cond} <> 0 THEN ${scaleTo(a, scale)} ELSE ${scaleTo(b, scale)} END)`;
-  return { sql, scale, text: a.text || b.text, dusty: Boolean(a.dusty || b.dusty) };
+  return { sql, scale, text: a.text || b.text };
 }
 
 // A boolean sub-expression: SQL text guaranteed to read as 0 or 1, never NULL —
@@ -161,7 +153,7 @@ export function compileBody(cx, node) {
   }
   const v = compileValue(inner, node.body);
   if (!v || (v.text && (node.fn === 'sum' || node.fn === 'avg'))) return null;
-  return { via, exprSQL: v.sql, condSQL: null, scale: v.scale ?? 1, text: v.text, dusty: v.dusty };
+  return { via, exprSQL: v.sql, condSQL: null, scale: v.scale ?? 1, text: v.text };
 }
 
 // A nested aggregate — written out in a body, or the expression of a derived
@@ -172,7 +164,7 @@ export function compileBody(cx, node) {
 // TEXT-to-TEXT comparison can use the ref's index.
 function compileSubAgg(cx, n) {
   const b = compileBody(cx, n);
-  if (!b || n.fn === 'avg' || (n.fn === 'sum' && b.scale > MAX_SCALE) || (b.dusty && n.fn !== 'sum' && n.fn !== 'count')) return null;
+  if (!b || n.fn === 'avg') return null;
   const from = `FROM "${n.entity.toLowerCase()}" AS t${cx.depth + 1} WHERE t${cx.depth + 1}."${b.via}" = CAST(t${cx.depth}."id" AS TEXT)`
     + (b.condSQL ? ` AND (${b.condSQL} <> 0)` : '');
   if (n.fn === 'count') return int(`(SELECT COUNT(*) ${from})`);

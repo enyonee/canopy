@@ -76,7 +76,9 @@ Used in derived fields, `rules[].check`, and inside steps as `"= <expression>"`.
   `addDays(date, n)`, `round(x, n)`, `abs(x)`, `min(a, b)`, `max(a, b)`, `coalesce(a, b, …)`,
   `len(text)`, `lower(text)`, `upper(text)`, `concat(a, b, …)`.
 - Clock: `today` (date), `now` (time).
-- Money is in major units inside expressions (`price > 100` means 100.00).
+- Money is in major units inside expressions (`price > 100` means 100.00). `+`, `-`, `*`, `sum` and `avg`
+  are exact to 6 decimals: `3 * 0.1` is `0.3`, so `qty * price > 0.3` is false for 3 and 0.1. Division
+  is the exception: a quotient is a fraction, rounded only by the field or `round(x, n)` that stores it.
 - Null propagates through arithmetic; comparisons with null are false except `= null` / `!= null`.
 
 Inside steps, names are `row.<field>`, `each.<field>`, `found.<field>`, `picked.<field>`,
