@@ -5,6 +5,49 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+Runtime performance, round 3. No change to any answer: the JSON responses and CSV exports of
+the benchmark routes are byte-identical to 0.1.2 at both data sizes.
+
+- **Derived fields and dates pushed into SQL** (`runtime/store/aggsql.mjs`, and the new
+  `aggexpr.mjs` for the expression compiler). The body of `count`/`sum`/`avg`/`min`/`max` over
+  a child may now contain, besides the child's stored `int`/`money`/`bool` fields:
+  - a **derived scalar field** of the child (`Item.line := qty * price`, a derived bool),
+    inlined when it stays exact (a money*money product, which needs real cent rounding, and an
+    int fed by money still evaluate in JS);
+  - a **derived or written-out aggregate** over a grandchild, as a correlated scalar subquery
+    (`Customer.spent := sum(Order: total)` with `total := sum(Item: qty * price)`; also
+    `sum(Order: count(Item))`). An empty inner group is 0 for `sum`/`count` and null for
+    `min`/`max`, as in JS; an inner `avg` (a fraction) stays in JS;
+  - **dates and times**: stored `date`/`time` fields and ISO literals in comparisons and
+    `if(...)` conditions, and `min`/`max` over a date/time field (the stored text, as before).
+    Text is compared exactly as `runtime/expr.mjs` compares it — as strings, whatever ISO shape
+    a `time` was stored in. `today`/`now` compile too: they are bound from the evaluation's one
+    clock (now read once per evaluation and handed to derived fields, hops and child rows), never
+    from SQLite's clock.
+  A customer with 5000 orders, `GET /Customer/<id>`: 146 → 14 ms (p50); `GET /Customer.csv`
+  (201 customers): 75 → 18 ms; the wide-customer case of round 2: 36.6 → 3.3 ms. With
+  the maintainer's own script (200 customers + one with 2000 orders): `/Customer` 102 → 15 ms,
+  `/Customer/<wide>` 140 → 10 ms, `/Customer.csv` 148 → 21 ms.
+- Compilation is bounded: nesting of derived fields, depth of subqueries and the work of one
+  plan are capped, a derived cycle is not compiled (the JS path raises its own error, as
+  before), and an integer beyond SQLite's `SUM` or JS's 2^53 falls back to the JS path for that
+  aggregate at run time instead of throwing. Compiled plans are cached per AST node.
+- **Known divergence, kept as shipped in 0.1.2:** a comparison of a *raw* money product with an
+  exactly equal value (`count(Item: qty * price > disc)` with 3, 0.1 and 0.3) is decided on
+  exact decimals in the SQL path and on doubles (0.30000000000000004) in the JS path. It is
+  pinned by a test and not widened — a nested `min`/`max` over such a product is not compiled.
+- **Memory**: RSS growth after a heavy dashboard/CSV request is a peak of allocations (V8 keeps
+  a grown young generation), not retention. `Store#ctx()` now returns a class instance instead
+  of an object with three closures, and a compiled aggregate's cache key is built once with its
+  plan, not once per row. RSS after `/dashboard` + `/Order.csv` at 8000 orders: 127 → 121 MB
+  (median of six runs); with the maintainer's script (2200 orders, 22 000 items + a wide
+  customer) 188 → 160 MB after the round-2 code's 314 MB.
+- `npm run bench`: scenario 4 (`bench/app2.json`) for the derived/date shapes.
+- Tests 267 → 280, mutations 143 → 164. A property test draws random expression trees
+  (ints, money, bools, dates, nullable columns, derived scalar and aggregate fields, `+ - *`,
+  comparisons, `and`/`or`/`not`, `if`) over random rows, empty groups and NULLs, with a fixed
+  seed, and asserts the SQL path equals the JS path for every function.
+
 ## 0.1.2 (2026-09-28)
 
 Runtime performance, round 2. No change to any answer except one fix below: the JSON responses
