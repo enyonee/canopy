@@ -1,7 +1,7 @@
 # Canopy
 
 **A lightweight app runtime: one JSON document in, a working application out.** Canopy is
-~4.7k lines of JavaScript with zero runtime dependencies. It runs one Node process and one
+~4.9k lines of JavaScript with zero runtime dependencies. It runs one Node process and one
 SQLite file per app, with no build step, no framework and no frontend bundle.
 
 Applications are a closed graph of effects with pure leaves. A language model writes one
@@ -28,7 +28,7 @@ Everything an app needs comes from the platform and one small runtime:
 
 | | |
 |---|---|
-| Runtime code | ~4.7k lines, 280 KB of source |
+| Runtime code | ~4.9k lines, 270 KB of source |
 | Runtime dependencies | **0**: Node 22 built-ins only (`node:sqlite`, `node:http`, `node:crypto`) |
 | Build step | none; no bundler, transpiler or frontend toolchain |
 | An app | one `app.json`: median **76 lines** (~5.7 KB) across the 104 apps in this repo |
@@ -60,11 +60,11 @@ nothing, so it cannot lie about what it does. Canopy closes **access**, not arit
 | WebGen-Bench tasks covered | **101 / 101**: one app per task, `webgen-bench/000001` … `000101` |
 | Apps in the repo | **104**: the 101 tasks, two hand-written references (`shop`, `crm`) with three patch-based changes each, and `tictactoe` (the widget reference) |
 | Acceptance checks | **699 / 699** green (`npm run verify`) |
-| Runtime tests | **256**, 100 % line coverage across 57 modules |
-| Mutation gate | **134 / 134** mutants killed |
+| Runtime tests | **267**, 100 % line coverage across 59 modules |
+| Mutation gate | **142 / 142** mutants killed |
 | Types | `tsc --checkJs`, clean |
-| Runtime size | ~4.7k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
-| Performance | indexes, page-before-hydrate, batched aggregates, prepared-statement cache; `/Order` list on a 500/2000/10000-row bench graph: 1590 ms → ~10-15 ms p50 (`npm run bench`, `TESTS.md`) |
+| Runtime size | ~4.9k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
+| Performance | indexes, page-before-hydrate, batched aggregates compiled into SQL where exact, prepared-statement cache; `/Order` list on a 500/2000/10000-row bench graph: 1590 ms → ~10-15 ms p50; an order with 20 000 items: 30.7 ms → 2.0 ms p50 (`npm run bench`, `TESTS.md`) |
 
 Each app ships `checks.mjs`, with one check per `ui_instruct` case of its benchmark task, and
 `NOTES.md`, which records every case that was weakened and every gap in the format. The
@@ -210,8 +210,15 @@ derived fields computed only for the visible page, batched child aggregates, lab
 hydrating the target row, and a prepared-statement cache. A query-count gate keeps a list page
 at O(1) queries. On 2000 customers / 8000 orders / 40 000 items, an order list went from
 22 s to 5 ms and a dashboard from 46 s to 0.26 s, with JSON answers byte-identical before
-and after ([CHANGELOG.md](CHANGELOG.md)). Next: push single-parent aggregates into SQL. Under
-load, a row with tens of thousands of children still sums them in JavaScript on every request.
+and after ([CHANGELOG.md](CHANGELOG.md)). The second round pushed `count`/`sum`/`avg`/`min`/`max`
+over a child's own stored fields into SQL (a `GROUP BY` for a page, one query for a single
+row) instead of fetching every child row and summing in JS — an order with 20 000 items:
+30.7 ms → 2.0 ms (p50) — and fixed the round-1 memory regression along with it (RSS growth
+after a heavy dashboard/CSV request at 40 000 orders: +87 MB → +17 MB), with the same
+byte-identical JSON guarantee. What still falls back to JS: a derived field or a hop through a
+reference inside the aggregate body, a correlated `row.*` reference, dates, and division
+(right now excluded on purpose — see `TESTS.md` for why). Next: the same push-down for a
+derived-field body where it is exact, and dates.
 
 **PostgreSQL as a second storage driver.** SQLite stays the default for development, tests and
 single-instance apps. Postgres is for deployments that need several instances, many concurrent
