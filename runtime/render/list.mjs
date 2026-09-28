@@ -57,7 +57,7 @@ export function listView(graph, store, entity, fields, rows, ctx) {
   const pageHref = (n) => { const q = new URLSearchParams(ctx.query || ''); q.set('page', String(n)); return `${path}?${q}`; };
   const pager = ctx.pages > 1 ? `<p class="pages">Page ${ctx.page} of ${ctx.pages} · ${ctx.page > 1 ? `<a href="${pageHref(ctx.page - 1)}">Previous</a>` : ''}${ctx.page < ctx.pages ? `<a href="${pageHref(ctx.page + 1)}">Next</a>` : ''}</p>` : '';
   const body = rows.map((r) => {
-    const cells = cols.map((c) => cell(store, entity, fields, r, c, ov.labels || {})).join('');
+    const cells = cols.map((c) => cell(store, entity, fields, r, c, ov.labels || {}, vc)).join('');
     const btns = actions.length ? rowButtons(graph, store, entity, r, actions, vc) : '';
     const isDone = doneField && r[doneField.name] && ov.strikeDone !== false && doneField.name === 'done';
     return `<tr class="${isDone ? 'done' : ''}">${cells}${actions.length ? `<td>${btns}</td>` : ''}</tr>`;

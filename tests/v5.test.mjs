@@ -5,10 +5,12 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { validate, formatErrors } from '../runtime/validate.mjs';
 import { parse, check as checkExpr, evaluate } from '../runtime/expr.mjs';
 import { FUNCTIONS } from '../runtime/functions.mjs';
+import { loadPlugins } from '../runtime/registry.mjs';
 import { boot, rows, tmpGraph } from './helpers.mjs';
 
 const graph = {
@@ -374,6 +376,13 @@ test('checker: rules.unique may be a compound array', () => {
   assert.ok(validate(g(['a', 'ghost'])).some((e) => /does not exist/.test(e.message)));
 });
 
+test('item 16 (checker): "null" is only meaningful on "ne"', () => {
+  const g = (cmp) => ({ app: 'x', data: { E: { n: 'int?' } }, lists: [{ id: 'l', entity: 'E', where: { n: cmp } }] });
+  assert.deepEqual(validate(g({ ne: null })), []);
+  const bad = validate(g({ gte: null }));
+  assert.ok(bad.some((e) => /is never true/.test(e.message)), formatErrors(bad));
+});
+
 // ---------------------------------------------------------------------------
 // Pure functions: hours()/minutes() kind-checking and null propagation.
 // ---------------------------------------------------------------------------
@@ -448,6 +457,123 @@ test('item 15: Entity.form\'s confirm/confirmEdit interpolate the just-written r
     const edited = await s2.post('/Task/1', { title: 'Ship it' });
     assert.match(edited.location, /ok=now%20called%20Ship%20it/);
   } finally { s2.close(); }
+});
+
+// ---------------------------------------------------------------------------
+// Items 16-19: more gaps confirmed by app agents, addressed after 1-15.
+// ---------------------------------------------------------------------------
+const widgetDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-r4-widget-'));
+const cardsPlugin = path.join(widgetDir, 'cards.mjs');
+fs.writeFileSync(cardsPlugin, `export default {
+  widgets: { cards: { summary: 'shows hole cards', client: './cards.client.mjs', props: ['fen'] } },
+};`);
+fs.writeFileSync(path.join(widgetDir, 'cards.client.mjs'), 'export default function mount() {}\n');
+
+const graph1719 = {
+  app: 'r1719', plugins: [cardsPlugin],
+  data: {
+    User: { email: 'text!', password: 'password!', role: 'enum[admin,member]=member' },
+    // "code" (not "holeCards") is deliberately the first plain-text field: a row's label
+    // (store.label()) always reads the first text field, and "private" does not cover
+    // that path — a private field must never double as the entity's own label.
+    Hand: { code: 'text!', player: 'ref:User!', holeCards: 'text?', note: 'text?' },
+    Feedback: { message: 'text!' },
+  },
+  roles: { entity: 'User', login: 'email', password: 'password', role: 'role', register: 'member',
+    can: { admin: '*', member: { Hand: ['view', 'create', 'do:annotate'], '*': ['do:sendFeedback'] } } },
+  actions: [
+    { name: 'annotate', in: 'Hand', title: 'Annotate', fields: ['note'], do: [{ block: 'db.update', set: { note: '@values.note' } }] },
+    { name: 'sendFeedback', title: 'Send feedback', fields: ['message'], do: [{ block: 'db.createRow', entity: 'Feedback', values: { message: '@values.message' } }] },
+  ],
+  override: { 'Hand.detail': { private: { holeCards: 'player' }, widget: { use: 'cards', fen: '@row.holeCards' }, actions: ['annotate'] } },
+  pages: [{ id: 'home', title: 'Home', actions: ['sendFeedback'] }],
+  lists: [{ id: 'dealt', entity: 'Hand', title: 'Dealt', where: { holeCards: { ne: null } }, roles: ['admin', 'member'] }],
+};
+
+test('item 17: a private field is redacted from everyone but the user it names (and admins), everywhere', async () => {
+  const s2 = await boot(tmpGraph(graph1719));
+  try {
+    await s2.post('/register', { email: 'alice@r1719', password: 'pw' });
+    const aliceId = s2.app.store.list('User', { where: { email: 'alice@r1719' } })[0].id;
+    const handId = s2.app.store.insert('Hand', { code: 'H1', player: aliceId, holeCards: 'AsKs' });
+    const asAlice = await s2.get(`/Hand/${handId}`);
+    assert.match(asAlice.html, /<th>Hole Cards<\/th><td>AsKs<\/td>/, 'the owner sees their own hole cards');
+    assert.match(asAlice.html, /data-widget="cards"[^>]*data-props='[^']*AsKs/, 'the widget prop resolved "@row.holeCards" for the owner');
+    s2.asGuest(); await s2.post('/register', { email: 'bob@r1719', password: 'pw' });
+    const asBob = await s2.get(`/Hand/${handId}`);
+    assert.match(asBob.html, /<th>Hole Cards<\/th><td><span class="muted">Hidden<\/span><\/td>/, 'a different member never sees it');
+    assert.doesNotMatch(asBob.html, /AsKs/, 'not even inside the widget\'s props');
+    const loginBob = await fetch(`${s2.base}/login`, { method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ login: 'bob@r1719', password: 'pw' }).toString() });
+    const cookie = (loginBob.headers.get('set-cookie') || '').split(';')[0];
+    const jsonBob = await (await fetch(`${s2.base}/Hand/${handId}`, { headers: { accept: 'application/json', cookie } })).json();
+    assert.equal(jsonBob.holeCards, null, 'JSON redacts it too');
+  } finally { s2.close(); }
+});
+
+test('item 19: row and global actions render a real input form for declared "fields", and require them', async () => {
+  const s2 = await boot(tmpGraph(graph1719));
+  try {
+    await s2.post('/register', { email: 'carol@r1719', password: 'pw' });
+    const carolId = s2.app.store.list('User', { where: { email: 'carol@r1719' } })[0].id;
+    const handId = s2.app.store.insert('Hand', { code: 'H2', player: carolId, holeCards: '2h2c' });
+    const detail = await s2.get(`/Hand/${handId}`);
+    assert.match(detail.html, new RegExp(`<form class="card inline-block" method="post" action="/Hand/${handId}/action/annotate">[\\s\\S]*name="note"`), 'the row action gets a real field, not a bare button');
+    const missing = await s2.post(`/Hand/${handId}/action/annotate`, {});
+    assert.equal(missing.status, 400);
+    assert.match(missing.html, /note is required/);
+    const ok = await s2.post(`/Hand/${handId}/action/annotate`, { note: 'strong hand' });
+    assert.equal(ok.status, 303);
+    assert.equal(s2.app.store.get('Hand', handId).note, 'strong hand');
+    const home = await s2.get('/page/home');
+    assert.match(home.html, /<form class="card" method="post" action="\/action\/sendFeedback">[\s\S]*name="message"/, 'the global action gets a real field too');
+    const noMsg = await s2.post('/action/sendFeedback', {});
+    assert.equal(noMsg.status, 400);
+    const sent = await s2.post('/action/sendFeedback', { message: 'great app' });
+    assert.equal(sent.status, 303);
+    assert.equal(s2.app.store.list('Feedback', {}).length, 1);
+    assert.equal(s2.app.store.list('Feedback', {})[0].message, 'great app');
+  } finally { s2.close(); }
+});
+
+test('item 16 + item 19 (list): "ne: null" filters a saved list, admin sees only dealt hands', async () => {
+  const s2 = await boot(tmpGraph(graph1719));
+  try {
+    await s2.post('/register', { email: 'dana@r1719', password: 'pw' });
+    const danaId = s2.app.store.list('User', { where: { email: 'dana@r1719' } })[0].id;
+    s2.app.store.insert('Hand', { code: 'H3', player: danaId }); // holeCards omitted: a real NULL, not the text "null"
+    s2.app.store.insert('Hand', { code: 'H4', player: danaId, holeCards: 'JhJd' });
+    const dealt = await s2.get('/list/dealt');
+    assert.equal(rows(dealt.html).length, 1, 'only the hand with real hole cards is "dealt"');
+  } finally { s2.close(); }
+});
+
+test('checker: item 17/18 edges — private needs roles and a real ref field; @row.* needs a row and a real field', async () => {
+  const g = (override) => ({ app: 'x',
+    data: { U: { name: 'text!', pass: 'password!', role: 'enum[m]=m' }, E: { owner: 'ref:U!', secretish: 'text?' } },
+    roles: { entity: 'U', login: 'name', password: 'pass', role: 'role', can: { m: {} } },
+    override });
+  assert.deepEqual(validate(g({ 'E.detail': { private: { secretish: 'owner' } } })), []);
+  const badOwner = validate(g({ 'E.detail': { private: { secretish: 'nope' } } }));
+  assert.ok(badOwner.some((e) => /does not exist/.test(e.message)));
+  const noRoles = validate({ app: 'x', data: { E: { owner: 'ref:E!' } }, override: { 'E.detail': { private: { owner: 'owner' } } } });
+  assert.ok(noRoles.some((e) => /no \/roles declared/.test(e.message)));
+  const rowGraph = { app: 'x', data: { E: { n: 'text!' } }, plugins: [cardsPlugin],
+    pages: [{ id: 'p', title: 'P', widget: { use: 'cards', fen: '@row.n' } }] };
+  const { registry } = await loadPlugins(rowGraph, path.dirname(cardsPlugin));
+  const noRow = validate(rowGraph, registry);
+  assert.ok(noRow.some((e) => /needs a row/.test(e.message)), formatErrors(noRow));
+});
+
+test('checker: item 19 edges — row action fields are typed against the entity, global action fields just need a name', () => {
+  const g = (a) => ({ app: 'x', data: { E: { n: 'text!' } }, actions: [a] });
+  assert.deepEqual(validate(g({ name: 'a', in: 'E', fields: ['n'], do: [{ block: 'db.update', set: { n: '@values.n' } }] })), []);
+  const badField = validate(g({ name: 'a', in: 'E', fields: ['ghost'], do: [{ block: 'db.update', set: { n: '1' } }] }));
+  assert.ok(badField.some((e) => /does not exist/.test(e.message)));
+  assert.deepEqual(validate(g({ name: 'a', fields: ['msg'], do: [{ block: 'db.update', set: { n: '1' } }, { block: 'db.createRow', entity: 'E', values: { n: '@values.msg' } }] })), []);
+  const notArray = validate(g({ name: 'a', fields: 'oops', do: [{ block: 'db.update', set: { n: '1' } }] }));
+  assert.ok(notArray.some((e) => /must be an array/.test(e.message)));
 });
 
 test('checker: a derived field may read "id", but not hop through it', () => {

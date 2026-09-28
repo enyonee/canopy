@@ -111,6 +111,8 @@ test('where clauses: ranges, sets, likes, null, and the same on derived fields i
   assert.deepEqual(ids({ where: { status: { ne: 'paid' } } }), [cheap, bare].sort());
   assert.deepEqual(ids({ where: { due: { like: '2026-01' } } }), [cheap]);
   assert.deepEqual(ids({ where: { customer: null } }), [bare]);
+  assert.deepEqual(ids({ where: { customer: { ne: null } } }), [cheap, dear].sort(), 'item 16: "ne: null" is IS NOT NULL, not silently dropped');
+  assert.deepEqual(ids({ where: { net: { ne: null } } }), [cheap, dear].sort(), 'the same on a derived field, in memory');
   assert.deepEqual(ids({ where: { customer: undefined, status: '' } }), [cheap, dear, bare].sort(), 'empty comparisons are dropped');
   assert.deepEqual(ids({ where: { due: { gte: '', lte: null } } }), [cheap, dear, bare].sort());
   assert.throws(() => store.list('Order', { where: { due: { between: 1 } } }), /unknown comparison "between" on Order\.due; known: gte, lte, gt, lt, ne, in, like/);

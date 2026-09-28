@@ -28,5 +28,12 @@ export function checkWidget(h, node, path, entity) {
     return;
   }
   for (const key of w.props || []) if (node[key] === undefined) err(path, `widget "${node.use}" requires prop "${key}"`, w.summary);
+  // Item 18: a prop may be "@row.field", resolved server-side — only where a row exists
+  // ("Entity.detail".widget, never pages[].widget) and only against a real, non-secret field.
+  for (const [key, v] of Object.entries(node)) {
+    if (key === 'use' || typeof v !== 'string' || !v.startsWith('@row.')) continue;
+    if (!entity) err(`${path}/${key}`, '"@row.*" needs a row: this widget has none (it is on pages[], not "Entity.detail")');
+    else checkField(entity, v.slice(5), `${path}/${key}`, { secret: true });
+  }
   if (w.check) w.check(node, { err, fields, entity, graph, path, checkEntity, checkField });
 }

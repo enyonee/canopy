@@ -35,7 +35,7 @@ function listRoute(ctx, entity, fields, ov) {
   if (wantsCsv) { exportRows(entity, entity, all, ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name), ov.labels || {}); return true; }
   const pg = paged(all, ov);
   ctx.answer(200, listView(graph, store, entity, fields, pg.rows, { q, where, flash, vc, range, query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }),
-    { rows: pg.rows.map((r) => rowJSON(store, entity, fields, r)), total: pg.total, page: pg.page, pages: pg.pages });
+    { rows: pg.rows.map((r) => rowJSON(store, entity, fields, r, vc)), total: pg.total, page: pg.page, pages: pg.pages });
   return true;
 }
 
@@ -71,7 +71,7 @@ async function createRoute(ctx, entity, fields, formOv) {
   // row, exactly like an action/transition's confirm already does.
   const createdRow = store.get(entity, id);
   const flash = formOv.confirm ? interp.interpolate(formOv.confirm, { rowEntity: entity, row: createdRow, id, created: id }) : `${label(entity)} saved successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id, created: id, flash, row: rowJSON(store, entity, fields, createdRow) }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id, created: id, flash, row: rowJSON(store, entity, fields, createdRow, vc) }); return true; }
   ok(interp.afterPath(formOv.after || `/${entity}`, entity, id, { created: id }), flash);
   return true;
 }
@@ -100,7 +100,7 @@ async function updateRoute(ctx, entity, fields, formOv, id, row) {
   }
   const updated = store.get(entity, id);
   const flash = formOv.confirmEdit ? interp.interpolate(formOv.confirmEdit, { rowEntity: entity, row: updated, id }) : `${label(entity)} updated successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: updated.id, flash, row: rowJSON(store, entity, fields, updated) }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: updated.id, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
   ok(interp.afterPath(formOv.afterEdit || `/${entity}`, entity, id), flash);
   return true;
 }
@@ -150,7 +150,7 @@ async function getRoutes(ctx, entity, fields, ov) {
     if (parts.length === 2) {
       if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
       const current = await fireViewed(ctx, entity, row);
-      ctx.answer(200, detailView(graph, store, entity, fields, current, flash, vc), rowJSON(store, entity, fields, current));
+      ctx.answer(200, detailView(graph, store, entity, fields, current, flash, vc), rowJSON(store, entity, fields, current, vc));
       return true;
     }
     if (vc.can(entity, 'edit', row)) send(200, formView(graph, store, entity, fields, row, 'edit', [], vc, flash)); else ctx.deny();

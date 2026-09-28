@@ -26,7 +26,7 @@ function sectionHtml(graph, store, vc, resolveTop, s) {
   const listFields = store.fields[l.entity];
   const cols = l.columns || listFields.filter((f) => !f.type.secret).map((f) => f.name);
   const head = cols.map((c) => `<th>${esc(label(c))}</th>`).join('');
-  const body = rows.map((r) => `<tr>${cols.map((c) => cell(store, l.entity, listFields, r, c, l.labels || {})).join('')}</tr>`).join('');
+  const body = rows.map((r) => `<tr>${cols.map((c) => cell(store, l.entity, listFields, r, c, l.labels || {}, vc)).join('')}</tr>`).join('');
   return `<h3>${esc(l.title || plural(label(l.entity)))}</h3><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
@@ -35,7 +35,11 @@ export function staticPage(graph, p, flash, vc = anyone, store = null, resolveTo
   const links = (p.links || []).map((l) => `<a class="btn" href="${esc(l.href)}">${esc(l.label)}</a>`).join(' ');
   const buttons = (p.actions || []).map((a) => {
     const act = (graph.actions || []).find((x) => x.name === a);
-    return `<form class="inline" method="post" action="/action/${esc(a)}"><button type="submit">${esc(act?.title || label(a))}</button></form>`;
+    // Item 19: a global action has no entity to type its fields against, so
+    // each is just a required plain-text input.
+    const inputs = (act?.fields || []).map((f) =>
+      `<label for="f_${f}">${esc(label(f))}</label><input type="text" id="f_${f}" name="${f}" required>`).join('');
+    return `<form class="${inputs ? 'card' : 'inline'}" method="post" action="/action/${esc(a)}">${inputs}<button type="submit">${esc(act?.title || label(a))}</button></form>`;
   }).join(' ');
   const sections = (p.sections || []).map((s) => sectionHtml(graph, store, vc, resolveTop, s)).join('');
   return page(graph, { title: p.title, flash, vc, refresh: p.refresh,

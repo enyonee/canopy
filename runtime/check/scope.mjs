@@ -41,7 +41,12 @@ function createEntityFieldChecks(h) {
     for (const [f, cmp] of Object.entries(where || {})) {
       if (f !== 'id' && !checkField(entity, f, `${path}/${f}`)) continue;
       if (cmp && typeof cmp === 'object' && !Array.isArray(cmp))
-        for (const op of Object.keys(cmp)) if (!CMP.includes(op)) err(`${path}/${f}/${op}`, `unknown comparison "${op}"`, `comparisons: ${CMP.join(', ')}`);
+        for (const [op, v] of Object.entries(cmp)) {
+          if (!CMP.includes(op)) { err(`${path}/${f}/${op}`, `unknown comparison "${op}"`, `comparisons: ${CMP.join(', ')}`); continue; }
+          // item 16: "null" is only meaningful on "ne" (IS NOT NULL); a bare field set to
+          // null is already IS NULL, and every other comparison against null is never true.
+          if (v === null && op !== 'ne') err(`${path}/${f}/${op}`, `"${op}: null" is never true`, '{"ne": null} means IS NOT NULL; the field itself set to null means IS NULL');
+        }
     }
   };
 

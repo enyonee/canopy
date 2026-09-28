@@ -45,7 +45,7 @@ const safeNext = (to) => (typeof to === 'string' && /^\/(?![/\\])[^\s\x00-\x1f]*
 
 // ?sort=&dir=&page= on any list, and its CSV export — split out only to keep
 // createContext() under the function-size budget.
-function createListHelpers(url, store, sendCsv) {
+function createListHelpers(url, store, sendCsv, vc) {
   const paged = (rows, ov) => {
     const size = ov.pageSize || 50;
     const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
@@ -60,7 +60,7 @@ function createListHelpers(url, store, sendCsv) {
   };
   const exportRows = (name, entity, rows, cols, labels) => {
     const fields = store.fields[entity];
-    const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels) : r[c]; };
+    const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels, vc) : r[c]; };
     return sendCsv(name, cols.map(label), rows.map((r) => cols.map((c) => pick(r, c))));
   };
   return { paged, sortOf, exportRows };
@@ -90,6 +90,7 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
     user, role,
     can: (e, op, row) => perms.can(user, e, op, row),
     canSee: (item) => perms.canSee(user, item),
+    isAdmin: !perms.enabled || perms.isAdmin(user),
     ownField: (e) => perms.ownField(user, e),
     ownWhere: (e, op) => ownWhere(e, op),
     ownOk: (e, row, op) => perms.ownOk(user, e, row, op),
@@ -105,7 +106,7 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
   let bodyOnce = null;
   const body = () => (bodyOnce ??= parseBody(req, filesDir));
   const resolveTop = interp.resolve({ user, values: {} });
-  const { paged, sortOf, exportRows } = createListHelpers(url, store, sendCsv);
+  const { paged, sortOf, exportRows } = createListHelpers(url, store, sendCsv, vc);
 
   return {
     req, res, url, parts, flash, wantsCsv, wantsJSON, headers,

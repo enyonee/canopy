@@ -94,7 +94,10 @@ Keys are `"Entity.list"`, `"Entity.form"`, `"Entity.detail"`.
 - `filters`: `[ { "name": "Status", "field": "status" } ]` — ref, enum and bool fields get their
   options automatically; `{ "field": "createdAt", "range": true }` adds a from/to form for date,
   time, int or money fields (query params `<field>_from`, `<field>_to`)
-- `where`: a fixed filter, e.g. `{ "active": 1 }` or `{ "id": "@me" }`; comparisons `{ "field": { "gte": …, "lte": …, "gt": …, "lt": …, "ne": …, "in": [...], "like": … } }`; `"@me"`, `"@today"` allowed
+- `where`: a fixed filter, e.g. `{ "active": 1 }` or `{ "id": "@me" }`; comparisons `{ "field": { "gte": …, "lte": …, "gt": …, "lt": …, "ne": …, "in": [...], "like": … } }`; `"@me"`, `"@today"` allowed.
+  The field itself set to `null` is `IS NULL`; `{ "ne": null }` is `IS NOT NULL` — the one place `null`
+  is meaningful in a comparison; the checker refuses a literal `null` on every other comparison
+  (`{ "gte": null }`, …), which is never true and was silently ignored before.
 - `sort`: `{ "field": "createdAt", "dir": "desc" }` — the default; every column header sorts (`?sort=&dir=`)
 - `pageSize`: rows per page (default 50); `?page=N`; the row count and a CSV link (`/Entity.csv`, same query) are under every list
 - `rowActions`: any of `"view"`, `"edit"`, `"delete"`, `"go:<transition>"`, `"<action name>"` (an action with `"in"` this entity); default `["edit", "delete"]`
@@ -110,6 +113,13 @@ Keys are `"Entity.list"`, `"Entity.form"`, `"Entity.detail"`.
 `Entity.detail`:
 - `fields` (which to show; derived allowed), `labels`
 - `actions`: row actions shown as buttons
+- `private`: `{ "holeCards": "player" }` — that field is shown only to the user `player` (a direct
+  `ref:<roles entity>` field of this same entity) names, plus any admin; anyone else reads it as
+  hidden (`"Hidden"`/`null`/blank, depending on output). One predicate (not a per-view setting)
+  covers every place the field could otherwise leak: this entity's own detail and list pages
+  (HTML), its JSON answers, and its CSV export. A related child table, a saved list, a page
+  section and search results all read the same field the same way, so the same redaction applies
+  there too — `private` is declared once, on `.detail`, and enforced wherever the field is read.
 - `related`: `[ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": [...], "form": ["qty"] | false, "fill": {…}, "submit": "Add", "confirm": "…", "rowActions": ["edit", "delete"] } ]` — a child table with an inline add form; `fill` resolves `@row.*` against the **parent** row (the one the detail page is showing), unlike `Entity.form`'s top-level `fill`, which runs before any row of the new entity exists and has no `@row`
 
 ## Lists, dashboards, pages
@@ -153,6 +163,11 @@ entity (global actions: on `"*"`). A row's action button uses the exact same pre
 that runs it — it is never offered where the server would then refuse, and never hidden where the server
 would allow it.
 `confirm` interpolates `{row.field}`, `{found.field}`, `{created}`, `{made}`, `{delivery}`, `{me}`; money formats as `12.34`.
+`fields`: an input form on the button, like a transition's own `fields` — a row action's are real, stored, typed
+fields of `in` (required, validated the same way); a global action has no entity to type them against, so its
+are plain required text inputs (still reachable as `@values.<name>` in `do`). Offered as a real form (rendered
+next to the row's transition forms, or on the page for a global action); a bare row-action or list button is
+never given one (same as a transition with `fields` in a list row).
 
 Every step is `{ "block": "<name>", …parameters }`. Values may be literals, `"@row.field"`, `"@each.field"`, `"@found.id"`, `"@picked.field"`, `"@values.name"`, `"@me"`, `"@created"`, `"@now"`, `"@today"`, or `"= <expression>"`.
 
@@ -323,6 +338,11 @@ a block's `check(step, h)` gets, for anything `props` alone can't express.
 Attach a widget with `"widget": { "use": "chess", …props }` on `pages[].widget` (no row) or
 `"Entity.detail".widget` (given the row). The checker only knows what the widget declared: unknown widget or a
 missing required prop is an error with a hint, same as everywhere else.
+
+A prop's value may be `"@row.field"` — resolved server-side against the row (never on `pages[].widget`, which
+has none), from the same JSON shape a JSON GET of that row returns (secrets dropped, derived fields included).
+`data-props` carries the resolved value, not the literal string; the checker rejects `@row.*` on a widget with
+no row, and a field name it does not recognise (or that is secret) on one that does.
 
 Rendered as:
 ```html

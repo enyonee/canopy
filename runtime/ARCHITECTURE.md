@@ -16,8 +16,8 @@
 | 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
 | 4 | `store.mjs`, `outbox.mjs` | хранилище (SQLite) и исходящий ящик |
 | 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
-| 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 4); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
-| 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 4) |
+| 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 5); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
+| 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 5) |
 | 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule}.mjs` | маршруты, поверх интерпретатора и рендера |
 | 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний |
 | 10 | `cli.mjs`, `run.mjs` | точка входа |
@@ -25,7 +25,7 @@
 `node:` втроенные модули — по отдельной таблице в `tests/arch.test.mjs`: `node:sqlite`
 только в `store.mjs`; `node:http` только в `server.mjs`; `node:fs` также в `routes/widgets.mjs`
 (читает файл виджета, который назвал плагин) и в `boot.mjs` (копирует сидируемый файл в
-`files/`, раунд 4); `fs`/`path` — там же, где сегодня
+`files/`, раунд 5); `fs`/`path` — там же, где сегодня
 (`auth.mjs`, `patch.mjs`, `server.mjs`, `cli.mjs`, `routes/context.mjs`, `routes/system.mjs`, `boot.mjs`).
 
 ## Кто чем владеет

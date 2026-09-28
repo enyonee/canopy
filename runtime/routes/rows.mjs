@@ -10,6 +10,13 @@ async function runAction(ctx, entity, fields, id, row) {
   if (!action) { ctx.answer(404, errorPage(graph, `no action ${parts[3]} on ${entity}`), { ok: false, status: 404, errors: [`no action ${parts[3]} on ${entity}`] }); return true; }
   if (!mayRunAction(vc, entity, action, row)) { ctx.deny(); return true; }
   const submitted = await ctx.body();
+  if (action.fields?.length) {
+    // Item 19: a row action's declared fields are typed and required, exactly
+    // like a transition's own `fields`.
+    const problems = interp.validateValues(entity, submitted, { partial: true, existing: row });
+    for (const f of action.fields) if (submitted[f] === undefined || String(submitted[f]).trim() === '') problems.push(`${f} is required`);
+    if (problems.length) { ctx.answer(400, detailView(graph, store, entity, fields, row, problems.join('; '), vc), { ok: false, status: 400, errors: problems }); return true; }
+  }
   let out;
   try { out = await interp.attempt(() => interp.runSteps(action.do, { rowEntity: entity, id, row, values: submitted, user })); }
   catch (e) {
@@ -18,7 +25,7 @@ async function runAction(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = action.confirm ? interp.interpolate(action.confirm, out) : '';
-  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated) }); return true; }
+  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
   ok(interp.afterPath(action.after || `/${entity}`, entity, id, { created: out.created }), flash);
   return true;
 }
@@ -53,7 +60,7 @@ async function runTransition(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = t.confirm ? interp.interpolate(t.confirm, out) : `${label(entity)} is now ${t.to}`;
-  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated) }); return true; }
+  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
   ok(interp.afterPath(t.after || `/${entity}/${id}`, entity, id, { created: out.created }), flash);
   return true;
 }
@@ -89,7 +96,7 @@ async function addRelated(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = rel.confirm || `${label(child)} added successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: kid, created: kid, flash, row: rowJSON(store, child, store.fields[child], store.get(child, kid)) }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: kid, created: kid, flash, row: rowJSON(store, child, store.fields[child], store.get(child, kid), vc) }); return true; }
   ok(`/${entity}/${id}`, flash);
   return true;
 }

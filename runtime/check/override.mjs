@@ -43,6 +43,22 @@ function checkByRole(entity, key, ov, h) {
   }
 }
 
+// "Entity.detail".private redacts a field to just the user its named owner field
+// names, plus any admin (item 17) — the owner must be a direct ref:<roles.entity>
+// field of this same entity, exactly like a single-field "own".
+function checkPrivate(graph, entity, key, ov, h) {
+  const { err, checkField, fields } = h;
+  if (!graph.roles) return err(`${key}/private`, 'no /roles declared, so there is no user to make a field private to');
+  for (const [field, owner] of Object.entries(ov.private || {})) {
+    const p = `/override/${key}/private/${field}`;
+    checkField(entity, field, p, { secret: true });
+    if (checkField(entity, owner, p)) {
+      const f = fields[entity][owner];
+      if (f.kind !== 'ref' || f.target !== graph.roles.entity) err(p, `"${owner}" must be a "ref:${graph.roles.entity}" field of ${entity}`);
+    }
+  }
+}
+
 export function check(graph, h) {
   const { err, checkEntity, checkField, checkWhere, fields, stateNames, actionNames } = h;
   for (const [key, ov] of Object.entries(graph.override || {})) {
@@ -50,6 +66,7 @@ export function check(graph, h) {
     if (!checkEntity(entity, `/override/${key}`)) continue;
     if (!VIEWS.includes(kind)) { err(`/override/${key}`, `unknown view "${kind}"`, `views are: ${VIEWS.join(', ')}`); continue; }
     if (kind === 'form' && ov.byRole) checkByRole(entity, key, ov, h);
+    if (kind === 'detail' && ov.private) checkPrivate(graph, entity, key, ov, h);
     (ov.columns || []).forEach((f) => f === 'id' || checkField(entity, f, `/override/${key}/columns`, { secret: true }));
     (ov.search || []).forEach((f) => checkField(entity, f, `/override/${key}/search`, { stored: true }));
     (ov.fields || []).forEach((f) => checkField(entity, f, `/override/${key}/fields`, { stored: kind === 'form', secret: kind === 'detail' }));

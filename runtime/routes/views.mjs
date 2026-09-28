@@ -123,7 +123,7 @@ function list(ctx) {
   const cols = view.columns || store.fields[l.entity].filter((f) => !f.type.secret).map((f) => f.name);
   if (wantsCsv) { exportRows(l.id, l.entity, all, cols, view.labels || {}); return true; }
   const pg = paged(all, view);
-  if (ctx.wantsJSON) { ctx.sendJson(200, { rows: pg.rows.map((r) => rowJSON(store, l.entity, store.fields[l.entity], r)), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { rows: pg.rows.map((r) => rowJSON(store, l.entity, store.fields[l.entity], r, vc)), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
   const g = { ...graph, override: { ...graph.override, [`${l.entity}.list`]: view } };
   ctx.send(200, listView(g, store, l.entity, store.fields[l.entity], pg.rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, path: `/list/${l.id}`,
     query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }));
@@ -142,7 +142,7 @@ function search(ctx) {
     return { entity, rows };
   });
   if (ctx.wantsJSON) {
-    ctx.sendJson(200, { results: results.map(({ entity, rows }) => ({ entity, rows: rows.map((r) => rowJSON(store, entity, store.fields[entity], r)) })) });
+    ctx.sendJson(200, { results: results.map(({ entity, rows }) => ({ entity, rows: rows.map((r) => rowJSON(store, entity, store.fields[entity], r, vc)) })) });
     return true;
   }
   ctx.send(200, searchView(graph, store, q, results, vc));

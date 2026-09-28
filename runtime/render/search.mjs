@@ -9,7 +9,7 @@ export function searchView(graph, store, q, results, vc = anyone) {
     const ov = graph.override?.[`${entity}.list`] || {};
     const cols = ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name);
     const head = cols.map((c) => `<th>${esc(label(c))}</th>`).join('');
-    const body = rows.map((r) => `<tr>${cols.map((c) => cell(store, entity, fields, r, c, ov.labels || {})).join('')}</tr>`).join('');
+    const body = rows.map((r) => `<tr>${cols.map((c) => cell(store, entity, fields, r, c, ov.labels || {}, vc)).join('')}</tr>`).join('');
     return `<h3>${esc(ov.title || plural(label(entity)))}</h3>${rows.length
       ? `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
       : '<p class="muted">No matches.</p>'}`;

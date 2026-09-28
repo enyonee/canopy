@@ -196,6 +196,7 @@ export interface ViewContext {
   ownField: (entity: string) => string | null;
   ownWhere: (entity: string, op?: string) => Record<string, any>;
   ownOk: (entity: string, row: any, op?: string) => boolean;
+  isAdmin?: boolean;
   outbox?: boolean;
   enabled?: boolean;
 }

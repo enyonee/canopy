@@ -14,7 +14,7 @@ export const plural = (word) => /[^aeiou]y$/i.test(word) ? word.slice(0, -1) + '
 export { esc, label };
 
 /** @type {import('./types.d.ts').ViewContext} */
-export const anyone = { user: null, role: null, can: (_e, _op, _row) => true, canSee: (_item) => true, ownField: (_e) => null, ownWhere: (_e) => ({}), ownOk: (_e, _row, _op) => true, enabled: false };
+export const anyone = { user: null, role: null, can: (_e, _op, _row) => true, canSee: (_item) => true, isAdmin: true, ownField: (_e) => null, ownWhere: (_e) => ({}), ownOk: (_e, _row, _op) => true, enabled: false };
 
 export function page(graph, { title, body, flash = '', vc = anyone, refresh = null }) {
   const bg = graph.theme?.background || 'white';
@@ -89,14 +89,27 @@ function navLinks(graph, vc) {
   return out.join('');
 }
 
+// Item 17: "Entity.detail".private redacts one field to just the user its named
+// (direct, ref:<roles.entity>) owner field names, plus any admin — one predicate,
+// consulted by every output a field can reach (HTML detail/list, JSON, CSV), so
+// declaring it once on ".detail" is never bypassed by reading the row another way.
+function mayReadField(graph, entity, field, row, vc = anyone) {
+  const owner = graph?.override?.[`${entity}.detail`]?.private?.[field];
+  if (!owner || !row) return true;
+  if (vc.isAdmin) return true;
+  return vc.user ? String(row[owner]) === String(vc.user.id) : false;
+}
+const HIDDEN = '<span class="muted">Hidden</span>';
+
 // One value, formatted by its field kind. HTML out, already escaped.
-export function fmt(store, entity, f, row, labels = {}) {
+export function fmt(store, entity, f, row, labels = {}, vc = anyone) {
+  if (!mayReadField(store.graph, entity, f.name, row, vc)) return HIDDEN;
   return f.type.format(row[f.name], f, { esc, label, store, entity, row, labels });
 }
 
-export const cell = (store, entity, fields, r, c, labels = {}) => {
+export const cell = (store, entity, fields, r, c, labels = {}, vc = anyone) => {
   const f = fields.find((x) => x.name === c);
-  return `<td>${f ? fmt(store, entity, f, r, labels) : esc(r[c])}</td>`;
+  return `<td>${f ? fmt(store, entity, f, r, labels, vc) : esc(r[c])}</td>`;
 };
 
 // Whether this viewer may run this declared action on this row — the one
@@ -153,7 +166,8 @@ export function csv(header, rows) {
   return [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
 }
 // A cell's plain-text value for export: labels for references and booleans, money as 12.34.
-export function plain(store, entity, f, row, labels = {}) {
+export function plain(store, entity, f, row, labels = {}, vc = anyone) {
+  if (!mayReadField(store.graph, entity, f.name, row, vc)) return 'Hidden';
   const v = row[f.name];
   if (f.kind === 'ref') { const t = store.get(f.target, v); return t ? store.label(f.target, t) : ''; }
   if (f.kind === 'bool') { const pair = labels[f.name] || ['No', 'Yes']; return v ? pair[1] : pair[0]; }
@@ -176,9 +190,9 @@ function toJSON(v, f) {
 // «JSON answers») and for a detail widget's `data-row`: every stored and
 // derived field except secrets (derived values are already computed by
 // store.hydrate() by the time a route calls this).
-export function rowJSON(store, entity, fields, row) {
+export function rowJSON(store, entity, fields, row, vc = anyone) {
   const out = { id: row.id };
-  for (const f of fields) if (!f.type.secret) out[f.name] = toJSON(row[f.name], f);
+  for (const f of fields) if (!f.type.secret) out[f.name] = mayReadField(store.graph, entity, f.name, row, vc) ? toJSON(row[f.name], f) : null;
   return out;
 }
 
@@ -190,6 +204,10 @@ export function widgetBlock(node, opts) {
   const { row } = opts || {};
   const props = { ...node };
   delete props.use;
+  // Item 18: a prop may read the row server-side ("@row.field", resolved from the
+  // same JSON shape rowJSON already computes — secrets dropped, derived included),
+  // instead of the model having to name every value in the graph by hand.
+  for (const [k, v] of Object.entries(props)) if (typeof v === 'string' && v.startsWith('@row.')) props[k] = row ? row[v.slice(5)] : null;
   const rowAttr = row !== undefined ? ` data-row='${esc(JSON.stringify(row))}'` : '';
   return `<div class="widget" data-widget="${esc(node.use)}" data-props='${esc(JSON.stringify(props))}'${rowAttr}>
     <noscript>This page needs JavaScript to show the ${esc(node.use)} widget.</noscript></div>

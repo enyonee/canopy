@@ -265,7 +265,7 @@ const MUTATIONS = [
 
   // --- R2: widgets, JSON answers, charts, schedule ---
   { name: 'a secret field reaches a JSON answer', file: 'runtime/render.mjs',
-    find: "  for (const f of fields) if (!f.type.secret) out[f.name] = toJSON(row[f.name], f);",
+    find: "  for (const f of fields) if (!f.type.secret) out[f.name] = mayReadField(store.graph, entity, f.name, row, vc) ? toJSON(row[f.name], f) : null;",
     replace: "  for (const f of fields) out[f.name] = toJSON(row[f.name], f);" },
   { name: 'a denied JSON request gets an HTML/redirect answer instead of a JSON body', file: 'runtime/routes/context.mjs',
     find: "    if (wantsJSON) return sendJson(403, { ok: false, status: 403, errors: [message || 'You are not allowed to do this.'] });", replace: "" },
@@ -321,6 +321,20 @@ const MUTATIONS = [
   { name: "item 15: Entity.form's confirm/confirmEdit stop interpolating the written row", file: 'runtime/routes/entity.mjs',
     find: "  const flash = formOv.confirm ? interp.interpolate(formOv.confirm, { rowEntity: entity, row: createdRow, id, created: id }) : `${label(entity)} saved successfully`;",
     replace: "  const flash = formOv.confirm || `${label(entity)} saved successfully`;" },
+
+  // --- more gaps confirmed by app agents, addressed after 1-15 ---
+  { name: 'item 16: "ne: null" is silently dropped again instead of meaning IS NOT NULL', file: 'runtime/store/query.mjs',
+    find: "        if (op === 'ne' && v === null) { clauses.push(`\"${field}\" IS NOT NULL`); continue; }\n        if (v === undefined || v === '' || v === null) continue;",
+    replace: "        if (v === undefined || v === '' || v === null) continue;" },
+  { name: 'item 17: a "private" field is never redacted, from anyone, anywhere', file: 'runtime/render.mjs',
+    find: "function mayReadField(graph, entity, field, row, vc = anyone) {\n  const owner = graph?.override?.[`${entity}.detail`]?.private?.[field];\n  if (!owner || !row) return true;\n  if (vc.isAdmin) return true;\n  return vc.user ? String(row[owner]) === String(vc.user.id) : false;\n}",
+    replace: "function mayReadField() { return true; }" },
+  { name: 'item 18: a widget prop never resolves "@row.field" server-side', file: 'runtime/render.mjs',
+    find: "  for (const [k, v] of Object.entries(props)) if (typeof v === 'string' && v.startsWith('@row.')) props[k] = row ? row[v.slice(5)] : null;",
+    replace: "" },
+  { name: "item 19: a row action's declared fields are never required", file: 'runtime/routes/rows.mjs',
+    find: "  if (action.fields?.length) {\n    // Item 19: a row action's declared fields are typed and required, exactly\n    // like a transition's own `fields`.\n    const problems = interp.validateValues(entity, submitted, { partial: true, existing: row });\n    for (const f of action.fields) if (submitted[f] === undefined || String(submitted[f]).trim() === '') problems.push(`${f} is required`);\n    if (problems.length) { ctx.answer(400, detailView(graph, store, entity, fields, row, problems.join('; '), vc), { ok: false, status: 400, errors: problems }); return true; }\n  }",
+    replace: "" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run
