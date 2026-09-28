@@ -44,7 +44,11 @@
   `queued → sending → sent|failed`); строка, застрявшая в `sending` дольше
   `LEASE_MS` (60 с, часы внедряются через `opts.now`), захватывается снова —
   доставка ровно один раз, а при падении процесса — минимум один раз, поэтому
-  коннектору нужен ключ идемпотентности. Колонка `claimedAt` (epoch мс) добавляется
+  коннектору нужен ключ идемпотентности. Итоговая запись доставки из `flush` —
+  `outboxFinish(id, claimedAt, patch)`: `UPDATE ... WHERE id=? AND claimedAt=? AND status='sending'`;
+  проигравшая аренду медленная доставка отбрасывается и трассируется
+  (`kind:'delivery', stale:true`, результат `'stale'`), не ошибка. Ручные пути
+  (`/outbox/:id/retry`, вызов `deliver` без `claimedAt`) пишут через `outboxUpdate`. Колонка `claimedAt` (epoch мс) добавляется
   `migrate.mjs#migrateOutbox` на месте, в старых базах тоже.
   **Раунд 8–9, батчинг и агрегаты** — `hydrate.mjs`: `hydratePage`/`buildAggCache`/
   `aggValue`. Для каждого агрегатного производного поля прямо на сущности сперва

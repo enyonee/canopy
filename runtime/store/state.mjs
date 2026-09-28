@@ -28,11 +28,18 @@ export function outboxClaim(id, now, leaseMs) {
     .run(now, new Date(now).toISOString(), Number(id), now - leaseMs).changes === 1;
 }
 export function outboxGet(id) { return this.outbox({ id: Number(id) })[0] || null; }
-export function outboxUpdate(id, patch) {
+function outboxSet(db, id, patch, guard, ...guardVals) {
   const sets = [], vals = [];
   for (const [k, v] of Object.entries(patch)) { sets.push(`"${k}"=?`); vals.push(v); }
   sets.push('"updatedAt"=?'); vals.push(new Date().toISOString());
-  this.db.prepare(`UPDATE "_outbox" SET ${sets.join(',')} WHERE id=?`).run(...vals, Number(id));
+  return db.prepare(`UPDATE "_outbox" SET ${sets.join(',')} WHERE id=?${guard}`).run(...vals, Number(id), ...guardVals).changes === 1;
+}
+// Unconditional write by id: manual paths (retry, tests) that hold no claim.
+export function outboxUpdate(id, patch) { outboxSet(this.db, id, patch, ''); }
+// The final write of a delivery: lands only while the row is still the one this
+// flush claimed. False when the lease ran out and another flush took it over.
+export function outboxFinish(id, claimedAt, patch) {
+  return outboxSet(this.db, id, patch, ` AND "claimedAt"=? AND status='sending'`, claimedAt);
 }
 
 export function sessionSet(sid, userId) {
