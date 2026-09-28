@@ -169,7 +169,7 @@ export function csv(header, rows) {
 export function plain(store, entity, f, row, labels = {}, vc = anyone) {
   if (!mayReadField(store.graph, entity, f.name, row, vc)) return 'Hidden';
   const v = row[f.name];
-  if (f.kind === 'ref') { const t = store.get(f.target, v); return t ? store.label(f.target, t) : ''; }
+  if (f.kind === 'ref') return store.labelOf(f.target, v);
   if (f.kind === 'bool') { const pair = labels[f.name] || ['No', 'Yes']; return v ? pair[1] : pair[0]; }
   if (f.kind === 'money') return formatMoney(v);
   if (f.type.secret) return '';

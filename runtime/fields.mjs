@@ -84,7 +84,7 @@ export const FIELDS = {
   ref: { sql: 'TEXT', exprKind: 'ref', derivable: false, structural: true,
     def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)),
     validate: (v, f, store) => (v && store && !store.raw(f.target, v) ? `${f.name}: there is no ${f.target} #${v}` : null),
-    format: (v, f, { esc, store }) => { const target = store.get(f.target, v); return target ? `<a href="/${f.target}/${target.id}">${esc(store.label(f.target, target))}</a>` : '—'; },
+    format: (v, f, { esc, store }) => { const lbl = store.labelOf(f.target, v); return lbl ? `<a href="/${f.target}/${v}">${esc(lbl)}</a>` : '—'; },
     input: (f, v, { esc, store }) => `<select id="f_${f.name}" name="${f.name}"><option value="">—</option>` + store.list(f.target, {}).map((r) =>
       `<option value="${r.id}"${String(v) === String(r.id) ? ' selected' : ''}>${esc(store.label(f.target, r))}</option>`).join('') + '</select>' },
   file: { sql: 'TEXT', exprKind: 'text', derivable: false, upload: true,

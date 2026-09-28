@@ -94,18 +94,55 @@ export function countRaw(entity, opts = {}) {
   return Number(this.prepare(`SELECT COUNT(*) AS n FROM "${entity.toLowerCase()}"${sql}`).get(...vals).n);
 }
 
-// Every row of `entity` whose `via` column names one of `ids` — one query,
-// however many parents it serves (buildAggCache's prefetch, and anything else
-// that needs "the children of a whole batch of rows" in one round trip).
-// `via` is always a `ref` field, stored as TEXT (runtime/fields.mjs's
-// ref.sql) — `clauses()` always coerces a ref comparison's value through
-// `coerce()` (= String) before binding it, and an unrelated bound INTEGER
-// does not get SQLite's column-affinity treatment the way a bare `=` would,
-// so an IN-list of raw numeric ids would silently match nothing.
+// Bound well under SQLite's own SQLITE_MAX_VARIABLE_NUMBER (32766 since
+// 3.32.0, as little as 999 before it — never assume the higher number) and
+// under engines that choke on spreading a huge array of bound values before
+// that. A full-table hydrate (CSV of a big table) or a single page whose rows
+// fan out wide enough can each alone put more than that many parent ids into
+// one prefetch.
+const IN_CHUNK = 5000;
+
+// Every row of `entity` whose `via` column names one of `ids` — as few
+// queries as `ids.length` allows within IN_CHUNK, in the same order a plain
+// `listRaw` would give any one parent's children (`ORDER BY id DESC`, item
+// C's fix — the unbatched path this replaces never sorted any other way, and
+// a batched sum/avg must accumulate its floats in the same order or the last
+// digit can differ). `via` is always a `ref` field, stored as TEXT
+// (runtime/fields.mjs's ref.sql) — `clauses()` always coerces a ref
+// comparison's value through `coerce()` (= String) before binding it, and an
+// unrelated bound INTEGER does not get SQLite's column-affinity treatment the
+// way a bare `=` would, so an IN-list of raw numeric ids would silently match
+// nothing. Never cached (`this.db.prepare`, not `this.prepare`): the chunk
+// boundary varies with `ids.length`, so the SQL text rarely repeats, and
+// caching it would only evict statements that do.
 export function listRawIn(entity, via, ids) {
   if (!ids.length) return [];
-  const vals = ids.map(String);
-  return this.prepare(`SELECT * FROM "${entity.toLowerCase()}" WHERE "${via}" IN (${vals.map(() => '?').join(',')})`).all(...vals);
+  const table = entity.toLowerCase();
+  const out = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const vals = ids.slice(i, i + IN_CHUNK).map(String);
+    const sql = `SELECT * FROM "${table}" WHERE "${via}" IN (${vals.map(() => '?').join(',')}) ORDER BY id DESC`;
+    out.push(...this.db.prepare(sql).all(...vals));
+  }
+  return out;
+}
+
+// The cheap twin of `label(entity, get(entity, id))`: a label never needs any
+// field but the label field itself, so this reads the raw row (no children,
+// no other derived field) and derives only that one field, only if it is
+// derived at all. Every "render a reference as its label" site (a ref cell in
+// a list/detail/CSV, a dashboard's ref groupBy) must call this, not `get()` +
+// `label()` — hydrating the whole target row costs as much as its most
+// expensive derived field even when the label is a plain stored column
+// (tests/arch.test.mjs's "no ref-label site re-hydrates…" gate enforces it).
+export function labelOf(entity, id) {
+  const row = this.raw(entity, id);
+  if (!row) return '';
+  const lf = this.labelField(entity);
+  if (!lf) return `#${row.id}`;
+  const f = this.field(entity, lf);
+  const v = f.derive ? this.derived(entity, row, f) : row[lf];
+  return v ? String(v) : `#${row.id}`;
 }
 
 export function list(entity, opts = {}) {

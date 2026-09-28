@@ -111,6 +111,12 @@ test('batched hydration matches per-row hydration exactly, on random data (prope
   // A tiny seeded PRNG (mulberry32) — deterministic, so a failure is reproducible.
   let seed32 = 0x2026_0928;
   const rand = () => { seed32 |= 0; seed32 = (seed32 + 0x6D2B79F5) | 0; let t = Math.imul(seed32 ^ (seed32 >>> 15), 1 | seed32); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  // Item C: 0.1/0.2/0.7-shaped money values are exactly where float summation
+  // order shows up in the last digit — mixed in among ordinary random prices,
+  // over enough rows per order that a wrong accumulation order has a real
+  // chance to round differently.
+  const TRICKY = [0.1, 0.2, 0.7, 1.1, 2.2, 0.3, 0.01, 99.99];
+  const price = () => (rand() < 0.4 ? TRICKY[Math.floor(rand() * TRICKY.length)] : Number((1 + rand() * 99).toFixed(2)));
   const store = new Store(BENCH_GRAPH, ':memory:');
   const customers = [];
   for (let c = 0; c < 40; c++) customers.push(store.insert('Customer', { name: `C${c}` }));
@@ -119,8 +125,8 @@ test('batched hydration matches per-row hydration exactly, on random data (prope
     const oid = store.insert('Order', { customer: customers[Math.floor(rand() * customers.length)], status: rand() < 0.5 ? 'new' : 'paid' });
     orders.push(oid);
   }
-  for (let i = 0; i < 600; i++) {
-    store.insert('Item', { order: orders[Math.floor(rand() * orders.length)], title: `I${i}`, qty: 1 + Math.floor(rand() * 5), price: (1 + rand() * 99).toFixed(2) });
+  for (let i = 0; i < 4000; i++) {
+    store.insert('Item', { order: orders[Math.floor(rand() * orders.length)], title: `I${i}`, qty: 1 + Math.floor(rand() * 5), price: price() });
   }
 
   for (const entity of ['Order', 'Customer']) {
@@ -129,4 +135,60 @@ test('batched hydration matches per-row hydration exactly, on random data (prope
     const batched = store.hydratePage(entity, raw);
     assert.deepEqual(batched, perRow, `${entity}: batched hydration differs from per-row hydration`);
   }
+});
+
+// --- item A: a ref label must never hydrate the whole target row -----------
+test('a ref label reads only the label field, never the target row\'s other derived fields (item A)', () => {
+  const store = new Store(BENCH_GRAPH, ':memory:');
+  const c = store.insert('Customer', { name: 'Solo' });
+  for (let i = 0; i < 50; i++) {
+    const o = store.insert('Order', { customer: c, status: 'new' });
+    store.insert('Item', { order: o, title: 'x', qty: 1, price: 1 });
+  }
+  let derivedCalls = 0;
+  const orig = store.derived;
+  store.derived = function counted(...args) { derivedCalls++; return orig.apply(this, args); };
+  let label;
+  try { label = store.labelOf('Customer', c); } finally { store.derived = orig; }
+  assert.equal(label, 'Solo');
+  // Customer.orders/spent are both derived and both expensive (they aggregate
+  // every one of this customer's orders) — labelOf must touch neither, only
+  // "name", which is a plain stored field here.
+  assert.equal(derivedCalls, 0, `labelOf ran ${derivedCalls} derived-field computations to read a plain stored label`);
+});
+
+// --- item B: an IN-list past SQLite's bound-parameter limit must not fail --
+test('listRawIn chunks the IN-list instead of binding every id in one query (item B)', () => {
+  const store = new Store(BENCH_GRAPH, ':memory:');
+  let prepares = 0;
+  const orig = store.db.prepare.bind(store.db);
+  store.db.prepare = (sql) => { prepares++; return orig(sql); };
+  const ids = Array.from({ length: 12000 }, (_, i) => i + 1); // synthetic — no matching rows needed
+  let rows;
+  try { rows = store.listRawIn('Item', 'order', ids); } finally { store.db.prepare = orig; }
+  assert.deepEqual(rows, []);
+  assert.equal(prepares, 3, `expected ceil(12000/5000)=3 chunked queries, got ${prepares}`);
+});
+
+test('a page of more than 32766 parent ids does not fail (item B, bulk insert)', () => {
+  const store = new Store({ app: 'big', data: {
+    Parent: { name: 'text!', n: 'int := count(Child)' }, Child: { parent: 'ref:Parent!' },
+  }, views: 'auto' }, ':memory:');
+  const N = 35000;
+  store.transaction(() => { for (let i = 0; i < N; i++) store.insert('Parent', { name: `p${i}` }); });
+  const rows = store.list('Parent', {}); // one hydratePage() call, ids.length === N
+  assert.equal(rows.length, N);
+  assert.ok(rows.every((r) => r.n === 0), 'no Child rows exist — every count must still come back 0, not throw');
+});
+
+// --- item C: batched children must follow the unbatched path's own order ---
+test('batched children are grouped in the same order the unbatched path reads them (item C)', () => {
+  const store = new Store(BENCH_GRAPH, ':memory:');
+  const c = store.insert('Customer', { name: 'Ann' });
+  for (let i = 0; i < 30; i++) store.insert('Order', { customer: c, status: 'new' });
+  const cache = store.buildAggCache('Customer', [c]);
+  const grouped = cache.groups.get('Order|customer').get(String(c)).map((r) => r.id);
+  const unbatched = store.listRaw('Order', { where: { customer: c } }).map((r) => r.id);
+  assert.ok(grouped.length === 30 && unbatched.length === 30);
+  assert.deepEqual(grouped, unbatched, 'batched grouping must preserve the unbatched (ORDER BY id DESC) order');
 });

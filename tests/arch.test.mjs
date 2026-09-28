@@ -345,6 +345,20 @@ test('no console.log/error in runtime outside the documented startup lines', () 
   assert.deepEqual(bad, [], `console.* outside the allow-list: ${bad.join(', ')}`);
 });
 
+// Round 7's item A: `store.label(entity, store.get(entity, id))` hydrates the
+// whole target row (every derived field, however expensive) just to read one
+// of them — a list/CSV/dashboard cell calling this per row is quadratic in
+// whatever that row's most expensive aggregate costs. `Store#labelOf(entity,
+// id)` reads the raw row and derives only the label field, if that is even
+// derived at all; every render/CSV/dashboard site must call it instead.
+test('no ref-label site re-hydrates the whole target row (store.get + store.label) — use store.labelOf', () => {
+  const bad = [];
+  for (const f of RUNTIME_FILES) {
+    for (const m of MASKED[f].matchAll(/store\.label\([^,]+,\s*store\.get\(/g)) bad.push(`${f}:${lineOf(SOURCE[f], m.index)}`);
+  }
+  assert.deepEqual(bad, [], `store.get() immediately re-labelled instead of store.labelOf(): ${bad.join(', ')}`);
+});
+
 test('no commented-out code (2+ consecutive // lines that parse as JS)', () => {
   const bad = [];
   for (const f of RUNTIME_FILES) {

@@ -14,7 +14,7 @@ const metricValue = (store, entity, fieldName, v) => {
 // its "grp" column (a ref renders its label, an enum its title-case name, a
 // bool Yes/No).
 function groupLabel(store, groupField, g) {
-  if (groupField?.kind === 'ref') return store.label(groupField.target, store.get(groupField.target, g)) || '—';
+  if (groupField?.kind === 'ref') return store.labelOf(groupField.target, g) || '—';
   if (groupField?.kind === 'enum') return g === null ? '—' : label(g);
   if (groupField?.kind === 'bool') return g ? 'Yes' : 'No';
   return String(g ?? '—');
@@ -120,7 +120,7 @@ export function dashboardView(graph, store, dash, flash, vc = anyone, period = {
       (t.metrics || []).map((m) => `<th>${esc(m.title ?? label(m.as))}</th>`).join('');
     const body = rows.map((r) => {
       let g = r.grp;
-      if (groupField?.kind === 'ref') g = store.label(groupField.target, store.get(groupField.target, g)) || null;
+      if (groupField?.kind === 'ref') g = store.labelOf(groupField.target, g) || null;
       if (groupField?.kind === 'enum') g = g === null ? null : label(g);
       if (groupField?.kind === 'bool') g = g ? 'Yes' : 'No';
       return `<tr>${t.groupBy ? `<td>${esc(g ?? '—')}</td>` : ''}${
