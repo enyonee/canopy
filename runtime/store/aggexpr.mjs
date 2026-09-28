@@ -137,10 +137,12 @@ function compileCmp(cx, n) {
   if (!a || !b || !agree(a, b)) return null;
   const scale = a.text || b.text ? undefined : commonScale(a, b), as = scaleTo(a, scale), bs = scaleTo(b, scale);
   const eq = n.op === '=', loose = eq || n.op === '!=';
+  // `=`/`!=` treat two nulls as equal (loose equality); an ordering comparison with a null
+  // operand is not true — which is exactly the CASE's ELSE 0, so it needs no branch of its own.
   const nulls = loose
-    ? `WHEN ${as} IS NULL AND ${bs} IS NULL THEN ${eq ? 1 : 0} WHEN ${as} IS NULL OR ${bs} IS NULL THEN ${eq ? 0 : 1}`
-    : `WHEN ${as} IS NULL OR ${bs} IS NULL THEN 0`;
-  return `(CASE ${nulls} WHEN ${as} ${n.op} ${bs} THEN 1 ELSE 0 END)`;
+    ? `WHEN ${as} IS NULL AND ${bs} IS NULL THEN ${eq ? 1 : 0} WHEN ${as} IS NULL OR ${bs} IS NULL THEN ${eq ? 0 : 1} `
+    : '';
+  return `(CASE ${nulls}WHEN ${as} ${n.op} ${bs} THEN 1 ELSE 0 END)`;
 }
 
 // The pieces of `node` (an `agg` AST node evaluated in the scope of cx.entity, whose
