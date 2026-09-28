@@ -24,13 +24,14 @@
 //
 // A derived field of the child is inlined (its own expression compiled in the
 // child's scope), a derived or written-out aggregate over a grandchild becomes a
-// correlated scalar subquery. Both are bounded (MAX_STACK, MAX_DEPTH, MAX_SQL) and
-// a derived field met again while it is being inlined stops the compile, so a
+// correlated scalar subquery. Both are bounded (MAX_STACK, MAX_DEPTH, and MAX_EXPANSIONS
+// for the work of one plan — a derived field used five times per level doubles every level)
+// and a derived field met again while it is being inlined stops the compile, so a
 // cycle can never loop here; the JS path raises its own error for it, as before.
 
 const MAX_STACK = 8; // derived fields inlined inside one another
 const MAX_DEPTH = 5; // nested subqueries
-const MAX_SQL = 20000; // generated text per value: a derived field used twice doubles it
+export const MAX_EXPANSIONS = 200; // derived fields inlined + subqueries built for one aggregate: a graph cannot make the compiler exponential
 const MAX_SCALE = 1e6; // exact() (rounds to 6 decimals) is the identity up to here, so integers stay faithful
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^\d{4}-\d{2}-\d{2}T[0-9:.Zz+-]*$/;
@@ -49,11 +50,6 @@ const agree = (a, b) => (a.text ? !isNum(b) : b.text ? !isNum(a) : true);
 
 // A value sub-expression, or null when this node (or anything under it) is not representable.
 function compileValue(cx, n) {
-  const v = compileNode(cx, n);
-  return v && v.sql.length <= MAX_SQL ? v : null;
-}
-
-function compileNode(cx, n) {
   if (n.t === 'num') return Number.isSafeInteger(n.v) ? int(String(n.v)) : null;
   if (n.t === 'null') return { sql: 'NULL', scale: null };
   if (n.t === 'str') return DATE.test(n.v) || TIME.test(n.v) ? { sql: `'${n.v}'`, text: true } : null;
@@ -87,7 +83,7 @@ function compileField(cx, name) {
 // fed by a money expression.
 function compileDerived(cx, f) {
   const key = `${cx.entity}.${f.name}`;
-  if (cx.stack.includes(key) || cx.stack.length >= MAX_STACK) return null;
+  if (cx.stack.includes(key) || cx.stack.length >= MAX_STACK || --cx.budget.left < 0) return null;
   const inner = { ...cx, stack: [...cx.stack, key] };
   if (f.kind === 'bool') { const c = compileBool(inner, f.derive); return c && int(c); }
   const v = compileValue(inner, f.derive);
@@ -155,7 +151,7 @@ function compileCmp(cx, n) {
 // (`exprSQL`) or of the condition of a count (`condSQL`), the scale, and whether the
 // value is date/time text — or null when any of it is not representable.
 export function compileBody(cx, node) {
-  if (cx.depth >= MAX_DEPTH) return null;
+  if (cx.depth >= MAX_DEPTH || --cx.budget.left < 0) return null;
   const via = childViaOrNull(cx.store, node.entity, cx.entity, node.via);
   if (!via) return null;
   const inner = { ...cx, entity: node.entity, depth: cx.depth + 1 };

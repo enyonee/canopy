@@ -236,7 +236,7 @@ export function evaluate(ast, ctx, functions = FUNCTIONS) {
         // (no such hook, or this particular node was not representable in SQL)
         // means "evaluate it here, the old way", exactly as before this hook existed.
         if (ctx.agg) { const hit = ctx.agg(n, clock); if (hit !== undefined) return hit; }
-        const rows = ctx.rows(n.entity, n.via).map((r) => ({ get: (p) => (p[0] === 'row' && p.length > 1 ? ctx.get(p.slice(1)) : r.get(p)), rows: r.rows, clock }));
+        const rows = ctx.rows(n.entity, n.via).map((r) => ({ get: (p) => (p[0] === 'row' && p.length > 1 ? ctx.get(p.slice(1)) : r.get(p)), rows: (e, v) => r.rows(e, v), clock }));
         if (n.fn === 'count') return n.body ? rows.filter((r) => truthy(evaluate(n.body, r, functions))).length : rows.length;
         const vals = rows.map((r) => evaluate(n.body, r, functions)).filter((v) => v !== null && v !== undefined);
         if (n.fn === 'sum') return exact(vals.reduce((a, b) => a + b, 0));

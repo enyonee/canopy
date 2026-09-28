@@ -2,7 +2,7 @@
 // is the diff between the graph and the live table. Destructive steps need a marker.
 // Derived fields never touch the schema: they are computed on every read.
 import { DatabaseSync } from 'node:sqlite';
-import { parseField, sqlType, defaultValue, coerce, isStored, toExpr, fromExpr } from './spec.mjs';
+import { parseField, sqlType, defaultValue, coerce, isStored, fromExpr } from './spec.mjs';
 import { evaluate } from './expr.mjs';
 import { hashPassword, isHashed } from './auth.mjs';
 import { DEFAULT } from './registry.mjs';
@@ -11,6 +11,7 @@ import * as hydrate from './store/hydrate.mjs';
 import * as state from './store/state.mjs';
 import * as rules from './store/rules.mjs';
 import * as migrate from './store/migrate.mjs';
+import { RowCtx } from './store/ctx.mjs';
 
 export class Store {
   constructor(graph, file, registry = DEFAULT) {
@@ -216,52 +217,9 @@ export class Store {
   }
 
   // --- derived fields ----------------------------------------------------------
-  // The evaluation context of a row: field reads (money in major units), one hop
-  // through references, and the child rows an aggregate walks. `allowSecret` is
-  // for a rule check on the row's own submitted values (still plain text, not yet
-  // hashed, and never stored): it does not propagate through a hop or an
-  // aggregate, so a referenced row's real password hash stays unreadable.
-  // `cache` (runtime/store/hydrate.mjs's buildAggCache, via hydratePage) is a
-  // purely optional fast path for `rows()`/`agg()`: when it holds this exact
-  // (child, link) grouping (or, for a SQL-compilable aggregate, this exact
-  // scalar) already, that is used instead of a fresh query — for any row
-  // this ctx was ever built for, correlated or not, nested or not, so no
-  // branch here needs to tell those cases apart. Nothing is ever wrong
-  // without it; a cache miss is exactly the query this method always ran.
+  // The evaluation context of a row — runtime/store/ctx.mjs.
   ctx(entity, row, stack = [], { allowSecret = false, cache = null } = {}) {
-    const store = this;
-    return {
-      entity, row, clock: cache?.clock,
-      get(path) {
-        const [head, ...rest] = path;
-        // "id" is read-only and always there (docs/FORMAT.md's «Expressions»): it is
-        // never a declared field, so it is resolved here rather than looked up below.
-        if (head === 'id') {
-          if (rest.length) throw new Error(`${entity}.id is a number, cannot read .${rest[0]} of it`);
-          return row.id;
-        }
-        const f = store.field(entity, head);
-        if (!f) throw new Error(`${entity} has no field "${head}"`);
-        // A password hash is not a value the algebra may copy into an ordinary column.
-        if (f.type.secret && !allowSecret) throw new Error(`${entity}.${head} is secret; expressions cannot read it`);
-        const v = toExpr(f, f.derive ? store.derived(entity, row, f, stack, cache) : row[head]);
-        if (!rest.length) return v;
-        if (f.kind !== 'ref') throw new Error(`${entity}.${head} is ${f.kind}, cannot read .${rest[0]} of it`);
-        const target = store.raw(f.target, v);
-        return target ? store.ctx(f.target, target, stack, { cache }).get(rest) : null;
-      },
-      rows(child, via) {
-        const link = store.childVia(child, entity, via);
-        const grouped = cache?.groups.get(`${child}|${link}`);
-        const key = String(row.id);
-        const raws = grouped?.has(key) ? grouped.get(key) : store.listRaw(child, { where: link ? { [link]: row.id } : {} });
-        return raws.map((r) => store.ctx(child, r, stack, { cache }));
-      },
-      // Tried by runtime/expr.mjs's evaluate() before it calls rows() at all;
-      // `undefined` means "not representable in SQL", which is exactly the
-      // signal that tells evaluate() to fall back to rows() as before.
-      agg(node, clock) { return store.aggValue(entity, row, node, cache, clock); },
-    };
+    return new RowCtx(this, entity, row, stack, allowSecret, cache);
   }
 
   // The field a dotted path ends in, following references; null when it leads nowhere.
