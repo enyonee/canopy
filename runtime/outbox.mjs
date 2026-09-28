@@ -20,9 +20,19 @@ export async function deliver(store, graph, row, { fetchImpl = fetch, trace = (_
   return patch.status;
 }
 
-// Deliver everything that is still queued. Called after a commit, never inside one.
-export async function flush(store, graph, opts) {
+// A row in `sending` whose claim is older than this is taken to belong to a dead
+// process and becomes claimable again: delivery is exactly-once unless a process
+// dies mid-delivery, then at-least-once. Connectors should send an idempotency key.
+export const LEASE_MS = 60000;
+
+// Deliver everything that is queued (or whose lease ran out). Called after a
+// commit, never inside one. A row is delivered only by the caller that claimed
+// it, so overlapping flushes never deliver one row twice.
+export async function flush(store, graph, opts = {}) {
+  const { now = Date.now, leaseMs = LEASE_MS } = opts;
   const out = [];
-  for (const row of store.outbox({ status: 'queued' }).reverse()) out.push(await deliver(store, graph, row, opts));
+  for (const row of store.outboxDue(now(), leaseMs)) {
+    if (store.outboxClaim(row.id, now(), leaseMs)) out.push(await deliver(store, graph, row, opts));
+  }
   return out;
 }

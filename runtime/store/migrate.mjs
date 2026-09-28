@@ -62,3 +62,13 @@ export function migrateIndexes(entity) {
     this.migrations.push(`dropped index ${name} on ${table}`);
   }
 }
+
+// The outbox: every effect that leaves the process is a row here first.
+// "claimedAt" (epoch ms) is the lease of a row in `sending`; a database made
+// before it existed is upgraded in place.
+export function migrateOutbox() {
+  this.db.exec(`CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT,
+    target TEXT, payload TEXT, status TEXT, code INTEGER, error TEXT, attempts INTEGER DEFAULT 0, at TEXT, updatedAt TEXT, claimedAt INTEGER)`);
+  const live = this.prepare(`PRAGMA table_info("_outbox")`).all().map((r) => r.name);
+  if (!live.includes('claimedAt')) this.db.exec(`ALTER TABLE "_outbox" ADD COLUMN "claimedAt" INTEGER`);
+}

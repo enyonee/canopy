@@ -229,6 +229,8 @@ declare module './store.mjs' {
     aggregateInMemory(entity: string, opts: Record<string, any>): any[];
     enqueue(row: { kind: string; connector: string; target: string; payload: any }): number;
     outbox(where?: Record<string, any>): any[];
+    outboxDue(now: number, leaseMs: number): any[];
+    outboxClaim(id: any, now: number, leaseMs: number): boolean;
     outboxGet(id: any): any;
     outboxUpdate(id: any, patch: Record<string, any>): void;
     sessionSet(sid: string, userId: number): string;
@@ -236,5 +238,6 @@ declare module './store.mjs' {
     sessionEnd(sid: string): void;
     checkRules(entity: string, values: Record<string, any>, existing?: any): string[];
     migrateIndexes(entity: string): void;
+    migrateOutbox(): void;
   }
 }

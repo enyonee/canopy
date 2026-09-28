@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../runtime/store.mjs';
-import { deliver, flush } from '../runtime/outbox.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { deliver, flush, LEASE_MS } from '../runtime/outbox.mjs';
+import { DEFAULT } from '../runtime/registry.mjs';
+import { outboxView } from '../runtime/render/pages.mjs';
 import { fakeFetch } from './helpers.mjs';
 
 const graph = {
@@ -83,4 +89,67 @@ test('flush delivers everything queued, oldest first, and leaves the rest alone'
   assert.equal(store.outbox().length, 4);
   assert.equal(store.outbox({ status: 'queued' }).length, 0);
   assert.equal(store.outboxGet(999), null);
+});
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const slowRegistry = (calls, ms = 15) => ({ ...DEFAULT, transports: { ...DEFAULT.transports, http: { deliver: async (row) => { calls.push(row.id); await sleep(ms); return { status: 'sent', code: 200, error: null }; } } } });
+const queue = (store, n) => Array.from({ length: n }, (_, i) => store.enqueue({ kind: 'http', connector: 'hook', target: `http://sink.test/${i}`, payload: i }));
+
+test('two overlapping flushes deliver every row exactly once', async () => {
+  const store = fresh();
+  const ids = queue(store, 4);
+  const calls = [];
+  const registry = slowRegistry(calls);
+  const [a, b] = await Promise.all([flush(store, graph, { registry }), flush(store, graph, { registry })]);
+  assert.deepEqual(calls.slice().sort(), ids.slice().sort(), 'each row was delivered once');
+  assert.equal(a.length + b.length, 4, 'and reported by exactly one of the flushes');
+  assert.ok(a.length > 0 && b.length > 0, 'the work was shared, not serialised');
+  assert.deepEqual(store.outbox().map((r) => [r.status, r.attempts]), ids.map(() => ['sent', 1]));
+});
+
+test('a claim goes to one caller only, and never to a row that is not queued', () => {
+  const store = fresh();
+  const [id] = queue(store, 1);
+  assert.equal(store.outboxClaim(id, 1000, LEASE_MS), true);
+  assert.equal(store.outboxClaim(id, 1000, LEASE_MS), false, 'already sending');
+  assert.equal(store.outboxGet(id).status, 'sending');
+  assert.equal(store.outboxGet(id).claimedAt, 1000);
+  store.outboxUpdate(id, { status: 'sent' });
+  assert.equal(store.outboxClaim(id, 1000 + 10 * LEASE_MS, LEASE_MS), false, 'sent is never claimable');
+  assert.equal(store.outboxClaim(999, 0, LEASE_MS), false, 'no such row');
+});
+
+test('a stale sending row is delivered again after the lease and not before', async () => {
+  const store = fresh();
+  const [id] = queue(store, 1);
+  assert.equal(store.outboxClaim(id, 1000, LEASE_MS), true, 'a process claims it, then dies');
+  const calls = [];
+  const registry = slowRegistry(calls, 0);
+  assert.deepEqual(await flush(store, graph, { registry, now: () => 1000 + LEASE_MS - 1 }), []);
+  assert.deepEqual(calls, [], 'the lease has not run out');
+  assert.deepEqual(await flush(store, graph, { registry, now: () => 1000 + LEASE_MS }), ['sent']);
+  assert.deepEqual(calls, [id]);
+  assert.equal(store.outboxGet(id).attempts, 1);
+  assert.deepEqual(await flush(store, graph, { registry, now: () => 1000 + 5 * LEASE_MS }), [], 'and then it is done');
+});
+
+test('a database made before "claimedAt" existed is upgraded in place, rows kept', () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'outbox-')), 'old.sqlite');
+  const old = new DatabaseSync(file);
+  old.exec(`CREATE TABLE "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT,
+    target TEXT, payload TEXT, status TEXT, code INTEGER, error TEXT, attempts INTEGER DEFAULT 0, at TEXT, updatedAt TEXT)`);
+  old.prepare(`INSERT INTO "_outbox" (kind, connector, target, payload, status, attempts) VALUES ('http','hook','http://sink.test/o','1','queued',0)`).run();
+  old.close();
+  const store = new Store(graph, file);
+  assert.equal(store.outboxGet(1).claimedAt, null);
+  assert.equal(store.outboxClaim(1, 5, LEASE_MS), true);
+  assert.equal(new Store(graph, file).outboxGet(1).claimedAt, 5, 'a second boot finds the column and changes nothing');
+  store.db.close();
+});
+
+test('the outbox screen shows a sending row and offers no retry for it', () => {
+  const rows = [{ id: 1, kind: 'http', connector: 'hook', target: 't', status: 'sending', payload: null, updatedAt: 'x' }];
+  const html = outboxView(graph, rows, null);
+  assert.match(html, /<span class="status">sending<\/span>/);
+  assert.doesNotMatch(html, /retry/);
 });

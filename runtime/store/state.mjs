@@ -13,6 +13,20 @@ export function outbox(where = {}) {
   return this.db.prepare(`SELECT * FROM "_outbox"${clauses.length ? ' WHERE ' + clauses.join(' AND ') : ''} ORDER BY id DESC`).all(...vals)
     .map((r) => ({ ...r, payload: JSON.parse(String(r.payload)) }));
 }
+// Rows a flush may take: queued, or sending with a lease older than leaseMs
+// (the process that claimed them died mid-delivery). Oldest first.
+export function outboxDue(now, leaseMs) {
+  return this.db.prepare(`SELECT * FROM "_outbox" WHERE status='queued' OR (status='sending' AND "claimedAt"<=?) ORDER BY id ASC`)
+    .all(now - leaseMs).map((r) => ({ ...r, payload: JSON.parse(String(r.payload)) }));
+}
+// The atomic claim: one UPDATE that only matches a row nobody holds. True only
+// for the caller whose UPDATE changed the row; the guard, not the caller's
+// earlier read, decides who delivers.
+export function outboxClaim(id, now, leaseMs) {
+  return this.db.prepare(`UPDATE "_outbox" SET status='sending', "claimedAt"=?, "updatedAt"=?
+    WHERE id=? AND (status='queued' OR (status='sending' AND "claimedAt"<=?))`)
+    .run(now, new Date(now).toISOString(), Number(id), now - leaseMs).changes === 1;
+}
 export function outboxGet(id) { return this.outbox({ id: Number(id) })[0] || null; }
 export function outboxUpdate(id, patch) {
   const sets = [], vals = [];
