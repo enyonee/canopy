@@ -1,0 +1,55 @@
+{
+  "app": "Fundraiser Day",
+  "task": "webgen-bench/000017",
+  "note": "One-page promotional site for Fundraiser Day. Every section is data (Testimonial, Offer, CompanyInfo rows), curated by seeding rather than public submission (create: false everywhere — this is a brochure, not a forum). The home page carries the introduction copy plus the one real widget: an auto-advancing offers carousel (plugins/fundraiser.mjs) that fetches /Offer itself and rotates on a timer. Testimonials and company information stay separate scaffold routes linked from home and the nav — the format has no single-DOM-page composition, so 'one page' is a landing page plus its linked sections, the same shape apps/obituaries and apps/poetry already use.",
+  "theme": { "background": "cornsilk", "accent": "peru" },
+  "home": "/page/home",
+  "plugins": ["./plugins/fundraiser.mjs"],
+
+  "data": {
+    "Testimonial": { "name": "text!", "quote": "longtext!", "result": "text" },
+    "Offer": { "title": "text!", "discount": "text!", "description": "longtext!" },
+    "CompanyInfo": { "name": "text!", "mission": "longtext!", "foundedYear": "int!", "role": "longtext!", "email": "text!", "phone": "text" }
+  },
+
+  "seed": {
+    "Testimonial": [
+      { "name": "Maria Gonzalez", "quote": "Fundraiser Day helped us raise more in one afternoon than an entire quarter of bake sales. The energy in the room was incredible.", "result": "Raised $4,200 for the local food bank" },
+      { "name": "James Whitfield", "quote": "Our youth sports league was about to cut two teams. Thanks to Fundraiser Day, every kid who wanted to play, played.", "result": "Funded 2 extra teams for the season" },
+      { "name": "Priya Natarajan", "quote": "I came as a volunteer and left as a believer. Watching strangers open their wallets for a cause they'd never heard of an hour earlier says everything.", "result": "Recruited 15 new volunteers" }
+    ],
+    "Offer": [
+      { "title": "Early Bird Ticket", "discount": "20% off", "description": "Register before the month is out and save 20% on your Fundraiser Day ticket — every dollar saved is a dollar you can pledge instead." },
+      { "title": "Bring-Four Group Package", "discount": "Buy 4, get 1 free", "description": "Rally your friends, family or coworkers: bring four paying guests and the fifth ticket is on us." },
+      { "title": "Sponsor Package", "discount": "Logo + VIP seating", "description": "Local businesses that sponsor Fundraiser Day get their logo on every banner and program, plus a reserved VIP table on the day." }
+    ],
+    "CompanyInfo": [
+      { "name": "Hopewell Community Foundation", "mission": "We connect generous people with the local causes that need them most, one event at a time.",
+        "foundedYear": 2011, "role": "Hopewell Community Foundation founded and organizes Fundraiser Day every year: we book the venue, invite the causes, and make sure every dollar raised reaches the organizations on stage.",
+        "email": "hello@hopewellfoundation.test", "phone": "+1 555 0142" }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Testimonial.list": { "title": "Testimonials", "intro": "Real feedback from people who came to a Fundraiser Day and saw what it raised.",
+                           "columns": ["name", "quote", "result"], "create": false, "rowActions": ["view"] },
+    "Testimonial.detail": { "fields": ["name", "quote", "result"] },
+    "Offer.list": { "title": "Offers", "intro": "Current Fundraiser Day offers — see the carousel on the home page for a quick preview.",
+                     "columns": ["title", "discount", "description"], "create": false, "rowActions": ["view"] },
+    "Offer.detail": { "fields": ["title", "discount", "description"] },
+    "CompanyInfo.list": { "title": "Company Information", "intro": "Who organizes Fundraiser Day.",
+                            "columns": ["name", "foundedYear", "email"], "create": false, "rowActions": ["view"] },
+    "CompanyInfo.detail": { "fields": ["name", "mission", "foundedYear", "role", "email", "phone"] }
+  },
+
+  "pages": [
+    { "id": "home", "title": "Home",
+      "heading": "Fundraiser Day — Give, Celebrate, Change Lives",
+      "body": [
+        "Fundraiser Day is our community's single biggest day of giving: one afternoon, dozens of local causes, and a room full of people who showed up to help. It exists for one purpose — turning an afternoon of food, music and stories into real money for the organizations that need it, from youth sports leagues to the neighborhood food bank.",
+        "Every ticket, every sponsorship and every raffle entry goes straight to the causes on stage that day. Below: what past guests said about it, what you get for showing up this year, and who is behind it all." ],
+      "widget": { "use": "carousel" },
+      "links": [ { "label": "Read testimonials", "href": "/Testimonial" }, { "label": "See all offers", "href": "/Offer" }, { "label": "About the organizer", "href": "/CompanyInfo" } ] }
+  ]
+}

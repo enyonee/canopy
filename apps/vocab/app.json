@@ -1,0 +1,107 @@
+{
+  "app": "WordWise",
+  "task": "webgen-bench/000060",
+  "note": "Adult vocabulary learning site. WordSet/Word/Attempt/BlogPost are rows; Profile is the single simulated visitor (identity, as in apps/poetry/apps/forum — no login, so avatar choice and progress are just this one person's own stored rows). A plugin block (vocab.grade) is the real domain logic: server-side grading shared by all five quiz kinds behind one global action (submitQuiz). Two widgets: vocabquiz (kind switches its rendering across the five activity pages) and waitroom (an avatar picker plus a tiny deterministic waiting-room game, both on one page).",
+  "theme": { "background": "lightgray", "accent": "darkred" },
+  "home": "/page/home",
+  "identity": { "entity": "Profile", "defaults": { "avatar": "fox" } },
+  "plugins": ["./plugins/vocab.mjs"],
+
+  "data": {
+    "Profile": { "avatar": "enum[fox,owl,cat,star,robot,ninja]=fox" },
+    "WordSet": { "week": "int!", "title": "text!", "wordCount": "int := count(Word)" },
+    "Word": { "wordSet": "ref:WordSet!", "term": "text!", "definition": "longtext!", "synonym": "text!", "antonym": "text!",
+              "sentence": "longtext!", "scrambled": "text!", "inCrossword": "bool=false", "crosswordNum": "int=0" },
+    "Attempt": { "kind": "enum[matching,fillblank,unjumble,crossword,flashcard]=matching", "wordSet": "ref:WordSet!",
+                 "score": "int=0", "total": "int=0", "pct": "int := round(score * 100 / total, 0)", "createdAt": "time=now" },
+    "BlogPost": { "title": "text!", "body": "longtext!", "publishedAt": "date=today" }
+  },
+
+  "seed": {
+    "Profile": [ {} ],
+    "WordSet": [
+      { "week": 1, "title": "Week 1: Everyday Character Words" },
+      { "week": 2, "title": "Week 2: Precision & Persuasion" }
+    ],
+    "Word": [
+      { "wordSet": 1, "term": "amiable", "definition": "Having a friendly and pleasant manner.", "synonym": "friendly", "antonym": "hostile", "sentence": "Their ___ host made every guest feel welcome.", "scrambled": "miableaa" },
+      { "wordSet": 1, "term": "diligent", "definition": "Showing care and conscientiousness in one's work.", "synonym": "hardworking", "antonym": "lazy", "sentence": "The ___ student reviewed her notes every night.", "scrambled": "ligentdi" },
+      { "wordSet": 1, "term": "gregarious", "definition": "Fond of company; sociable.", "synonym": "sociable", "antonym": "reserved", "sentence": "The ___ puppy greeted every visitor at the door.", "scrambled": "gariousgre" },
+      { "wordSet": 1, "term": "humble", "definition": "Having a modest view of one's own importance.", "synonym": "modest", "antonym": "arrogant", "sentence": "Despite his fame, he remained remarkably ___.", "scrambled": "blehum" },
+      { "wordSet": 1, "term": "tranquil", "definition": "Free from disturbance; calm.", "synonym": "peaceful", "antonym": "chaotic", "sentence": "The lake was ___ at dawn, without a ripple.", "scrambled": "quiltran" },
+      { "wordSet": 1, "term": "vivid", "definition": "Producing powerful feelings or clear images in the mind.", "synonym": "vibrant", "antonym": "dull", "sentence": "She gave a ___ account of her trip abroad.", "scrambled": "vidiv" },
+      { "wordSet": 1, "term": "cautious", "definition": "Careful to avoid potential problems.", "synonym": "careful", "antonym": "reckless", "sentence": "He took a ___ step onto the icy path.", "scrambled": "tiouscau" },
+      { "wordSet": 1, "term": "generous", "definition": "Willing to give more than is necessary.", "synonym": "giving", "antonym": "stingy", "sentence": "Their ___ donation covered the whole project.", "scrambled": "erousgen" },
+      { "wordSet": 1, "term": "curious", "definition": "Eager to know or learn something.", "synonym": "inquisitive", "antonym": "indifferent", "sentence": "The ___ child asked why the sky was blue.", "scrambled": "riousocu" },
+      { "wordSet": 1, "term": "patient", "definition": "Able to accept delay without becoming annoyed.", "synonym": "tolerant", "antonym": "impatient", "sentence": "The ___ teacher explained the problem three different ways.", "scrambled": "tientpa" },
+
+      { "wordSet": 2, "term": "ephemeral", "definition": "Lasting for a very short time.", "synonym": "transient", "antonym": "permanent", "sentence": "The beauty of cherry blossoms is ___, gone within a week.", "scrambled": "laeehmrpe", "inCrossword": true, "crosswordNum": 1 },
+      { "wordSet": 2, "term": "candid", "definition": "Truthful and straightforward; frank.", "synonym": "honest", "antonym": "deceptive", "sentence": "Her ___ feedback, though blunt, helped the team improve.", "scrambled": "dicnad", "inCrossword": true, "crosswordNum": 2 },
+      { "wordSet": 2, "term": "meticulous", "definition": "Showing great attention to detail; very careful.", "synonym": "precise", "antonym": "careless", "sentence": "The watchmaker's ___ work left no screw untightened.", "scrambled": "ticulousme", "inCrossword": true, "crosswordNum": 3 },
+      { "wordSet": 2, "term": "benevolent", "definition": "Well meaning and kindly.", "synonym": "kind", "antonym": "malicious", "sentence": "The ___ donor asked that her gift remain anonymous.", "scrambled": "nevolentbe", "inCrossword": true, "crosswordNum": 4 },
+      { "wordSet": 2, "term": "austere", "definition": "Severe or strict in manner or appearance; unadorned.", "synonym": "stern", "antonym": "luxurious", "sentence": "The monastery's ___ halls held nothing but a bed and a candle.", "scrambled": "usteare" },
+      { "wordSet": 2, "term": "pragmatic", "definition": "Dealing with things sensibly and realistically.", "synonym": "practical", "antonym": "idealistic", "sentence": "A ___ approach solved the budget crisis without drama.", "scrambled": "gmaticpra" },
+      { "wordSet": 2, "term": "eloquent", "definition": "Fluent and persuasive in speaking or writing.", "synonym": "articulate", "antonym": "inarticulate", "sentence": "Her ___ speech moved the entire audience to applause.", "scrambled": "quenteloc" },
+      { "wordSet": 2, "term": "resilient", "definition": "Able to recover quickly from difficulties.", "synonym": "tough", "antonym": "fragile", "sentence": "The ___ community rebuilt within a year of the flood.", "scrambled": "silientre" },
+      { "wordSet": 2, "term": "ambiguous", "definition": "Open to more than one interpretation; unclear.", "synonym": "vague", "antonym": "explicit", "sentence": "The contract's ___ wording led to a long dispute.", "scrambled": "biguousam" },
+      { "wordSet": 2, "term": "frugal", "definition": "Sparing or economical with money or food.", "synonym": "thrifty", "antonym": "wasteful", "sentence": "Years of ___ habits let them retire early.", "scrambled": "gurfal" }
+    ],
+    "BlogPost": [
+      { "title": "Why 10 words a week beats 100 words a day", "body": "Cramming fades by the weekend. Ten well-chosen words, reviewed through five different games, is what actually survives into your working vocabulary.", "publishedAt": "2026-09-14" },
+      { "title": "Flashcards are a warm-up, not a finish line", "body": "Recognising a word on a flashcard is the easiest kind of recall. Fill-in-the-blank and unjumble force you to produce the word yourself, which is the harder, more durable skill.", "publishedAt": "2026-09-21" },
+      { "title": "Behind this week's word set", "body": "This week leans on words you will actually meet in opinion columns and performance reviews: candid, meticulous, pragmatic. Precision words, for precise writing.", "publishedAt": "2026-09-25" }
+    ]
+  },
+
+  "actions": [
+    { "name": "submitQuiz", "confirm": "Scored {score}/{total}",
+      "do": [ { "block": "vocab.grade", "kind": "@values.kind", "wordSet": "@values.wordSet", "answers": "@values.answers" } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Profile.list": { "hidden": true },
+    "Profile.form": { "title": "Choose your avatar", "fields": ["avatar"], "confirm": "Avatar updated", "confirmEdit": "Avatar updated" },
+    "WordSet.list": { "title": "Word Sets", "intro": "A new set of 10 words is introduced every week.",
+                       "columns": ["week", "title", "wordCount"], "sort": { "field": "week", "dir": "desc" }, "create": false },
+    "WordSet.detail": { "fields": ["week", "title", "wordCount"],
+      "related": [ { "entity": "Word", "via": "wordSet", "title": "This set's words", "columns": ["term", "definition", "synonym", "antonym"], "form": false } ] },
+    "Word.list": { "hidden": true, "filters": [ { "name": "Word Set", "field": "wordSet" } ] },
+    "Attempt.list": { "title": "Quiz History", "columns": ["kind", "wordSet", "score", "total", "pct", "createdAt"],
+                       "sort": { "field": "createdAt", "dir": "desc" }, "create": false, "rowActions": ["view"] },
+    "BlogPost.list": { "title": "Blog", "columns": ["title", "publishedAt"], "sort": { "field": "publishedAt", "dir": "desc" }, "create": false },
+    "BlogPost.detail": { "fields": ["title", "body", "publishedAt"] }
+  },
+
+  "dashboards": [
+    { "id": "progress", "title": "Progress", "intro": "Your vocabulary practice so far.",
+      "cards": [ { "title": "Quiz Attempts", "entity": "Attempt", "fn": "count" },
+                 { "title": "Average Score %", "entity": "Attempt", "fn": "avg", "field": "pct" },
+                 { "title": "Word Sets Published", "entity": "WordSet", "fn": "count" } ],
+      "tables": [ { "title": "By quiz type", "entity": "Attempt", "groupBy": "kind", "groupTitle": "Quiz",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Attempts" }, { "fn": "avg", "field": "pct", "as": "avgPct", "title": "Avg %" } ] } ] }
+  ],
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Learn 10 new words every week",
+      "body": [ "WordWise teaches ten new words every week through five different games: match synonyms and antonyms, fill in the blank, unjumble the letters, solve a mini crossword, or drill flashcards. Every attempt is graded and added to your progress dashboard.",
+                "Pick an avatar and warm up with a quick game in the waiting room, then jump into this week's words." ],
+      "links": [ { "label": "This week's words", "href": "/WordSet" }, { "label": "Synonyms & Antonyms", "href": "/page/quiz-matching" },
+                 { "label": "Fill in the Blank", "href": "/page/quiz-fillblank" }, { "label": "Unjumble", "href": "/page/quiz-unjumble" },
+                 { "label": "Crossword", "href": "/page/quiz-crossword" }, { "label": "Flashcards", "href": "/page/quiz-flashcard" },
+                 { "label": "Progress Dashboard", "href": "/dashboard/progress" }, { "label": "Blog", "href": "/BlogPost" },
+                 { "label": "Waiting Room", "href": "/page/waiting-room" } ] },
+    { "id": "quiz-matching", "title": "Synonyms & Antonyms", "heading": "Synonyms & Antonyms",
+      "body": [ "For each word, type a synonym and an antonym." ], "widget": { "use": "vocabquiz", "kind": "matching" } },
+    { "id": "quiz-fillblank", "title": "Fill in the Blank", "heading": "Fill in the Blank",
+      "body": [ "Type the word that completes each sentence." ], "widget": { "use": "vocabquiz", "kind": "fillblank" } },
+    { "id": "quiz-unjumble", "title": "Unjumble", "heading": "Unjumble the Letters",
+      "body": [ "Unscramble the letters to spell this week's word." ], "widget": { "use": "vocabquiz", "kind": "unjumble" } },
+    { "id": "quiz-crossword", "title": "Crossword", "heading": "Mini Crossword",
+      "body": [ "Each numbered clue is a definition — type the word it defines." ], "widget": { "use": "vocabquiz", "kind": "crossword" } },
+    { "id": "quiz-flashcard", "title": "Flashcards", "heading": "Flashcards",
+      "body": [ "Flip each card, then say whether you knew it." ], "widget": { "use": "vocabquiz", "kind": "flashcard" } },
+    { "id": "waiting-room", "title": "Waiting Room", "heading": "Waiting Room",
+      "body": [ "Pick an avatar, then play a quick game while your next quiz loads." ], "widget": { "use": "waitroom" } }
+  ]
+}

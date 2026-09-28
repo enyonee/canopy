@@ -1,0 +1,75 @@
+{
+  "app": "airwarn",
+  "task": "webgen-bench/000068",
+  "note": "Environmental warning system: Sensor is the one live station (temperature, humidity, gas level, AQI); a `schedule` tick logs its current values as an AqiReading then evolves the four numbers by a fixed, deterministic step (see NOTES, same technique as solardash). The live dashboard shows Sensor's current numbers and reloads itself; a 14-day seeded history plus the live ticks feed a historical AQI trend chart for any date range, which is also where two chosen dates are compared (both points sit on the same line).",
+  "theme": { "background": "azure", "accent": "darkslateblue" },
+  "home": "/dashboard/realtime",
+
+  "data": {
+    "Sensor":     { "temperature": "int=77", "humidity": "int=45", "gasLevel": "int=305", "aqi": "int=68" },
+    "AqiReading": { "sensor": "ref:Sensor!", "temperature": "int!", "humidity": "int!", "gasLevel": "int!", "aqi": "int!", "recordedAt": "time=now",
+                    "category": "text := if(aqi <= 50, 'Good', if(aqi <= 100, 'Moderate', 'Unhealthy'))" }
+  },
+
+  "rules": {
+    "AqiReading": [ { "check": "aqi >= 0", "message": "AQI cannot be negative" } ]
+  },
+
+  "seed": {
+    "Sensor": [ {} ],
+    "AqiReading": [
+      { "sensor": 1, "aqi": 42,  "temperature": 68, "humidity": 55, "gasLevel": 220, "recordedAt": "2026-09-14T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 48,  "temperature": 70, "humidity": 52, "gasLevel": 240, "recordedAt": "2026-09-15T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 55,  "temperature": 72, "humidity": 50, "gasLevel": 260, "recordedAt": "2026-09-16T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 61,  "temperature": 75, "humidity": 48, "gasLevel": 280, "recordedAt": "2026-09-17T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 68,  "temperature": 77, "humidity": 45, "gasLevel": 300, "recordedAt": "2026-09-18T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 74,  "temperature": 79, "humidity": 43, "gasLevel": 320, "recordedAt": "2026-09-19T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 81,  "temperature": 81, "humidity": 40, "gasLevel": 340, "recordedAt": "2026-09-20T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 88,  "temperature": 83, "humidity": 38, "gasLevel": 360, "recordedAt": "2026-09-21T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 95,  "temperature": 85, "humidity": 36, "gasLevel": 380, "recordedAt": "2026-09-22T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 102, "temperature": 84, "humidity": 39, "gasLevel": 400, "recordedAt": "2026-09-23T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 97,  "temperature": 82, "humidity": 42, "gasLevel": 390, "recordedAt": "2026-09-24T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 89,  "temperature": 80, "humidity": 44, "gasLevel": 370, "recordedAt": "2026-09-25T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 76,  "temperature": 78, "humidity": 47, "gasLevel": 350, "recordedAt": "2026-09-26T12:00:00.000Z" },
+      { "sensor": 1, "aqi": 63,  "temperature": 76, "humidity": 50, "gasLevel": 330, "recordedAt": "2026-09-27T12:00:00.000Z" }
+    ]
+  },
+
+  "schedule": [
+    { "name": "tick", "every": "5m",
+      "note": "Logs the sensor's current temperature/humidity/gas/AQI as an AqiReading, then moves each by a fixed deterministic step (bounces between a floor and a ceiling instead of a real physical model, so repeated runs are predictable for a check).",
+      "do": [ { "block": "db.each", "from": "Sensor", "do": [
+        { "block": "db.createRow", "entity": "AqiReading", "values": { "sensor": "@each.id", "temperature": "@each.temperature", "humidity": "@each.humidity", "gasLevel": "@each.gasLevel", "aqi": "@each.aqi" } },
+        { "block": "db.adjust", "entity": "Sensor", "id": "@each.id", "field": "temperature", "by": "= if(each.temperature >= 85, -12, 4)" },
+        { "block": "db.adjust", "entity": "Sensor", "id": "@each.id", "field": "humidity", "by": "= if(each.humidity >= 60, -15, 5)", "min": 0 },
+        { "block": "db.adjust", "entity": "Sensor", "id": "@each.id", "field": "gasLevel", "by": "= if(each.gasLevel >= 400, -80, 25)", "min": 0 },
+        { "block": "db.adjust", "entity": "Sensor", "id": "@each.id", "field": "aqi", "by": "= if(each.aqi >= 100, -40, 8)", "min": 0 }
+      ] } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Sensor.list":     { "hidden": true },
+    "AqiReading.list": { "title": "AQI history", "columns": ["recordedAt", "temperature", "humidity", "gasLevel", "aqi", "category"],
+                         "sort": { "field": "recordedAt", "dir": "desc" }, "create": false, "filters": [ { "field": "recordedAt", "range": true } ] },
+    "AqiReading.detail": { "fields": ["sensor", "temperature", "humidity", "gasLevel", "aqi", "category", "recordedAt"] }
+  },
+
+  "dashboards": [
+    { "id": "realtime", "title": "Current weather and air quality", "intro": "Live temperature, humidity, gas sensor and AQI readings.", "refresh": 10,
+      "cards": [ { "title": "Temperature", "entity": "Sensor", "fn": "avg", "field": "temperature" },
+                 { "title": "Humidity", "entity": "Sensor", "fn": "avg", "field": "humidity" },
+                 { "title": "Gas sensor level", "entity": "Sensor", "fn": "avg", "field": "gasLevel" },
+                 { "title": "Air Quality Index", "entity": "Sensor", "fn": "avg", "field": "aqi" } ] },
+    { "id": "history", "title": "Historical AQI", "intro": "Query and compare AQI for any two dates in the last two weeks.", "period": { "AqiReading": "recordedAt" },
+      "tables": [ { "title": "Daily AQI", "entity": "AqiReading", "groupBy": "recordedAt", "groupUnit": "day", "groupTitle": "Day",
+                    "metrics": [ { "fn": "avg", "field": "aqi", "as": "aqi", "title": "AQI" } ] } ],
+      "charts": [ { "title": "AQI trend", "entity": "AqiReading", "type": "line", "groupBy": "recordedAt", "groupUnit": "day", "metric": { "fn": "avg", "field": "aqi" } } ] }
+  ],
+
+  "pages": [
+    { "id": "about", "title": "Air quality tracker", "heading": "Environmental warning system",
+      "body": [ "Current weather and air quality update live; historical AQI covers the last two weeks and lets you compare any two days on the same chart." ],
+      "links": [ { "label": "Current conditions", "href": "/dashboard/realtime" }, { "label": "Historical AQI", "href": "/dashboard/history" }, { "label": "AQI history", "href": "/AqiReading" } ] }
+  ]
+}

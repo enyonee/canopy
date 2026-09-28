@@ -1,0 +1,62 @@
+{
+  "app": "stockreports",
+  "task": "webgen-bench/000001",
+  "note": "Stock research and reporting: a searchable stock catalog with market and financial data, a transparent up/down trend derived from the day's change, and a Report entity whose content field summarises exactly the sections the user chose (trends, financials) for the chosen stock.",
+  "theme": { "background": "white", "accent": "navy" },
+  "home": "/Stock",
+
+  "data": {
+    "Stock":  { "name": "text!", "symbol": "text!", "sector": "enum[Technology,Financials,Healthcare,Energy,Consumer]=Technology",
+                "price": "money!", "prevClose": "money!", "weekHigh": "money", "weekLow": "money", "peRatio": "money",
+                "revenue": "money", "netIncome": "money", "eps": "money",
+                "changePct": "money := round((price - prevClose) * (100 / prevClose), 2)",
+                "trend": "text := if(changePct > 0, 'Up', if(changePct < 0, 'Down', 'Flat'))" },
+    "Report": { "stock": "ref:Stock!", "format": "enum[summary,detailed,full]=summary",
+                "includeTrends": "bool=true", "includeFinancials": "bool=true", "createdAt": "time=now",
+                "content": "text := concat('Report for ', stock.name, ' (', stock.symbol, ') - price ', stock.price, if(includeTrends, concat(' - trend: ', stock.trend, ' (', stock.changePct, '%)'), ''), if(includeFinancials, concat(' - revenue: ', stock.revenue, ', net income: ', stock.netIncome, ', EPS: ', stock.eps), ''))" }
+  },
+
+  "rules": {
+    "Stock":  [ { "unique": "symbol", "message": "This stock symbol is already tracked" },
+                { "check": "price >= 0", "message": "Price cannot be negative" },
+                { "check": "peRatio >= 0", "message": "P/E ratio cannot be negative" } ]
+  },
+
+  "seed": {
+    "Stock":  [ { "name": "Apple Inc.", "symbol": "AAPL", "sector": "Technology", "price": 189.50, "prevClose": 187.20, "weekHigh": 199.62, "weekLow": 164.08, "peRatio": 31.4, "revenue": 383.8, "netIncome": 97.0, "eps": 6.13 },
+                { "name": "Microsoft Corp.", "symbol": "MSFT", "sector": "Technology", "price": 415.20, "prevClose": 410.00, "weekHigh": 430.82, "weekLow": 362.90, "peRatio": 35.2, "revenue": 245.1, "netIncome": 88.1, "eps": 11.80 },
+                { "name": "JPMorgan Chase", "symbol": "JPM", "sector": "Financials", "price": 195.30, "prevClose": 198.10, "weekHigh": 202.45, "weekLow": 135.19, "peRatio": 11.8, "revenue": 158.1, "netIncome": 49.6, "eps": 16.23 },
+                { "name": "Johnson & Johnson", "symbol": "JNJ", "sector": "Healthcare", "price": 152.40, "prevClose": 151.00, "weekHigh": 175.97, "weekLow": 140.68, "peRatio": 14.1, "revenue": 85.2, "netIncome": 13.3, "eps": 5.29 },
+                { "name": "Exxon Mobil", "symbol": "XOM", "sector": "Energy", "price": 112.75, "prevClose": 114.90, "weekHigh": 123.70, "weekLow": 95.77, "peRatio": 13.6, "revenue": 344.6, "netIncome": 36.0, "eps": 8.89 },
+                { "name": "Procter & Gamble", "symbol": "PG", "sector": "Consumer", "price": 165.10, "prevClose": 163.50, "weekHigh": 169.60, "weekLow": 140.19, "peRatio": 25.0, "revenue": 82.0, "netIncome": 14.7, "eps": 6.02 } ],
+    "Report": [ { "stock": 1, "format": "detailed", "includeTrends": true, "includeFinancials": true } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Stock.list":    { "title": "Stocks", "intro": "Search by stock code or company name.",
+                       "columns": ["symbol", "name", "sector", "price", "changePct", "trend", "peRatio"],
+                       "search": ["name", "symbol"], "filters": [ { "name": "Sector", "field": "sector" } ],
+                       "sort": { "field": "name", "dir": "asc" } },
+    "Stock.detail":  { "fields": ["symbol", "name", "sector", "price", "changePct", "trend", "weekHigh", "weekLow", "peRatio", "revenue", "netIncome", "eps"],
+                       "related": [ { "entity": "Report", "via": "stock", "title": "Reports", "columns": ["format", "includeTrends", "includeFinancials", "createdAt"], "form": false, "rowActions": ["view"] } ] },
+    "Report.list":   { "title": "Reports", "columns": ["stock", "format", "includeTrends", "includeFinancials", "createdAt"],
+                       "sort": { "field": "createdAt", "dir": "desc" }, "rowActions": ["view", "edit", "delete"] },
+    "Report.form":   { "title": "Generate a stock report", "submit": "Generate report",
+                       "fields": ["stock", "format", "includeTrends", "includeFinancials"],
+                       "confirm": "Report generated", "after": "/Report/{id}" },
+    "Report.detail": { "fields": ["stock", "format", "includeTrends", "includeFinancials", "createdAt", "content"],
+                       "labels": { "includeTrends": ["Not included", "Included"], "includeFinancials": ["Not included", "Included"] } }
+  },
+
+  "dashboards": [
+    { "id": "market", "title": "Market overview",
+      "cards": [ { "title": "Stocks tracked", "entity": "Stock", "fn": "count" },
+                 { "title": "Reports generated", "entity": "Report", "fn": "count" },
+                 { "title": "Average P/E", "entity": "Stock", "fn": "avg", "field": "peRatio" } ],
+      "tables": [ { "title": "By sector", "entity": "Stock", "groupBy": "sector", "groupTitle": "Sector",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Stocks" }, { "fn": "avg", "field": "price", "as": "avgPrice", "title": "Avg price" } ] } ],
+      "charts": [ { "title": "Price by stock", "entity": "Stock", "type": "bar", "groupBy": "symbol", "metric": { "fn": "avg", "field": "price" } },
+                  { "title": "Stocks by sector", "entity": "Stock", "type": "pie", "groupBy": "sector", "metric": { "fn": "count" } } ] }
+  ]
+}

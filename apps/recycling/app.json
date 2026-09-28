@@ -1,0 +1,76 @@
+{
+  "app": "Sort It Out!",
+  "task": "webgen-bench/000061",
+  "note": "Kids' recycling game. A Player starts a GameSession; the widget (recyclebin) is the drag-into-bins canvas, and every drop is graded server-side by plugins/recycling.mjs's recycle.drop block — the server refuses re-dropping an already-sorted item, decides correct/incorrect against the item's real WasteItem.correctBin, and finishes the game with a badge once enough items are sorted correctly. Cartoon look is emoji + widget-local styling: the theme node only carries background/accent colours.",
+  "theme": { "background": "seashell", "accent": "crimson" },
+  "home": "/page/home",
+  "plugins": ["./plugins/recycling.mjs"],
+
+  "data": {
+    "Bin": { "name": "text!" },
+    "WasteItem": { "name": "text!", "correctBin": "ref:Bin!" },
+    "Player": { "name": "text!" },
+    "GameSession": { "player": "ref:Player!", "score": "int=0", "correct": "int=0", "total": "int=0",
+                     "dropped": "text=[]", "badge": "text", "status": "enum[playing,finished]=playing", "createdAt": "time=now" },
+    "Drop": { "gameSession": "ref:GameSession!", "item": "ref:WasteItem!", "bin": "ref:Bin!", "correct": "bool=false", "createdAt": "time=now" }
+  },
+
+  "seed": {
+    "Bin": [ { "name": "Plastic" }, { "name": "Paper" }, { "name": "Glass" }, { "name": "Organic" } ],
+    "WasteItem": [
+      { "name": "Plastic bottle", "correctBin": 1 },
+      { "name": "Yogurt cup", "correctBin": 1 },
+      { "name": "Newspaper", "correctBin": 2 },
+      { "name": "Cardboard box", "correctBin": 2 },
+      { "name": "Glass jar", "correctBin": 3 },
+      { "name": "Broken glass bottle", "correctBin": 3 },
+      { "name": "Banana peel", "correctBin": 4 },
+      { "name": "Apple core", "correctBin": 4 }
+    ],
+    "Player": [ { "name": "Sample Sorter" } ],
+    "GameSession": [ { "player": 1 } ]
+  },
+
+  "actions": [
+    { "name": "playNow", "in": "Player", "title": "Play now", "after": "/GameSession/{created}",
+      "confirm": "Game started for {row.name} — sort every item into its bin!",
+      "do": [ { "block": "db.createRow", "entity": "GameSession", "values": { "player": "@row.id" } } ] },
+    { "name": "drop", "in": "GameSession", "after": "/GameSession/{id}", "confirm": "{message}",
+      "do": [ { "block": "recycle.drop", "item": "@values.item", "bin": "@values.bin" } ] }
+  ],
+
+  "states": {
+    "GameSession": { "field": "status", "transitions": [
+      { "name": "newGame", "from": ["finished"], "to": "playing", "title": "Play again",
+        "do": [ { "block": "db.update", "set": { "score": 0, "correct": 0, "total": 0, "dropped": "[]", "badge": "" } } ] },
+      { "name": "forfeit", "from": ["playing"], "to": "finished", "title": "End game early" }
+    ] }
+  },
+
+  "views": "auto",
+  "override": {
+    "Bin.list": { "title": "Bins", "columns": ["name"], "create": false, "rowActions": ["view"] },
+    "WasteItem.list": { "title": "Items to Sort", "columns": ["name", "correctBin"], "create": false, "rowActions": ["view"] },
+    "Player.list": { "title": "Players", "intro": "Start here: add your name, then play.", "columns": ["name"] },
+    "Player.form": { "title": "New player", "fields": ["name"], "submit": "Add player", "confirm": "Welcome, {row.name}! Click Play Now to begin.", "after": "/Player/{id}" },
+    "Player.detail": { "fields": ["name"], "actions": ["playNow"] },
+    "GameSession.list": { "hidden": true, "create": false },
+    "GameSession.detail": { "fields": ["player", "score", "correct", "total", "badge", "status"],
+                              "widget": { "use": "recyclebin" } },
+    "Drop.list": { "hidden": true }
+  },
+
+  "lists": [
+    { "id": "leaderboard", "entity": "GameSession", "title": "Leaderboard", "where": { "status": "finished" },
+      "columns": ["player", "score", "correct", "total", "badge"], "sort": { "field": "score", "dir": "desc" },
+      "rowActions": ["view"], "create": false }
+  ],
+
+  "pages": [
+    { "id": "home", "title": "Home", "heading": "Sort It Out! 🌍",
+      "body": [ "Learn how to recycle by sorting waste into the right bin: plastic, paper, glass, and organic. Drag each item into its matching bin — get it right for points, and if you get it wrong, we'll gently show you the right bin so you learn for next time.",
+                "Sort enough items correctly and you'll win a badge!" ],
+      "links": [ { "label": "Start playing", "href": "/Player" }, { "label": "See the bins", "href": "/Bin" },
+                 { "label": "Leaderboard", "href": "/list/leaderboard" } ] }
+  ]
+}

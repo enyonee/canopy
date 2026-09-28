@@ -1,0 +1,80 @@
+{
+  "app": "Diagram Maker",
+  "task": "webgen-bench/000079",
+  "note": "Diagram maker: Diagram/Node/Edge are rows; a plugin widget (diagramcanvas) is the drag-and-drop SVG editor — it adds/moves/removes/restyles nodes and edges through the entity's own core CRUD JSON routes (no bespoke actions needed for that). A plugin block (diagram.layout) is the one piece of real domain logic: a genuine arrangement algorithm (horizontal row / vertical column / radial circle) that the graph reapplies through an on-update event whenever a diagram's stored layout preference changes. Export is a client-side SVG-to-file download, since the format has no file-generation block.",
+  "theme": { "background": "ghostwhite", "accent": "slategray" },
+  "home": "/Diagram",
+  "plugins": ["./plugins/diagram.mjs"],
+
+  "data": {
+    "Diagram": {
+      "title": "text!",
+      "type": "enum[flowchart,orgchart,mindmap]=flowchart",
+      "layout": "enum[free,horizontal,vertical,radial]=free",
+      "nodeCount": "int := count(Node)",
+      "createdAt": "time=now"
+    },
+    "Node": {
+      "diagram": "ref:Diagram!",
+      "label": "text!",
+      "shape": "enum[rectangle,ellipse,diamond]=rectangle",
+      "x": "int=100",
+      "y": "int=100",
+      "fill": "text=white",
+      "stroke": "text=slategray"
+    },
+    "Edge": {
+      "diagram": "ref:Diagram!",
+      "fromNode": "ref:Node!",
+      "toNode": "ref:Node!",
+      "label": "text"
+    }
+  },
+
+  "seed": {
+    "Diagram": [
+      { "title": "Employee Onboarding", "type": "flowchart", "layout": "free" },
+      { "title": "Product Ideas", "type": "mindmap", "layout": "radial" }
+    ],
+    "Node": [
+      { "diagram": 1, "label": "Start", "shape": "ellipse", "x": 80, "y": 200, "fill": "honeydew", "stroke": "seagreen" },
+      { "diagram": 1, "label": "Fill paperwork", "shape": "rectangle", "x": 260, "y": 200, "fill": "white", "stroke": "slategray" },
+      { "diagram": 1, "label": "Approved?", "shape": "diamond", "x": 440, "y": 200, "fill": "lightyellow", "stroke": "goldenrod" },
+      { "diagram": 1, "label": "Onboarded", "shape": "ellipse", "x": 620, "y": 200, "fill": "honeydew", "stroke": "seagreen" },
+      { "diagram": 2, "label": "Product Ideas", "shape": "ellipse", "x": 400, "y": 260, "fill": "lavender", "stroke": "slateblue" },
+      { "diagram": 2, "label": "Mobile app", "shape": "ellipse", "x": 250, "y": 150, "fill": "white", "stroke": "slategray" },
+      { "diagram": 2, "label": "Browser extension", "shape": "ellipse", "x": 550, "y": 150, "fill": "white", "stroke": "slategray" },
+      { "diagram": 2, "label": "API", "shape": "ellipse", "x": 400, "y": 420, "fill": "white", "stroke": "slategray" }
+    ],
+    "Edge": [
+      { "diagram": 1, "fromNode": 1, "toNode": 2 },
+      { "diagram": 1, "fromNode": 2, "toNode": 3 },
+      { "diagram": 1, "fromNode": 3, "toNode": 4, "label": "yes" },
+      { "diagram": 2, "fromNode": 5, "toNode": 6 },
+      { "diagram": 2, "fromNode": 5, "toNode": 7 },
+      { "diagram": 2, "fromNode": 5, "toNode": 8 }
+    ]
+  },
+
+  "events": [
+    { "on": "Diagram.updated", "do": [ { "block": "diagram.layout" } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Diagram.list": { "title": "Diagrams", "intro": "Every diagram is a living canvas: open one to drag, edit and restyle its shapes.",
+                       "columns": ["title", "type", "layout", "nodeCount", "createdAt"], "search": ["title"],
+                       "filters": [ { "name": "Type", "field": "type" } ] },
+    "Diagram.form": { "title": "New diagram", "fields": ["title", "type", "layout"], "submit": "Create diagram",
+                       "confirm": "{row.title} created — a blank canvas is ready", "after": "/Diagram/{id}" },
+    "Diagram.detail": { "fields": ["type", "layout", "nodeCount", "createdAt"], "widget": { "use": "diagramcanvas" } },
+    "Node.list": { "hidden": true, "filters": [ { "name": "Diagram", "field": "diagram" } ] },
+    "Edge.list": { "hidden": true, "filters": [ { "name": "Diagram", "field": "diagram" } ] }
+  },
+
+  "pages": [
+    { "id": "about", "title": "About", "heading": "Diagram Maker",
+      "body": [ "Create flowcharts, org charts and mind maps. Drag shapes onto the canvas, connect them, restyle them, and change the diagram's layout at any time." ],
+      "links": [ { "label": "Open a diagram", "href": "/Diagram" } ] }
+  ]
+}

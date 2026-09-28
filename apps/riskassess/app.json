@@ -1,0 +1,81 @@
+{
+  "app": "riskassess",
+  "task": "webgen-bench/000084",
+  "note": "Risk assessment tool: RiskItem is the seeded background catalog; picking one onto an Assessment (an inline related-add, like a cart line item) auto-populates likelihood, impact, category and guidance from the catalog through one-hop derived fields — no re-entry, no delay. Assessment itself is the report row: its derived item count and total/average risk score summarise exactly the items selected. A dashboard charts risk by category; an entity CSV export (filterable by assessment) is the downloadable report. Subscribing (self-registering) grants access to the tool immediately.",
+  "theme": { "background": "aliceblue", "accent": "steelblue" },
+  "home": "/RiskItem",
+
+  "data": {
+    "User":           { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,subscriber]=subscriber" },
+    "RiskItem":       { "title": "text!", "category": "enum[Cyber,Financial,Operational,Compliance,Safety]=Operational",
+                        "baseLikelihood": "int=1", "baseImpact": "int=1", "guidance": "longtext",
+                        "baseRiskScore": "int := baseLikelihood * baseImpact" },
+    "Assessment":     { "owner": "ref:User!", "title": "text!", "createdAt": "time=now",
+                        "itemCount": "int := count(AssessmentItem)",
+                        "totalRiskScore": "int := sum(AssessmentItem: riskScore)",
+                        "avgRiskScore": "int := if(count(AssessmentItem) = 0, 0, round(sum(AssessmentItem: riskScore) / count(AssessmentItem)))" },
+    "AssessmentItem": { "assessment": "ref:Assessment!", "riskItem": "ref:RiskItem!",
+                        "likelihood": "int := riskItem.baseLikelihood", "impact": "int := riskItem.baseImpact",
+                        "category": "text := riskItem.category", "riskScore": "int := riskItem.baseLikelihood * riskItem.baseImpact",
+                        "guidanceNote": "text := riskItem.guidance" }
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "subscriber", "anonymous": "guest",
+    "can": {
+      "admin":      "*",
+      "subscriber": { "RiskItem": ["view"], "Assessment": { "own": "owner", "can": ["view", "create"] }, "AssessmentItem": ["view", "create", "edit", "delete"] },
+      "guest":      { "RiskItem": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":            [ { "email": "admin@riskassess.test", "password": "admin123", "name": "Admin", "role": "admin" },
+                         { "email": "demo@riskassess.test", "password": "demo123", "name": "Demo Subscriber", "role": "subscriber" } ],
+    "RiskItem":        [ { "title": "Phishing Attack Exposure", "category": "Cyber", "baseLikelihood": 4, "baseImpact": 4,
+                           "guidance": "Employees click malicious links in email. Mitigate with security-awareness training and email filtering." },
+                         { "title": "Data Breach - Customer Records", "category": "Cyber", "baseLikelihood": 3, "baseImpact": 5,
+                           "guidance": "Unauthorized access to customer PII. Mitigate with encryption at rest and strict access controls." },
+                         { "title": "Currency Exchange Volatility", "category": "Financial", "baseLikelihood": 3, "baseImpact": 3,
+                           "guidance": "Foreign exchange swings affect margins. Mitigate with hedging contracts." },
+                         { "title": "Vendor Payment Fraud", "category": "Financial", "baseLikelihood": 2, "baseImpact": 4,
+                           "guidance": "Fraudulent invoices from fake vendors. Mitigate with payment verification controls." },
+                         { "title": "Equipment Failure", "category": "Operational", "baseLikelihood": 3, "baseImpact": 3,
+                           "guidance": "Critical machinery breakdown halts production. Mitigate with preventive maintenance." },
+                         { "title": "Regulatory Non-Compliance", "category": "Compliance", "baseLikelihood": 2, "baseImpact": 5,
+                           "guidance": "Failure to meet industry regulations results in fines. Mitigate with regular audits." },
+                         { "title": "Workplace Injury", "category": "Safety", "baseLikelihood": 2, "baseImpact": 3,
+                           "guidance": "On-site accidents cause injury and downtime. Mitigate with safety training and PPE." } ],
+    "Assessment":      [ { "owner": 2, "title": "Q3 Vendor Risk Review" } ],
+    "AssessmentItem":  [ { "assessment": 1, "riskItem": 4 } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "RiskItem.list":        { "title": "Risk item catalog", "intro": "Background data used to auto-populate an assessment.",
+                              "columns": ["title", "category", "baseLikelihood", "baseImpact", "baseRiskScore"],
+                              "search": ["title"], "filters": [ { "name": "Category", "field": "category" } ] },
+    "RiskItem.detail":      { "fields": ["title", "category", "baseLikelihood", "baseImpact", "baseRiskScore", "guidance"] },
+    "Assessment.list":      { "title": "My assessments", "columns": ["title", "createdAt", "itemCount", "totalRiskScore", "avgRiskScore"] },
+    "Assessment.form":      { "title": "Start a risk assessment", "fields": ["title"], "confirm": "Assessment created", "after": "/Assessment/{id}" },
+    "Assessment.detail":    { "fields": ["title", "createdAt", "itemCount", "totalRiskScore", "avgRiskScore"],
+                              "related": [ { "entity": "AssessmentItem", "via": "assessment", "title": "Selected risk items",
+                                             "columns": ["riskItem", "likelihood", "impact", "category", "riskScore"],
+                                             "form": ["riskItem"], "submit": "Select item", "rowActions": ["delete"] } ] },
+    "AssessmentItem.list": { "hidden": true, "filters": [ { "name": "Assessment", "field": "assessment" } ],
+                              "columns": ["assessment", "riskItem", "likelihood", "impact", "category", "riskScore", "guidanceNote"] }
+  },
+
+  "dashboards": [
+    { "id": "risk", "title": "Risk dashboard", "intro": "Risk exposure by category across every selected item.",
+      "roles": ["admin", "subscriber"],
+      "cards": [ { "title": "Assessments", "entity": "Assessment", "fn": "count" },
+                 { "title": "Items assessed", "entity": "AssessmentItem", "fn": "count" },
+                 { "title": "Avg risk score", "entity": "AssessmentItem", "fn": "avg", "field": "riskScore" } ],
+      "tables": [ { "title": "By category", "entity": "AssessmentItem", "groupBy": "category", "groupTitle": "Category",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Items" }, { "fn": "avg", "field": "riskScore", "as": "avgScore", "title": "Avg risk score" } ] } ],
+      "charts": [ { "title": "Risk score by category", "entity": "AssessmentItem", "type": "bar", "groupBy": "category", "metric": { "fn": "avg", "field": "riskScore" } },
+                  { "title": "Items by category", "entity": "AssessmentItem", "type": "pie", "groupBy": "category", "metric": { "fn": "count" } } ] }
+  ]
+}

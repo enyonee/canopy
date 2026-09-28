@@ -1,0 +1,68 @@
+{
+  "app": "hoopsbets",
+  "task": "webgen-bench/000004",
+  "note": "Basketball analytics: team win% is derived from wins/losses; a Match's prediction (home/away win probability) and betting recommendation are transparent derived formulas over the two teams' current win% plus a fixed home-court edge (documented below), never a model — see NOTES 'New for this app'.",
+  "theme": { "background": "ghostwhite", "accent": "slategray" },
+  "home": "/dashboard/basketball",
+
+  "data": {
+    "Team":   { "name": "text!", "wins": "int=0", "losses": "int=0", "pointsFor": "int=0", "pointsAgainst": "int=0",
+                "winPct": "int := round(wins * 100 / (wins + losses))" },
+    "Player": { "name": "text!", "team": "ref:Team!", "pointsPerGame": "money!", "assistsPerGame": "money!", "rating": "money!" },
+    "Match":  { "teams": "text!", "homeTeam": "ref:Team!", "awayTeam": "ref:Team!", "date": "date!",
+                "status": "enum[scheduled,final]=scheduled", "homeScore": "int", "awayScore": "int",
+                "winner": "text := if(status = 'final', if(homeScore > awayScore, homeTeam.name, if(awayScore > homeScore, awayTeam.name, 'Draw')), '')",
+                "predictedHomeWinPct": "int := round(min(95, max(5, 50 + (homeTeam.winPct - awayTeam.winPct) / 2 + 5)))",
+                "predictedAwayWinPct": "int := 100 - predictedHomeWinPct",
+                "recommendation": "text := if(predictedHomeWinPct > 60, concat('Back ', homeTeam.name, ' (', predictedHomeWinPct, '%)'), if(predictedAwayWinPct > 60, concat('Back ', awayTeam.name, ' (', predictedAwayWinPct, '%)'), 'Too close to call'))" }
+  },
+
+  "rules": {
+    "Team": [ { "check": "wins >= 0", "message": "Wins cannot be negative" }, { "check": "losses >= 0", "message": "Losses cannot be negative" } ]
+  },
+
+  "seed": {
+    "Team": [ { "name": "Ironclads", "wins": 55, "losses": 15, "pointsFor": 8620, "pointsAgainst": 7910 },
+              { "name": "Comets",    "wins": 50, "losses": 20, "pointsFor": 8340, "pointsAgainst": 8005 },
+              { "name": "Wildcats",  "wins": 45, "losses": 25, "pointsFor": 8100, "pointsAgainst": 7990 },
+              { "name": "Vipers",    "wins": 45, "losses": 25, "pointsFor": 8050, "pointsAgainst": 8010 },
+              { "name": "Titans",    "wins": 30, "losses": 40, "pointsFor": 7700, "pointsAgainst": 7960 },
+              { "name": "Falcons",   "wins": 20, "losses": 50, "pointsFor": 7400, "pointsAgainst": 8100 } ],
+    "Player": [ { "name": "J. Carter",   "team": 1, "pointsPerGame": 28.4, "assistsPerGame": 6.1, "rating": 27.8 },
+                { "name": "M. Alvarez",  "team": 2, "pointsPerGame": 24.7, "assistsPerGame": 8.3, "rating": 25.2 },
+                { "name": "D. Brooks",   "team": 3, "pointsPerGame": 19.9, "assistsPerGame": 5.4, "rating": 21.0 },
+                { "name": "T. Nguyen",   "team": 4, "pointsPerGame": 22.1, "assistsPerGame": 4.7, "rating": 22.9 },
+                { "name": "R. Simmons",  "team": 5, "pointsPerGame": 15.6, "assistsPerGame": 7.2, "rating": 18.4 },
+                { "name": "K. Owusu",    "team": 6, "pointsPerGame": 12.3, "assistsPerGame": 3.1, "rating": 14.0 } ],
+    "Match": [ { "teams": "Ironclads vs Comets", "homeTeam": 1, "awayTeam": 2, "date": "2026-01-10", "status": "final", "homeScore": 102, "awayScore": 98 },
+               { "teams": "Wildcats vs Titans",  "homeTeam": 3, "awayTeam": 5, "date": "2026-01-15", "status": "final", "homeScore": 90,  "awayScore": 85 },
+               { "teams": "Ironclads vs Falcons", "homeTeam": 1, "awayTeam": 6, "date": "2026-02-01", "status": "final", "homeScore": 110, "awayScore": 80 },
+               { "teams": "Comets vs Vipers", "homeTeam": 2, "awayTeam": 4, "date": "2026-02-10", "status": "final", "homeScore": 95, "awayScore": 92 },
+               { "teams": "Ironclads vs Falcons", "homeTeam": 1, "awayTeam": 6, "date": "2026-10-15", "status": "scheduled" } ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Team.list":    { "title": "Team rankings", "intro": "Teams ranked by current win percentage.",
+                      "columns": ["name", "wins", "losses", "winPct", "pointsFor", "pointsAgainst"],
+                      "sort": { "field": "winPct", "dir": "desc" } },
+    "Player.list":  { "title": "Player performance", "columns": ["name", "team", "pointsPerGame", "assistsPerGame", "rating"],
+                      "sort": { "field": "rating", "dir": "desc" }, "search": ["name"] },
+    "Match.list":   { "title": "Matches", "columns": ["date", "homeTeam", "awayTeam", "homeScore", "awayScore", "status", "winner"],
+                      "search": ["teams"], "filters": [ { "name": "Status", "field": "status" } ],
+                      "sort": { "field": "date", "dir": "asc" } },
+    "Match.detail": { "fields": ["teams", "homeTeam", "awayTeam", "date", "status", "homeScore", "awayScore", "winner",
+                                  "predictedHomeWinPct", "predictedAwayWinPct", "recommendation"] }
+  },
+
+  "dashboards": [
+    { "id": "basketball", "title": "Basketball analytics", "intro": "Team win percentages, matches by status, and player ratings.",
+      "cards": [ { "title": "Teams tracked", "entity": "Team", "fn": "count" },
+                 { "title": "Matches final", "entity": "Match", "fn": "count", "where": { "status": "final" } },
+                 { "title": "Avg team win %", "entity": "Team", "fn": "avg", "field": "winPct" } ],
+      "tables": [ { "title": "Rankings", "entity": "Team", "groupBy": "name", "groupTitle": "Team",
+                    "metrics": [ { "fn": "avg", "field": "winPct", "as": "pct", "title": "Win %" } ], "sort": { "field": "pct", "dir": "desc" } } ],
+      "charts": [ { "title": "Win percentage by team", "entity": "Team", "type": "bar", "groupBy": "name", "metric": { "fn": "avg", "field": "winPct" } },
+                  { "title": "Matches by status", "entity": "Match", "type": "pie", "groupBy": "status", "metric": { "fn": "count" } } ] }
+  ]
+}

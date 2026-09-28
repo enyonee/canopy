@@ -1,0 +1,80 @@
+{
+  "app": "neighborhoods",
+  "task": "webgen-bench/000002",
+  "note": "Neighborhood mapping/comparison: one Neighborhood entity carries demographic, economic and crime fields, so any list or table that shows several neighborhoods already compares areas side by side; a comparison dashboard groups by neighborhood, filters by survey period, and charts income/crime; a second dashboard id offers the same data with the demographic and economic tables in swapped order (see NOTES for what a real live drag-and-drop layout would need instead).",
+  "theme": { "background": "ivory", "accent": "forestgreen" },
+  "home": "/page/compare",
+
+  "data": {
+    "Neighborhood": { "name": "text!", "city": "text!",
+                       "population": "int!", "medianIncome": "money!", "unemploymentRate": "money!", "medianHomeValue": "money!",
+                       "crimeRatePer1000": "money!", "violentCrimePct": "money!", "surveyedAt": "date=today" }
+  },
+
+  "rules": {
+    "Neighborhood": [ { "check": "population >= 0", "message": "Population cannot be negative" },
+                       { "check": "unemploymentRate >= 0 and unemploymentRate <= 100", "message": "Unemployment rate must be between 0 and 100" } ]
+  },
+
+  "seed": {
+    "Neighborhood": [
+      { "name": "Riverside Heights", "city": "Springfield", "population": 8400,  "medianIncome": 54000, "unemploymentRate": 6.2, "medianHomeValue": 210000, "crimeRatePer1000": 28.4, "violentCrimePct": 12.5, "surveyedAt": "2026-01-15" },
+      { "name": "Oak Hill",          "city": "Springfield", "population": 6200,  "medianIncome": 61500, "unemploymentRate": 4.8, "medianHomeValue": 245000, "crimeRatePer1000": 19.7, "violentCrimePct": 8.1,  "surveyedAt": "2026-03-10" },
+      { "name": "Maple Grove",       "city": "Rivertown",   "population": 15200, "medianIncome": 72300, "unemploymentRate": 3.9, "medianHomeValue": 310000, "crimeRatePer1000": 14.2, "violentCrimePct": 5.4,  "surveyedAt": "2026-05-20" },
+      { "name": "Downtown Core",     "city": "Rivertown",   "population": 22800, "medianIncome": 48750, "unemploymentRate": 7.5, "medianHomeValue": 195000, "crimeRatePer1000": 41.6, "violentCrimePct": 17.9, "surveyedAt": "2026-06-25" },
+      { "name": "Sunnybrook",        "city": "Lakeside",    "population": 5100,  "medianIncome": 88900, "unemploymentRate": 3.1, "medianHomeValue": 420000, "crimeRatePer1000": 9.3,  "violentCrimePct": 2.7,  "surveyedAt": "2026-08-05" },
+      { "name": "Birch Park",        "city": "Lakeside",    "population": 9600,  "medianIncome": 65200, "unemploymentRate": 5.0, "medianHomeValue": 265000, "crimeRatePer1000": 22.1, "violentCrimePct": 9.0,  "surveyedAt": "2026-09-01" }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Neighborhood.list":   { "title": "Neighborhoods", "intro": "Compare demographic, economic and crime data across areas.",
+                             "columns": ["name", "city", "population", "medianIncome", "unemploymentRate", "medianHomeValue", "crimeRatePer1000", "violentCrimePct", "surveyedAt"],
+                             "search": ["name", "city"], "filters": [ { "name": "City", "field": "city", "options": ["Springfield", "Rivertown", "Lakeside"] } ],
+                             "sort": { "field": "name", "dir": "asc" } },
+    "Neighborhood.detail": { "fields": ["name", "city", "population", "medianIncome", "unemploymentRate", "medianHomeValue", "crimeRatePer1000", "violentCrimePct", "surveyedAt"] }
+  },
+
+  "dashboards": [
+    { "id": "areas", "title": "Neighborhood comparison", "intro": "Demographic, economic and crime data for every neighborhood, side by side.",
+      "period": { "Neighborhood": "surveyedAt" },
+      "cards": [ { "title": "Neighborhoods", "entity": "Neighborhood", "fn": "count" },
+                 { "title": "Avg median income", "entity": "Neighborhood", "fn": "avg", "field": "medianIncome" },
+                 { "title": "Avg crime rate", "entity": "Neighborhood", "fn": "avg", "field": "crimeRatePer1000" } ],
+      "tables": [ { "title": "Demographic data", "entity": "Neighborhood", "groupBy": "name", "groupTitle": "Neighborhood",
+                    "metrics": [ { "fn": "avg", "field": "population", "as": "population", "title": "Population" } ] },
+                  { "title": "Economic data", "entity": "Neighborhood", "groupBy": "name", "groupTitle": "Neighborhood",
+                    "metrics": [ { "fn": "avg", "field": "medianIncome", "as": "income", "title": "Median income" },
+                                 { "fn": "avg", "field": "unemploymentRate", "as": "unemployment", "title": "Unemployment %" },
+                                 { "fn": "avg", "field": "medianHomeValue", "as": "homeValue", "title": "Median home value" } ] },
+                  { "title": "Crime data", "entity": "Neighborhood", "groupBy": "name", "groupTitle": "Neighborhood",
+                    "metrics": [ { "fn": "avg", "field": "crimeRatePer1000", "as": "crime", "title": "Crime per 1000" },
+                                 { "fn": "avg", "field": "violentCrimePct", "as": "violent", "title": "Violent crime %" } ] } ],
+      "charts": [ { "title": "Median income by neighborhood", "entity": "Neighborhood", "type": "bar", "groupBy": "name", "metric": { "fn": "avg", "field": "medianIncome" } },
+                  { "title": "Neighborhoods surveyed by month", "entity": "Neighborhood", "type": "line", "groupBy": "surveyedAt", "groupUnit": "month", "metric": { "fn": "count" } } ] },
+    { "id": "areas-swapped", "title": "Neighborhood comparison (swapped layout)", "intro": "The same data with economic and demographic panels exchanged — a saved alternate layout.",
+      "period": { "Neighborhood": "surveyedAt" },
+      "cards": [ { "title": "Neighborhoods", "entity": "Neighborhood", "fn": "count" },
+                 { "title": "Avg median income", "entity": "Neighborhood", "fn": "avg", "field": "medianIncome" },
+                 { "title": "Avg crime rate", "entity": "Neighborhood", "fn": "avg", "field": "crimeRatePer1000" } ],
+      "tables": [ { "title": "Economic data", "entity": "Neighborhood", "groupBy": "name", "groupTitle": "Neighborhood",
+                    "metrics": [ { "fn": "avg", "field": "medianIncome", "as": "income", "title": "Median income" },
+                                 { "fn": "avg", "field": "unemploymentRate", "as": "unemployment", "title": "Unemployment %" },
+                                 { "fn": "avg", "field": "medianHomeValue", "as": "homeValue", "title": "Median home value" } ] },
+                  { "title": "Demographic data", "entity": "Neighborhood", "groupBy": "name", "groupTitle": "Neighborhood",
+                    "metrics": [ { "fn": "avg", "field": "population", "as": "population", "title": "Population" } ] },
+                  { "title": "Crime data", "entity": "Neighborhood", "groupBy": "name", "groupTitle": "Neighborhood",
+                    "metrics": [ { "fn": "avg", "field": "crimeRatePer1000", "as": "crime", "title": "Crime per 1000" },
+                                 { "fn": "avg", "field": "violentCrimePct", "as": "violent", "title": "Violent crime %" } ] } ],
+      "charts": [ { "title": "Median income by neighborhood", "entity": "Neighborhood", "type": "bar", "groupBy": "name", "metric": { "fn": "avg", "field": "medianIncome" } },
+                  { "title": "Neighborhoods surveyed by month", "entity": "Neighborhood", "type": "line", "groupBy": "surveyedAt", "groupUnit": "month", "metric": { "fn": "count" } } ] }
+  ],
+
+  "pages": [
+    { "id": "compare", "title": "Compare Neighborhoods", "heading": "Compare neighborhoods across your city",
+      "body": [ "See demographic data (population), economic data (median income, unemployment, home values) and crime data (crime rate, violent crime share) for every neighborhood, side by side.",
+                "Use the search box to narrow neighborhoods by name or city, or open the comparison dashboard for charts and a full breakdown by area." ],
+      "links": [ { "label": "Browse neighborhoods", "href": "/Neighborhood" }, { "label": "Comparison dashboard", "href": "/dashboard/areas" }, { "label": "Swap layout", "href": "/dashboard/areas-swapped" } ] }
+  ]
+}

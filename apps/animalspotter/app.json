@@ -1,0 +1,84 @@
+{
+  "app": "animalspotter",
+  "task": "webgen-bench/000094",
+  "note": "Animal spotter: each Species carries its own assigned colour code, shown on every Detection through a one-hop derived field. A `schedule` ingests deterministic detections from one camera (fixed species, a confidence that bounces between a floor and ceiling — see NOTES); `Detection.created` fires an event that finds every active AlertRule for that species and sends an SMS through the shared `plugins/messaging.mjs`, landing in /outbox. Users manage their own alert rules (species + phone) after registering.",
+  "theme": { "background": "mistyrose", "accent": "firebrick" },
+  "home": "/Detection",
+  "plugins": ["../../plugins/messaging.mjs"],
+
+  "data": {
+    "User":      { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,user]=user" },
+    "Species":   { "name": "text!", "colorCode": "text!", "habitat": "text", "dangerLevel": "enum[low,medium,high]=low", "description": "longtext!" },
+    "Camera":    { "confidence": "int=82" },
+    "Detection": { "species": "ref:Species!", "location": "text!", "confidence": "int=80", "detectedAt": "time=now",
+                   "colorCode": "text := species.colorCode" },
+    "AlertRule": { "owner": "ref:User!", "species": "ref:Species!", "phone": "text!", "active": "bool=true" }
+  },
+
+  "rules": {
+    "Detection": [ { "check": "confidence >= 0 and confidence <= 100", "message": "Confidence must be between 0 and 100" } ],
+    "AlertRule": [ { "check": "len(phone) >= 8", "message": "Phone must look like a real E.164 number, e.g. +15551234567" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "user", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "user":  { "Species": ["view"], "Detection": ["view"], "AlertRule": { "own": "owner", "can": ["view", "create", "edit", "delete"] } },
+      "guest": { "Species": ["view"], "Detection": ["view"] }
+    }
+  },
+
+  "connectors": {
+    "alerts": { "kind": "sms", "from": "+15550001000" }
+  },
+
+  "seed": {
+    "User":      [ { "email": "admin@animalspotter.test", "password": "admin123", "name": "Admin", "role": "admin" } ],
+    "Species":   [ { "name": "Wolf",   "colorCode": "Gray",   "habitat": "Forest",     "dangerLevel": "medium", "description": "A social pack hunter; grey coat, keeps to forested ridgelines and hunts mainly at dawn and dusk." },
+                   { "name": "Deer",   "colorCode": "Brown",  "habitat": "Meadow",     "dangerLevel": "low",    "description": "A grazing herbivore; light brown coat, most active in open meadows near dawn." },
+                   { "name": "Fox",    "colorCode": "Orange", "habitat": "Woodland",   "dangerLevel": "low",    "description": "A small, solitary omnivore; vivid orange coat, often seen near the trail cameras at night." },
+                   { "name": "Bear",   "colorCode": "Black",  "habitat": "Forest",     "dangerLevel": "high",   "description": "A large omnivore; black coat, forages near creeks and can be dangerous if surprised." },
+                   { "name": "Eagle",  "colorCode": "White",  "habitat": "Cliffs",     "dangerLevel": "low",    "description": "A large bird of prey; white head plumage, nests on cliff overlooks and hunts by day." },
+                   { "name": "Coyote", "colorCode": "Tan",    "habitat": "Grassland",  "dangerLevel": "medium", "description": "An adaptable canid; tan coat, ranges across grassland and forest edges, mostly nocturnal." } ],
+    "Camera":    [ {} ],
+    "Detection": [ { "species": 1, "location": "North Ridge",    "confidence": 76, "detectedAt": "2026-09-25T08:15:00.000Z" },
+                   { "species": 2, "location": "Meadow Trail",   "confidence": 91, "detectedAt": "2026-09-25T09:40:00.000Z" },
+                   { "species": 4, "location": "Creek Bend",     "confidence": 68, "detectedAt": "2026-09-26T06:05:00.000Z" },
+                   { "species": 5, "location": "Cliff Overlook", "confidence": 84, "detectedAt": "2026-09-26T14:22:00.000Z" },
+                   { "species": 6, "location": "South Fence",    "confidence": 72, "detectedAt": "2026-09-27T22:10:00.000Z" } ]
+  },
+
+  "schedule": [
+    { "name": "detect", "every": "5m",
+      "note": "Ingests one deterministic detection from the trail camera (always a Fox, id 3, for a predictable alert target) with a confidence that bounces between a floor and a ceiling, then checks every active AlertRule for that species and texts it. The match-and-alert step lives here rather than in an `events: Detection.created` hook because `db.createRow` does not fire entity-created events (see NOTES) — only a form-posted create does.",
+      "do": [ { "block": "db.each", "from": "Camera", "do": [
+                 { "block": "db.createRow", "entity": "Detection", "values": { "species": 3, "location": "Trail Cam 1", "confidence": "@each.confidence" } },
+                 { "block": "db.adjust", "entity": "Camera", "id": "@each.id", "field": "confidence", "by": "= if(each.confidence >= 95, -15, 6)", "min": 0 }
+               ] },
+               { "block": "db.each", "from": "AlertRule", "where": { "species": 3, "active": 1 }, "do": [
+                 { "block": "sms.send", "connector": "alerts", "to": "@each.phone", "text": "Wildlife alert: Fox detected at Trail Cam 1." }
+               ] } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Camera.list":     { "hidden": true },
+    "Species.list":    { "title": "Species", "columns": ["name", "colorCode", "habitat", "dangerLevel"], "search": ["name"] },
+    "Species.detail":  { "fields": ["name", "colorCode", "habitat", "dangerLevel", "description"] },
+    "Detection.list":  { "title": "Detection records", "intro": "Complete detection history with timestamp, species and colour code.",
+                         "columns": ["detectedAt", "species", "colorCode", "location", "confidence"],
+                         "filters": [ { "name": "Species", "field": "species" } ], "sort": { "field": "detectedAt", "dir": "desc" }, "create": false },
+    "Detection.detail": { "fields": ["species", "colorCode", "location", "confidence", "detectedAt"] },
+    "AlertRule.list":  { "title": "My alerts", "columns": ["species", "phone", "active"] },
+    "AlertRule.form":  { "title": "Set an alert", "fields": ["species", "phone", "active"], "confirm": "Alert saved", "submit": "Save alert", "after": "/AlertRule/{id}" },
+    "AlertRule.detail": { "fields": ["species", "phone", "active"] }
+  },
+
+  "pages": [
+    { "id": "about", "title": "Animal spotter", "heading": "Wildlife detection and alerts",
+      "body": [ "Every species has its own colour code, shown on every detection. Set a personal alert for a species and a phone number, and an SMS goes out the moment it is detected." ],
+      "links": [ { "label": "Detection records", "href": "/Detection" }, { "label": "Species", "href": "/Species" } ] }
+  ]
+}

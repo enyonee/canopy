@@ -1,0 +1,68 @@
+{
+  "app": "HTML Editor",
+  "task": "webgen-bench/000081",
+  "note": "Cross-platform HTML editor: Project groups Documents (HTML pages) and Images (uploads) as rows. A plugin widget (htmleditor) is the code editor — a code/text mode toggle that never loses either buffer, a live sandboxed <iframe srcdoc> preview, and a simple client-side tokeniser for syntax highlighting. Saving and 'save as template' both go through the core Document edit route (no plugin block needed: nothing here is a rule the server must referee, it is presentation and a pure client-side text<->HTML conversion).",
+  "theme": { "background": "honeydew", "accent": "darkolivegreen" },
+  "home": "/Project",
+  "plugins": ["./plugins/htmleditor.mjs"],
+
+  "data": {
+    "Project": { "name": "text!", "description": "longtext", "createdAt": "time=now",
+                 "documents": "int := count(Document)", "images": "int := count(Image)" },
+    "Document": { "project": "ref:Project!", "name": "text!",
+                  "content": "longtext=<h1>New document</h1><p>Start typing your HTML here.</p>",
+                  "isTemplate": "bool=false", "createdAt": "time=now" },
+    "Image": { "project": "ref:Project!", "file": "image!", "caption": "text", "createdAt": "time=now" }
+  },
+
+  "seed": {
+    "Project": [
+      { "name": "Company site", "description": "Marketing pages for the public website." },
+      { "name": "Newsletter", "description": "Monthly HTML email templates." }
+    ],
+    "Document": [
+      { "project": 1, "name": "Landing page",
+        "content": "<h1>Welcome</h1>\n<p>We build things people love.</p>\n<!-- hero section --><p class=\"tag\">Fast. Simple. Reliable.</p>",
+        "isTemplate": false },
+      { "project": 1, "name": "About us", "content": "<h1>About us</h1>\n<p>Founded in 2019, still shipping.</p>", "isTemplate": false },
+      { "project": 2, "name": "Monthly update template",
+        "content": "<h1>This month</h1>\n<p>Hello {{name}},</p>\n<p>Here is what shipped this month.</p>",
+        "isTemplate": true }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Project.list": { "title": "Projects", "intro": "Group your documents and images by project.",
+                       "columns": ["name", "documents", "images", "createdAt"], "search": ["name"] },
+    "Project.detail": { "fields": ["name", "description", "documents", "images", "createdAt"],
+      "related": [
+        { "entity": "Document", "via": "project", "title": "Documents", "columns": ["name", "isTemplate", "createdAt"],
+          "form": ["name"], "submit": "New document", "confirm": "Document created" },
+        { "entity": "Image", "via": "project", "title": "Images", "columns": ["file", "caption", "createdAt"],
+          "form": ["file", "caption"], "submit": "Upload image", "confirm": "Image uploaded" }
+      ] },
+    "Document.list": { "title": "Documents", "columns": ["project", "name", "isTemplate", "createdAt"], "search": ["name"] },
+    "Document.form": { "title": "New document", "fields": ["project", "name", "content", "isTemplate"], "submit": "Create document",
+                        "confirm": "{row.name} created", "after": "/Document/{id}" },
+    "Document.detail": { "fields": ["project", "isTemplate", "createdAt"], "widget": { "use": "htmleditor" } },
+    "Image.list": { "hidden": true },
+    "Image.form": { "fields": ["project", "file", "caption"] },
+    "Image.detail": { "fields": ["project", "file", "caption", "createdAt"] }
+  },
+
+  "lists": [
+    { "id": "templates", "entity": "Document", "title": "Templates", "where": { "isTemplate": 1 },
+      "columns": ["project", "name", "createdAt"], "rowActions": ["view"], "create": false }
+  ],
+
+  "pages": [
+    { "id": "guide", "title": "User Guide", "heading": "Using the HTML editor",
+      "body": [
+        "Every document belongs to a project, alongside the images you upload for it.",
+        "Open a document to edit it: the Code tab is a raw HTML editor with live syntax highlighting and an instant preview; the Text tab is a plain-text view of the same content that you can freely edit — press \"Convert to HTML\" to turn your edited text into fresh HTML paragraphs. Switching tabs without converting never loses either version.",
+        "\"Save\" writes your HTML back to the document. \"Save as Template\" does the same and also marks it as a template, so it shows up under Templates with its content untouched, ready to reuse.",
+        "Upload images for a project from its page, and give each one a caption." ],
+      "links": [ { "label": "Back to projects", "href": "/Project" }, { "label": "Templates", "href": "/list/templates" } ] }
+  ]
+}

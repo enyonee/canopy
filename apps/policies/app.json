@@ -1,0 +1,75 @@
+{
+  "app": "policies",
+  "task": "webgen-bench/000005",
+  "note": "Regulatory policy dashboard: policies carry a type, status, a transparent relevance score and an estimated compliance cost; a PolicyMetric child gives each policy a small year-by-year history (related data on the detail page, and its own chart); a dashboard visualises cost by policy, status mix and cost by year, filterable and sortable by type, date and relevance.",
+  "theme": { "background": "lavender", "accent": "indigo" },
+  "home": "/Policy",
+
+  "data": {
+    "Policy":       { "title": "text!", "type": "enum[Environmental,Financial,Healthcare,Labor,Trade]=Environmental",
+                       "agency": "text!", "summary": "longtext!", "enactedDate": "date!",
+                       "status": "enum[proposed,active,amended,repealed]=active",
+                       "relevanceScore": "int=50", "complianceCost": "money=0" },
+    "PolicyMetric": { "policy": "ref:Policy!", "year": "int!", "affectedEntities": "int=0", "complianceCostActual": "money=0" }
+  },
+
+  "rules": {
+    "Policy": [ { "check": "relevanceScore >= 0 and relevanceScore <= 100", "message": "Relevance score must be between 0 and 100" },
+                { "check": "complianceCost >= 0", "message": "Compliance cost cannot be negative" } ]
+  },
+
+  "seed": {
+    "Policy": [
+      { "title": "Clean Air Standards Update", "type": "Environmental", "agency": "EPA", "enactedDate": "2024-03-01", "status": "active", "relevanceScore": 82, "complianceCost": 45000000,
+        "summary": "Tightens emission limits for industrial facilities burning fossil fuels, phased in over three years, with monitoring and public reporting requirements." },
+      { "title": "Consumer Financial Protection Rule", "type": "Financial", "agency": "CFPB", "enactedDate": "2023-07-15", "status": "active", "relevanceScore": 74, "complianceCost": 12000000,
+        "summary": "Restricts predatory lending practices and requires plain-language disclosure of fees on consumer credit products." },
+      { "title": "Workplace Safety Modernization Act", "type": "Labor", "agency": "OSHA", "enactedDate": "2022-11-20", "status": "amended", "relevanceScore": 65, "complianceCost": 8000000,
+        "summary": "Updates workplace injury reporting thresholds and mandates annual safety training for high-risk occupations." },
+      { "title": "Cross-Border Trade Tariff Adjustment", "type": "Trade", "agency": "USTR", "enactedDate": "2025-01-10", "status": "proposed", "relevanceScore": 58, "complianceCost": 5000000,
+        "summary": "Proposes adjusted tariffs on imported steel and aluminum to address dumping complaints from domestic producers." },
+      { "title": "Healthcare Data Privacy Extension", "type": "Healthcare", "agency": "HHS", "enactedDate": "2021-05-05", "status": "active", "relevanceScore": 90, "complianceCost": 22000000,
+        "summary": "Extends existing patient data privacy protections to telehealth providers and third-party health apps that process patient records." },
+      { "title": "Renewable Energy Incentive Repeal", "type": "Environmental", "agency": "DOE", "enactedDate": "2019-09-01", "status": "repealed", "relevanceScore": 40, "complianceCost": 0,
+        "summary": "Repealed a tax-credit program for residential renewable energy installations after the program reached its funding cap." }
+    ],
+    "PolicyMetric": [
+      { "policy": 1, "year": 2023, "affectedEntities": 1200, "complianceCostActual": 42000000 },
+      { "policy": 1, "year": 2024, "affectedEntities": 1350, "complianceCostActual": 45000000 },
+      { "policy": 2, "year": 2023, "affectedEntities": 300,  "complianceCostActual": 11500000 },
+      { "policy": 2, "year": 2024, "affectedEntities": 340,  "complianceCostActual": 12000000 },
+      { "policy": 5, "year": 2022, "affectedEntities": 900,  "complianceCostActual": 20000000 },
+      { "policy": 5, "year": 2023, "affectedEntities": 980,  "complianceCostActual": 21500000 }
+    ]
+  },
+
+  "views": "auto",
+  "override": {
+    "Policy.list":   { "title": "Policies", "intro": "Browse, filter and sort regulatory policies.",
+                       "columns": ["title", "type", "agency", "status", "enactedDate", "relevanceScore", "complianceCost"],
+                       "search": ["title", "summary", "agency"],
+                       "filters": [ { "name": "Type", "field": "type" }, { "field": "enactedDate", "range": true }, { "field": "relevanceScore", "range": true } ],
+                       "sort": { "field": "relevanceScore", "dir": "desc" } },
+    "Policy.detail": { "fields": ["title", "type", "agency", "status", "enactedDate", "relevanceScore", "complianceCost", "summary"],
+                       "related": [ { "entity": "PolicyMetric", "via": "policy", "title": "Yearly data", "columns": ["year", "affectedEntities", "complianceCostActual"], "form": false, "rowActions": ["edit", "delete"] } ] },
+    "PolicyMetric.list": { "hidden": true }
+  },
+
+  "pages": [
+    { "id": "about", "title": "About this dashboard", "heading": "Regulatory policy tracker",
+      "body": [ "This dashboard tracks regulatory policies across agencies: their status, relevance and estimated compliance cost, with a year-by-year history for the policies that have one." ],
+      "links": [ { "label": "Browse policies", "href": "/Policy" }, { "label": "Policy analytics", "href": "/dashboard/policies" } ] }
+  ],
+
+  "dashboards": [
+    { "id": "policies", "title": "Policy analytics", "intro": "Compliance cost, status mix and year-over-year trends across all tracked policies.",
+      "cards": [ { "title": "Policies tracked", "entity": "Policy", "fn": "count" },
+                 { "title": "Active policies", "entity": "Policy", "fn": "count", "where": { "status": "active" } },
+                 { "title": "Avg relevance", "entity": "Policy", "fn": "avg", "field": "relevanceScore" } ],
+      "tables": [ { "title": "By type", "entity": "Policy", "groupBy": "type", "groupTitle": "Type",
+                    "metrics": [ { "fn": "count", "as": "n", "title": "Policies" }, { "fn": "avg", "field": "complianceCost", "as": "avgCost", "title": "Avg compliance cost" } ] } ],
+      "charts": [ { "title": "Compliance cost by policy", "entity": "Policy", "type": "bar", "groupBy": "title", "metric": { "fn": "avg", "field": "complianceCost" } },
+                  { "title": "Policies by status", "entity": "Policy", "type": "pie", "groupBy": "status", "metric": { "fn": "count" } },
+                  { "title": "Compliance cost by year", "entity": "PolicyMetric", "type": "line", "groupBy": "year", "metric": { "fn": "avg", "field": "complianceCostActual" } } ] }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "app": "solardash",
+  "task": "webgen-bench/000006",
+  "note": "Solar dashboard: Station is the one live sensor (generation, consumption, battery); a `schedule` tick logs its current values as a Reading then evolves the three numbers by a fixed, deterministic step (so a check can predict every future value by replaying the same arithmetic — see NOTES). The real-time dashboard shows Station's current numbers and reloads itself (`refresh`); a separate historical dashboard charts Reading over a chosen date range.",
+  "theme": { "background": "honeydew", "accent": "darkolivegreen" },
+  "home": "/dashboard/realtime",
+
+  "data": {
+    "Station": { "generationKw": "int=5", "consumptionKw": "int=3", "batteryPct": "int=60" },
+    "Reading": { "station": "ref:Station!", "generationKw": "int!", "consumptionKw": "int!", "batteryPct": "int!", "recordedAt": "time=now" }
+  },
+
+  "rules": {
+    "Reading": [ { "check": "batteryPct >= 0 and batteryPct <= 100", "message": "Battery percentage must be between 0 and 100" } ]
+  },
+
+  "seed": {
+    "Station": [ {} ],
+    "Reading": [
+      { "station": 1, "generationKw": 4, "consumptionKw": 5, "batteryPct": 55, "recordedAt": "2026-09-23T12:00:00.000Z" },
+      { "station": 1, "generationKw": 6, "consumptionKw": 4, "batteryPct": 58, "recordedAt": "2026-09-24T12:00:00.000Z" },
+      { "station": 1, "generationKw": 7, "consumptionKw": 3, "batteryPct": 62, "recordedAt": "2026-09-25T12:00:00.000Z" },
+      { "station": 1, "generationKw": 5, "consumptionKw": 6, "batteryPct": 59, "recordedAt": "2026-09-26T12:00:00.000Z" },
+      { "station": 1, "generationKw": 3, "consumptionKw": 6, "batteryPct": 57, "recordedAt": "2026-09-27T12:00:00.000Z" }
+    ]
+  },
+
+  "schedule": [
+    { "name": "tick", "every": "5m",
+      "note": "Logs the station's current generation/consumption/battery as a Reading, then moves each by a fixed deterministic step (bounces between a floor and a ceiling instead of a real physical model, so repeated runs are predictable for a check).",
+      "do": [ { "block": "db.each", "from": "Station", "do": [
+        { "block": "db.createRow", "entity": "Reading", "values": { "station": "@each.id", "generationKw": "@each.generationKw", "consumptionKw": "@each.consumptionKw", "batteryPct": "@each.batteryPct" } },
+        { "block": "db.adjust", "entity": "Station", "id": "@each.id", "field": "generationKw", "by": "= if(each.generationKw >= 9, -6, 2)" },
+        { "block": "db.adjust", "entity": "Station", "id": "@each.id", "field": "consumptionKw", "by": "= if(each.consumptionKw >= 7, -4, 1)" },
+        { "block": "db.adjust", "entity": "Station", "id": "@each.id", "field": "batteryPct", "by": "= if(each.batteryPct >= 95, -10, 5)", "min": 0 }
+      ] } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Station.list":   { "hidden": true },
+    "Reading.list":   { "title": "Reading history", "columns": ["recordedAt", "generationKw", "consumptionKw", "batteryPct"], "sort": { "field": "recordedAt", "dir": "desc" }, "create": false },
+    "Reading.detail": { "fields": ["station", "generationKw", "consumptionKw", "batteryPct", "recordedAt"] }
+  },
+
+  "dashboards": [
+    { "id": "realtime", "title": "Live status", "intro": "Current solar generation, power consumption and battery charge.", "refresh": 10,
+      "cards": [ { "title": "Solar generation (kW)", "entity": "Station", "fn": "avg", "field": "generationKw" },
+                 { "title": "Power consumption (kW)", "entity": "Station", "fn": "avg", "field": "consumptionKw" },
+                 { "title": "Battery percentage", "entity": "Station", "fn": "avg", "field": "batteryPct" } ] },
+    { "id": "history", "title": "Historical trends", "intro": "Query past readings by date range.", "period": { "Reading": "recordedAt" },
+      "tables": [ { "title": "Daily averages", "entity": "Reading", "groupBy": "recordedAt", "groupUnit": "day", "groupTitle": "Day",
+                    "metrics": [ { "fn": "avg", "field": "generationKw", "as": "gen", "title": "Avg generation" },
+                                 { "fn": "avg", "field": "consumptionKw", "as": "cons", "title": "Avg consumption" },
+                                 { "fn": "avg", "field": "batteryPct", "as": "batt", "title": "Avg battery" } ] } ],
+      "charts": [ { "title": "Generation over time", "entity": "Reading", "type": "line", "groupBy": "recordedAt", "groupUnit": "day", "metric": { "fn": "avg", "field": "generationKw" } },
+                  { "title": "Battery over time", "entity": "Reading", "type": "line", "groupBy": "recordedAt", "groupUnit": "day", "metric": { "fn": "avg", "field": "batteryPct" } } ] }
+  ],
+
+  "pages": [
+    { "id": "about", "title": "Solar dashboard", "heading": "Solar dashboard",
+      "body": [ "Live status shows the current reading and refreshes itself; historical trends lets you query any date range." ],
+      "links": [ { "label": "Live status", "href": "/dashboard/realtime" }, { "label": "Historical trends", "href": "/dashboard/history" }, { "label": "Reading history", "href": "/Reading" } ] }
+  ]
+}
