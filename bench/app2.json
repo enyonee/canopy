@@ -1,0 +1,11 @@
+{ "app": "bench2", "data": {
+  "Customer": { "name": "text!", "orders": "int := count(Order)", "spent": "money := sum(Order: total)",
+    "lines": "money := sum(Order: gross)", "big": "int := count(Order: total > 100)",
+    "recent": "int := count(Order: placed > '2026-01-01')", "latest": "date := max(Order: placed)",
+    "late": "int := count(Order: placed < today)" },
+  "Order": { "customer": "ref:Customer!", "status": "enum[new,paid]=new", "placed": "date",
+    "total": "money := sum(Item: qty * price)", "gross": "money := sum(Item: line)", "lastShip": "date := max(Item: shipped)" },
+  "Item": { "order": "ref:Order!", "title": "text!", "qty": "int=1", "price": "money=1", "shipped": "date",
+    "line": "money := qty * price" } },
+  "views": "auto"
+}
