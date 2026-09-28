@@ -7,7 +7,7 @@ const answerIdIn = (row) => { const m = /\/Answer\/(\d+)\/action\/upvote/.exec(r
 
 export const checks = [
   { task: 'Submit a new question using the question submission form',
-    run: async ({ asGuest, get, post, follow, rowWith, must, flashOf }) => {
+    run: async ({ asGuest, get, post, follow, login, rowWith, must, flashOf }) => {
       asGuest();
       const anon = await get('/Question/new');
       must(anon.location.startsWith('/login'), `a guest reached the question form: ${anon.status} ${anon.location}`);
@@ -24,7 +24,14 @@ export const checks = [
       must(/<th>Author<\/th><td><a href="\/User\/\d+">eve@qna.test<\/a>/.test(detail.html), 'the author was not filled from the session');
       const list = await get('/Question');
       must(rowWith(list.html, TITLE), 'the new question is not in the list');
-      return `posted as #${questionId}; guest redirected; short title refused`;
+      // Round 4: `own` grew `all`, so eve may now edit/delete only her own question.
+      const editedByAuthor = await post(`/Question/${questionId}`, { title: TITLE, body: 'Edited: sunlight scatters more at shorter (blue) wavelengths.' });
+      must(editedByAuthor.status === 303, `eve could not edit her own question: ${editedByAuthor.status}`);
+      await login('dana@qna.test', 'dana123');
+      const hijack = await post(`/Question/${questionId}`, { title: 'hijacked', body: 'x' });
+      must(hijack.status === 403, `dana could edit eve's question (status ${hijack.status})`);
+      await login('eve@qna.test', 'eve123');
+      return `posted as #${questionId}; guest redirected; short title refused; the author (only) may edit it`;
     } },
   { task: 'View the list of submitted questions',
     run: async ({ get, rows, rowWith, must }) => {
