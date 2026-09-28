@@ -8,6 +8,28 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 - `AGENTS.md`, `CONTRIBUTING.md`, pull request and issue templates, this changelog.
 - README roadmap: runtime performance, PostgreSQL as a second driver, horizontal scaling,
   a production connector library.
+- **Runtime performance, round 2.** No change to any answer: the same 13 benchmark routes and
+  the CSV export stay byte-identical.
+  - **Aggregates pushed into SQL** (`runtime/store/aggsql.mjs`): `count`/`sum`/`avg`/`min`/`max`
+    over a child with a direct `via` link, whose body is built only from the child's own stored
+    `int`/`money`/`bool` fields (`+ - *`, comparisons, `and`/`or`/`not`, integer literals,
+    `if(...)`), answers in one SQL query — a single row for `Store#get()`, one `GROUP BY` for a
+    whole page — instead of fetching every child row and summing in JS. `total := sum(Item: qty
+    * price)` on an order with 20 000 items: 30.7 ms → 2.0 ms (p50). Everything else (a derived
+    field inside the body, `row.*` correlation, a hop through a reference, date/time, division
+    anywhere in the body, a fractional literal, text/enum comparisons) still evaluates in JS,
+    unchanged. Parity with the JS path — including money's minor-unit rounding, NULL
+    propagation, and empty groups (`sum`/`count` are 0, `avg`/`min`/`max` are null) — is a
+    property test (`tests/aggsql.test.mjs`) over random rows and random compilable expressions,
+    plus direct tests of the compiler's accept/reject boundary.
+  - **Memory regression from 0.1.1 fixed.** `hydratePage` now builds its aggregate cache (and
+    fetches any raw child rows a non-compilable aggregate still needs) in chunks of 500 parent
+    rows at a time, released between chunks, instead of once for the whole page — and with SQL
+    aggregates above, most pages never fetch a child row into JS at all any more. RSS growth
+    after `/dashboard` + `/Order.csv` at 40 000 orders (200 000 items): +87 MB (0.1.1) → +17 MB
+    (this round), measured with the same script before and after a forced GC.
+  - `npm run bench` extended with both scenarios (`bench/run.mjs`); numbers above and the full
+    table are in `TESTS.md`.
 
 ## 0.1.1 (2026-09-28)
 
