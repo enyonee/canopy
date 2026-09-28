@@ -5,13 +5,12 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { validate, formatErrors } from '../runtime/validate.mjs';
 import { parse, check as checkExpr, evaluate } from '../runtime/expr.mjs';
 import { FUNCTIONS } from '../runtime/functions.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
-import { boot, rows, tmpGraph } from './helpers.mjs';
+import { boot, rows, tmpGraph, tmpDir } from './helpers.mjs';
 
 const graph = {
   app: 'v5', theme: { accent: 'navy' },
@@ -462,7 +461,7 @@ test('item 15: Entity.form\'s confirm/confirmEdit interpolate the just-written r
 // ---------------------------------------------------------------------------
 // Items 16-19: more gaps confirmed by app agents, addressed after 1-15.
 // ---------------------------------------------------------------------------
-const widgetDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-r4-widget-'));
+const widgetDir = tmpDir('ag-r4-widget-');
 const cardsPlugin = path.join(widgetDir, 'cards.mjs');
 fs.writeFileSync(cardsPlugin, `export default {
   widgets: { cards: { summary: 'shows hole cards', client: './cards.client.mjs', props: ['fen'] } },

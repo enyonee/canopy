@@ -1,9 +1,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { boot, rows, flash } from './helpers.mjs';
+import { boot, rows, flash, tmpDir } from './helpers.mjs';
 
 let s;
 before(async () => { s = await boot(); });
@@ -178,7 +177,7 @@ test('failures are contained: unknown routes 404, a broken block 500, both trace
 });
 
 test('an invalid graph is served as an error page, not a crash', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-bad-'));
+  const dir = tmpDir('ag-bad-');
   const file = path.join(dir, 'bad.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'bad', data: { A: { x: 'datetime!' } } }));
   const bad = await boot(file);

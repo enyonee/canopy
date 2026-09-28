@@ -5,6 +5,19 @@ import { once } from 'node:events';
 import { serve } from '../runtime/server.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
 
+// Every directory a test makes goes through here and is removed when the test file's process
+// ends, pass or fail (a leaked one costs an inode for ever; the mutation gate runs the suite
+// ~180 times). With `t` it is removed as soon as that test is done.
+const made = new Set();
+const drop = (d) => { fs.rmSync(d, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); made.delete(d); };
+process.on('exit', () => { for (const d of made) drop(d); });
+export const tmpDir = (prefix, t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  made.add(dir);
+  if (t) t.after(() => drop(dir));
+  return dir;
+};
+
 // A fake network for outgoing HTTP: records calls, answers what the test says.
 export const fakeFetch = () => {
   const calls = [];
@@ -18,7 +31,7 @@ export const fakeFetch = () => {
 };
 
 export async function boot(graphFile = 'tests/fixtures/kitchen.json', opts = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-srv-'));
+  const dir = tmpDir('ag-srv-');
   const traceFile = path.join(dir, 'trace.jsonl');
   const net = fakeFetch();
   const { registry, errors: pluginErrors } = await loadPlugins(JSON.parse(fs.readFileSync(graphFile, 'utf8')), path.dirname(path.resolve(graphFile)));
@@ -49,14 +62,14 @@ export async function boot(graphFile = 'tests/fixtures/kitchen.json', opts = {})
   const asGuest = () => { cookie = ''; };
   const trace = () => fs.readFileSync(traceFile, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
   // fetch keeps connections alive; without dropping them close() never resolves.
-  const close = () => { app.server.closeAllConnections(); app.server.close(); };
+  const close = () => { app.server.closeAllConnections(); app.server.close(); drop(dir); };
   return { app, base, get, post, upload, follow, login, asGuest, trace, dir, close, net };
 }
 
 export const rows = (html) => [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]).filter((r) => r.includes('<td>'));
 export const flash = (html) => (/<p class="flash">([\s\S]*?)<\/p>/.exec(html) || [, ''])[1].trim();
 export const tmpGraph = (graph) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-g-'));
+  const dir = tmpDir('ag-g-');
   const file = path.join(dir, 'app.json');
   fs.writeFileSync(file, JSON.stringify(graph));
   return file;

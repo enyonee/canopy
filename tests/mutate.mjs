@@ -2,6 +2,8 @@
 // The mutation gate. Coverage says the line ran; this says the tests would have
 // noticed if the line were wrong. A mutation that survives is a hole in the suite.
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const MUTATIONS = [
@@ -505,10 +507,12 @@ const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminat
 // `process.kill(-pid, …)` reaches the parent and every worker it forked, not just the one pid.
 const run = () => new Promise((resolve) => {
   const files = fs.readdirSync('tests').filter((f) => f.endsWith('.test.mjs')).map((f) => `tests/${f}`);
-  const child = spawn('node', ['--no-warnings', '--test', ...files], { stdio: 'ignore', detached: true });
+  // A private TMPDIR per run, removed afterwards: a run killed on timeout cannot clean up after itself.
+  const priv = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-mutrun-'));
+  const child = spawn('node', ['--no-warnings', '--test', ...files], { stdio: 'ignore', detached: true, env: { ...process.env, TMPDIR: priv } });
   let settled = false;
   const timer = setTimeout(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ } }, TEST_TIMEOUT);
-  const finish = (ok) => { if (settled) return; settled = true; clearTimeout(timer); resolve(ok); };
+  const finish = (ok) => { if (settled) return; settled = true; clearTimeout(timer); fs.rmSync(priv, { recursive: true, force: true }); resolve(ok); };
   child.on('exit', (code) => finish(code === 0));
   child.on('error', () => finish(false));
 });

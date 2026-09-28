@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { applyPatch } from '../runtime/patch.mjs';
+import { tmpDir } from './helpers.mjs';
 
 const graph = () => ({ app: 'x', data: { Task: { title: 'text!' } },
   override: { 'Task.list': { columns: ['title'], filters: [{ field: 'title', options: [] }] } } });
@@ -42,7 +42,7 @@ test('a patch into nowhere names the missing segment', () => {
 });
 
 test('the CLI refuses a patch that would break the graph, and keeps the file intact', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-p-'));
+  const dir = tmpDir('ag-p-');
   const gf = path.join(dir, 'app.json');
   const pf = path.join(dir, 'p.json');
   const original = JSON.stringify(graph());

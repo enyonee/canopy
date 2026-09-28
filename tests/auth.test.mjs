@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { hashPassword, isHashed, verifyPassword, sessions, permissions } from '../runtime/auth.mjs';
+import { tmpDir } from './helpers.mjs';
 
 test('passwords are salted hashes that verify only against their own plain text', () => {
   const h = hashPassword('secret');
@@ -20,7 +20,7 @@ test('passwords are salted hashes that verify only against their own plain text'
 });
 
 test('sessions are rows: the cookie carries an opaque id, logout ends it, a broken cookie is not a crash', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-auth-'));
+  const dir = tmpDir('ag-auth-');
   const keyFile = path.join(dir, 'session.key');
   const rows = new Map();
   const store = {

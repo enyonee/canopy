@@ -2,13 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../runtime/store.mjs';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { open } from '../runtime/driver.mjs';
 import { deliver, flush, LEASE_MS } from '../runtime/outbox.mjs';
 import { DEFAULT } from '../runtime/registry.mjs';
 import { outboxView } from '../runtime/render/pages.mjs';
-import { fakeFetch } from './helpers.mjs';
+import { fakeFetch, tmpDir } from './helpers.mjs';
 
 const graph = {
   app: 'o', data: { A: { n: 'text' } },
@@ -169,7 +168,7 @@ test('outboxFinish writes only while the claim is the caller\'s', () => {
 });
 
 test('a database made before "claimedAt" existed is upgraded in place, rows kept', () => {
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'outbox-')), 'old.sqlite');
+  const file = path.join(tmpDir('outbox-'), 'old.sqlite');
   const old = open(file);
   old.exec(`CREATE TABLE "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT,
     target TEXT, payload TEXT, status TEXT, code INTEGER, error TEXT, attempts INTEGER DEFAULT 0, at TEXT, updatedAt TEXT)`);

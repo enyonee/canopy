@@ -2,7 +2,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
 import { Store } from '../runtime/store.mjs';
@@ -13,7 +12,7 @@ import { formView } from '../runtime/render/form.mjs';
 import { detailView } from '../runtime/render/detail.mjs';
 import { dashboardView } from '../runtime/render/dashboard.mjs';
 import { serve } from '../runtime/server.mjs';
-import { boot, rows, flash } from './helpers.mjs';
+import { boot, rows, flash, tmpDir } from './helpers.mjs';
 
 test('an entity with no fields still gets a table, and unknown entities answer emptily', () => {
   const store = new Store({ app: 'x', data: { Empty: {}, A: { n: 'int' } } }, ':memory:');
@@ -97,7 +96,7 @@ test('a dashboard card without a function counts, and a missing metric reads zer
 });
 
 test('seed and identity happen once, not on every boot', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-seed-'));
+  const dir = tmpDir('ag-seed-');
   const db = path.join(dir, 'd.sqlite');
   const open = async () => {
     const app = serve({ graphFile: 'tests/fixtures/kitchen.json', dbFile: db, traceFile: null, port: 0 });
@@ -127,7 +126,7 @@ test('seed order: identity before seed, and a self-reference patched once every 
     // each other: neither self-reference exists yet when its own row is inserted.
     seed: { User: [{ name: 'Ada', manager: 2 }, { name: 'Bo', manager: 1 }], Order: [{ customer: 1, item: 'widget' }] },
   };
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-seedorder-'));
+  const dir = tmpDir('ag-seedorder-');
   const app = serve({ graphFile: (() => { const f = path.join(dir, 'app.json'); fs.writeFileSync(f, JSON.stringify(graph)); return f; })(),
     dbFile: path.join(dir, 'd.sqlite'), traceFile: null, port: 0 });
   await once(app.server, 'listening');
@@ -141,7 +140,7 @@ test('seed order: identity before seed, and a self-reference patched once every 
 });
 
 test('an app that declares nothing beyond its data still works end to end', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-bare-'));
+  const dir = tmpDir('ag-bare-');
   const file = path.join(dir, 'app.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'bare', data: { Note: { text: 'text!', done: 'bool=false' } } }));
   const s = await boot(file);
@@ -193,7 +192,7 @@ test('the last defensive paths: no options, no metrics, no actions, missing valu
 });
 
 test('resolution of @now, of a path that leads nowhere, and of a plain value', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-res-'));
+  const dir = tmpDir('ag-res-');
   const file = path.join(dir, 'app.json');
   fs.writeFileSync(file, JSON.stringify({
     app: 'res', data: { A: { name: 'text!', at: 'text', ghost: 'text' } },
@@ -233,7 +232,7 @@ test('the strikethrough row, a page whose graph declares no actions, an identity
   const page = staticPage(bareGraph, { id: 'p', title: 'P', actions: ['ghost'] });
   assert.match(page, />Ghost</, 'a page button survives a graph that declares no actions at all');
 
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-id-'));
+  const dir = tmpDir('ag-id-');
   const file = path.join(dir, 'app.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'id', data: { Me: { name: 'text' } }, identity: { entity: 'Me' } }));
   const s = await boot(file);
@@ -257,7 +256,7 @@ test('the checker survives a step written against an entity that does not exist'
 });
 
 test('a row action on a graph without actions, and an action that declares no target', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-noact-'));
+  const dir = tmpDir('ag-noact-');
   const file = path.join(dir, 'app.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'noact', data: { A: { name: 'text!', done: 'bool=false' } } }));
   const s = await boot(file);
@@ -296,7 +295,7 @@ test('a wheel whose arithmetic runs off the end still returns a prize', async (t
 test('an unchecked box means false, even when the declared default says true', async () => {
   // The gap the mutation gate found: a browser sends nothing for an unchecked box,
   // and "nothing" must not be read as "apply the declared default".
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-box-'));
+  const dir = tmpDir('ag-box-');
   const file = path.join(dir, 'app.json');
   fs.writeFileSync(file, JSON.stringify({ app: 'box',
     data: { Job: { title: 'text!', active: 'bool=true' }, Task: { job: 'ref:Job!', title: 'text!', urgent: 'bool=true' } },
