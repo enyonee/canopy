@@ -107,3 +107,15 @@ export const fakeClock = (start = 1_000_000) => {
     },
   };
 };
+
+// The JS reference of the SQL-compiled aggregates: the compiler is off for the snapshot path
+// (`compileAggIn`) and for the lazy one (`aggValue`, and a page cache with no batches), so every
+// aggregate is evaluated by runtime/expr.mjs over child rows. Restores whatever `fn` returns/throws.
+export const compilerOff = (store, fn) => {
+  const { aggValue, buildAggCache } = store;
+  store.compileAggIn = () => null;
+  store.plans.clear(); // plans record which aggregates compile
+  store.aggValue = () => undefined;
+  store.buildAggCache = () => ({ groups: new Map(), scalars: new Map(), clock: new Date() });
+  try { return fn(); } finally { delete store.compileAggIn; store.plans.clear(); store.aggValue = aggValue; store.buildAggCache = buildAggCache; }
+};
