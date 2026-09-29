@@ -271,3 +271,18 @@ test('the lazy path (the old context) pays one query per hop per row — the sna
   const lazy = everyQuery(store, () => store.list('Order', {}));
   assert.ok(lazy > snapshot * 10, `expected the lazy path to be far more expensive: ${lazy} vs ${snapshot}`);
 });
+
+// The lazy path is still shipped for one release (`store.lazyEval`, S3a): its own batching — one cache
+// per page, prefetched level by level through nested aggregates — keeps its gates.
+test('the lazy path still batches a page: a non-compilable aggregate over a derived aggregate is O(1) queries', () => {
+  const graph = { ...BENCH_GRAPH, data: { ...BENCH_GRAPH.data, Customer: { name: 'text!', half: 'money := sum(Order: total / 2)' } } };
+  const small = new Store(graph, ':memory:');
+  seed(small, 25);
+  const big = new Store(graph, ':memory:');
+  seed(big, 500);
+  small.lazyEval = true; big.lazyEval = true;
+  const page = (store) => withQueryCount(store, () => store.listPage('Customer', {}, { page: 1, pageSize: 50 }));
+  const c100 = page(small), c2000 = page(big);
+  assert.equal(c100, c2000, `lazy Customer list issued ${c100} queries at 100 rows but ${c2000} at 2000 — not O(1)`);
+  assert.ok(c100 <= 6, `expected a small constant through the nested aggregate, got ${c100}`);
+});

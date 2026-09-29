@@ -16,6 +16,7 @@ const GRAPH = {
       net: 'money := total - customer.discount',
       where: 'text := customer.region.name',
       mine: 'money := sum(Item: qty * price - row.rebate)',
+      viaRow: 'money := sum(Item: qty * price - row.customer.discount)',
       nested: 'int := count(Item: count(Item) > 0)',
       cheap: 'bool := total < customer.discount and customer.orders > 1' },
     Item: { order: 'ref:Order!', qty: 'int=1', price: 'money=1', cust: 'text := order.customer.name' },
@@ -70,6 +71,13 @@ test('row.* inside a body reads the enclosing row: its fields are planned on the
   assert.deepEqual(hops(entry.sub), [], 'the body reads Item fields and row.rebate, no hop');
 });
 
+test('row.customer.discount in a body: the customer hop is planned on the enclosing Order, not on the Items', () => {
+  const s = store();
+  const plan = planFor(s, 'Order', ['viaRow']);
+  assert.deepEqual(hops(plan), ['customer']);
+  assert.deepEqual(hops([...plan.aggs.values()][0].sub), []);
+});
+
 test('an aggregate inside another aggregate\'s body is planned over rows, never compiled (evaluate gives a body no agg hook)', () => {
   const s = store();
   const nested = [...planFor(s, 'Order', ['nested']).aggs.values()][0];
@@ -93,7 +101,7 @@ test('plans are cached per store, by entity and field list', () => {
   assert.notEqual(planFor(s, 'Order', ['net']), planFor(store(), 'Order', ['net']));
   const all = planFor(s, 'Order', null);
   assert.deepEqual(hops(all), ['customer']);
-  assert.equal(all.aggs.size, 3, "total, mine and nested: a derived field is expanded once per node");
+  assert.equal(all.aggs.size, 4, "total, mine, viaRow and nested: a derived field is expanded once per node");
 });
 
 test('a cycle is cut where evaluation cuts it; the plan terminates and the error text is unchanged', () => {
@@ -102,6 +110,8 @@ test('a cycle is cut where evaluation cuts it; the plan terminates and the error
   const s = new Store(g, ':memory:');
   const root = planFor(s, 'Node', null);
   assert.ok(root.hops.has('parent'));
+  // up := parent.up + 1: the walk enters the parent and stops there, where evaluation would throw.
+  assert.deepEqual(hops(root.hops.get('parent')), []);
   const a = s.insert('Node', {});
   assert.throws(() => s.get('Node', a), /derived field Node\.x depends on itself \(Node\.x → Node\.y → Node\.x\)/);
   const only = new Store({ app: 'c', data: { Node: { parent: 'ref:Node', up: 'int := parent.up + 1' } }, views: 'auto' }, ':memory:');
@@ -123,4 +133,15 @@ test('a lookup that fails (an ambiguous link) is left to evaluation: the plan ne
   assert.throws(() => s.get('A', b), /C references A through first and second; name one: C\.first/);
   s.lazyEval = true;
   assert.throws(() => s.get('A', b), /C references A through first and second; name one: C\.first/);
+});
+
+test('a derived field reached along many paths is expanded once per node (a diamond 40 deep is not 2^40 walks)', () => {
+  const fields = { n: 'int=0' };
+  for (let i = 0; i < 40; i++) fields[`f${i}`] = `int := f${i + 1} + f${i + 1}`;
+  fields.f40 = 'int := n';
+  const s = new Store({ app: 'diamond', data: { D: fields }, views: 'auto' }, ':memory:');
+  assert.equal(planFor(s, 'D', ['f0']).hops.size, 0);
+  // (Evaluating f0 itself would be 2^40 additions: the plan is what must not be.)
+  const d = s.insert('D', { n: 1 });
+  assert.equal(s.derived('D', s.raw('D', d), s.field('D', 'f39')), 2);
 });

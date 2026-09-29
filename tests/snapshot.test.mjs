@@ -99,6 +99,7 @@ const GRAPH = {
       who: 'text := customer.name',
       halves: 'money := sum(Item: (qty * price) / 2)',
       lessRebate: 'money := sum(Item: qty * price - row.rebate)',
+      viaRow: 'money := sum(Item: qty * price - row.customer.discount)',
       tags: 'int := count(Tag)',
       late: 'bool := due < today',
       stamp: 'time := now',
@@ -169,8 +170,63 @@ test('a dangling or empty reference reads as null, like the lazy path', (t) => {
   store.drv.run('UPDATE "order" SET "customer"=? WHERE id=1', ['999']);
   store.drv.run('UPDATE "order" SET "customer"=NULL WHERE id=2');
   store.drv.run('UPDATE "order" SET "customer"=? WHERE id=3', ['abc']);
+  store.drv.run('UPDATE "order" SET "customer"=? WHERE id=4', ['02']); // the same row as 2, spelled differently
   const snap = JSON.stringify(store.list('Order', {}));
   store.lazyEval = true;
   assert.equal(snap, JSON.stringify(store.list('Order', {})));
   assert.equal(store.get('Order', 1).who, null);
+  assert.equal(store.get('Order', 4).who, 'Customer 2', 'a reference is looked up by its number, however it is spelled');
+});
+
+// A float sum depends on the order it adds in: the children of a parent arrive ORDER BY id DESC, as the lazy
+// path always read them. These integers are chosen so that adding them ascending gives a different double.
+test('the children of a non-compilable aggregate are summed in id-descending order, like the lazy path', () => {
+  const g = { app: 'order', data: { P: { total: 'int := sum(C: n / 1)' }, C: { p: 'ref:P!', n: 'int' } }, views: 'auto' };
+  const store = new Store(g, ':memory:');
+  const p = store.insert('P', {});
+  for (const n of [1, 1, 1, 9007199254740991]) store.insert('C', { p, n });
+  assert.equal(store.get('P', p).total, 9007199254740992);
+  assert.equal(store.list('P', {})[0].total, 9007199254740992);
+  store.lazyEval = true;
+  assert.equal(store.get('P', p).total, 9007199254740992);
+});
+
+test('no row is fetched twice while one page loads, however many plan nodes reach it', () => {
+  const g = { app: 'dup', data: {
+    Customer: { name: 'text!', ohalves: 'money := sum(Order: halves)' },
+    Order: { customer: 'ref:Customer!', halves: 'money := sum(Item: (qty * price) / 2)' },
+    Item: { order: 'ref:Order!', qty: 'int=1', price: 'money=1', x: 'money := order.halves + order.customer.ohalves' } }, views: 'auto' };
+  const store = new Store(g, ':memory:');
+  for (let c = 0; c < 3; c++) {
+    const cid = store.insert('Customer', { name: `C${c}` });
+    for (let o = 0; o < 3; o++) {
+      const oid = store.insert('Order', { customer: cid });
+      for (let i = 0; i < 2; i++) store.insert('Item', { order: oid, qty: 2, price: 3 });
+    }
+  }
+  const seen = new Map(), repeated = [];
+  const note = (sql, params) => {
+    const shape = sql.replace(/IN \([^)]*\)/, 'IN (…)');
+    if (!seen.has(shape)) seen.set(shape, new Set());
+    for (const v of params) { if (seen.get(shape).has(String(v))) repeated.push(`${shape} ${v}`); seen.get(shape).add(String(v)); }
+  };
+  for (const m of ['all', 'get']) { const orig = store.drv[m]; store.drv[m] = (sql, params = [], opts) => { if (/ IN \(/.test(sql)) note(sql, params); return orig(sql, params, opts); }; }
+  const rows = store.list('Item', {});
+  assert.equal(rows.length, 18);
+  assert.deepEqual(repeated, [], 'a plan node asked again for rows another node had already loaded');
+  assert.ok(seen.size >= 4, `the gate must have seen the hop and the group queries: ${[...seen.keys()]}`);
+});
+
+test('labelOf on the lazy switch never builds a snapshot, and on the default path it does', () => {
+  const store = new Store(GRAPH, ':memory:');
+  seedPurity(store);
+  const built = [];
+  const orig = store.loadSnapshot;
+  store.loadSnapshot = function counted(...a) { built.push(a[0]); return orig.apply(this, a); };
+  assert.equal(store.labelOf('Person', 1), 'Ann Lee');
+  assert.equal(built.length, 1);
+  store.lazyEval = true;
+  assert.equal(store.labelOf('Person', 1), 'Ann Lee');
+  assert.equal(built.length, 1, 'the lazy path derives the label over its own context');
+  delete store.loadSnapshot;
 });
