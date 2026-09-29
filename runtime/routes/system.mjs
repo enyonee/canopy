@@ -29,7 +29,7 @@ async function outbox(ctx) {
     await outboxAction(ctx, row, parts[2]);
     return true;
   }
-  send(200, outboxView(graph, store.outbox(), ctx.flash, vc, store.breakers()));
+  send(200, outboxView(graph, store.outbox(), ctx.flash, vc, store.breakers(), ctx.interp.modes()));
   return true;
 }
 

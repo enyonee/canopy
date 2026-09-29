@@ -85,12 +85,20 @@ function breakerTable(breakers) {
     <table><thead><tr><th>Connector</th><th>Mode</th><th>State</th><th>Failures</th><th>Open until</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-export function outboxView(graph, rows, flash, vc = anyone, breakers = []) {
+// Each connector and the mode it runs in now (the deploy file, runtime/deploy.mjs); never a secret, only how it is set up.
+function modeTable(modes) {
+  if (!modes.length) return '';
+  const rows = modes.map((m) => `<tr><td>${esc(m.connector)}</td><td>${esc(m.kind)}</td><td><span class="status">${esc(m.mode)}</span></td><td>${esc(m.modes.join(', '))}</td></tr>`).join('');
+  return `<h3>Connector modes</h3><p class="muted">Sandbox answers from the connector's own rules and sends nothing; live calls the provider. Switched only with the command line.</p>
+    <table><thead><tr><th>Connector</th><th>Kind</th><th>Mode</th><th>Available</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+export function outboxView(graph, rows, flash, vc = anyone, breakers = [], modes = []) {
   const body = rows.map((r) => `<tr><td>${r.id}</td><td>${esc(r.kind)}</td><td>${esc(r.connector)}</td><td>${esc(r.target)}</td>
     <td><span class="status">${esc(r.status)}</span>${r.code ? ` ${r.code}` : ''}${r.error ? `<div class="error">${esc(r.error)}</div>` : ''}${attemptNote(r)}</td>
     <td><pre class="muted">${esc(JSON.stringify(r.payload, null, 1))}</pre></td><td>${esc(r.updatedAt)}</td><td>${actions(r)}</td></tr>`).join('');
   return page(graph, { title: 'Outbox', flash, vc,
     body: `<h2>Outbox</h2><p class="muted">Everything the application sent out, with its delivery status.</p>
       <table><thead><tr><th>#</th><th>Kind</th><th>Connector</th><th>Target</th><th>Status</th><th>Payload</th><th>Updated</th><th></th></tr></thead>
-      <tbody>${body}</tbody></table><p class="muted">${rows.length} item(s)</p>${breakerTable(breakers)}` });
+      <tbody>${body}</tbody></table><p class="muted">${rows.length} item(s)</p>${modeTable(modes)}${breakerTable(breakers)}` });
 }

@@ -11,6 +11,7 @@ export const TRANSPORTS = {
   // http is a built-in descriptor (runtime/connectors/builtin.mjs); the engine is its transport.
   http: synthesize(BUILTIN.http),
   mail: {
+    modes: ['sandbox'],
     // The stand transport: the letter is recorded, not carried. SMTP is a plugin's business.
     summary: 'a letter with "from"; recorded in the outbox',
     validate: () => [],

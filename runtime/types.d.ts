@@ -144,6 +144,8 @@ export interface BlockCtx {
 /** A registry.transports[kind] entry — one per connector kind. */
 export interface TransportType {
   summary: string;
+  /** The modes this kind may run in (the first is the default); absent means live only. */
+  modes?: Array<'sandbox' | 'live'>;
   validate: (connector: ConnectorSpec) => Array<[string, string, string?]>;
   deliver: (row: any, connector: ConnectorSpec, opts: any) => Promise<{ status: string; code?: number | null; error?: string | null; response?: string; result?: string; drift?: number; retryAfter?: string }>;
 }
@@ -168,6 +170,10 @@ export interface ConnectorDescriptor {
   descriptor: 1; name: string; title?: string; version?: string; base?: string; config?: SchemaNode;
   timeoutMs?: number; legacy?: string; operations: Record<string, OperationSpec>;
   retry?: Partial<RetryPolicy>; breaker?: Partial<BreakerPolicy>; idempotency?: { header: string };
+  /** The modes a connector of this kind may run in, the first is the default (runtime/deploy.mjs). */
+  modes?: Array<'sandbox' | 'live'>;
+  /** Per operation, the ordered rules that answer in sandbox mode (runtime/connectors/sandbox.mjs). */
+  sandbox?: { operations: Record<string, Array<{ when?: Record<string, any>; status?: number; headers?: Record<string, string>; body?: any }>> };
 }
 
 /** The retry policy of a descriptor (runtime/connectors/backoff.mjs DEFAULT_RETRY). */

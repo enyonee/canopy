@@ -6,12 +6,13 @@
 import { checkSchema } from './schema.mjs';
 import { refs, pathSteps, originProblem } from './template.mjs';
 import { checkPolicy } from './backoff.mjs';
+import { checkSandbox } from './sandbox.mjs';
 
 // The longest an operation may wait: half the outbox lease (runtime/outbox.mjs LEASE_MS),
 // so a slow provider cannot outlive the claim on its row and be delivered twice.
 export const MAX_TIMEOUT_MS = 30000;
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'operations'];
+const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'modes', 'sandbox', 'operations'];
 const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result'];
 const REQUEST = ['method', 'url', 'headers', 'body'];
 const NAME = /^[A-Za-z_][\w-]*$/;
@@ -92,6 +93,12 @@ function checkIdempotency(v) {
   return out;
 }
 
+// Which modes a connector of this kind may run in; the first is the default (runtime/deploy.mjs).
+function checkModes(v) {
+  const ok = Array.isArray(v) && v.length > 0 && new Set(v).size === v.length && v.every((m) => m === 'sandbox' || m === 'live');
+  return ok ? [] : [['/modes', '"modes" lists "sandbox" and/or "live", each once; the first is the default', '"modes": ["sandbox", "live"]']];
+}
+
 function checkTop(d) {
   const out = unknownKeys(d, TOP, '');
   if (d.descriptor !== 1) out.push(['/descriptor', 'the descriptor format version is 1', '"descriptor": 1']);
@@ -101,6 +108,7 @@ function checkTop(d) {
     out.push(['/timeoutMs', `"timeoutMs" is a whole number of milliseconds, 1 to ${MAX_TIMEOUT_MS}`, 'half the delivery lease, so a slow call cannot outlive its claim']);
   for (const k of ['retry', 'breaker']) if (d[k] !== undefined) out.push(...checkPolicy(k, d[k], `/${k}`));
   if (d.idempotency !== undefined) out.push(...checkIdempotency(d.idempotency));
+  if (d.modes !== undefined) out.push(...checkModes(d.modes));
   if (d.base !== undefined) out.push(...(typeof d.base === 'string' ? checkRefs(d.base, '/base', { noSecret: true, noInput: true, config: d.config?.properties }) : [['/base', '"base" is a string template']]));
   if (d.config !== undefined) out.push(...checkSchema(d.config, '/config'), ...(d.config?.type === 'object' ? [] : [['/config/type', '"config" describes an object: "type" must be "object"']]));
   return out;
@@ -116,6 +124,7 @@ export function checkDescriptor(d) {
     if (!NAME.test(name)) out.push([`/operations/${name}`, `"${name}" cannot be an operation name`]);
     out.push(...checkOperation(op, `/operations/${name}`, d));
   }
+  out.push(...checkSandbox(d.sandbox, d));
   if (d.legacy !== undefined && !ops.some(([n]) => n === d.legacy)) out.push(['/legacy', `"legacy" names an operation this descriptor does not have`]);
   return out;
 }

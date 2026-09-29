@@ -4,3 +4,5 @@ apps/*/trace.jsonl
 apps/*/session.key
 apps/*/files/
 apps/*/.stage*.json
+apps/*/secrets.enc
+apps/*/secrets.key

@@ -47,7 +47,7 @@ test('a descriptor is registered with its transport; the built-in registry has h
 
 test('registerDescriptor is fail-closed: an invalid descriptor and a taken name are load errors', () => {
   const r = createRegistry();
-  assert.throws(() => registerDescriptor(r, { ...PAY, sandbox: 1 }, 'x.json'), /^Error: x\.json: invalid descriptor — \/sandbox unknown key "sandbox"/);
+  assert.throws(() => registerDescriptor(r, { ...PAY, sandbox: 1 }, 'x.json'), /^Error: x\.json: invalid descriptor — \/sandbox sandbox rules need "sandbox" in "modes"/);
   assert.throws(() => registerDescriptor(r, { ...PAY, name: 'http' }, 'x.json'), /x\.json: connector kind "http" is already registered$/);
   registerDescriptor(r, PAY, 'a.json');
   assert.throws(() => registerDescriptor(r, PAY, 'b.json'), /b\.json: connector kind "pay" is already registered by a\.json/);
@@ -270,7 +270,7 @@ test('a secret with no store behind it fails the delivery closed, with the reaso
     await s.post(`/Order/${order}/action/secured`, {});
     const [row] = s.app.store.outbox();
     assert.equal(row.status, 'failed');
-    assert.match(row.error, /secret "apiKey" cannot be resolved/);
+    assert.match(row.error, /secret "apiKey" is not set/);
     assert.deepEqual(sent, [], 'nothing was sent');
   } finally { s.close(); }
 });
