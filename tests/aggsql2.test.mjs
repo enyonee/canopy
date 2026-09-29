@@ -243,4 +243,11 @@ test('a derived field inside an aggregate reads the same `now` as the aggregate 
     assert.deepEqual([jsOnly(store, () => store.get('O', o)).diff, jsOnly(store, () => store.get('O', o)).dd], [0, 0]);
   }
   assert.ok(k > 100, 'the clock really did move');
+  // The old lazy context (`store.lazyEval`, kept one release) hands the clock down the same way — with
+  // no page cache, as a lone `Store#get` read before S3a, each derived field would otherwise take its own.
+  const lazyGet = () => store.hydrateLazy('O', store.raw('O', o));
+  for (let i = 0; i < 60; i++) {
+    assert.deepEqual([lazyGet().diff, lazyGet().dd], [0, 0]);
+    assert.deepEqual([jsOnly(store, lazyGet).diff, jsOnly(store, lazyGet).dd], [0, 0]);
+  }
 });
