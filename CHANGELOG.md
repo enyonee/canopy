@@ -5,6 +5,16 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.3.0 (2026-09-29)
+
+Two roadmap items move: the connector library starts (stage C1 of `docs/CONNECTORS.md`: a
+connector is a validated JSON descriptor, `http` runs on it) and PostgreSQL reaches stage S2 (the
+store builds all SQL through a dialect; a `postgres` dialect exists and is golden-tested, still
+without a driver). No answer changes: JSON/CSV of the benchmark routes are byte-identical to 0.2.0,
+and existing `http` connectors deliver byte-identical requests.
+
+### Connector library
+
 - **Connector descriptors (connector library, stage C1).** A connector is now data: a
   descriptor (`docs/CONNECTORS.md`) names the operations of a service, the JSON-Schema-subset
   input and output of each, the request template and how to map the answer. New `runtime/connectors/`:
@@ -26,6 +36,8 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   operation's `output` schema sets `drift=1` and traces `contract_drift` while the row stays
   `sent`. URL safety: `{input.*}`/`{key}` in a url template are percent-encoded, an input in the origin is a descriptor error, header values with a line break fail the delivery. Gates: five `tests/connectors_*.test.mjs` files (the http regression compares against a
   copy of the old transport), 48 `C1:` mutations, the new modules in the layer table.
+
+### PostgreSQL
 
 - **Portable SQL and dialect hooks (PostgreSQL roadmap, stage S2).** New
   `runtime/driver/dialects.mjs` (a pure leaf): a `sqlite` and a `postgres` dialect with every
