@@ -5,6 +5,28 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Connector descriptors (connector library, stage C1).** A connector is now data: a
+  descriptor (`docs/CONNECTORS.md`) names the operations of a service, the JSON-Schema-subset
+  input and output of each, the request template and how to map the answer. New `runtime/connectors/`:
+  `schema.mjs` and `template.mjs` (pure leaves; an unknown schema keyword is an error, templates
+  have no expressions or conditionals), `descriptor.mjs` (validates a descriptor, fail closed),
+  `engine.mjs` (request building, response mapping, output validation, and the registry transport
+  a descriptor becomes), `builtin.mjs` (built-in descriptors as JS literals). A `.json` file in
+  `plugins` registers a descriptor as a connector kind of its own name. One new block,
+  `connector.call { connector, op, input, ref? }`, validates `input` against the operation's schema
+  when the step runs, inside the transaction, so a malformed call refuses the action and never
+  reaches the outbox; the checker validates literal inputs and `@row.field` types against the
+  same schema. `http` is now a built-in descriptor and delivers byte for byte what it did (same
+  url, method, JSON body, header merge and 3000 ms timeout; `http.send` and `connector.send` rows
+  are queued without an operation and delivered as its `send`). `mail` is unchanged. The checker
+  refuses a literal secret in a connector (by key name or by shape) and a secret or credential
+  in a url; `{secret.*}` is reference syntax only until the secret store lands (C2): a delivery
+  that needs one fails closed with a clear message. `_outbox` gains `op`, `response` (capped at
+  16 KB), `result` and `drift`, added in place like `claimedAt`; an answer that does not fit the
+  operation's `output` schema sets `drift=1` and traces `contract_drift` while the row stays
+  `sent`. Gates: five `tests/connectors_*.test.mjs` files (the http regression compares against a
+  copy of the old transport), 48 `C1:` mutations, the new modules in the layer table.
+
 - **Portable SQL and dialect hooks (PostgreSQL roadmap, stage S2).** New
   `runtime/driver/dialects.mjs` (a pure leaf): a `sqlite` and a `postgres` dialect with every
   hook the store builders need: placeholders (`?` / `$n`), `quote`, id and integer column types
