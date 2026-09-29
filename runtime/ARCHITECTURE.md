@@ -100,6 +100,24 @@
   `server.mjs#startFlusher` — интервал плюс одноразовый таймер на ближайший `nextAttemptAt`, `unref`, остановка
   при закрытии сервера, выключен при `noTimers`/`AG_NO_TIMERS`. `/outbox`: `unknown` с «Mark sent» и «Retry»,
   время следующей попытки у ждущих строк, таблица состояний разрывателя.
+  **C2, секреты и режимы** (`docs/CONNECTORS.md` §3 и §12). `secrets.mjs` — хранилище (`node:crypto`, `node:fs`):
+  один файл `secrets.enc` рядом с базой, весь блоб под AES-256-GCM (имена тоже скрыты), ключ — HKDF от мастер-ключа
+  (`CANOPY_MASTER_KEY` или `secrets.key`, 0600), AAD — имя приложения и версия; чужой ключ, изменённый байт и
+  неизвестный формат бросают понятную ошибку (закрыто). `get(name)` — `[name, name.prev]`, `current(name)` — одно
+  имя (подписывать запрос можно только им). `connectors/redact.mjs` — чистый лист: значения секретов (как есть, в
+  JSON-экранировании и в URL-кодировке) заменяются на `«secret»` в тексте и в данных любой формы. `deploy.mjs` —
+  режим каждого коннектора в `deploy.json` (читается заново при каждой доставке; нет файла — первый из `modes` вида),
+  `connectorEnv` — то, с чем доставляет работающее приложение (`{deploy(), secrets}`; создаёт `serve`, отдаёт
+  интерпретатору и flusher'у). `connectors/sandbox.mjs` — чистый лист: упорядоченные правила `when` над `input.*`
+  (`eq ne gt gte lt lte in present`) → шаблонный ответ (`input`, `config`, `{key}`) и проверка блока `sandbox` в
+  дескрипторе. `engine.mjs#deliverRow` при `mode: 'sandbox'` не строит запрос и не зовёт сеть: ответ правила
+  оформляется как `Response` и идёт через тот же `mapResponse`; в live `{secret.x}` читается из `opts.secrets` только
+  в момент доставки (нет секрета — обычная ошибка без `fault`: не повтор и не отказ провайдера).
+  `outbox.mjs`: `flush` читает `deploy.json` один раз, вычисляет режим строки и передаёт его в `admit`, разрыватель и
+  `deliver`; `deliver` отвергает режим, которого нет у вида, и маскирует секреты в ответе, ошибке и трассе.
+  `admin.mjs` — команды оператора `--secrets set|list|rm` (значение только из stdin) и `--connectors status|live
+  NAME --confirm|sandbox NAME` (live отказывает без `--confirm`, без секрета, который читают его живые запросы, и для
+  режима, которого у вида нет); зовёт их `cli.mjs` до запуска сервера. `/outbox` показывает режим каждого коннектора.
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.

@@ -1,9 +1,9 @@
 # Canopy connector library: design (v0.2.0 baseline)
 
-**Status: design accepted (maintainer decisions, section 9). Stages C1 and C3 are done** (C1: descriptor,
+**Status: design accepted (maintainer decisions, section 9). Stages C1, C3 and C2 are done** (C1: descriptor,
 checker, engine, `connector.call`, `http` on it; C3: retries with backoff, `unknown`, timeouts, circuit
-breaker, background flusher, injectable clock; see "C1 as built" and "C3 as built" at the end). C2, C4 to C7
-are next, in the order of section 9.
+breaker, background flusher, injectable clock; C2: encrypted secret store, sandbox and live mode; see "C1 as
+built", "C3 as built" and "C2 as built" at the end). C4 to C7 are next, in the order of section 9.
 
 The study below was read-only. All line numbers refer to /home/vyacheslav/code/canopy at main, before C1.
 
@@ -127,7 +127,7 @@ Every rule fails closed and names a JSON path and a hint:
 - **Naming.** The graph holds only names (`"secrets":{"apiKey":"stripe_key"}`), and the checker knows names but not values. `deliver` gets `opts.secret(name)`, which reads the decrypted map cached in memory and returns a value only for the duration of one request. A `redact(text, secretValues)` leaf masks every known secret value in errors, `response`, trace fields and the JSON of any route.
 - **Never leaks.** Outbox `payload` holds only the *input* (never auth). The auth header is built inside `deliver` and never stored. The URL template forbids secrets (2.1). Descriptors may not declare `sensitive` inputs before a decision (see section 8), and a PAN-like value in an input is refused ("use a provider token").
 - **CLI.** Extend `runtime/cli.mjs` (the layer-10 entry) with `--connectors <status|secret-set NAME|secret-rm NAME|secret-list|live NAME|sandbox NAME|rekey>`. A secret's value is read from stdin or `CANOPY_SECRET_VALUE`, never from argv (shell history). `secret-list` prints names only, never values.
-- **Mode.** The mode is *not* in app.json (the same graph runs in dev and prod). It lives in the plain, diffable `<dir>/deploy.json`: `{connectors:{pay:{mode:"live", since, by}}}`. The default is `sandbox`. `live NAME` requires all `secret` slots to be present, `--confirm NAME`, and every live `base` to be https. It appends a row to a `_deploy_log` table. At boot and on each flush (stat mtime), a connector in live with a missing secret is marked *misconfigured*: deliveries fail with a clear error and **never fall back to sandbox silently**. The outbox row records `mode`, and `/outbox` shows it.
+- **Mode (as built: section 12).** The mode is *not* in app.json (the same graph runs in dev and prod). It lives in the plain, diffable `<dir>/deploy.json`: `{connectors:{pay:{mode:"live", since, by}}}`. The default is `sandbox`. `live NAME` requires all `secret` slots to be present, `--confirm NAME`, and every live `base` to be https. It appends a row to a `_deploy_log` table. At boot and on each flush (stat mtime), a connector in live with a missing secret is marked *misconfigured*: deliveries fail with a clear error and **never fall back to sandbox silently**. The outbox row records `mode`, and `/outbox` shows it.
 - **Built-ins.** `http` and `mail` declare `modes:["live"]` and `["sandbox"]` respectively, so the four sink apps and the 20 mail apps keep today's behaviour with no deploy step (decide now, section 8).
 
 ## 4. Reliability
@@ -335,3 +335,41 @@ Where the code differs from, or narrows, section 4:
   interval). It does not yet re-fire unsettled events (there are none until settlement lands).
 - **Operator.** `POST /outbox/:id/retry` resets `attempts` and `nextAttemptAt` and flushes (an open breaker still
   holds the row back); `POST /outbox/:id/sent` settles only an `unknown` row, guarded in the `UPDATE`.
+
+## 12. C2 as built
+
+Where the code differs from, or narrows, sections 2.1, 3 and 6:
+- **Modules.** `runtime/secrets.mjs` (the store: node:crypto, node:fs), `runtime/deploy.mjs` (`deploy.json`,
+  `modesOf`, `modeOf`, `connectorModes`, `connectorEnv`: what a running app delivers with), `runtime/admin.mjs`
+  (the `--secrets` and `--connectors` commands, called by `cli.mjs`), `runtime/connectors/redact.mjs` (masking, a pure
+  leaf) and `runtime/connectors/sandbox.mjs` (the rule engine and its checker, pure). There is no `_deploy_log`
+  table and no `--connectors rekey` yet; the file is plain and diffable.
+- **The store.** `secrets.enc` is `{v: 1, alg: "aes-256-gcm", salt, nonce, tag, ct}`; the key is
+  `hkdfSync('sha256', master, salt, 'canopy-secrets-v1', 32)`; the AAD is `<app>|1`. Every write uses a fresh salt
+  and nonce, goes through a temporary file and a rename, mode 0600. The master key is `CANOPY_MASTER_KEY` (base64,
+  exactly 32 bytes) or `secrets.key` (created by the first `set`); reading a store that does not exist needs no key.
+  API: `get(name)` returns `[name, name.prev]` (those that exist), `current(name)` the value of the name alone,
+  `set`, `remove`, `names`, `values` (for masking). A name is `[A-Za-z_][\w-]*` with an optional `.prev`.
+- **Resolution.** `{secret.slot}` is read by the engine when the request is built, in a delivery only: the store name
+  is `connector.secrets[slot]` or else the slot. Only the current value signs a request: a `.prev` alone does not stand
+  in for it. A missing secret throws a plain error (no `fault`), so `settle` makes the row `failed` for good and tells
+  the breaker nothing. `secrets` in a connector is checked only for shape (slot to name).
+- **Masking.** `deliver` masks every value of the store (all names, `.prev` included) in what the transport returns,
+  in the error it throws, and in every trace line it writes, in three forms: as written, JSON-escaped and URL-encoded.
+  A store that cannot be read masks nothing (it resolved nothing) and the delivery reports the store's own error.
+- **Modes.** A descriptor's `modes` (absent: `["live"]`) and `sandbox` are checked at load: modes are `sandbox` and/or
+  `live` once each; the `sandbox` mode needs rules for every operation and rules need the mode. `http` is `["live"]`,
+  `mail` is `["sandbox"]` (its transport records the letter, as before). `flush` reads `deploy.json` once per flush
+  and gives every row its connector's mode; `deliver` refuses a mode the kind does not offer; the breaker is keyed by
+  the real mode. A `deploy.json` that is not the shape stops `serve()` like an invalid graph. The outbox row does not
+  record the mode it was delivered in (its breaker and `/outbox` do).
+- **Sandbox.** Rules and `when` comparisons as in FORMAT.md; the answer is shaped like a `fetch` Response and goes
+  through `mapResponse`, so `output`, `result`, `drift`, `Retry-After` and retry classification behave as with a real
+  provider. `{key}` in a sandbox body is the row's idempotency key. No rule matching fails the delivery for good.
+- **Command line.** `--connectors status | live NAME --confirm | sandbox NAME`, `--secrets set NAME | list | rm NAME`.
+  A value comes only from stdin (one trailing newline dropped); a value given as an argument is refused. `live`
+  refuses, changing nothing, without `--confirm`, for a mode the kind does not offer, and while a secret its live
+  requests read is missing (checked by store name, current value). The commands exit 1 with a message on any refusal
+  or a wrong master key. `CANOPY_SECRET_VALUE` and the `_deploy_log` of section 3 were not built.
+- **Not yet.** Rotation is by hand (`--secrets set NAME.prev`, then `set NAME`); a descriptor cannot yet ask for the
+  list of values (C4's signature check will); the https-only check of live bases and the settings screen (C7).

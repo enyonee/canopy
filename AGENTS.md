@@ -100,5 +100,5 @@ The gates in `tests/arch.test.mjs` are part of `npm test`. Fix the code, never t
 - `main` is protected: CI (tests, coverage, types, all acceptance checks) must pass, history is
   linear, force pushes are refused.
 - Never rewrite published history, and never commit `data.sqlite`, `trace.jsonl`,
-  `session.key` or `files/`.
+  `session.key`, `secrets.enc`, `secrets.key` or `files/`.
 - Versioning is in [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-releases).

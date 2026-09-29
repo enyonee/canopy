@@ -335,8 +335,11 @@ Mail is recorded in the outbox (the stand has no SMTP); http is really sent.
 No secret goes in `app.json`: a string under a key like `key`, `token`, `secret`, `password` or
 `authorization`, or one shaped like `sk_…`, `Bearer …` or a JWT, is an error, and so is a
 credential or `{secret.*}` in a connector's `url` (the url is what `/outbox` and the trace show).
-Write `{secret.name}` where a value is needed; until the secret store exists a delivery that
-needs one fails with a clear message.
+Write `{secret.name}` where a value is needed (header or body): it is read from the secret store when
+the request is sent — never when the row is queued, and never stored. A connector may map a slot to a
+differently named secret: `"secrets": {"apiKey": "stripe_key"}` (names only, never values); without a mapping
+the slot is the name. A secret the store lacks fails the delivery for good (not retried, and the provider's
+breaker is not touched). See "Secrets and modes" below.
 
 ### Connector descriptors
 
@@ -384,6 +387,17 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   defaults (`capMs` may not be below `baseMs`, nor `maxCooldownMs` below `cooldownMs`); `idempotency`
   `{ "header": "Idempotency-Key" }` sends the row's key in that request header. `{key}` in a template is
   still an error: the header is the only way the key leaves.
+- **Modes.** `"modes": ["sandbox", "live"]` (top level, optional) lists the modes the kind may run in; the
+  first is the default. A descriptor that says nothing is live only, as before; built-in `http` is live only and
+  `mail` is sandbox only, so no existing app needs a deploy step. A descriptor that lists `sandbox` needs a
+  `"sandbox"` block with rules for every operation:
+  `"sandbox": {"operations": {"charge": [ {"when": {"input.amount": {"gt": 999900}}, "status": 402, "body": {...}},
+  {"status": 200, "body": {"id": "sbx_{key}"}} ]}}`. The first rule whose `when` holds answers (no `when` always
+  holds); `when` maps `input.<name>` to a value (equal) or to comparisons `eq ne gt gte lt lte in present`;
+  `status` defaults to 200, `headers` (strings) are the answer's (`Retry-After` works), `body` is a template over
+  `{input.x}`, `{config.x}` and `{key}` (the row's idempotency key: the same fake id on every retry). The answer
+  goes through the same mapping as a real one (`output`, `result`, `drift`, retry classification). No rule
+  matching is a failed delivery. Nothing is sent and no secret is read in sandbox mode.
 - The outbox row of a call has `op`, the completed input as `payload`, and after delivery `response` (the
   answer text, up to 16 KB), `result` and `drift`. An answer that does not fit `output` sets `drift` to 1 and
   writes `contract_drift` to the trace; the row stays `sent` because the effect happened.
@@ -391,6 +405,35 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   set), `"headers"` merged over the JSON content type, `"timeout"` (3000 ms unless set). Its one
   operation `send` takes `body`, so `connector.call { connector, op: "send", input: { body } }`
   is `http.send` without a `path` (data may not extend the url). Plugin code (`.mjs`) and descriptors (`.json`) coexist in one `plugins` list.
+
+### Secrets and modes
+
+The secret store is the file `secrets.enc` beside the database (and `secrets.key`, mode 0600, made by the first
+`--secrets set`; or the environment variable `CANOPY_MASTER_KEY`, 32 bytes as base64, which takes precedence and
+is what a hosted deployment should use). It is one AES-256-GCM blob under a key derived with HKDF, so even the
+names are hidden; a wrong key or a changed byte fails closed with a message, and the app's name is part of what
+is authenticated. `name.prev` holds the value before a rotation: a consumer that accepts a list (a verifier)
+gets `[name, name.prev]`, a request is signed with `name` alone. A secret's value is masked (as written, as
+JSON text and URL-encoded) in every answer, error and trace line of a delivery, so it is not in the outbox, the
+trace or any screen.
+
+The mode of each connector is not in `app.json` (the same graph runs on a laptop and in production). It is in
+`deploy.json` beside the database, `{"connectors": {"pay": "live"}}`, and only the command line writes it; absent
+means each kind's first mode. It is read afresh on every delivery, so a switch takes effect without a restart,
+and a malformed file stops the app at boot instead of guessing a mode. A mode the kind does not offer fails the
+delivery; nothing ever falls back to sandbox or to live silently. The breaker of a connector is kept per mode.
+
+```bash
+node runtime/run.mjs app.json --connectors status               # each connector, its mode, its secrets: set / MISSING
+echo -n "$KEY" | node runtime/run.mjs app.json --secrets set stripe_key   # the value comes from stdin, never argv
+node runtime/run.mjs app.json --secrets list                    # names only
+node runtime/run.mjs app.json --secrets rm stripe_key
+node runtime/run.mjs app.json --connectors live pay --confirm   # refused without --confirm, or while a secret
+                                                                # its live requests read is not in the store
+node runtime/run.mjs app.json --connectors sandbox pay
+```
+
+`/outbox` lists each connector with the mode it runs in and the modes it offers.
 
 ## Search
 
