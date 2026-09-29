@@ -8,16 +8,11 @@ import assert from 'node:assert/strict';
 import { Store } from '../runtime/store.mjs';
 import { parse } from '../runtime/expr.mjs';
 import { compileAgg, runAggOne, runAggBatch } from '../runtime/store/aggsql.mjs';
-import { freezeClock } from './helpers.mjs';
+import { freezeClock, compilerOff } from './helpers.mjs';
 
 const yes = (store, entity, src) => assert.ok(compileAgg(store, entity, parse(src)), `expected "${src}" to compile`);
 const no = (store, entity, src) => assert.equal(compileAgg(store, entity, parse(src)), null, `expected "${src}" NOT to compile`);
-const jsOnly = (store, fn) => {
-  const { aggValue, buildAggCache } = store;
-  store.aggValue = () => undefined;
-  store.buildAggCache = () => ({ groups: new Map(), scalars: new Map(), clock: new Date() });
-  try { return fn(); } finally { store.aggValue = aggValue; store.buildAggCache = buildAggCache; }
-};
+const jsOnly = compilerOff;
 const same = (store, entity) => {
   const sql = JSON.stringify(store.list(entity, {})), js = JSON.stringify(jsOnly(store, () => store.list(entity, {})));
   assert.equal(sql, js);

@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { Store } from '../runtime/store.mjs';
 import { parse } from '../runtime/expr.mjs';
 import { compileAgg, runAggOne, runAggBatch } from '../runtime/store/aggsql.mjs';
+import { compilerOff } from './helpers.mjs';
 
 const GRAPH = {
   app: 'aggsql',
@@ -61,11 +62,7 @@ function withQueryCount(store, fn) {
 
 // Forces every field to go through the pre-item-1 path (ctx.rows()-based),
 // for a byte-for-byte comparison against the SQL path.
-function withSQLDisabled(store, fn) {
-  const orig = store.aggValue;
-  store.aggValue = () => undefined;
-  try { return fn(); } finally { store.aggValue = orig; }
-}
+const withSQLDisabled = compilerOff;
 
 let seed32 = 0xC0FFEE;
 const rand = () => { seed32 |= 0; seed32 = (seed32 + 0x6D2B79F5) | 0; let t = Math.imul(seed32 ^ (seed32 >>> 15), 1 | seed32); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -222,13 +219,13 @@ test('batched hydration across more than one chunk (HYDRATE_CHUNK) still matches
 // page), which no value comparison above can see: correctness is identical
 // either way, by design. Proved directly instead, by recording how many
 // parent ids buildAggCache is ever asked to cover in one call.
-test('a big page is hydrated in bounded chunks, not built as one cache covering every row', () => {
+test('a big page is hydrated in bounded chunks, not loaded as one snapshot covering every row', () => {
   const store = new Store(GRAPH, ':memory:');
   seedRandom(store, 1200, 2); // well past HYDRATE_CHUNK (500), so at least 3 chunks
   const sizes = [];
-  const orig = store.buildAggCache;
-  store.buildAggCache = function counted(entity, ids, ...rest) { if (entity === 'Parent') sizes.push(ids.length); return orig.call(this, entity, ids, ...rest); };
-  try { store.list('Parent', {}); } finally { store.buildAggCache = orig; }
+  const orig = store.loadSnapshot;
+  store.loadSnapshot = function counted(entity, rows, ...rest) { if (entity === 'Parent') sizes.push(rows.length); return orig.call(this, entity, rows, ...rest); };
+  try { store.list('Parent', {}); } finally { delete store.loadSnapshot; }
   assert.ok(sizes.length >= 3, `expected at least 3 chunks for 1200 rows, got ${sizes.length}: ${sizes}`);
   assert.ok(sizes.every((n) => n <= 500), `a chunk exceeded 500 parents: ${sizes}`);
   assert.equal(sizes.reduce((a, b) => a + b, 0), 1200);

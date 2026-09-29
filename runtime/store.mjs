@@ -8,10 +8,11 @@ import { DEFAULT } from './registry.mjs';
 import { open } from './driver.mjs';
 import * as query from './store/query.mjs';
 import * as hydrate from './store/hydrate.mjs';
+import * as lazy from './store/lazy.mjs';
 import * as state from './store/state.mjs';
 import * as rules from './store/rules.mjs';
 import * as migrate from './store/migrate.mjs';
-import { RowCtx } from './store/ctx.mjs';
+import { RowCtx, checkCycle } from './store/ctx.mjs';
 
 export class Store {
   constructor(graph, file, registry = DEFAULT, driver = null) {
@@ -30,6 +31,10 @@ export class Store {
     // needs installing later). ruleExprs caches a rule's parsed expression.
     this.trace = () => {};
     this.ruleExprs = new Map();
+    // Test-only: hydrate over the old lazy RowCtx (runtime/store/lazy.mjs) instead of a snapshot.
+    this.lazyEval = false;
+    // Read-sets of derived fields (runtime/store/plan.mjs), by entity and field list: pure in the graph.
+    this.plans = new Map();
     this.migrate();
   }
 
@@ -195,6 +200,9 @@ export class Store {
   }
 
   // --- derived fields ----------------------------------------------------------
+  // Pages, `get`, labels, CSV and dashboards evaluate over a snapshot loaded before evaluation
+  // (runtime/store/hydrate.mjs, snapshot.mjs). What follows is the lazy context: rules and step
+  // values (S3b) and the test-only `lazyEval` path still run on it.
   // The evaluation context of a row — runtime/store/ctx.mjs.
   /** @param {string} entity @param {any} row @param {string[]} [stack] @param {{ allowSecret?: boolean, cache?: any, clock?: Date }} [opts] */
   ctx(entity, row, stack = [], { allowSecret = false, cache = null, clock = undefined } = {}) {
@@ -217,15 +225,12 @@ export class Store {
   // with the value a compiled aggregate (runtime/store/aggsql.mjs) binds.
   derived(entity, row, f, stack = [], cache = null, clock = cache?.clock ?? new Date()) {
     const key = `${entity}.${f.name}`;
-    if (stack.includes(key)) throw new Error(`derived field ${key} depends on itself (${[...stack, key].join(' → ')})`);
+    checkCycle(stack, key);
     return fromExpr(f, evaluate(f.derive, this.ctx(entity, row, [...stack, key], { cache, clock }), this.registry.functions));
   }
 
-  hydrate(entity, row, cache = null) {
-    if (!row) return row;
-    const out = { ...row };
-    for (const f of this.fields[entity]) if (f.derive) out[f.name] = this.derived(entity, row, f, [], cache);
-    return out;
+  hydrate(entity, row) {
+    return row ? this.hydratePage(entity, [row])[0] : row;
   }
 }
 
@@ -234,5 +239,5 @@ export class Store {
 // are plain functions run with `this` bound to the Store instance — split
 // out only to keep this file under the size budget; they are as much "the
 // store" as anything above.
-Object.assign(Store.prototype, query, hydrate, state, rules, migrate);
+Object.assign(Store.prototype, query, hydrate, lazy, state, rules, migrate);
 

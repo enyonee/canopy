@@ -130,6 +130,18 @@ export function listRawIn(entity, via, ids) {
   return out;
 }
 
+// The rows of `entity` with these ids (`keys`: numeric strings, see snapshot.mjs's refKey), in as
+// few queries as IN_CHUNK allows — one level of a reference hop. Never cached, like listRawIn.
+export function listRawByIds(entity, keys) {
+  const { quote, phs } = this.drv.dialect;
+  const out = [];
+  for (let i = 0; i < keys.length; i += IN_CHUNK) {
+    const vals = keys.slice(i, i + IN_CHUNK).map(Number);
+    out.push(...this.drv.all(`SELECT * FROM ${quote(entity.toLowerCase())} WHERE id IN (${phs(vals.length)})`, vals, { cache: false }));
+  }
+  return out;
+}
+
 // The cheap twin of `label(entity, get(entity, id))`: a label never needs any
 // field but the label field itself, so this reads the raw row (no children,
 // no other derived field) and derives only that one field, only if it is
@@ -144,7 +156,7 @@ export function labelOf(entity, id) {
   const lf = this.labelField(entity);
   if (!lf) return `#${row.id}`;
   const f = this.field(entity, lf);
-  const v = f.derive ? this.derived(entity, row, f) : row[lf];
+  const v = f.derive ? this.deriveOne(entity, row, f) : row[lf];
   return v ? String(v) : `#${row.id}`;
 }
 
