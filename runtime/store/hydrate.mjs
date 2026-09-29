@@ -9,9 +9,18 @@
 //
 // Attached to Store.prototype by store.mjs (`this` is the Store). The old lazy path (lazy.mjs)
 // stays behind the test-only switch `store.lazyEval`; rules and step values still use it.
-import { compileAgg, runAggBatch, aggKey } from './aggsql.mjs';
+import { compileAgg, runAggOne, runAggBatch, aggKey } from './aggsql.mjs';
 import { planFor, planFallback } from './plan.mjs';
 import { Snapshot, refKey } from './snapshot.mjs';
+
+// The values of a compiled aggregate for `ids`: one grouped query, or — for a lone row (a detail
+// page, a re-read after a step) — the parent-by-parent query the statement cache already holds.
+// `undefined` when the integers left SQLite's range (aggsql's `guarded`).
+function batchOf(store, compiled, ids, clock) {
+  if (ids.length > 1) return runAggBatch(store, compiled, ids, clock);
+  const one = runAggOne(store, compiled, ids[0], clock);
+  return one === undefined ? undefined : new Map([[String(ids[0]), one]]);
+}
 
 // The aggregate an `agg` node of a plan stands for, over `rows` of the plan node's entity.
 function loadAgg(store, snap, node, entry, rows) {
@@ -20,7 +29,7 @@ function loadAgg(store, snap, node, entry, rows) {
     if (!snap.declined.has(key)) {
       const missing = rows.filter((r) => !snap.hasScalar(key, r.id)).map((r) => r.id);
       if (missing.length) {
-        const batch = runAggBatch(store, entry.compiled, missing, snap.clock);
+        const batch = batchOf(store, entry.compiled, missing, snap.clock);
         if (batch === undefined) snap.declined.add(key); else snap.addScalars(key, batch);
       }
     }
@@ -76,11 +85,13 @@ export function deriveOne(entity, row, f) {
 const HYDRATE_CHUNK = 500;
 
 function hydrateChunk(entity, rows, clock) {
+  const derived = this.fields[entity].filter((f) => f.derive);
+  if (!derived.length) return rows.map((row) => ({ ...row })); // nothing to evaluate: nothing to load
   if (this.lazyEval) return this.hydratePageLazy(entity, rows);
   const snap = this.loadSnapshot(entity, rows, null, clock);
   return rows.map((row) => {
     const out = { ...row };
-    for (const f of this.fields[entity]) if (f.derive) out[f.name] = snap.derived(entity, row, f);
+    for (const f of derived) out[f.name] = snap.derived(entity, row, f);
     return out;
   });
 }

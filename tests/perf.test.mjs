@@ -208,3 +208,66 @@ test('batched children are grouped in the same order the unbatched path reads th
   assert.ok(grouped.length === 30 && unbatched.length === 30);
   assert.deepEqual(grouped, unbatched, 'batched grouping must preserve the unbatched (ORDER BY id DESC) order');
 });
+
+// S3a: a derived field that reads through a reference used to cost one query per hop per row
+// (Store#raw inside the lazy context). The snapshot loads each hop level with one `WHERE id IN (…)`.
+const HOP_GRAPH = {
+  app: 'hops',
+  data: {
+    Customer: { name: 'text!', discount: 'money=0' },
+    Order: { customer: 'ref:Customer!', who: 'text := customer.name', off: 'money := customer.discount * 2' },
+    Item: { order: 'ref:Order!', qty: 'int=1', price: 'money=1',
+      cust: 'text := order.customer.name', net: 'money := qty * price - order.customer.discount', label: 'text := order.who' },
+  },
+  views: 'auto',
+};
+
+// Every statement, the chunked IN-lists included (withQueryCount leaves those out): a hop level
+// that fetched one row per statement would not show in the count above.
+function everyQuery(store, fn) {
+  let n = 0;
+  store.drv.onQuery = () => { n++; };
+  try { fn(); } finally { store.drv.onQuery = null; }
+  return n;
+}
+
+function seedHops(store, customers) {
+  for (let c = 1; c <= customers; c++) {
+    const cid = store.insert('Customer', { name: `Customer ${c}`, discount: c % 5 });
+    for (let o = 0; o < 4; o++) {
+      const oid = store.insert('Order', { customer: cid });
+      for (let i = 0; i < 2; i++) store.insert('Item', { order: oid, qty: 1 + i, price: 10 + i });
+    }
+  }
+}
+
+test('a list page whose derived fields hop through references issues O(1) queries in the number of rows', () => {
+  const small = new Store(HOP_GRAPH, ':memory:');
+  seedHops(small, 25);
+  const big = new Store(HOP_GRAPH, ':memory:');
+  seedHops(big, 500);
+  for (const entity of ['Order', 'Item']) {
+    const page = (store) => everyQuery(store, () => store.listPage(entity, {}, { page: 1, pageSize: 50 }));
+    const n100 = page(small), n2000 = page(big);
+    assert.equal(n100, n2000, `${entity} list issued ${n100} queries at ~100 rows but ${n2000} at ~2000 — the hops are not batched`);
+    assert.ok(n100 <= 8, `${entity} list issued ${n100} queries for one page — expected a small constant (page, count, one per hop level)`);
+  }
+  // A full hydrate (CSV) is O(1) within a chunk of HYDRATE_CHUNK rows.
+  const mid = new Store(HOP_GRAPH, ':memory:');
+  seedHops(mid, 100); // 400 orders: still one chunk
+  const all = (store) => everyQuery(store, () => store.list('Order', {}));
+  assert.equal(all(small), all(mid), 'Order full hydrate (CSV) is not O(1) within a chunk');
+  // Each hop level is one query more: the size of the plan, not the number of rows.
+  const items = everyQuery(big, () => big.listPage('Item', {}, { page: 1, pageSize: 50 }));
+  const orders = everyQuery(big, () => big.listPage('Order', {}, { page: 1, pageSize: 50 }));
+  assert.ok(items >= orders, `Item reaches Order then Customer (${items}), Order only Customer (${orders})`);
+});
+
+test('the lazy path (the old context) pays one query per hop per row — the snapshot is what removed that', () => {
+  const store = new Store(HOP_GRAPH, ':memory:');
+  seedHops(store, 25);
+  const snapshot = everyQuery(store, () => store.list('Order', {}));
+  store.lazyEval = true;
+  const lazy = everyQuery(store, () => store.list('Order', {}));
+  assert.ok(lazy > snapshot * 10, `expected the lazy path to be far more expensive: ${lazy} vs ${snapshot}`);
+});
