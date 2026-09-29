@@ -10,16 +10,16 @@
 
 | слой | модули | зачем |
 |---|---|---|
-| 0 | `fields.mjs`, `functions.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/dialects.mjs`, `connectors/{schema,template,builtin}.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
+| 0 | `fields.mjs`, `functions.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/dialects.mjs`, `clock.mjs`, `connectors/{schema,template,builtin,backoff}.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
 | 1 | `expr.mjs`, `spec.mjs`, `driver/sqlite.mjs`, `connectors/{descriptor,engine}.mjs`, `transports.mjs` | алгебра выражений и разбор спецификации поля; `driver/sqlite.mjs` — единственный исполнитель SQL, SQL-текст берёт у диалекта |
 | 2 | `driver.mjs`, `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs`, `check/calls.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
 | 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
-| 4 | `store.mjs`, `outbox.mjs` | хранилище (говорит с базой только через `this.drv`) и исходящий ящик |
+| 4 | `store.mjs`, `outbox.mjs`, `settle.mjs` | хранилище (говорит с базой только через `this.drv`) и исходящий ящик; `settle.mjs` — чистое «во что превратилась доставка» (повтор, `unknown`, событие разрывателю) |
 | 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
 | 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 5); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
 | 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 5) |
 | 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule}.mjs` | маршруты, поверх интерпретатора и рендера |
-| 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний |
+| 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний и фоновый `startFlusher` |
 | 10 | `cli.mjs`, `run.mjs` | точка входа |
 
 `node:` втроенные модули — по отдельной таблице в `tests/arch.test.mjs`: `node:sqlite`
@@ -77,6 +77,29 @@
   Колонки `_outbox`: `op`, `response`, `result`, `drift` (добавляются на месте, как `claimedAt`).
   Ответ, не сошедшийся с `output`, ставит `drift=1` и пишет в трассу `contract_drift`; строка
   остаётся `sent` (действие уже произошло).
+  **C3, надёжность доставки** (`docs/CONNECTORS.md` §4 и §11). `connectors/backoff.mjs` — чистый лист
+  (`node:crypto` для хеша, часов не читает): `classify` (сеть/таймаут/429/5xx — повторяемо, прочие 4xx —
+  окончательно, 2xx — отправлено), `decide` (повторяет только операцию с `idempotent: true`; неидемпотентная
+  без ответа — `unknown`; запрос, который не ушёл, повторяем всегда; после `max` попыток — `failed`),
+  `delayFor` (`min(cap, base·2^(n−1))` минус детерминированный джиттер от хеша `idemKey:n`, не ниже `Retry-After`,
+  тот же потолок), `breakerStep` (закрыт → открыт после N подряд, один пробный вызов после `openUntil`,
+  удвоение паузы до максимума), `idemKeyOf`, `checkPolicy` (ключи `retry`/`breaker` дескриптора).
+  `settle.mjs` из ответа транспорта (или исключения с меткой `fault`, которую ставит движок) делает патч
+  строки (`queued` + `nextAttemptAt`, `unknown`, `failed`) и событие для разрывателя; исключение без метки
+  (ошибка шаблона, плагин) окончательно и разрывателю ничего не говорит. `outbox.mjs`: `deliver` берёт
+  `clock`, `mode`, `leaseMs`; `flush` перед захватом строки спрашивает разрыватель (`admit`): закрыт — идём;
+  открыт — строку не захватываем, `nextAttemptAt` сдвигаем на `openUntil`, попытки не считаем; после паузы
+  пробу забирает ровно один вызов (`state.mjs#breakerClaim`: один `UPDATE`, совпадающий только с тем
+  состоянием, которое вызывающий прочитал). `store/state.mjs`: `outboxDue` уважает `nextAttemptAt`,
+  `outboxNextDue`, `outboxDefer`, `outboxMark` (решение оператора, охраняется статусом), `breakerGet/Record/Claim/
+  breakers`; колонки `nextAttemptAt`, `idemKey` и таблица `_breaker` (`key = connector|mode`) добавляются
+  `migrate.mjs#migrateOutbox` на месте. Ключ идемпотентности считается при `enqueue` один раз. **Часы**:
+  `clock.mjs` (`{now, setTimer, clear}`), `serve({clock})` → интерпретатор (`flushNow`) → `flush` → `deliver` →
+  движок, где таймаут запроса — таймер часов, роняющий `AbortController` (потолок — половина аренды);
+  арх-гейт запрещает в модулях доставки `Date.now`, `new Date()`, `Math.random` и системные таймеры.
+  `server.mjs#startFlusher` — интервал плюс одноразовый таймер на ближайший `nextAttemptAt`, `unref`, остановка
+  при закрытии сервера, выключен при `noTimers`/`AG_NO_TIMERS`. `/outbox`: `unknown` с «Mark sent» и «Retry»,
+  время следующей попытки у ждущих строк, таблица состояний разрывателя.
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.
