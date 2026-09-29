@@ -232,5 +232,6 @@ test('SQLite: sessions upsert one row per id and an existing outbox keeps its mi
   store.outboxUpdate(id, { status: 'sent' });
   const row = store.outboxGet(id);
   assert.deepEqual([row.status, row.attempts, typeof row.updatedAt, row.claimedAt], ['sent', 0, 'string', 10]);
-  assert.deepEqual(store.drv.columns('_outbox').map((c) => c.name).slice(-2), ['updatedAt', 'claimedAt']);
+  const cols = store.drv.columns('_outbox').map((c) => c.name);
+  assert.ok(cols.includes('updatedAt') && cols.includes('claimedAt'), 'mixed-case names survive');
 });

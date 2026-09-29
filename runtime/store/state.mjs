@@ -2,10 +2,12 @@
 // Store.prototype by store.mjs: the outbox (every effect that leaves the
 // process, delivered after commit — see runtime/outbox.mjs) and sessions
 // (a cookie names a row here, so signing out really ends the session).
-export function enqueue({ kind, connector, target, payload }) {
+// "op" is the operation of a connector descriptor (connector.call); a row queued without one is a
+// legacy row, delivered by its transport's default operation.
+export function enqueue({ kind, connector, target, payload, op = null }) {
   const at = new Date().toISOString();
-  return this.drv.run(this.drv.dialect.insert('_outbox', ['kind', 'connector', 'target', 'payload', 'status', 'attempts', 'at', 'updatedAt']),
-    [kind, connector, target, JSON.stringify(payload ?? null), 'queued', 0, at, at]).lastId;
+  return this.drv.run(this.drv.dialect.insert('_outbox', ['kind', 'connector', 'target', 'payload', 'op', 'status', 'attempts', 'at', 'updatedAt']),
+    [kind, connector, target, JSON.stringify(payload ?? null), op, 'queued', 0, at, at]).lastId;
 }
 export function outbox(where = {}) {
   const { quote: q, ph } = this.drv.dialect;

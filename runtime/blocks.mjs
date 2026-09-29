@@ -10,6 +10,8 @@
 //   run(ctx)                     — the effect, inside the action's transaction; ctx has
 //     store, graph, entity, id, values, step, resolve(obj), text(str), run(steps, extra), user
 import { toMinor } from './fields.mjs';
+import { prepare } from './connectors/engine.mjs';
+import { checkCall } from './check/calls.mjs';
 
 /** @type {Record<string, import('./types.d.ts').BlockType>} */
 export const CATALOG = {
@@ -144,6 +146,18 @@ export const CATALOG = {
     run: ({ store, graph, step, resolve }) => {
       const c = graph.connectors[step.connector];
       return { delivery: store.enqueue({ kind: c.kind, connector: step.connector, target: String(c.url || c.file || c.to || step.connector), payload: resolve(step.body) }) };
+    },
+  },
+  'connector.call': {
+    summary: 'call an operation "op" of a descriptor "connector" with "input" (an object, checked against the operation\'s schema before anything is queued; "ref" names the row the call is about); delivered after commit, visible in /outbox as @delivery',
+    effects: ['out'], requires: ['connector', 'op', 'input'],
+    check: checkCall,
+    run: ({ store, graph, registry, step, resolve }) => {
+      const c = graph.connectors[step.connector];
+      const d = registry.descriptors[c.kind];
+      if (!d) throw new Error(`connector.call: "${step.connector}" is ${c.kind}, which has no descriptor`);
+      const { input, target } = prepare(d, c, step.op, resolve(step.input));
+      return { delivery: store.enqueue({ kind: c.kind, connector: step.connector, target, payload: input, op: step.op }) };
     },
   },
   'mail.send': {

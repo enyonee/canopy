@@ -14,7 +14,7 @@ CREATE INDEX IF NOT EXISTS "idx_item_order" ON "item" ("order")
 SELECT name FROM sqlite_master WHERE type='table'
 CREATE TABLE "blank" (id INTEGER PRIMARY KEY AUTOINCREMENT)
 SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=? AND name LIKE ? ESCAPE '\'
-CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, "kind" TEXT, "connector" TEXT, "target" TEXT, "payload" TEXT, "status" TEXT, "code" INTEGER, "error" TEXT, "attempts" INTEGER DEFAULT 0, "at" TEXT, "updatedAt" TEXT, "claimedAt" INTEGER)
+CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, "kind" TEXT, "connector" TEXT, "target" TEXT, "payload" TEXT, "status" TEXT, "code" INTEGER, "error" TEXT, "attempts" INTEGER DEFAULT 0, "at" TEXT, "updatedAt" TEXT, "claimedAt" INTEGER, "op" TEXT, "response" TEXT, "result" TEXT, "drift" INTEGER)
 PRAGMA table_info("_outbox")
 CREATE TABLE IF NOT EXISTS "_session" ("id" TEXT PRIMARY KEY, "user" INTEGER, "at" TEXT)
 -- write
@@ -50,7 +50,7 @@ SELECT COUNT(*) AS v FROM "item" AS t0 WHERE t0."order"=? AND ((CASE WHEN (CASE 
 SELECT t0."order" AS grp, COUNT(*) AS v FROM "item" AS t0 WHERE t0."order" IN (?) AND ((CASE WHEN (CASE WHEN (CASE WHEN (CASE WHEN (CASE WHEN "due" >= $today THEN 1 ELSE 0 END) <> 0 AND (CASE WHEN COALESCE("ok",0) <> 0 THEN 1 ELSE 0 END) <> 0 THEN 1 ELSE 0 END) <> 0 AND (CASE WHEN "due" < $now THEN 1 ELSE 0 END) <> 0 THEN 1 ELSE 0 END) <> 0 AND (CASE WHEN "price" IS NULL AND (2 * 100) IS NULL THEN 1 WHEN "price" IS NULL OR (2 * 100) IS NULL THEN 0 WHEN "price" = (2 * 100) THEN 1 ELSE 0 END) <> 0 THEN 1 ELSE 0 END) <> 0 AND (CASE WHEN "qty" IS NULL AND 1 IS NULL THEN 0 WHEN "qty" IS NULL OR 1 IS NULL THEN 1 WHEN "qty" != 1 THEN 1 ELSE 0 END) <> 0 THEN 1 ELSE 0 END) <> 0) GROUP BY t0."order"
 SELECT SUM(("total" + ((SELECT COUNT(*) FROM "item" AS t1 WHERE t1."order" = CAST(t0."id" AS TEXT) AND ((CASE WHEN COALESCE("ok",0) <> 0 THEN 1 ELSE 0 END) <> 0)) * 100))) AS v FROM "order" AS t0 WHERE t0."customer"=?
 -- outbox and sessions
-INSERT INTO "_outbox" ("kind","connector","target","payload","status","attempts","at","updatedAt") VALUES (?,?,?,?,?,?,?,?)
+INSERT INTO "_outbox" ("kind","connector","target","payload","op","status","attempts","at","updatedAt") VALUES (?,?,?,?,?,?,?,?,?)
 SELECT * FROM "_outbox" WHERE "status"=? AND "id"=? ORDER BY id DESC
 SELECT * FROM "_outbox" WHERE "status"='queued' OR ("status"='sending' AND "claimedAt"<=?) ORDER BY id ASC
 UPDATE "_outbox" SET "status"='sending', "claimedAt"=?, "updatedAt"=? WHERE id=? AND ("status"='queued' OR ("status"='sending' AND "claimedAt"<=?))
