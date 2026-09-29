@@ -342,6 +342,12 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   (fills a missing input), `title`, `description`, `message`, `hint`. Any other keyword is an error.
 - Templates: `{config.x}`, `{input.x}`, `{secret.x}`, `{base}` in strings; `{"$": "input.x"}` for a whole
   value of any type; `"..."` spreads an object. `{secret.*}` never in `url`. No expressions, no conditionals.
+- **URLs are safe by construction.** In a `url` template every `{input.*}` (and `{key}`) is
+  percent-encoded whole (`encodeURIComponent`): `/`, `?`, `#`, `%`, `..` sequences and non-ASCII cannot leave
+  their segment or add a query. `{config.*}`, `{base}` and literals are the operator's and stay raw. The
+  origin (scheme, host, port) may come only from those: an `{input.*}` or `{key}` before the first `/` after
+  the host (`https://{input.host}/x`, `{base}{input.id}`) is a descriptor error. Header values that hold a
+  CR or LF (from input or config) fail the delivery.
 - An operation says `idempotent: true|false` (no default). `timeoutMs` is at most 30000. `result` maps names
   to `$.a.b[0]` paths of the answer and needs an `output` schema.
 - The outbox row of a call has `op`, the completed input as `payload`, and after delivery `response` (the
@@ -349,8 +355,8 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   writes `contract_drift` to the trace; the row stays `sent` because the effect happened.
 - `http` is the built-in descriptor of today's connector: `"url"` (required), `"method"` (POST unless
   set), `"headers"` merged over the JSON content type, `"timeout"` (3000 ms unless set). Its one
-  operation `send` takes `body` and `path`, so `connector.call { connector, op: "send", input: { body, path } }`
-  is `http.send`. Plugin code (`.mjs`) and descriptors (`.json`) coexist in one `plugins` list.
+  operation `send` takes `body`, so `connector.call { connector, op: "send", input: { body } }`
+  is `http.send` without a `path` (data may not extend the url). Plugin code (`.mjs`) and descriptors (`.json`) coexist in one `plugins` list.
 
 ## Search
 

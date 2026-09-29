@@ -3,7 +3,7 @@
 // own — the caller passes `fetchImpl`. `synthesize` turns a descriptor into the
 // registry's transport, so the outbox delivers a descriptor's rows like any other.
 import { validate, withDefaults } from './schema.mjs';
-import { expand, pick } from './template.mjs';
+import { expand, expandUrl, pick } from './template.mjs';
 import { METHODS } from './descriptor.mjs';
 
 export const DEFAULT_TIMEOUT_MS = 3000;
@@ -24,7 +24,7 @@ function scopesOf(d, connector, input, secret) {
 }
 
 function requestUrl(op, scopes) {
-  const url = expand(op.request.url, scopes);
+  const url = expandUrl(op.request.url, scopes);
   if (!/^https?:\/\//.test(url)) throw new Error(`the request url must start with http:// or https://, got "${url}"`);
   return url;
 }
@@ -55,8 +55,10 @@ export function buildRequest(d, connector, opName, input, opts = {}) {
   const method = r.method === undefined ? 'POST' : expand(r.method, scopes);
   if (!METHODS.includes(method)) throw new Error(`unsupported method "${method}"`);
   const body = r.body === undefined ? undefined : expand(r.body, scopes);
+  const headers = expand(r.headers || {}, scopes);
+  for (const [k, v] of Object.entries(headers)) if (/[\r\n]/.test(k) || /[\r\n]/.test(String(v))) throw new Error(`header "${k.replace(/[\r\n]/g, ' ')}" holds a line break`);
   return {
-    method, url: target ?? requestUrl(op, scopes), headers: expand(r.headers || {}, scopes),
+    method, url: target ?? requestUrl(op, scopes), headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     timeout: scopes.config.timeout || d.timeoutMs || DEFAULT_TIMEOUT_MS,
   };

@@ -24,7 +24,7 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   that needs one fails closed with a clear message. `_outbox` gains `op`, `response` (capped at
   16 KB), `result` and `drift`, added in place like `claimedAt`; an answer that does not fit the
   operation's `output` schema sets `drift=1` and traces `contract_drift` while the row stays
-  `sent`. Gates: five `tests/connectors_*.test.mjs` files (the http regression compares against a
+  `sent`. URL safety: `{input.*}`/`{key}` in a url template are percent-encoded, an input in the origin is a descriptor error, header values with a line break fail the delivery. Gates: five `tests/connectors_*.test.mjs` files (the http regression compares against a
   copy of the old transport), 48 `C1:` mutations, the new modules in the layer table.
 
 - **Portable SQL and dialect hooks (PostgreSQL roadmap, stage S2).** New

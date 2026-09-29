@@ -78,6 +78,31 @@ export function expand(value, scopes) {
   return out;
 }
 
+// A url template. `{input.*}` and `{key}` are data, so each is percent-encoded whole
+// (encodeURIComponent: "/", "?", "#", "%", ".." and non-ASCII cannot leave their segment);
+// `{config.*}`, `{base}` and literals are the descriptor's and the operator's own, and stay raw.
+export function expandUrl(template, scopes) {
+  return parse(template).map((p) => {
+    if (typeof p === 'string') return p;
+    const v = text(lookup(p, scopes));
+    return p.scope === 'input' || p.scope === 'key' ? encodeURIComponent(v) : v;
+  }).join('');
+}
+
+/**
+ * Why a url template lets data choose where the request goes, or null. The origin (scheme, host, port)
+ * comes only from literals, `{config.*}` and `{base}`: an `{input.*}` or `{key}` must come after the
+ * first "/" that follows the origin.
+ */
+export function originProblem(template) {
+  const shape = parse(template).map((p) => (typeof p === 'string' ? p : p.scope === 'input' || p.scope === 'key' ? '\u0000' : 'X')).join('');
+  const scheme = shape.indexOf('://');
+  const end = shape.indexOf('/', scheme < 0 ? 0 : scheme + 3);
+  const first = shape.indexOf('\u0000');
+  if (first < 0) return null;
+  return end < 0 || first < end ? '{input.*} and {key} may only appear after the first "/" following the host: data must never choose where the request goes' : null;
+}
+
 const STEP = /\.([A-Za-z_][\w-]*)|\[(\d+)\]/y;
 
 /** The path steps of `$.a.b[0]`, or throws. */
