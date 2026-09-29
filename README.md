@@ -143,7 +143,7 @@ npm run gate             # tests + coverage + types + mutations
 ```
 
 An app is a directory: `app.json`, `checks.mjs`, `NOTES.md`, optional `plugins/`, and at run
-time `data.sqlite`, `trace.jsonl` (every step and effect) and `session.key`. See [RUN.md](RUN.md).
+time `data.sqlite`, `trace.jsonl` (every step and effect) and `session.key` (plus `secrets.enc`/`secrets.key` once a secret is set, and `deploy.json` once a connector is switched). See [RUN.md](RUN.md).
 
 ## Architecture
 
@@ -275,10 +275,11 @@ Every connector follows one contract, so each new one is cheap and safe:
 - recorded responses for hermetic tests, and contract-drift detection when a provider's
   answer stops matching its schema.
 
-**Status:** the design is accepted and staged in [docs/CONNECTORS.md](docs/CONNECTORS.md); stage C1
-has landed (the descriptor format, its checker and engine, the `connector.call` block, `http` as a
-built-in descriptor, `drift` detection). Next: retries and the circuit breaker (C3), the secret
-store and sandbox/live mode (C2), inbound webhooks (C4), then the first providers.
+**Status:** the design is accepted and staged in [docs/CONNECTORS.md](docs/CONNECTORS.md); stages C1,
+C3 and C2 have landed (the descriptor format, its checker and engine, the `connector.call` block, `http`
+as a built-in descriptor, `drift` detection; retries and the circuit breaker; an encrypted secret store
+and sandbox/live mode switched only by the command line). Next: inbound webhooks (C4), then the first
+providers.
 
 Import from an OpenAPI spec should cover the long tail. A settings screen for connectors and
 secrets means a non-programmer can connect an app to real services.

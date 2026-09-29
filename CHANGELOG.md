@@ -5,6 +5,26 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Secrets and sandbox/live mode (connector library, stage C2).** `{secret.name}` in a descriptor's headers
+  and body is now read from an encrypted **secret store**, `secrets.enc` beside the database: one AES-256-GCM
+  blob (even the names are hidden) under a key derived with HKDF from `CANOPY_MASTER_KEY` or a `secrets.key` file
+  (0600, made by the first `set`); a wrong key or a changed byte fails closed with a clear message. A secret is
+  resolved when the request is sent (never when the row is queued, never stored), only its current value signs a
+  request (`name.prev` is kept for rotation), a missing one fails the delivery for good (not a retry, not a
+  breaker failure), and its value is masked in every stored answer, error and trace line. Every connector now has
+  a **mode**: descriptors gain `modes` (first is the default; none means live only, `http` is live only and `mail`
+  sandbox only, so no existing app changes) and a `sandbox` block of ordered `when` rules over `input.*` that
+  answer without the network, through the same output/result/retry path as a real provider. The mode lives in
+  `deploy.json` beside the database and only the command line writes it: `--connectors status`,
+  `--connectors live NAME --confirm` (refused without `--confirm` and while a secret its live requests read is not
+  in the store), `--connectors sandbox NAME`, `--secrets set NAME` (value from stdin, never argv), `--secrets list`
+  (names only), `--secrets rm NAME`. The circuit breaker is keyed by the real mode, `/outbox` shows each
+  connector's mode, and a malformed `deploy.json` stops the app at boot. New: `runtime/secrets.mjs`,
+  `runtime/deploy.mjs`, `runtime/admin.mjs`, `runtime/connectors/redact.mjs` and `runtime/connectors/sandbox.mjs`.
+  Gates: `tests/secrets.test.mjs`, `tests/connectors_modes.test.mjs` (round trip, wrong key, tampering, rotation,
+  missing secret, a redaction scan over the outbox, trace and database, sandbox rules, live switch, the commands),
+  37 `C2:` mutations.
+
 - **Delivery reliability (connector library, stage C3; roadmap "Horizontal scaling": retries and
   background delivery).** A failed delivery is now classified: a network error, a timeout, `429` and
   `5xx` are retryable, any other `4xx` is final. Only an operation with `idempotent: true` is retried;
