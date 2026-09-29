@@ -2,25 +2,34 @@
 // POST /action/<name> (an action with no "in").
 import fs from 'node:fs';
 import path from 'node:path';
-import { flush } from '../outbox.mjs';
 import { errorPage, noticePage } from '../render.mjs';
 import { outboxView } from '../render/pages.mjs';
 
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
   svg: 'image/svg+xml', pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv' };
 
+// An operator's word on a delivery. Retry starts it over (attempts and schedule cleared); "mark sent" settles a
+// delivery of unknown outcome (the request may have landed) as done, and only that.
+async function outboxAction(ctx, row, action) {
+  const { store, ok, interp } = ctx;
+  if (action === 'retry') {
+    store.outboxUpdate(row.id, { status: 'queued', nextAttemptAt: null, attempts: 0 });
+    await interp.flushNow();
+    ok('/outbox', `Delivery #${row.id} retried: ${store.outboxGet(row.id).status}`);
+  } else if (store.outboxMark(row.id, 'unknown', { status: 'sent', error: null })) ok('/outbox', `Delivery #${row.id} marked as sent`);
+  else ok('/outbox', `Delivery #${row.id} is not waiting for a decision`);
+}
+
 async function outbox(ctx) {
-  const { graph, store, parts, req, send, ok, vc, registry, trace } = ctx;
+  const { graph, store, parts, req, send, vc } = ctx;
   if (!vc.outbox) { ctx.deny(); return true; }
-  if (parts[2] === 'retry' && req.method === 'POST') {
+  if (['retry', 'sent'].includes(parts[2]) && req.method === 'POST') {
     const row = store.outboxGet(parts[1]);
     if (!row) { send(404, errorPage(graph, `no delivery #${parts[1]}`)); return true; }
-    store.outboxUpdate(row.id, { status: 'queued' });
-    await flush(store, graph, { fetchImpl: ctx.fetchImpl, trace, registry });
-    ok('/outbox', `Delivery #${row.id} retried: ${store.outboxGet(row.id).status}`);
+    await outboxAction(ctx, row, parts[2]);
     return true;
   }
-  send(200, outboxView(graph, store.outbox(), ctx.flash, vc));
+  send(200, outboxView(graph, store.outbox(), ctx.flash, vc, store.breakers()));
   return true;
 }
 

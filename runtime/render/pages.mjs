@@ -69,13 +69,28 @@ export function registerView(graph, store, fields, submitted = {}, errors = [], 
       <p><button type="submit">Register</button> <a class="btn" href="/login">Login</a></p></form>` });
 }
 
-export function outboxView(graph, rows, flash, vc = anyone) {
+const act = (id, what, label) => `<form class="inline" method="post" action="/outbox/${id}/${what}"><button type="submit">${label}</button></form>`;
+const when = (ms) => new Date(ms).toISOString();
+
+// The buttons of a delivery: failed and unknown ones can be retried; only an unknown one (the request may have
+// landed) can be marked as sent.
+const actions = (r) => (r.status === 'failed' ? act(r.id, 'retry', 'Retry') : r.status === 'unknown' ? `${act(r.id, 'sent', 'Mark sent')} ${act(r.id, 'retry', 'Retry')}` : '');
+const attemptNote = (r) => (r.status === 'queued' && r.nextAttemptAt ? `<div class="muted">attempt ${r.attempts + 1} at ${when(r.nextAttemptAt)}</div>` : '');
+
+function breakerTable(breakers) {
+  if (!breakers.length) return '';
+  const rows = breakers.map((b) => `<tr><td>${esc(b.connector)}</td><td>${esc(b.mode)}</td><td><span class="status">${esc(b.state)}</span></td>
+    <td>${b.failures}</td><td>${b.state === 'open' ? esc(when(b.openUntil)) : ''}</td></tr>`).join('');
+  return `<h3>Circuit breakers</h3><p class="muted">A connector that keeps failing is not called until its cooldown is over.</p>
+    <table><thead><tr><th>Connector</th><th>Mode</th><th>State</th><th>Failures</th><th>Open until</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+export function outboxView(graph, rows, flash, vc = anyone, breakers = []) {
   const body = rows.map((r) => `<tr><td>${r.id}</td><td>${esc(r.kind)}</td><td>${esc(r.connector)}</td><td>${esc(r.target)}</td>
-    <td><span class="status">${esc(r.status)}</span>${r.code ? ` ${r.code}` : ''}${r.error ? `<div class="error">${esc(r.error)}</div>` : ''}</td>
-    <td><pre class="muted">${esc(JSON.stringify(r.payload, null, 1))}</pre></td><td>${esc(r.updatedAt)}</td>
-    <td>${r.status === 'failed' ? `<form class="inline" method="post" action="/outbox/${r.id}/retry"><button type="submit">Retry</button></form>` : ''}</td></tr>`).join('');
+    <td><span class="status">${esc(r.status)}</span>${r.code ? ` ${r.code}` : ''}${r.error ? `<div class="error">${esc(r.error)}</div>` : ''}${attemptNote(r)}</td>
+    <td><pre class="muted">${esc(JSON.stringify(r.payload, null, 1))}</pre></td><td>${esc(r.updatedAt)}</td><td>${actions(r)}</td></tr>`).join('');
   return page(graph, { title: 'Outbox', flash, vc,
     body: `<h2>Outbox</h2><p class="muted">Everything the application sent out, with its delivery status.</p>
       <table><thead><tr><th>#</th><th>Kind</th><th>Connector</th><th>Target</th><th>Status</th><th>Payload</th><th>Updated</th><th></th></tr></thead>
-      <tbody>${body}</tbody></table><p class="muted">${rows.length} item(s)</p>` });
+      <tbody>${body}</tbody></table><p class="muted">${rows.length} item(s)</p>${breakerTable(breakers)}` });
 }

@@ -47,7 +47,7 @@ test('a descriptor is registered with its transport; the built-in registry has h
 
 test('registerDescriptor is fail-closed: an invalid descriptor and a taken name are load errors', () => {
   const r = createRegistry();
-  assert.throws(() => registerDescriptor(r, { ...PAY, retry: 1 }, 'x.json'), /^Error: x\.json: invalid descriptor — \/retry unknown key "retry"/);
+  assert.throws(() => registerDescriptor(r, { ...PAY, sandbox: 1 }, 'x.json'), /^Error: x\.json: invalid descriptor — \/sandbox unknown key "sandbox"/);
   assert.throws(() => registerDescriptor(r, { ...PAY, name: 'http' }, 'x.json'), /x\.json: connector kind "http" is already registered$/);
   registerDescriptor(r, PAY, 'a.json');
   assert.throws(() => registerDescriptor(r, PAY, 'b.json'), /b\.json: connector kind "pay" is already registered by a\.json/);
@@ -306,7 +306,7 @@ test('a database made before "op", "response", "result" and "drift" is upgraded 
   old.close();
   const graph = { app: 'o', data: { A: { n: 'text' } } };
   const store = new Store(graph, file);
-  assert.deepEqual(store.outboxGet(1), { id: 1, kind: 'http', connector: 'hook', target: 'http://sink.test/o', payload: 1, status: 'sent', code: null, error: null, attempts: 1, at: null, updatedAt: null, claimedAt: null, op: null, response: null, result: null, drift: null });
+  assert.deepEqual(store.outboxGet(1), { id: 1, kind: 'http', connector: 'hook', target: 'http://sink.test/o', payload: 1, status: 'sent', code: null, error: null, attempts: 1, at: null, updatedAt: null, claimedAt: null, op: null, response: null, result: null, drift: null, nextAttemptAt: null, idemKey: null });
   const id = store.enqueue({ kind: 'pay', connector: 'p', target: 't', payload: { a: 1 }, op: 'charge' });
   store.outboxUpdate(id, { response: 'r', result: '{}', drift: 1 });
   assert.deepEqual([store.outboxGet(id).op, store.outboxGet(id).response, store.outboxGet(id).result, store.outboxGet(id).drift], ['charge', 'r', '{}', 1]);

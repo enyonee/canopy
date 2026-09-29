@@ -14,8 +14,9 @@ CREATE INDEX IF NOT EXISTS "idx_item_order" ON "item" ("order")
 SELECT name FROM sqlite_master WHERE type='table'
 CREATE TABLE "blank" (id INTEGER PRIMARY KEY AUTOINCREMENT)
 SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=? AND name LIKE ? ESCAPE '\'
-CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, "kind" TEXT, "connector" TEXT, "target" TEXT, "payload" TEXT, "status" TEXT, "code" INTEGER, "error" TEXT, "attempts" INTEGER DEFAULT 0, "at" TEXT, "updatedAt" TEXT, "claimedAt" INTEGER, "op" TEXT, "response" TEXT, "result" TEXT, "drift" INTEGER)
+CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, "kind" TEXT, "connector" TEXT, "target" TEXT, "payload" TEXT, "status" TEXT, "code" INTEGER, "error" TEXT, "attempts" INTEGER DEFAULT 0, "at" TEXT, "updatedAt" TEXT, "claimedAt" INTEGER, "op" TEXT, "response" TEXT, "result" TEXT, "drift" INTEGER, "nextAttemptAt" INTEGER, "idemKey" TEXT)
 PRAGMA table_info("_outbox")
+CREATE TABLE IF NOT EXISTS "_breaker" ("key" TEXT PRIMARY KEY, "connector" TEXT, "mode" TEXT, "state" TEXT, "failures" INTEGER DEFAULT 0, "openUntil" INTEGER DEFAULT 0, "cooldownMs" INTEGER DEFAULT 0, "probeClaimedAt" INTEGER DEFAULT 0)
 CREATE TABLE IF NOT EXISTS "_session" ("id" TEXT PRIMARY KEY, "user" INTEGER, "at" TEXT)
 -- write
 SELECT id FROM "order" WHERE "title"=? AND "status"=? AND id!=?
@@ -51,8 +52,9 @@ SELECT t0."order" AS grp, COUNT(*) AS v FROM "item" AS t0 WHERE t0."order" IN (?
 SELECT SUM(("total" + ((SELECT COUNT(*) FROM "item" AS t1 WHERE t1."order" = CAST(t0."id" AS TEXT) AND ((CASE WHEN COALESCE("ok",0) <> 0 THEN 1 ELSE 0 END) <> 0)) * 100))) AS v FROM "order" AS t0 WHERE t0."customer"=?
 -- outbox and sessions
 INSERT INTO "_outbox" ("kind","connector","target","payload","op","status","attempts","at","updatedAt") VALUES (?,?,?,?,?,?,?,?,?)
+UPDATE "_outbox" SET "idemKey"=? WHERE id=?
 SELECT * FROM "_outbox" WHERE "status"=? AND "id"=? ORDER BY id DESC
-SELECT * FROM "_outbox" WHERE "status"='queued' OR ("status"='sending' AND "claimedAt"<=?) ORDER BY id ASC
+SELECT * FROM "_outbox" WHERE ("status"='queued' AND ("nextAttemptAt" IS NULL OR "nextAttemptAt"<=?)) OR ("status"='sending' AND "claimedAt"<=?) ORDER BY id ASC
 UPDATE "_outbox" SET "status"='sending', "claimedAt"=?, "updatedAt"=? WHERE id=? AND ("status"='queued' OR ("status"='sending' AND "claimedAt"<=?))
 UPDATE "_outbox" SET "status"=?,"error"=?,"updatedAt"=? WHERE id=?
 UPDATE "_outbox" SET "status"=?,"code"=?,"updatedAt"=? WHERE id=? AND "claimedAt"=? AND "status"='sending'

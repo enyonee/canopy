@@ -82,3 +82,28 @@ export const freezeClock = (iso = '2026-09-29T12:00:00.000Z') => {
   globalThis.Date = class extends Real { constructor(...a) { super(...(a.length ? a : [iso])); } static now() { return new Real(iso).getTime(); } };
   return () => { globalThis.Date = Real; };
 };
+
+// A clock for the delivery path (runtime/clock.mjs): time moves only when the test says so. `advance(ms)` fires every
+// timer that falls due on the way, in order, awaiting each callback (so a flush it starts has finished when it returns).
+export const fakeClock = (start = 1_000_000) => {
+  let t = start, seq = 0;
+  const timers = new Map();
+  return {
+    now: () => t,
+    setTimer: (fn, ms) => { const handle = ++seq; timers.set(handle, { at: t + Math.max(0, ms), fn, handle }); return handle; },
+    clear: (handle) => { timers.delete(handle); },
+    pending: () => timers.size,
+    nextAt: () => Math.min(...[...timers.values()].map((x) => x.at)),
+    async advance(ms) {
+      const end = t + ms;
+      for (;;) {
+        const due = [...timers.values()].filter((x) => x.at <= end).sort((a, b) => a.at - b.at || a.handle - b.handle)[0];
+        if (!due) break;
+        timers.delete(due.handle);
+        t = Math.max(t, due.at);
+        await due.fn();
+      }
+      t = end;
+    },
+  };
+};

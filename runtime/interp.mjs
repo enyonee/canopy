@@ -12,7 +12,7 @@ import { formatMoney } from './spec.mjs';
 // caller can answer 400 with its message instead of 500.
 class Refused extends Error {}
 
-export function createInterpreter({ graph, store, registry, perms, meId, trace = (_event) => {}, fetchImpl }) {
+export function createInterpreter({ graph, store, registry, perms, meId, trace = (_event) => {}, fetchImpl, clock }) {
   // The store's write guard (Store#checkRules) traces a throwing rule's
   // underlying error the same way any other request-time failure is traced —
   // installed here, once, rather than known to the store from construction:
@@ -84,9 +84,11 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     return row && row[k] !== undefined && row[k] !== null ? String(row[k]) : '';
   });
 
+  // Deliver what is due (after a commit, or when an operator asks); the delivery path takes its time from `clock`.
+  const flushNow = () => flush(store, graph, { fetchImpl, trace, registry, clock });
   const withEffects = async (fn) => {
     const out = store.transaction(fn);
-    await flush(store, graph, { fetchImpl, trace, registry });
+    await flushNow();
     return out;
   };
   const attempt = async (fn) => {
@@ -207,7 +209,7 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   };
 
   return {
-    resolve, interpolate, afterPath, attempt, runSteps, fireEvents,
+    resolve, interpolate, afterPath, attempt, runSteps, fireEvents, flushNow,
     validateValues, writable, onlyWritable, checkboxes, dropEmptyUploads,
   };
 }

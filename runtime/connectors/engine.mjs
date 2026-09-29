@@ -4,7 +4,9 @@
 // registry's transport, so the outbox delivers a descriptor's rows like any other.
 import { validate, withDefaults } from './schema.mjs';
 import { expand, expandUrl, pick } from './template.mjs';
-import { METHODS } from './descriptor.mjs';
+import { METHODS, MAX_TIMEOUT_MS } from './descriptor.mjs';
+import { faultOf } from './backoff.mjs';
+import { systemClock } from '../clock.mjs';
 
 export const DEFAULT_TIMEOUT_MS = 3000;
 // The most of an answer the outbox row keeps.
@@ -45,10 +47,12 @@ export function prepare(d, connector, opName, input) {
 /**
  * The request of one operation: { method, url, headers, body (JSON text or undefined), timeout }.
  * A row queued before the descriptor existed already has its url (`target`): that one is used as is.
- * @param {{ secret?: (name: string) => any, target?: string }} [opts]
+ * `timeout` is the descriptor's (or the connector's) `timeoutMs`, never above `timeoutCapMs` (half the outbox lease), so a
+ * request cannot outlive the claim on its row. With `idemKey`, a descriptor that declares `idempotency.header` sends it there.
+ * @param {{ secret?: (name: string) => any, target?: string, idemKey?: string, timeoutCapMs?: number }} [opts]
  */
 export function buildRequest(d, connector, opName, input, opts = {}) {
-  const { secret, target } = opts;
+  const { secret, target, idemKey, timeoutCapMs = MAX_TIMEOUT_MS } = opts;
   const op = operation(d, opName);
   const scopes = scopesOf(d, connector, input, secret);
   const r = op.request;
@@ -56,11 +60,12 @@ export function buildRequest(d, connector, opName, input, opts = {}) {
   if (!METHODS.includes(method)) throw new Error(`unsupported method "${method}"`);
   const body = r.body === undefined ? undefined : expand(r.body, scopes);
   const headers = expand(r.headers || {}, scopes);
+  if (idemKey !== undefined && d.idempotency) headers[d.idempotency.header] = idemKey;
   for (const [k, v] of Object.entries(headers)) if (/[\r\n]/.test(k) || /[\r\n]/.test(String(v))) throw new Error(`header "${k.replace(/[\r\n]/g, ' ')}" holds a line break`);
   return {
     method, url: target ?? requestUrl(op, scopes), headers,
     body: body === undefined ? undefined : JSON.stringify(body),
-    timeout: scopes.config.timeout || d.timeoutMs || DEFAULT_TIMEOUT_MS,
+    timeout: Math.min(scopes.config.timeout || d.timeoutMs || DEFAULT_TIMEOUT_MS, timeoutCapMs),
   };
 }
 
@@ -81,25 +86,40 @@ async function readAnswer(op, res) {
 /** The outbox patch for a response, and the drift found in it: { patch, drift: [[path, message]] }. */
 export async function mapResponse(op, res) {
   const patch = { code: res.status, status: res.ok ? 'sent' : 'failed', error: res.ok ? null : `HTTP ${res.status}` };
+  // The provider's own wish for when to come back; the outbox reads it (runtime/settle.mjs) and does not store it.
+  const retryAfter = res.headers?.get?.('retry-after');
+  if (!res.ok && retryAfter) patch.retryAfter = retryAfter;
   if (!res.ok || !op.output) return { patch, drift: [] };
   const { drift, ...answer } = await readAnswer(op, res);
   return { patch: { ...patch, ...answer, drift: drift.length ? 1 : 0 }, drift };
 }
 
+// The request, with a timeout that comes from the clock (so a test's fake clock can fire it). A request that throws is
+// tagged with why (runtime/connectors/backoff.mjs faultOf): the outbox retries a timeout or a refused connection, and
+// never a request that could not even be built.
+async function send(req, fetchImpl, clock, answer) {
+  const abort = new AbortController();
+  const timer = clock.setTimer(() => abort.abort(new DOMException(`no answer within ${req.timeout} ms`, 'TimeoutError')), req.timeout);
+  const init = { method: req.method, headers: req.headers, signal: abort.signal };
+  if (req.body !== undefined) init.body = req.body;
+  try {
+    let res;
+    try { res = await fetchImpl(req.url, init); } catch (e) { throw Object.assign(new Error(e && e.message, { cause: e }), { fault: faultOf(e) }); }
+    return await answer(res);
+  } finally { clock.clear(timer); }
+}
+
 /**
  * Deliver one outbox row of this descriptor's kind: build the request, send it, map the answer.
- * @param {{ fetchImpl?: typeof fetch, trace?: (event: any) => void, secret?: (name: string) => any }} [opts]
+ * @param {{ fetchImpl?: typeof fetch, trace?: (event: any) => void, secret?: (name: string) => any, clock?: import('../types.d.ts').Clock, idemKey?: string, timeoutCapMs?: number }} [opts]
  */
 export async function deliverRow(d, row, connector, opts = {}) {
-  const { fetchImpl = fetch, trace = (_event) => {}, secret } = opts;
+  const { fetchImpl = fetch, trace = (_event) => {}, secret, clock = systemClock, idemKey, timeoutCapMs } = opts;
   const legacy = row.op === null || row.op === undefined;
   const opName = legacy ? d.legacy : row.op;
   if (!opName) throw new Error(`a "${d.name}" row needs an operation`);
-  const req = buildRequest(d, connector, opName, legacy ? { body: row.payload } : row.payload, { secret, target: legacy ? row.target : undefined });
-  const init = { method: req.method, headers: req.headers, signal: AbortSignal.timeout(req.timeout) };
-  if (req.body !== undefined) init.body = req.body;
-  const res = await fetchImpl(req.url, init);
-  const { patch, drift } = await mapResponse(operation(d, opName), res);
+  const req = buildRequest(d, connector, opName, legacy ? { body: row.payload } : row.payload, { secret, target: legacy ? row.target : undefined, idemKey, timeoutCapMs });
+  const { patch, drift } = await send(req, fetchImpl, clock, (res) => mapResponse(operation(d, opName), res));
   if (drift.length) trace({ kind: 'contract_drift', id: row.id, connector: row.connector, op: opName, path: drift[0][0], message: drift[0][1] });
   return patch;
 }

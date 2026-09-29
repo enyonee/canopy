@@ -145,7 +145,7 @@ export interface BlockCtx {
 export interface TransportType {
   summary: string;
   validate: (connector: ConnectorSpec) => Array<[string, string, string?]>;
-  deliver: (row: any, connector: ConnectorSpec, opts: any) => Promise<{ status: string; code?: number | null; error?: string | null; response?: string; result?: string; drift?: number }>;
+  deliver: (row: any, connector: ConnectorSpec, opts: any) => Promise<{ status: string; code?: number | null; error?: string | null; response?: string; result?: string; drift?: number; retryAfter?: string }>;
 }
 
 /** A schema of the connector-descriptor subset (runtime/connectors/schema.mjs). */
@@ -167,7 +167,17 @@ export interface OperationSpec {
 export interface ConnectorDescriptor {
   descriptor: 1; name: string; title?: string; version?: string; base?: string; config?: SchemaNode;
   timeoutMs?: number; legacy?: string; operations: Record<string, OperationSpec>;
+  retry?: Partial<RetryPolicy>; breaker?: Partial<BreakerPolicy>; idempotency?: { header: string };
 }
+
+/** The retry policy of a descriptor (runtime/connectors/backoff.mjs DEFAULT_RETRY). */
+export interface RetryPolicy { max: number; baseMs: number; capMs: number; jitter: number }
+/** The circuit breaker policy of a descriptor (DEFAULT_BREAKER); probeLeaseMs is the outbox lease. */
+export interface BreakerPolicy { threshold: number; cooldownMs: number; maxCooldownMs: number; probeLeaseMs: number }
+/** One breaker row: closed, open until `openUntil`, or half (one probe claimed at `probeClaimedAt`). */
+export interface BreakerState { state: 'closed' | 'open' | 'half'; failures: number; openUntil: number; cooldownMs: number; probeClaimedAt: number }
+/** The one injectable clock of the delivery path (runtime/clock.mjs). */
+export interface Clock { now(): number; setTimer(fn: () => any, ms: number): any; clear(handle: any): void }
 
 /** A registry.functions[name] entry — a scalar expression function. */
 export interface FunctionType {
@@ -309,6 +319,13 @@ declare module './store.mjs' {
     enqueue(row: { kind: string; connector: string; target: string; payload: any; op?: string | null }): number;
     outbox(where?: Record<string, any>): any[];
     outboxDue(now: number, leaseMs: number): any[];
+    outboxNextDue(now: number): number | null;
+    outboxDefer(id: any, at: number): void;
+    outboxMark(id: any, from: string, patch: Record<string, any>): boolean;
+    breakerGet(connector: string, mode: string): BreakerState & { connector: string; mode: string };
+    breakers(): Array<BreakerState & { connector: string; mode: string }>;
+    breakerRecord(connector: string, mode: string, event: 'failure' | 'success', now: number, cfg?: Partial<BreakerPolicy>): { before: BreakerState; after: BreakerState };
+    breakerClaim(connector: string, mode: string, now: number, cfg?: Partial<BreakerPolicy>): boolean;
     outboxClaim(id: any, now: number, leaseMs: number): boolean;
     outboxGet(id: any): any;
     outboxUpdate(id: any, patch: Record<string, any>): void;

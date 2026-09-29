@@ -180,16 +180,19 @@ const ALLOWED = {
   'runtime/check/util.mjs': [],
   'runtime/cli.mjs': ['runtime/server.mjs', 'runtime/validate.mjs', 'runtime/registry.mjs'],
   'runtime/client/api.mjs': [],
+  'runtime/clock.mjs': [],
+  'runtime/connectors/backoff.mjs': [],
   'runtime/connectors/builtin.mjs': [],
-  'runtime/connectors/descriptor.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs'],
-  'runtime/connectors/engine.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/descriptor.mjs'],
+  'runtime/connectors/descriptor.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/backoff.mjs'],
+  'runtime/connectors/engine.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/descriptor.mjs', 'runtime/connectors/backoff.mjs', 'runtime/clock.mjs'],
   'runtime/connectors/schema.mjs': [],
   'runtime/connectors/template.mjs': [],
   'runtime/expr.mjs': ['runtime/functions.mjs'],
   'runtime/fields.mjs': [],
   'runtime/functions.mjs': [],
   'runtime/interp.mjs': ['runtime/outbox.mjs', 'runtime/expr.mjs', 'runtime/spec.mjs'],
-  'runtime/outbox.mjs': ['runtime/registry.mjs'],
+  'runtime/outbox.mjs': ['runtime/registry.mjs', 'runtime/clock.mjs', 'runtime/connectors/backoff.mjs', 'runtime/settle.mjs'],
+  'runtime/settle.mjs': ['runtime/connectors/backoff.mjs'],
   'runtime/patch.mjs': ['runtime/validate.mjs'],
   'runtime/registry.mjs': ['runtime/fields.mjs', 'runtime/blocks.mjs', 'runtime/transports.mjs', 'runtime/functions.mjs', 'runtime/widgets.mjs',
     'runtime/connectors/builtin.mjs', 'runtime/connectors/descriptor.mjs', 'runtime/connectors/engine.mjs'],
@@ -205,7 +208,7 @@ const ALLOWED = {
   'runtime/routes/rows.mjs': ['runtime/render.mjs', 'runtime/render/detail.mjs'],
   'runtime/routes/schedule.mjs': ['runtime/render.mjs'],
   'runtime/routes/session.mjs': ['runtime/auth.mjs', 'runtime/render/pages.mjs'],
-  'runtime/routes/system.mjs': ['runtime/outbox.mjs', 'runtime/render.mjs', 'runtime/render/pages.mjs'],
+  'runtime/routes/system.mjs': ['runtime/render.mjs', 'runtime/render/pages.mjs'],
   'runtime/routes/views.mjs': ['runtime/spec.mjs', 'runtime/render.mjs', 'runtime/render/pages.mjs', 'runtime/render/dashboard.mjs', 'runtime/render/list.mjs', 'runtime/render/search.mjs'],
   'runtime/routes/widgets.mjs': [],
   'runtime/driver.mjs': ['runtime/driver/sqlite.mjs'],
@@ -215,7 +218,8 @@ const ALLOWED = {
   'runtime/schedule.mjs': [],
   'runtime/server.mjs': ['runtime/validate.mjs', 'runtime/store.mjs', 'runtime/registry.mjs', 'runtime/auth.mjs', 'runtime/interp.mjs',
     'runtime/boot.mjs', 'runtime/render.mjs', 'runtime/routes/context.mjs', 'runtime/routes/session.mjs', 'runtime/routes/views.mjs',
-    'runtime/routes/system.mjs', 'runtime/routes/entity.mjs', 'runtime/routes/widgets.mjs', 'runtime/routes/schedule.mjs', 'runtime/schedule.mjs'],
+    'runtime/routes/system.mjs', 'runtime/routes/entity.mjs', 'runtime/routes/widgets.mjs', 'runtime/routes/schedule.mjs', 'runtime/schedule.mjs',
+    'runtime/outbox.mjs', 'runtime/clock.mjs'],
   'runtime/spec.mjs': ['runtime/expr.mjs', 'runtime/fields.mjs'],
   'runtime/store.mjs': ['runtime/spec.mjs', 'runtime/expr.mjs', 'runtime/auth.mjs', 'runtime/registry.mjs', 'runtime/driver.mjs', 'runtime/store/query.mjs', 'runtime/store/hydrate.mjs', 'runtime/store/state.mjs', 'runtime/store/rules.mjs', 'runtime/store/migrate.mjs', 'runtime/store/ctx.mjs'],
   'runtime/store/aggexpr.mjs': [],
@@ -224,7 +228,7 @@ const ALLOWED = {
   'runtime/store/hydrate.mjs': ['runtime/store/aggsql.mjs'],
   'runtime/store/query.mjs': ['runtime/spec.mjs'],
   'runtime/store/rules.mjs': ['runtime/spec.mjs', 'runtime/expr.mjs'],
-  'runtime/store/state.mjs': [],
+  'runtime/store/state.mjs': ['runtime/connectors/backoff.mjs'],
   'runtime/store/migrate.mjs': [],
   'runtime/transports.mjs': ['runtime/connectors/builtin.mjs', 'runtime/connectors/engine.mjs'],
   'runtime/validate.mjs': ['runtime/registry.mjs', 'runtime/check/scope.mjs', 'runtime/check/steps.mjs', 'runtime/check/basics.mjs',
@@ -235,6 +239,7 @@ const ALLOWED = {
 };
 
 const NODE_BUILTINS = {
+  'runtime/connectors/backoff.mjs': ['node:crypto'],
   'runtime/auth.mjs': ['node:crypto', 'node:fs'],
   'runtime/boot.mjs': ['node:fs', 'node:path'],
   'runtime/cli.mjs': ['node:path', 'node:fs'],
@@ -385,6 +390,18 @@ test('no console.log/error in runtime outside the documented startup lines', () 
     for (const m of MASKED[f].matchAll(/\bconsole\.(log|error|warn|info|debug)\b/g)) bad.push(`${f}:${lineOf(SOURCE[f], m.index)}`);
   }
   assert.deepEqual(bad, [], `console.* outside the allow-list: ${bad.join(', ')}`);
+});
+
+// The delivery path takes its time from the injected clock (runtime/clock.mjs), and its jitter from a hash:
+// a wall-clock read or a random number in these modules would make a backoff schedule, a breaker cooldown or a
+// timeout untestable. runtime/clock.mjs is the one place that reads the real clock.
+const CLOCKED = ['runtime/connectors/backoff.mjs', 'runtime/connectors/engine.mjs', 'runtime/settle.mjs', 'runtime/outbox.mjs'];
+test('the delivery modules never read the wall clock or Math.random: time comes from the clock they are given', () => {
+  const bad = [];
+  for (const f of CLOCKED) {
+    for (const m of MASKED[f].matchAll(/\bDate\.now\b|\bnew Date\(\s*\)|\bMath\.random\b|\bsetTimeout\b|\bsetInterval\b|\bperformance\.now\b/g)) bad.push(`${f}:${lineOf(SOURCE[f], m.index)} (${m[0]})`);
+  }
+  assert.deepEqual(bad, [], `wall clock or randomness outside runtime/clock.mjs: ${bad.join(', ')}`);
 });
 
 // Round 7's item A: `store.label(entity, store.get(entity, id))` hydrates the
