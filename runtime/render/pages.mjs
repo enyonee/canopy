@@ -86,11 +86,11 @@ function breakerTable(breakers) {
 }
 
 // Each connector and the mode it runs in now (the deploy file, runtime/deploy.mjs); never a secret, only how it is set up.
-function modeTable(modes) {
+// A list, not table rows: a screen that counts the outbox's rows must not count these.
+function modeList(modes) {
   if (!modes.length) return '';
-  const rows = modes.map((m) => `<tr><td>${esc(m.connector)}</td><td>${esc(m.kind)}</td><td><span class="status">${esc(m.mode)}</span></td><td>${esc(m.modes.join(', '))}</td></tr>`).join('');
-  return `<h3>Connector modes</h3><p class="muted">Sandbox answers from the connector's own rules and sends nothing; live calls the provider. Switched only with the command line.</p>
-    <table><thead><tr><th>Connector</th><th>Kind</th><th>Mode</th><th>Available</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const items = modes.map((m) => `<li><b>${esc(m.connector)}</b> (${esc(m.kind)}): <span class="status">${esc(m.mode)}</span> <span class="muted">offers ${esc(m.modes.join(', '))}</span></li>`).join('');
+  return `<h3>Connector modes</h3><p class="muted">Sandbox answers from the connector's own rules and sends nothing; live calls the provider. Switched only with the command line.</p><ul class="modes">${items}</ul>`;
 }
 
 export function outboxView(graph, rows, flash, vc = anyone, breakers = [], modes = []) {
@@ -100,5 +100,5 @@ export function outboxView(graph, rows, flash, vc = anyone, breakers = [], modes
   return page(graph, { title: 'Outbox', flash, vc,
     body: `<h2>Outbox</h2><p class="muted">Everything the application sent out, with its delivery status.</p>
       <table><thead><tr><th>#</th><th>Kind</th><th>Connector</th><th>Target</th><th>Status</th><th>Payload</th><th>Updated</th><th></th></tr></thead>
-      <tbody>${body}</tbody></table><p class="muted">${rows.length} item(s)</p>${modeTable(modes)}${breakerTable(breakers)}` });
+      <tbody>${body}</tbody></table><p class="muted">${rows.length} item(s)</p>${modeList(modes)}${breakerTable(breakers)}` });
 }
