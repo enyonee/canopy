@@ -66,12 +66,16 @@ export function migrateIndexes(entity) {
 // "claimedAt" (epoch ms) is the lease of a row in `sending`; "op" is the descriptor operation
 // the row calls, "response" the (capped) answer text, "result" the fields the operation maps out
 // of it, "drift" 1 when the answer did not fit its schema. A database made before any of these
-// existed is upgraded in place, one column at a time.
-const OUTBOX_LATER = [['claimedAt', 'INTEGER'], ['op', 'TEXT'], ['response', 'TEXT'], ['result', 'TEXT'], ['drift', 'INTEGER']];
+// existed is upgraded in place, one column at a time. "nextAttemptAt" (epoch ms) holds a queued row back until a retry is
+// due, "idemKey" is the idempotency key fixed at enqueue. `_breaker` is the circuit breaker of each connector and mode.
+const OUTBOX_LATER = [['claimedAt', 'INTEGER'], ['op', 'TEXT'], ['response', 'TEXT'], ['result', 'TEXT'], ['drift', 'INTEGER'],
+  ['nextAttemptAt', 'INTEGER'], ['idemKey', 'TEXT']];
 export function migrateOutbox() {
   this.drv.createTable('_outbox', [['kind', 'TEXT'], ['connector', 'TEXT'], ['target', 'TEXT'], ['payload', 'TEXT'],
     ['status', 'TEXT'], ['code', 'INTEGER'], ['error', 'TEXT'], ['attempts', 'INTEGER DEFAULT 0'], ['at', 'TEXT'],
     ['updatedAt', 'TEXT'], ...OUTBOX_LATER], { ifNotExists: true });
   const live = this.drv.columns('_outbox').map((r) => r.name);
   for (const [name, type] of OUTBOX_LATER) if (!live.includes(name)) this.drv.addColumn('_outbox', name, type);
+  this.drv.createTable('_breaker', [['key', 'TEXT PRIMARY KEY'], ['connector', 'TEXT'], ['mode', 'TEXT'], ['state', 'TEXT'], ['failures', 'INTEGER DEFAULT 0'],
+    ['openUntil', 'INTEGER DEFAULT 0'], ['cooldownMs', 'INTEGER DEFAULT 0'], ['probeClaimedAt', 'INTEGER DEFAULT 0']], { ifNotExists: true, serial: false });
 }

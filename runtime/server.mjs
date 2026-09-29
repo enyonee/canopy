@@ -24,6 +24,8 @@ import * as entity from './routes/entity.mjs';
 import * as widgets from './routes/widgets.mjs';
 import * as schedule from './routes/schedule.mjs';
 import { everyMs } from './schedule.mjs';
+import { flush } from './outbox.mjs';
+import { systemClock } from './clock.mjs';
 
 function invalidGraphServer(graph, errors, port, host) {
   console.error(`graph is invalid:\n${formatErrors(errors)}`);
@@ -63,7 +65,35 @@ function startTimers(graph, interp, trace, server, noTimers) {
   }
 }
 
-export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [], noTimers = false }) {
+// The background flusher: retries come due on their own, not only when someone next causes a flush. It flushes every
+// `intervalMs`, and a one-shot timer wakes it at the earliest `nextAttemptAt` still ahead. Both run on the injected
+// clock, are unref'd, stop when the server closes, and are absent under `noTimers` — so `flusher` is null and only a request
+// or the /outbox retry delivers. A flush that throws is traced; the next tick tries again.
+export function startFlusher({ store, graph, server, trace, noTimers, clock = systemClock, intervalMs = 5000, ...flushOpts }) {
+  if (noTimers) return null;
+  let every = null, shot = null, stopped = false, busy = false;
+  const arm = () => {
+    clock.clear(shot);
+    const at = store.outboxNextDue(clock.now());
+    shot = at === null ? null : clock.setTimer(tick, at - clock.now());
+  };
+  const tick = async () => {
+    if (busy || stopped) return;
+    busy = true;
+    try { await flush(store, graph, { ...flushOpts, trace, clock }); }
+    catch (e) { trace({ kind: 'error', message: String(e && e.message) }); }
+    finally { busy = false; }
+    if (!stopped) arm();
+  };
+  const loop = () => { every = clock.setTimer(async () => { await tick(); if (!stopped) loop(); }, intervalMs); };
+  const stop = () => { stopped = true; clock.clear(every); clock.clear(shot); };
+  server.on('close', stop);
+  loop();
+  arm();
+  return { stop, arm };
+}
+
+export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [], noTimers = false, clock = systemClock }) {
   const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
   const errors = [...pluginErrors, ...validate(graph, registry)];
   if (errors.length) return invalidGraphServer(graph, errors, port, host);
@@ -91,7 +121,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     if (!traceFile) return;
     fs.appendFileSync(traceFile, JSON.stringify({ at: new Date().toISOString(), ...event }) + '\n');
   };
-  const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl });
+  const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl, clock });
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
@@ -107,6 +137,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
   });
 
   startTimers(graph, interp, trace, server, noTimers);
+  const flusher = startFlusher({ store, graph, server, trace, noTimers, clock, registry, fetchImpl });
   server.listen(port, host);
-  return { server, graph, store, perms, invalid: false };
+  return { server, graph, store, perms, flusher, invalid: false };
 }

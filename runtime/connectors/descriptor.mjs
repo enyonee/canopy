@@ -5,12 +5,13 @@
 // [[path, message, hint?]], empty when the descriptor is usable.
 import { checkSchema } from './schema.mjs';
 import { refs, pathSteps, originProblem } from './template.mjs';
+import { checkPolicy } from './backoff.mjs';
 
 // The longest an operation may wait: half the outbox lease (runtime/outbox.mjs LEASE_MS),
 // so a slow provider cannot outlive the claim on its row and be delivered twice.
 export const MAX_TIMEOUT_MS = 30000;
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'legacy', 'operations'];
+const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'operations'];
 const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result'];
 const REQUEST = ['method', 'url', 'headers', 'body'];
 const NAME = /^[A-Za-z_][\w-]*$/;
@@ -25,7 +26,7 @@ function checkRefs(value, path, ctx) {
   try { list = refs(value); } catch (e) { return [[path, e.message]]; }
   const out = [];
   for (const { scope, path: names } of list) {
-    if (scope === 'key') out.push([path, '{key} (the idempotency key) arrives with retries; it is not available yet']);
+    if (scope === 'key') out.push([path, '{key} (the idempotency key) cannot be used in a template', 'declare "idempotency": {"header": "Idempotency-Key"} and the outbox sends it there']);
     else if (scope === 'base' && ctx.base === undefined) out.push([path, '{base} needs a "base" at the top of the descriptor']);
     else if (scope === 'secret' && ctx.noSecret) out.push([path, '{secret.*} may not appear here: the value would be shown in the outbox and the trace', 'put the secret in a header']);
     else if (scope === 'input' && ctx.noInput) out.push([path, '{input.*} may not appear here: it is the same for every call'])
@@ -83,6 +84,14 @@ function checkOperation(op, path, top) {
   return out.concat(checkResult(op, `${path}/result`));
 }
 
+// The header that carries the idempotency key (fixed at enqueue, the same on every retry).
+function checkIdempotency(v) {
+  if (!isObject(v)) return [['/idempotency', '"idempotency" is an object', '{"header": "Idempotency-Key"}']];
+  const out = unknownKeys(v, ['header'], '/idempotency');
+  if (typeof v.header !== 'string' || !/^[A-Za-z0-9-]+$/.test(v.header)) out.push(['/idempotency/header', '"header" names the request header that carries the key', '"header": "Idempotency-Key"']);
+  return out;
+}
+
 function checkTop(d) {
   const out = unknownKeys(d, TOP, '');
   if (d.descriptor !== 1) out.push(['/descriptor', 'the descriptor format version is 1', '"descriptor": 1']);
@@ -90,6 +99,8 @@ function checkTop(d) {
   for (const k of ['title', 'version']) if (d[k] !== undefined && typeof d[k] !== 'string') out.push([`/${k}`, `"${k}" is a string`]);
   if (d.timeoutMs !== undefined && !(Number.isInteger(d.timeoutMs) && d.timeoutMs >= 1 && d.timeoutMs <= MAX_TIMEOUT_MS))
     out.push(['/timeoutMs', `"timeoutMs" is a whole number of milliseconds, 1 to ${MAX_TIMEOUT_MS}`, 'half the delivery lease, so a slow call cannot outlive its claim']);
+  for (const k of ['retry', 'breaker']) if (d[k] !== undefined) out.push(...checkPolicy(k, d[k], `/${k}`));
+  if (d.idempotency !== undefined) out.push(...checkIdempotency(d.idempotency));
   if (d.base !== undefined) out.push(...(typeof d.base === 'string' ? checkRefs(d.base, '/base', { noSecret: true, noInput: true, config: d.config?.properties }) : [['/base', '"base" is a string template']]));
   if (d.config !== undefined) out.push(...checkSchema(d.config, '/config'), ...(d.config?.type === 'object' ? [] : [['/config/type', '"config" describes an object: "type" must be "object"']]));
   return out;

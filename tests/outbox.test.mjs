@@ -38,23 +38,24 @@ test('an http delivery carries method, headers and JSON body, and records the an
   assert.equal(events[0].status, 'sent');
 });
 
-test('a non-2xx answer and a thrown request are both failures with a reason', async () => {
+test('a non-2xx answer is a failure, a request that never left is retried, and both keep a reason', async () => {
   const store = fresh();
   const net = fakeFetch();
   net.state.status = 503;
   const a = store.enqueue({ kind: 'http', connector: 'hook', target: 'http://sink.test/h', payload: null });
-  assert.equal(await deliver(store, graph, store.outboxGet(a), { fetchImpl: net.fetchImpl }), 'failed');
+  assert.equal(await deliver(store, graph, store.outboxGet(a), { fetchImpl: net.fetchImpl }), 'failed', 'http.send is not idempotent: no retry after an answer');
   assert.equal(store.outboxGet(a).error, 'HTTP 503');
   assert.equal(store.outboxGet(a).code, 503);
   net.state.throwWith = 'connect ECONNREFUSED';
   const b = store.enqueue({ kind: 'http', connector: 'hook', target: 'http://sink.test/h', payload: {} });
-  assert.equal(await deliver(store, graph, store.outboxGet(b), { fetchImpl: net.fetchImpl }), 'failed');
+  assert.equal(await deliver(store, graph, store.outboxGet(b), { fetchImpl: net.fetchImpl, now: () => 5000 }), 'queued', 'nothing left the machine: safe to try again');
   assert.equal(store.outboxGet(b).error, 'connect ECONNREFUSED');
   assert.equal(store.outboxGet(b).code, null, 'no code when nothing answered');
+  assert.ok(store.outboxGet(b).nextAttemptAt > 5000);
   net.state.throwWith = null; net.state.status = 200;
-  store.outboxUpdate(b, { status: 'queued' });
   assert.equal(await deliver(store, graph, store.outboxGet(b), { fetchImpl: net.fetchImpl }), 'sent');
   assert.equal(store.outboxGet(b).attempts, 2, 'a retry counts');
+  assert.equal(store.outboxGet(b).nextAttemptAt, null, 'and the wait is over');
 });
 
 test('mail is recorded by the stand transport; an unknown kind fails loudly', async () => {

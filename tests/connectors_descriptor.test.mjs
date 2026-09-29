@@ -116,7 +116,7 @@ test('descriptor: the longest timeout is half the outbox lease', () => {
 test('descriptor: the top level — fail closed on unknown keys, names and versions', () => {
   assert.deepEqual(problems(null), ['/: a descriptor is an object']);
   assert.deepEqual(problems([]), ['/: a descriptor is an object']);
-  only((d) => { d.retry = { max: 5 }; }, /unknown key "retry"/, '/retry');
+  only((d) => { d.sandbox = {}; }, /unknown key "sandbox"/, '/sandbox');
   only((d) => { d.descriptor = 2; }, /format version is 1/, '/descriptor');
   only((d) => { delete d.descriptor; }, /format version is 1/);
   only((d) => { d.name = 'Pay Now'; }, /a "name"/, '/name');
@@ -173,7 +173,7 @@ test('descriptor: the request — url, method, headers, body and the references 
   only((d) => { op(d).request.method = 5; }, /"method" is a string/);
   only((d) => { op(d).request.method = '{secret.m}'; }, /\{secret/);
   only((d) => { op(d).request.headers = 'x'; }, /"headers" is an object/);
-  only((d) => { op(d).request.headers = { a: '{key}' }; }, /idempotency key\) arrives with retries/);
+  only((d) => { op(d).request.headers = { a: '{key}' }; }, /idempotency key\) cannot be used in a template/);
   only((d) => { op(d).request.body = { a: '{input.nope}' }; }, /\{input\.nope\} is not an input of this operation/, '/operations/charge/request/body');
   only((d) => { op(d).request.body = { a: '{config.nope}' }; }, /\{config\.nope\} is not declared in "config"/);
   only((d) => { delete d.config; }, /is not declared in "config"/);

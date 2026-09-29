@@ -1,19 +1,37 @@
 // The outbox. An effect that leaves the process is a row first and a request
 // second: it is committed with the transaction that caused it, then delivered
 // by the transport registered for its kind. Delivery never runs inside a
-// transaction and never blocks a commit.
+// transaction and never blocks a commit. A delivery that fails in a way worth
+// retrying goes back to `queued` with `nextAttemptAt` (runtime/settle.mjs, the
+// policy in runtime/connectors/backoff.mjs); a provider that keeps failing opens
+// its circuit breaker, and its rows wait without being tried.
 import { DEFAULT } from './registry.mjs';
+import { resolveClock } from './clock.mjs';
+import { idemKeyOf } from './connectors/backoff.mjs';
+import { settle, policyOf } from './settle.mjs';
 
-export async function deliver(store, graph, row, { fetchImpl = fetch, trace = (_event) => {}, registry = DEFAULT, claimedAt = null } = {}) {
+// A row in `sending` whose claim is older than this is taken to belong to a dead
+// process and becomes claimable again: delivery is exactly-once unless a process
+// dies mid-delivery, then at-least-once. Connectors should send an idempotency key,
+// and a request never waits longer than half of this, so a live one cannot outlive its claim.
+export const LEASE_MS = 60000;
+
+export async function deliver(store, graph, row, opts = {}) {
+  const { fetchImpl = fetch, trace = (_event) => {}, registry = DEFAULT, claimedAt = null, leaseMs = LEASE_MS, mode = 'live' } = opts;
+  const clock = resolveClock(opts);
   const connector = graph.connectors?.[row.connector] || {};
-  const patch = { attempts: (row.attempts || 0) + 1 };
+  const idemKey = row.idemKey || idemKeyOf(graph.app, row.connector, row.id, row.at);
   const transport = registry.transports[row.kind];
+  let result = {}, error = null;
   try {
     if (!transport) throw new Error(`unknown delivery kind "${row.kind}"`);
-    Object.assign(patch, await transport.deliver(row, connector, { fetchImpl, trace }));
-  } catch (e) {
-    patch.status = 'failed';
-    patch.error = String(e && e.message);
+    result = await transport.deliver(row, connector, { fetchImpl, trace, clock, idemKey, timeoutCapMs: leaseMs / 2 });
+  } catch (e) { error = e; }
+  const policy = policyOf(registry, row);
+  const { patch, event } = settle(row, result, error, { policy, now: clock.now(), idemKey });
+  if (event) {
+    const { before, after } = store.breakerRecord(row.connector, mode, event, clock.now(), policy.breaker);
+    if (before.state !== after.state) trace({ kind: 'breaker', connector: row.connector, mode, from: before.state, to: after.state, openUntil: after.openUntil });
   }
   // A delivery that came from a flush finishes only while it still holds its claim;
   // one whose lease ran out and was re-claimed is dropped, not written over the new owner.
@@ -22,24 +40,34 @@ export async function deliver(store, graph, row, { fetchImpl = fetch, trace = (_
     return 'stale';
   }
   if (claimedAt === null) store.outboxUpdate(row.id, patch);
-  trace({ kind: 'delivery', id: row.id, via: row.kind, connector: row.connector, target: row.target, status: patch.status, code: patch.code ?? null });
+  trace({ kind: 'delivery', id: row.id, via: row.kind, connector: row.connector, target: row.target, status: patch.status, code: patch.code ?? null, nextAttemptAt: patch.nextAttemptAt });
   return patch.status;
 }
 
-// A row in `sending` whose claim is older than this is taken to belong to a dead
-// process and becomes claimable again: delivery is exactly-once unless a process
-// dies mid-delivery, then at-least-once. Connectors should send an idempotency key.
-export const LEASE_MS = 60000;
+// May this row be tried now? A closed breaker says yes. Otherwise the connector is
+// being spared: once its cooldown is over exactly one caller wins the probe (an atomic
+// claim), everyone else leaves the row where it is, and while it is still cooling the
+// row's next attempt is pushed to the end of the cooldown — without counting an attempt.
+function admit(store, row, { now, mode, registry, leaseMs }) {
+  const b = store.breakerGet(row.connector, mode);
+  if (b.state === 'closed') return true;
+  if (store.breakerClaim(row.connector, mode, now, { ...policyOf(registry, row).breaker, probeLeaseMs: leaseMs })) return true;
+  if (b.state === 'open' && now < b.openUntil) store.outboxDefer(row.id, b.openUntil);
+  return false;
+}
 
-// Deliver everything that is queued (or whose lease ran out). Called after a
-// commit, never inside one. A row is delivered only by the caller that claimed
-// it, so overlapping flushes never deliver one row twice.
+// Deliver everything that is due: queued (and past its nextAttemptAt), or whose lease
+// ran out. Called after a commit and by the background flusher, never inside a
+// transaction. A row is delivered only by the caller that claimed it, so overlapping
+// flushes never deliver one row twice.
 export async function flush(store, graph, opts = {}) {
-  const { now = Date.now, leaseMs = LEASE_MS } = opts;
+  const { leaseMs = LEASE_MS, registry = DEFAULT, mode = 'live' } = opts;
+  const clock = resolveClock(opts);
   const out = [];
-  for (const row of store.outboxDue(now(), leaseMs)) {
-    const claimedAt = now();
-    if (store.outboxClaim(row.id, claimedAt, leaseMs)) out.push(await deliver(store, graph, row, { ...opts, claimedAt }));
+  for (const row of store.outboxDue(clock.now(), leaseMs)) {
+    if (!admit(store, row, { now: clock.now(), mode, registry, leaseMs })) continue;
+    const claimedAt = clock.now();
+    if (store.outboxClaim(row.id, claimedAt, leaseMs)) out.push(await deliver(store, graph, row, { ...opts, clock, claimedAt }));
   }
   return out;
 }
