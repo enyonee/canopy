@@ -120,6 +120,8 @@ const IN_CHUNK = 5000;
 // caching it would only evict statements that do.
 export function listRawIn(entity, via, ids) {
   if (!ids.length) return [];
+  // One parent (a detail page): the plain equality query, whose statement the driver caches.
+  if (ids.length === 1) return this.listRaw(entity, { where: { [via]: ids[0] } });
   const { quote, phs } = this.drv.dialect;
   const out = [];
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
@@ -133,6 +135,7 @@ export function listRawIn(entity, via, ids) {
 // The rows of `entity` with these ids (`keys`: numeric strings, see snapshot.mjs's refKey), in as
 // few queries as IN_CHUNK allows — one level of a reference hop. Never cached, like listRawIn.
 export function listRawByIds(entity, keys) {
+  if (keys.length === 1) return [this.raw(entity, keys[0])].filter(Boolean);
   const { quote, phs } = this.drv.dialect;
   const out = [];
   for (let i = 0; i < keys.length; i += IN_CHUNK) {
