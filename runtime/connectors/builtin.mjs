@@ -11,6 +11,7 @@ export const BUILTIN = {
   http: {
     descriptor: 1,
     name: 'http',
+    modes: ['live'],
     title: 'a JSON request to "url" (POST by default) with optional "headers" and "timeout"',
     timeoutMs: 3000,
     legacy: 'send',

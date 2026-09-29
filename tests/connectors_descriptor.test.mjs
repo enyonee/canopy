@@ -116,7 +116,7 @@ test('descriptor: the longest timeout is half the outbox lease', () => {
 test('descriptor: the top level — fail closed on unknown keys, names and versions', () => {
   assert.deepEqual(problems(null), ['/: a descriptor is an object']);
   assert.deepEqual(problems([]), ['/: a descriptor is an object']);
-  only((d) => { d.sandbox = {}; }, /unknown key "sandbox"/, '/sandbox');
+  only((d) => { d.sandbox = {}; }, /sandbox rules need "sandbox" in "modes"/, '/sandbox');
   only((d) => { d.descriptor = 2; }, /format version is 1/, '/descriptor');
   only((d) => { delete d.descriptor; }, /format version is 1/);
   only((d) => { d.name = 'Pay Now'; }, /a "name"/, '/name');

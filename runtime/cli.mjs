@@ -6,8 +6,9 @@ import fs from 'node:fs';
 import { serve } from './server.mjs';
 import { validate, formatErrors } from './validate.mjs';
 import { loadPlugins } from './registry.mjs';
+import { admin } from './admin.mjs';
 
-export async function main(argv, { log = console.log, err = console.error } = {}) {
+export async function main(argv, { log = console.log, err = console.error, stdin = async () => '' } = {}) {
   const graphFile = argv.find((a) => !a.startsWith('--'));
   const flag = (name, def) => {
     const i = argv.indexOf(`--${name}`);
@@ -26,10 +27,14 @@ export async function main(argv, { log = console.log, err = console.error } = {}
     return { code: 1 };
   }
 
+  const dbFile = flag('db', path.join(dir, 'data.sqlite'));
+  const code = await admin(argv, { graph, registry, dir: path.dirname(dbFile), log, err, stdin });
+  if (code !== null) return { code };
+
   const port = Number(flag('port', 8901));
   const app = serve({
     graphFile,
-    dbFile: flag('db', path.join(dir, 'data.sqlite')),
+    dbFile,
     traceFile: flag('trace', path.join(dir, 'trace.jsonl')),
     port, registry, pluginErrors,
     noTimers: Boolean(process.env.AG_NO_TIMERS),

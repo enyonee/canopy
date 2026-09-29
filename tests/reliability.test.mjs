@@ -292,12 +292,13 @@ test('breaker: one per connector and mode, kept in the table, listed in order', 
 });
 
 test('a breaker that is open in one mode does not stop deliveries in another', async () => {
-  const t = make();
+  const t = make({ modes: ['sandbox', 'live'], sandbox: { operations: { get: [{ status: 200 }], charge: [{ status: 200 }] } } });
+  const in_ = (mode) => ({ env: { deploy: () => ({ connectors: { p: mode } }), secrets: null } });
   queue(t.store);
   t.store.breakerRecord('p', 'live', 'failure', t.clock.now(), { threshold: 1, cooldownMs: 5000 });
-  assert.deepEqual(await flush(t.store, t.graph, opts(t, { fetchImpl: scripted([answer(200)]).fetchImpl, mode: 'sandbox' })), ['sent']);
+  assert.deepEqual(await flush(t.store, t.graph, opts(t, { fetchImpl: scripted([answer(200)]).fetchImpl, ...in_('sandbox') })), ['sent']);
   queue(t.store);
-  assert.deepEqual(await flush(t.store, t.graph, opts(t, { fetchImpl: scripted([answer(200)]).fetchImpl })), [], 'live is still open');
+  assert.deepEqual(await flush(t.store, t.graph, opts(t, { fetchImpl: scripted([answer(200)]).fetchImpl, ...in_('live') })), [], 'live is still open');
 });
 
 test('the queue helpers: outboxDue respects nextAttemptAt, outboxNextDue finds the earliest wait, outboxDefer and outboxMark are guarded', () => {

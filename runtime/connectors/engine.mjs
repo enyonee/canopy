@@ -3,7 +3,8 @@
 // own — the caller passes `fetchImpl`. `synthesize` turns a descriptor into the
 // registry's transport, so the outbox delivers a descriptor's rows like any other.
 import { validate, withDefaults } from './schema.mjs';
-import { expand, expandUrl, pick } from './template.mjs';
+import { expand, expandUrl, pick, refs } from './template.mjs';
+import { sandboxAnswer } from './sandbox.mjs';
 import { METHODS, MAX_TIMEOUT_MS } from './descriptor.mjs';
 import { faultOf } from './backoff.mjs';
 import { systemClock } from '../clock.mjs';
@@ -17,7 +18,7 @@ const operation = (d, name) => {
   if (!op) throw new Error(`${d.name} has no operation "${name}" (operations: ${Object.keys(d.operations).join(', ')})`);
   return op;
 };
-const configOf = (d, connector) => { const { kind, ...rest } = connector || {}; return withDefaults(d.config || {}, rest); };
+const configOf = (d, connector) => { const { kind, secrets, ...rest } = connector || {}; return withDefaults(d.config || {}, rest); };
 const problems = (list, root) => list.map(([p, m]) => `${root}${p}: ${m}`).join('; ');
 
 function scopesOf(d, connector, input, secret) {
@@ -30,6 +31,21 @@ function requestUrl(op, scopes) {
   if (!/^https?:\/\//.test(url)) throw new Error(`the request url must start with http:// or https://, got "${url}"`);
   return url;
 }
+
+/** The slots (`{secret.<slot>}`) the live requests of a descriptor read. */
+export const secretSlots = (d) => [...new Set(Object.values(d.operations).flatMap((op) => refs(op.request)).filter((r) => r.scope === 'secret').map((r) => r.path[0]))];
+
+/** The name in the secret store that a slot is: the connector's `secrets` map says, else the slot itself. */
+export const secretName = (connector, slot) => connector?.secrets?.[slot] ?? slot;
+
+// `{secret.x}` at delivery: the store's current value, and a missing one fails the delivery for good (no `fault`, so it is
+// neither retried nor counted against the breaker). The message names the secret, never a value.
+const resolver = (secrets, connector) => (slot) => {
+  const name = secretName(connector, slot);
+  const value = secrets.current(name);
+  if (value === undefined) throw new Error(`secret "${name}" is not set: put it in the secret store (--secrets set ${name})`);
+  return value;
+};
 
 /**
  * What a call must satisfy before it is queued: the input is completed with its defaults and
@@ -83,6 +99,15 @@ async function readAnswer(op, res) {
   return answer;
 }
 
+// The answer a sandbox rule gives, shaped like a fetch Response so it goes through the same mapping as a real one.
+function sandboxResponse(d, opName, connector, input, key) {
+  const hit = sandboxAnswer(d.sandbox?.operations?.[opName], { input, key, config: configOf(d, connector) });
+  if (!hit) throw new Error(`${d.name}.${opName}: no sandbox rule answers this input`);
+  const text = JSON.stringify(hit.body);
+  const headers = Object.fromEntries(Object.entries(hit.headers).map(([k, v]) => [k.toLowerCase(), v]));
+  return { ok: hit.status >= 200 && hit.status < 300, status: hit.status, headers: { get: (k) => headers[k.toLowerCase()] ?? null }, text: async () => text };
+}
+
 /** The outbox patch for a response, and the drift found in it: { patch, drift: [[path, message]] }. */
 export async function mapResponse(op, res) {
   const patch = { code: res.status, status: res.ok ? 'sent' : 'failed', error: res.ok ? null : `HTTP ${res.status}` };
@@ -110,26 +135,43 @@ async function send(req, fetchImpl, clock, answer) {
 }
 
 /**
- * Deliver one outbox row of this descriptor's kind: build the request, send it, map the answer.
- * @param {{ fetchImpl?: typeof fetch, trace?: (event: any) => void, secret?: (name: string) => any, clock?: import('../types.d.ts').Clock, idemKey?: string, timeoutCapMs?: number }} [opts]
+ * Deliver one outbox row of this descriptor's kind: build the request, send it, map the answer. In `mode: 'sandbox'`
+ * nothing is built or sent: the descriptor's sandbox rules answer. `secrets` is the store `{secret.x}` is read from.
+ * @param {{ fetchImpl?: typeof fetch, trace?: (event: any) => void, secret?: (name: string) => any, secrets?: any, mode?: string, clock?: import('../types.d.ts').Clock, idemKey?: string, timeoutCapMs?: number }} [opts]
  */
 export async function deliverRow(d, row, connector, opts = {}) {
-  const { fetchImpl = fetch, trace = (_event) => {}, secret, clock = systemClock, idemKey, timeoutCapMs } = opts;
+  const { fetchImpl = fetch, trace = (_event) => {}, secrets, mode = 'live', clock = systemClock, idemKey, timeoutCapMs } = opts;
+  const secret = opts.secret ?? (secrets && resolver(secrets, connector));
   const legacy = row.op === null || row.op === undefined;
   const opName = legacy ? d.legacy : row.op;
   if (!opName) throw new Error(`a "${d.name}" row needs an operation`);
-  const req = buildRequest(d, connector, opName, legacy ? { body: row.payload } : row.payload, { secret, target: legacy ? row.target : undefined, idemKey, timeoutCapMs });
-  const { patch, drift } = await send(req, fetchImpl, clock, (res) => mapResponse(operation(d, opName), res));
-  if (drift.length) trace({ kind: 'contract_drift', id: row.id, connector: row.connector, op: opName, path: drift[0][0], message: drift[0][1] });
-  return patch;
+  const input = legacy ? { body: row.payload } : row.payload;
+  const op = operation(d, opName);
+  let done;
+  if (mode === 'sandbox') done = await mapResponse(op, sandboxResponse(d, opName, connector, input, idemKey));
+  else {
+    const req = buildRequest(d, connector, opName, input, { secret, target: legacy ? row.target : undefined, idemKey, timeoutCapMs });
+    done = await send(req, fetchImpl, clock, (res) => mapResponse(op, res));
+  }
+  if (done.drift.length) trace({ kind: 'contract_drift', id: row.id, connector: row.connector, op: opName, path: done.drift[0][0], message: done.drift[0][1] });
+  return done.patch;
+}
+
+// `secrets` in a connector maps the descriptor's slots to names in the store: never a value.
+function secretProblems(connector) {
+  const map = connector?.secrets;
+  if (map === undefined) return [];
+  if (map === null || typeof map !== 'object' || Array.isArray(map)) return [['secrets', '"secrets" maps a slot to the name of a secret in the store', '{"apiKey": "stripe_key"}']];
+  return Object.entries(map).flatMap(([slot, name]) => (typeof name === 'string' && /^[A-Za-z_][\w-]*$/.test(name) ? []
+    : [[`secrets/${slot}`, 'a secret is named by letters, digits, "_" and "-" (a name, never the value)']]));
 }
 
 /** The registry transport of a descriptor: its configuration is checked against "config", its rows go through the engine. */
 export function synthesize(d) {
   return {
     summary: d.title || `the ${d.name} connector (${Object.keys(d.operations).join(', ')})`,
-    validate: (connector) => validate(d.config || { type: 'object', properties: {} }, configOf(d, connector), '')
-      .map(([p, m, h]) => (h ? [p.slice(1), m, h] : [p.slice(1), m])),
+    validate: (connector) => [...secretProblems(connector), ...validate(d.config || { type: 'object', properties: {} }, configOf(d, connector), '')
+      .map(([p, m, h]) => (h ? [p.slice(1), m, h] : [p.slice(1), m]))],
     deliver: (row, connector, opts) => deliverRow(d, row, connector, opts),
   };
 }

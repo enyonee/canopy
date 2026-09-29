@@ -26,6 +26,7 @@ import * as schedule from './routes/schedule.mjs';
 import { everyMs } from './schedule.mjs';
 import { flush } from './outbox.mjs';
 import { systemClock } from './clock.mjs';
+import { connectorEnv } from './deploy.mjs';
 
 function invalidGraphServer(graph, errors, port, host) {
   console.error(`graph is invalid:\n${formatErrors(errors)}`);
@@ -121,7 +122,10 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     if (!traceFile) return;
     fs.appendFileSync(traceFile, JSON.stringify({ at: new Date().toISOString(), ...event }) + '\n');
   };
-  const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl, clock });
+  // The deploy file (each connector's mode) must be sound before anything is delivered.
+  const env = connectorEnv(dir, graph.app);
+  try { env.deploy(); } catch (e) { return invalidGraphServer(graph, [{ path: '/deploy.json', message: e.message }], port, host); }
+  const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl, clock, env });
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
@@ -137,7 +141,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
   });
 
   startTimers(graph, interp, trace, server, noTimers);
-  const flusher = startFlusher({ store, graph, server, trace, noTimers, clock, registry, fetchImpl });
+  const flusher = startFlusher({ store, graph, server, trace, noTimers, clock, registry, fetchImpl, env });
   server.listen(port, host);
   return { server, graph, store, perms, flusher, invalid: false };
 }
