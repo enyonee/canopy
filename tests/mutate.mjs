@@ -962,7 +962,7 @@ const MUTATIONS = [
     replace: "''" },
   { name: "C3: screen: the breakers are not shown", file: "runtime/render/pages.mjs",
     find: "${breakerTable(breakers)}` });",
-    replace: "` });" }
+    replace: "` });" },
   // --- S3a: derived fields evaluate over a prefetched snapshot (plan.mjs, snapshot.mjs, hydrate.mjs) ---
   { name: "S3a: the plan follows no reference hop, so a derived field that reads customer.name finds nothing loaded", file: "runtime/store/plan.mjs",
     find: "  if (!rest.length || f.kind !== 'ref') return;", replace: "  if (true) return;" },
