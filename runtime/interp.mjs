@@ -112,7 +112,7 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     for (const [i, step] of steps.entries()) {
       const block = CATALOG[step.block];
       const out = block.run({
-        store, graph, entity: ctx.rowEntity, id: ctx.id, values: ctx.values, step, user: ctx.user,
+        store, graph, registry, entity: ctx.rowEntity, id: ctx.id, values: ctx.values, step, user: ctx.user,
         resolve: resolve(ctx), text: (s) => interpolate(s, ctx),
         run: (sub, extra) => runSteps(sub, { ...ctx, ...extra }),
         fireCreated: fireCreatedFor(ctx),

@@ -37,8 +37,8 @@ export function createStepsChecker(h) {
         if (!c) err(`${p}/connector`, `unknown connector "${step.connector}"`, `declared: ${Object.keys(graph.connectors || {}).join(', ') || '(none; add /connectors)'}`);
         else if (c.kind !== block.connector) err(`${p}/connector`, `connector "${step.connector}" is ${c.kind}, ${step.block} needs ${block.connector}`);
       }
-      if (block.check) block.check(step, { err, fields, entity, graph, path: p, checkEntity, checkField });
-      for (const key of ['set', 'values', 'where', 'body', 'id', 'by', 'to', 'path'])
+      if (block.check) block.check(step, { err, fields, entity, graph, registry: h.registry, path: p, checkEntity, checkField });
+      for (const key of ['set', 'values', 'where', 'body', 'id', 'by', 'to', 'path', 'input'])
         if (step[key] !== undefined) checkValues(step[key], ctxEntities, `${p}/${key}`);
       for (const sub of block.nested ? block.nested(step) : []) checkSteps(sub.steps, `${p}/${sub.path}`, entity, { ...ctxEntities, ...sub.adds });
       if (block.exposes) Object.assign(ctxEntities, block.exposes(step));

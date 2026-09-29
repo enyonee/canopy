@@ -1,30 +1,15 @@
 // Connector transports. One entry per connector kind: validate(connector) says
 // what is wrong with its declaration; deliver(row, connector, opts) carries one
 // outbox row and returns the status patch. A plugin adds a transport with the
-// same shape (SMTP, a queue, a chat API…).
-const TIMEOUT_MS = 3000;
+// same shape (SMTP, a queue, a chat API…). A connector descriptor becomes one too
+// (runtime/connectors/engine.mjs `synthesize`).
+import { BUILTIN } from './connectors/builtin.mjs';
+import { synthesize } from './connectors/engine.mjs';
 
 /** @type {Record<string, import('./types.d.ts').TransportType>} */
 export const TRANSPORTS = {
-  http: {
-    summary: 'a JSON request to "url" (POST by default) with optional "headers" and "timeout"',
-    validate: (c) => {
-      /** @type {[string, string, string?][]} */
-      const out = [];
-      if (!/^https?:\/\//.test(String(c.url || ''))) out.push(['url', 'an http connector needs "url" starting with http:// or https://']);
-      if (c.method !== undefined && !['POST', 'PUT', 'PATCH', 'GET'].includes(c.method)) out.push(['method', `unsupported method "${c.method}"`, 'POST, PUT, PATCH or GET']);
-      return out;
-    },
-    deliver: async (row, connector, { fetchImpl = fetch } = {}) => {
-      const res = await fetchImpl(row.target, {
-        method: connector.method || 'POST',
-        headers: { 'content-type': 'application/json', ...(connector.headers || {}) },
-        body: JSON.stringify(row.payload),
-        signal: AbortSignal.timeout(connector.timeout || TIMEOUT_MS),
-      });
-      return { code: res.status, status: res.ok ? 'sent' : 'failed', error: res.ok ? null : `HTTP ${res.status}` };
-    },
-  },
+  // http is a built-in descriptor (runtime/connectors/builtin.mjs); the engine is its transport.
+  http: synthesize(BUILTIN.http),
   mail: {
     // The stand transport: the letter is recorded, not carried. SMTP is a plugin's business.
     summary: 'a letter with "from"; recorded in the outbox',

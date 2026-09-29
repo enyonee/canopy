@@ -63,12 +63,15 @@ export function migrateIndexes(entity) {
 }
 
 // The outbox: every effect that leaves the process is a row here first.
-// "claimedAt" (epoch ms) is the lease of a row in `sending`; a database made
-// before it existed is upgraded in place.
+// "claimedAt" (epoch ms) is the lease of a row in `sending`; "op" is the descriptor operation
+// the row calls, "response" the (capped) answer text, "result" the fields the operation maps out
+// of it, "drift" 1 when the answer did not fit its schema. A database made before any of these
+// existed is upgraded in place, one column at a time.
+const OUTBOX_LATER = [['claimedAt', 'INTEGER'], ['op', 'TEXT'], ['response', 'TEXT'], ['result', 'TEXT'], ['drift', 'INTEGER']];
 export function migrateOutbox() {
   this.drv.createTable('_outbox', [['kind', 'TEXT'], ['connector', 'TEXT'], ['target', 'TEXT'], ['payload', 'TEXT'],
     ['status', 'TEXT'], ['code', 'INTEGER'], ['error', 'TEXT'], ['attempts', 'INTEGER DEFAULT 0'], ['at', 'TEXT'],
-    ['updatedAt', 'TEXT'], ['claimedAt', 'INTEGER']], { ifNotExists: true });
+    ['updatedAt', 'TEXT'], ...OUTBOX_LATER], { ifNotExists: true });
   const live = this.drv.columns('_outbox').map((r) => r.name);
-  if (!live.includes('claimedAt')) this.drv.addColumn('_outbox', 'claimedAt', 'INTEGER');
+  for (const [name, type] of OUTBOX_LATER) if (!live.includes(name)) this.drv.addColumn('_outbox', name, type);
 }

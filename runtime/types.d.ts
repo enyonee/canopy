@@ -134,6 +134,7 @@ export interface BlockCtx {
   values: Record<string, any>;
   step: StepSpec;
   user: any;
+  registry: Registry;
   resolve: (obj: any) => any;
   text: (s: string) => string;
   run: (steps: StepSpec[], extra: Record<string, any>) => any;
@@ -144,7 +145,28 @@ export interface BlockCtx {
 export interface TransportType {
   summary: string;
   validate: (connector: ConnectorSpec) => Array<[string, string, string?]>;
-  deliver: (row: any, connector: ConnectorSpec, opts: any) => Promise<{ status: string; code?: number | null; error?: string | null }>;
+  deliver: (row: any, connector: ConnectorSpec, opts: any) => Promise<{ status: string; code?: number | null; error?: string | null; response?: string; result?: string; drift?: number }>;
+}
+
+/** A schema of the connector-descriptor subset (runtime/connectors/schema.mjs). */
+export interface SchemaNode {
+  type?: 'object' | 'array' | 'string' | 'integer' | 'number' | 'boolean' | 'null';
+  properties?: Record<string, SchemaNode>; required?: string[]; additionalProperties?: boolean; items?: SchemaNode;
+  enum?: any[]; format?: 'email' | 'date-time' | 'uri'; minLength?: number; maxLength?: number; pattern?: string;
+  minimum?: number; maximum?: number; default?: any; title?: string; description?: string; message?: string; hint?: string;
+}
+
+/** One operation of a descriptor: the input it takes, the request it makes, the answer it must give. */
+export interface OperationSpec {
+  summary?: string; idempotent: boolean; input: SchemaNode;
+  request: { method?: string; url: string; headers?: Record<string, any>; body?: any };
+  output?: SchemaNode; result?: Record<string, string>;
+}
+
+/** A connector descriptor (docs/CONNECTORS.md): data, checked by runtime/connectors/descriptor.mjs. */
+export interface ConnectorDescriptor {
+  descriptor: 1; name: string; title?: string; version?: string; base?: string; config?: SchemaNode;
+  timeoutMs?: number; legacy?: string; operations: Record<string, OperationSpec>;
 }
 
 /** A registry.functions[name] entry — a scalar expression function. */
@@ -168,6 +190,7 @@ export interface Registry {
   transports: Record<string, TransportType>;
   functions: Record<string, FunctionType>;
   widgets: Record<string, WidgetType>;
+  descriptors: Record<string, ConnectorDescriptor>;
   plugins: string[];
 }
 
@@ -283,7 +306,7 @@ declare module './store.mjs' {
     hydratePage(entity: string, rows: any[]): any[];
     aggregate(entity: string, opts?: Record<string, any>): any[];
     aggregateInMemory(entity: string, opts: Record<string, any>): any[];
-    enqueue(row: { kind: string; connector: string; target: string; payload: any }): number;
+    enqueue(row: { kind: string; connector: string; target: string; payload: any; op?: string | null }): number;
     outbox(where?: Record<string, any>): any[];
     outboxDue(now: number, leaseMs: number): any[];
     outboxClaim(id: any, now: number, leaseMs: number): boolean;

@@ -10,7 +10,7 @@ export async function deliver(store, graph, row, { fetchImpl = fetch, trace = (_
   const transport = registry.transports[row.kind];
   try {
     if (!transport) throw new Error(`unknown delivery kind "${row.kind}"`);
-    Object.assign(patch, await transport.deliver(row, connector, { fetchImpl }));
+    Object.assign(patch, await transport.deliver(row, connector, { fetchImpl, trace }));
   } catch (e) {
     patch.status = 'failed';
     patch.error = String(e && e.message);

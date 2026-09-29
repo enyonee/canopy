@@ -1,8 +1,10 @@
 // The registry: the five tables the kernel consults by name — field kinds,
-// blocks, connector transports, expression functions, client widgets.
+// blocks, connector transports, expression functions, client widgets — and
+// `descriptors`, the data behind the transports that come from a connector descriptor.
 // Built-ins fill it; a plugin (an ES module next to the application, listed in
 // /plugins) adds entries with the same contracts. Node kinds are not here:
 // they are the format, and the checker has to know all of them.
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { FIELDS } from './fields.mjs';
@@ -10,12 +12,28 @@ import { CATALOG } from './blocks.mjs';
 import { TRANSPORTS } from './transports.mjs';
 import { FUNCTIONS } from './functions.mjs';
 import { WIDGETS } from './widgets.mjs';
+import { BUILTIN } from './connectors/builtin.mjs';
+import { checkDescriptor } from './connectors/descriptor.mjs';
+import { synthesize } from './connectors/engine.mjs';
 
 export const TABLES = ['fields', 'blocks', 'transports', 'functions', 'widgets'];
 
 export function createRegistry() {
   return { fields: { ...FIELDS }, blocks: { ...CATALOG }, transports: { ...TRANSPORTS }, functions: { ...FUNCTIONS },
-    widgets: { ...WIDGETS }, plugins: [] };
+    widgets: { ...WIDGETS }, descriptors: { ...BUILTIN }, plugins: [] };
+}
+
+// A connector descriptor (a .json plugin): checked, then registered as a descriptor and as the
+// transport of the same name, so its kind is a connector kind like any other.
+export function registerDescriptor(registry, descriptor, name = 'descriptor') {
+  const bad = checkDescriptor(descriptor);
+  if (bad.length) throw new Error(`${name}: invalid descriptor — ${bad.map(([p, m]) => `${p || '/'} ${m}`).join('; ')}`);
+  const kind = descriptor.name;
+  if (registry.transports[kind]) throw new Error(`${name}: connector kind "${kind}" is already registered${registry.transports[kind].plugin ? ` by ${registry.transports[kind].plugin}` : ''}`);
+  registry.descriptors[kind] = descriptor;
+  registry.transports[kind] = { ...synthesize(descriptor), plugin: name };
+  registry.plugins.push(name);
+  return registry;
 }
 
 // Merge one plugin's declarations. A name already taken is an error, never a silent override.
@@ -45,8 +63,9 @@ export async function loadPlugins(graph, baseDir) {
   const errors = [];
   const list = Array.isArray(graph?.plugins) ? graph.plugins : [];
   for (const [i, p] of list.entries()) {
-    if (typeof p !== 'string') { errors.push({ path: `/plugins/${i}`, message: 'a plugin is a path to an ES module', hint: '"./plugins/loyalty.mjs"' }); continue; }
+    if (typeof p !== 'string') { errors.push({ path: `/plugins/${i}`, message: 'a plugin is a path to an ES module or to a connector descriptor (.json)', hint: '"./plugins/loyalty.mjs", "../../connectors/stripe/descriptor.json"' }); continue; }
     try {
+      if (p.endsWith('.json')) { registerDescriptor(registry, JSON.parse(fs.readFileSync(path.resolve(baseDir, p), 'utf8')), p); continue; }
       const mod = await import(pathToFileURL(path.resolve(baseDir, p)).href);
       const decl = mod.default || mod;
       register(registry, decl, p);
