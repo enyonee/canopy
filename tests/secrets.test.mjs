@@ -83,6 +83,16 @@ test('secrets: any changed byte of the file — tag, ciphertext, nonce, salt —
     assert.throws(() => s.get('k'), /the master key is wrong or the file was changed/, field);
     assert.throws(() => s.names(), /file was changed/, field);
   }
+  for (const [field, cut] of [['tag', 4], ['tag', 15], ['nonce', 11]]) {
+    const b = blob2(good);
+    b[field] = Buffer.from(b[field], 'base64').subarray(0, cut).toString('base64');
+    fs.writeFileSync(path.join(dir, 'secrets.enc'), JSON.stringify(b));
+    assert.throws(() => s.get('k'), /the master key is wrong or the file was changed/, `${field} cut to ${cut}`);
+  }
+  const last = blob2(good), tagBytes = Buffer.from(last.tag, 'base64');
+  tagBytes[15] ^= 1;
+  fs.writeFileSync(path.join(dir, 'secrets.enc'), JSON.stringify({ ...last, tag: tagBytes.toString('base64') }));
+  assert.throws(() => s.get('k'), /file was changed/, 'the last byte of the tag counts');
   fs.writeFileSync(path.join(dir, 'secrets.enc'), good);
   assert.deepEqual(s.get('k'), ['v']);
   assert.throws(() => store(dir, {}, 'another-app').get('k'), /file was changed/, 'the app is part of what is authenticated');
@@ -94,6 +104,23 @@ test('secrets: any changed byte of the file — tag, ciphertext, nonce, salt —
   assert.throws(() => s.get('k'), /it is not a secret store/);
   fs.writeFileSync(path.join(dir, 'secrets.enc'), JSON.stringify({ ...JSON.parse(good), salt: 5 }));
   assert.throws(() => s.get('k'), /file was changed/, 'a field of the wrong type is a changed file, not a crash');
+});
+
+const blob2 = (text) => JSON.parse(text);
+
+test('secrets: a key file that group or others can read is refused, like ssh does', (t) => {
+  const dir = tmpDir('ag-sec-', t);
+  const s = store(dir);
+  s.set('k', 'v');
+  for (const mode of [0o640, 0o604, 0o644]) {
+    fs.chmodSync(path.join(dir, 'secrets.key'), mode);
+    assert.throws(() => s.get('k'), /secrets\.key is readable by group or others: run chmod 600/, mode.toString(8));
+    assert.throws(() => s.set('x', 'y'), /chmod 600/);
+  }
+  fs.chmodSync(path.join(dir, 'secrets.key'), 0o400);
+  assert.deepEqual(s.get('k'), ['v'], 'owner-only is fine');
+  fs.chmodSync(path.join(dir, 'secrets.key'), 0o644);
+  assert.deepEqual(store(dir, { CANOPY_MASTER_KEY: fs.readFileSync(path.join(dir, 'secrets.key'), 'utf8').trim() }).get('k'), ['v'], 'the file is not consulted when the environment gives the key');
 });
 
 test('secrets: rotation — a name and its .prev are both returned, newest first; a name is a name, not a path', (t) => {

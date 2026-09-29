@@ -16,7 +16,10 @@ function masterKey(dir, env, create) {
   const fromEnv = env.CANOPY_MASTER_KEY;
   const file = path.join(dir, 'secrets.key');
   let text = fromEnv;
-  if (text === undefined && fs.existsSync(file)) text = fs.readFileSync(file, 'utf8').trim();
+  if (text === undefined && fs.existsSync(file)) {
+    if (fs.statSync(file).mode & 0o077) throw new Error('secrets.key is readable by group or others: run chmod 600 on it');
+    text = fs.readFileSync(file, 'utf8').trim();
+  }
   if (text === undefined) {
     if (!create) throw new Error('secrets.enc exists but there is no master key: set CANOPY_MASTER_KEY or restore secrets.key');
     text = b64(crypto.randomBytes(32));
@@ -32,7 +35,7 @@ const aad = (app) => Buffer.from(`${app}|1`);
 
 function seal(master, app, plain) {
   const salt = crypto.randomBytes(16), nonce = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', derive(master, salt), nonce);
+  const cipher = crypto.createCipheriv('aes-256-gcm', derive(master, salt), nonce, { authTagLength: 16 });
   cipher.setAAD(aad(app));
   const ct = Buffer.concat([cipher.update(JSON.stringify(plain), 'utf8'), cipher.final()]);
   return JSON.stringify({ v: 1, alg: 'aes-256-gcm', salt: b64(salt), nonce: b64(nonce), tag: b64(cipher.getAuthTag()), ct: b64(ct) });
@@ -45,9 +48,11 @@ function unseal(master, app, text) {
   try { blob = JSON.parse(text); } catch { throw broken('it is not a secret store'); }
   if (!blob || blob.v !== 1 || blob.alg !== 'aes-256-gcm') throw broken('unknown format');
   try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', derive(master, Buffer.from(blob.salt, 'base64')), Buffer.from(blob.nonce, 'base64'));
+    const nonce = Buffer.from(blob.nonce, 'base64'), tag = Buffer.from(blob.tag, 'base64');
+    if (nonce.length !== 12 || tag.length !== 16) throw new Error('bad lengths'); // a short tag would be easier to forge
+    const decipher = crypto.createDecipheriv('aes-256-gcm', derive(master, Buffer.from(blob.salt, 'base64')), nonce, { authTagLength: 16 });
     decipher.setAAD(aad(app));
-    decipher.setAuthTag(Buffer.from(blob.tag, 'base64'));
+    decipher.setAuthTag(tag);
     return JSON.parse(Buffer.concat([decipher.update(Buffer.from(blob.ct, 'base64')), decipher.final()]).toString('utf8'));
   } catch { throw broken('the master key is wrong or the file was changed'); }
 }
