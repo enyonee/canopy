@@ -5,19 +5,14 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
-- **Tests no longer leak temp directories.** Every test directory goes through `tmpDir` and is removed on exit; the coverage gate fails if the suite leaves anything in a private `TMPDIR`, and each mutation run gets (and loses) its own.
-- **The Driver seam (PostgreSQL roadmap, step 1, stage S1).** The store no longer holds a
-  SQLite handle: it talks to a `Driver` (`runtime/driver/sqlite.mjs`, opened by
-  `runtime/driver.mjs`) through `this.drv`: `all/get/run/exec/transaction/close`, a `dialect`,
-  schema helpers (`tables/columns/indexes/createTable/addColumn/createIndex/dropIndex`) and an
-  `onQuery` hook. The prepared-statement LRU moved into the driver; `PRAGMA`, `sqlite_master`
-  and `AUTOINCREMENT` no longer appear outside it. `new Store(graph, file, registry, driver)`
-  accepts a driver. Still synchronous; no answer, schema, migration message or trace changes.
-  `Store#prepare` and `store.db` are gone.
-- Gates: `node:sqlite` only in `runtime/driver/sqlite.mjs`; new arch gate keeping SQLite-only
-  surface under `runtime/driver/`. Query counting in `perf.test.mjs` uses the driver hook.
-  Mutations re-pointed, ten new. `docs/POSTGRES.draft.md` is now `docs/POSTGRES.md` (design
-  accepted, status per stage).
+## 0.2.0 (2026-09-29)
+
+Two roadmap items move: horizontal scaling (the outbox is safe under overlapping deliveries) and
+PostgreSQL (step 1, stage S1 of the accepted design in `docs/POSTGRES.md`: the store talks to a
+driver, not to SQLite). Plus one fix to expression arithmetic. No answer changes except the money
+fix below; JSON/CSV of the benchmark routes are byte-identical to 0.1.3.
+
+### Horizontal scaling: outbox delivery
 
 - **The outbox delivers each row once.** `flush` used to read every `queued` row, deliver them
   one by one and only then update them, so two overlapping flushes (two requests committing
@@ -34,6 +29,24 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 - New column `_outbox.claimedAt`, added in place to databases made by earlier versions.
 - Tests: concurrent flushes, lease before/after, in-place upgrade from the old DDL; six new
   mutations.
+
+### PostgreSQL: the Driver seam
+
+- **The Driver seam (PostgreSQL roadmap, step 1, stage S1).** The store no longer holds a
+  SQLite handle: it talks to a `Driver` (`runtime/driver/sqlite.mjs`, opened by
+  `runtime/driver.mjs`) through `this.drv`: `all/get/run/exec/transaction/close`, a `dialect`,
+  schema helpers (`tables/columns/indexes/createTable/addColumn/createIndex/dropIndex`) and an
+  `onQuery` hook. The prepared-statement LRU moved into the driver; `PRAGMA`, `sqlite_master`
+  and `AUTOINCREMENT` no longer appear outside it. `new Store(graph, file, registry, driver)`
+  accepts a driver. Still synchronous; no answer, schema, migration message or trace changes.
+  `Store#prepare` and `store.db` are gone.
+- Gates: `node:sqlite` only in `runtime/driver/sqlite.mjs`; new arch gate keeping SQLite-only
+  surface under `runtime/driver/`. Query counting in `perf.test.mjs` uses the driver hook.
+  Mutations re-pointed, ten new. `docs/POSTGRES.draft.md` is now `docs/POSTGRES.md` (design
+  accepted, status per stage).
+
+### Fixes and hygiene
+
 - **Fix: money arithmetic in expressions is exact.** `runtime/expr.mjs` evaluated money as
   doubles in major units, so `qty * price` with 3 and 0.1 was 0.30000000000000004 and
   `qty * price > 0.3` was true in the JS path while the SQL path (exact integers in minor
@@ -43,6 +56,9 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   cases: ties like the one above, and values with more than 6 decimals, now come out
   rounded. A nested `min`/`max` over a raw money product now compiles to SQL; a product of
   more than 6 decimals (four money factors) is left to the JS path.
+- **Tests no longer leak temp directories.** Every test directory goes through `tmpDir` and is removed on exit; the coverage gate fails if the suite leaves anything in a private `TMPDIR`, and each mutation run gets (and loses) its own.
+
+Tests 267 (0.1.2) → 280 (0.1.3) → 295, mutations 164 → 179, all killed; 699 acceptance checks pass.
 
 ## 0.1.3 (2026-09-29)
 
