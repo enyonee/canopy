@@ -36,6 +36,28 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   network and a fake clock: schedule, caps, Retry-After, `unknown`, no retry on 4xx, breaker
   open/half-open/probe/close/reopen with doubling, flusher, lease and retry, old database, an
   outage-recovery cycle on the server), 72 `C3:` mutations.
+- **Derived fields evaluate over a prefetched snapshot (PostgreSQL roadmap, stage S3a).**
+  Evaluating a derived field performs zero driver calls: a load phase (`runtime/store/hydrate.mjs`)
+  first fetches everything the expression tree can touch, then `evaluate()` runs over a snapshot
+  whose `get/rows/agg` are Map lookups (`runtime/store/snapshot.mjs`); a read that was not loaded
+  throws `not loaded: <Entity.field>` and never queries. What to load is computed from the graph
+  alone by the new pure `runtime/store/plan.mjs`: the derived closure (cycle-safe; the cycle error
+  text is unchanged), one `WHERE id IN (...)` per reference hop per level, SQL-compiled aggregates
+  through aggsql's batch, the child rows of the others level by level with the child entity's own
+  plan (also for `row.*` correlation and for aggregates with no link back, which used to be
+  fetched once per row). The query count depends on the size of the plan, not on the number of
+  rows. `Store#get`, `hydrate`, `list`, `listPage`, `count`, `labelOf`, CSV and dashboards use it;
+  rules and step values (S3b) and render/perms (S3c) still read through the lazy `RowCtx`.
+- This also removes the reference-hop N+1: a list page whose derived fields read `customer.name`
+  or `order.customer.discount` used to issue one query per hop per row; it now issues a constant
+  number (`tests/perf.test.mjs`). Answers are byte-identical: the JSON and CSV of the benchmark
+  routes (and of both benchmark graphs' routes, HTML and JSON) match 0.2.0.
+- The old lazy hydration moved to `runtime/store/lazy.mjs` and stays one release behind the
+  test-only switch `store.lazyEval`.
+- Gates: `tests/snapshot.test.mjs` (every row of every app under `apps/` hydrated through both paths
+  with identical JSON; no driver call while evaluate runs over list, detail, CSV and dashboard;
+  `not loaded` throws), `tests/plan.test.mjs`, the hop gate in `tests/perf.test.mjs`, the snapshot
+  vs lazy comparison in `tests/aggfuzz.test.mjs`; `S3a:` mutations.
 
 ## 0.3.0 (2026-09-29)
 
