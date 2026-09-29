@@ -10,9 +10,9 @@
 
 | слой | модули | зачем |
 |---|---|---|
-| 0 | `fields.mjs`, `functions.mjs`, `transports.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/dialects.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
-| 1 | `expr.mjs`, `spec.mjs`, `driver/sqlite.mjs` | алгебра выражений и разбор спецификации поля; `driver/sqlite.mjs` — единственный исполнитель SQL, SQL-текст берёт у диалекта |
-| 2 | `driver.mjs`, `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
+| 0 | `fields.mjs`, `functions.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/dialects.mjs`, `connectors/{schema,template,builtin}.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
+| 1 | `expr.mjs`, `spec.mjs`, `driver/sqlite.mjs`, `connectors/{descriptor,engine}.mjs`, `transports.mjs` | алгебра выражений и разбор спецификации поля; `driver/sqlite.mjs` — единственный исполнитель SQL, SQL-текст берёт у диалекта |
+| 2 | `driver.mjs`, `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs`, `check/calls.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
 | 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
 | 4 | `store.mjs`, `outbox.mjs` | хранилище (говорит с базой только через `this.drv`) и исходящий ящик |
 | 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
@@ -54,6 +54,29 @@
   `indexName` (pg: 63 байта, усечение + хеш). Билдеры в `store/` берут диалект из
   `this.drv.dialect` и сами не пишут SQLite-специфичных слов (арх-гейт); драйвер
   исполняет то, что продиктовал диалект. В SQLite текст запросов не менял поведение.
+  **C1, коннекторы-дескрипторы** (`docs/CONNECTORS.md`) — `runtime/connectors/`: `schema.mjs` (лист:
+  подмножество JSON Schema — `type/properties/required/additionalProperties/items/enum/format/
+  minLength/maxLength/pattern/minimum/maximum`, аннотации `default/title/description/message/hint`;
+  неизвестное ключевое слово — ошибка схемы, `additionalProperties` закрыт, если есть `properties`),
+  `template.mjs` (лист: `{config.x}`, `{input.x}`, `{secret.x}`, `{base}`, `{key}`, целое значение
+  `{"$": "input.x"}`, `"..."` — распахнуть объект, путь `$.a.b[0]`; ни условий, ни выражений;
+  секрет без хранилища падает закрыто), `builtin.mjs` (встроенные дескрипторы как JS-литералы —
+  реестр по умолчанию остаётся синхронным и без файлов; сейчас только `http`), `descriptor.mjs`
+  (`checkDescriptor`: неизвестный ключ — ошибка, `idempotent` обязателен, `{secret.*}` нельзя в
+  `url`, `timeoutMs` ≤ LEASE_MS/2, ссылки шаблонов только на объявленные входы и `config`) и
+  `engine.mjs` (`prepare` — проверка входа и url при постановке в очередь; `buildRequest`;
+  `mapResponse` — код, статус, `response` (до 16 КБ), `result`, `drift`; `deliverRow`;
+  `synthesize` — транспорт из дескриптора). Реестр получил таблицу `descriptors` и `.json`-записи
+  в `plugins` (`registerDescriptor`). `transports.mjs`'s `http` — это `synthesize(BUILTIN.http)`:
+  строка `_outbox` без `op` (`http.send`, `connector.send`) доставляется как операция `legacy`
+  дескриптора, её `target` — готовый url, запрос байт-в-байт прежний. Блок `connector.call`
+  (`{ connector, op, input, ref? }`) проверяет `input` схемой операции при постановке, внутри
+  транзакции, и кладёт в ящик строку с `op` и входом в `payload`; чекер блока — `check/calls.mjs`
+  (операция, имена входов, обязательные, литералы против схемы, `@row.поле` против типа поля).
+  `check/connectors.mjs` отвергает литеральные секреты в `app.json` и секреты/учётные данные в `url`.
+  Колонки `_outbox`: `op`, `response`, `result`, `drift` (добавляются на месте, как `claimedAt`).
+  Ответ, не сошедшийся с `output`, ставит `drift=1` и пишет в трассу `contract_drift`; строка
+  остаётся `sent` (действие уже произошло).
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.

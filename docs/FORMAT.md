@@ -29,10 +29,10 @@ never work around the checker.
 | `events` | steps that run on `Entity.created`/`.updated`/`.deleted`, on login, or on view (below) |
 | `states` | status transitions per entity (below) |
 | `schedule` | named timers the server runs on an interval (below) |
-| `connectors` | http and mail endpoints the app may send to |
+| `connectors` | endpoints the app may send to: `http`, `mail`, and any kind a connector descriptor defines (see Connector descriptors); never holds a secret |
 | `rules` | checks and uniqueness (single field or a compound list) per entity |
 | `allowDestructive` | `true` lets a migration drop columns the graph no longer declares |
-| `plugins` | ES modules next to the app that add field kinds, blocks, transports and functions (see Plugins) |
+| `plugins` | ES modules next to the app that add field kinds, blocks, transports and functions, and connector descriptors (`.json`) (see Plugins, Connector descriptors) |
 | `search` | site-wide search: `{ "entities": ["Article", "Thread"], "title": "Search" }` → `/search?q=` (below) |
 
 ## Fields (`data`)
@@ -188,11 +188,12 @@ Every step is `{ "block": "<name>", …parameters }`. Values may be literals, `"
 | `check.matchRef` | `ref`, `field`, `against`, `into` | compares a field with one on a referenced row, writes 1/0 |
 | `http.send` | `connector`, `body`, optional `path` | queues a JSON request to an http connector; delivered after commit |
 | `connector.send` | `connector`, `body` | queues to any connector; its kind picks the transport (plugin transports) |
+| `connector.call` | `connector`, `op`, `input`, optional `ref` | calls operation `op` of a connector whose kind has a descriptor; `input` (an object; `@row.f` and `= expr` allowed) is checked against the operation's schema when the step runs, so a bad call refuses the action and queues nothing; delivered after commit |
 | `mail.send` | `connector`, `to`, `subject`, optional `text` | queues a letter; `{row.field}` placeholders in subject/text |
 
 Steps run inside one transaction; a block that refuses (not enough stock, no such row) rolls
 everything back and answers 400 with its message. Outgoing effects wait in the outbox and are
-delivered after the commit; `/outbox` shows every delivery with its status and a retry button.
+delivered after the commit; `/outbox` shows every delivery with its status and a retry button. A row queued by `connector.call` also records `op`, the answer and its mapped `result`.
 
 Delivery statuses: `queued` (waiting) → `sending` (claimed by one flush, request in flight) →
 `sent` or `failed` (`failed` gets the retry button, which sets it back to `queued`). A row is
@@ -302,6 +303,54 @@ the rule, served the same way a statically invalid graph is — not a crash.
 combination must be unique, not each field alone; on an edit that only submits one of the fields, the other's
 existing stored value is used for the check.
 Mail is recorded in the outbox (the stand has no SMTP); http is really sent.
+
+No secret goes in `app.json`: a string under a key like `key`, `token`, `secret`, `password` or
+`authorization`, or one shaped like `sk_…`, `Bearer …` or a JWT, is an error, and so is a
+credential or `{secret.*}` in a connector's `url` (the url is what `/outbox` and the trace show).
+Write `{secret.name}` where a value is needed; until the secret store exists a delivery that
+needs one fails with a clear message.
+
+### Connector descriptors
+
+A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed like a plugin
+(`"plugins": ["../../connectors/stripe/descriptor.json"]`); its `name` becomes the connector `kind`.
+
+```json
+{ "descriptor": 1, "name": "pay", "timeoutMs": 5000,
+  "config": { "type": "object", "required": ["host"], "properties": { "host": { "type": "string", "pattern": "^https://" } } },
+  "operations": { "charge": {
+      "idempotent": false,
+      "input":  { "type": "object", "required": ["amount"], "properties": { "amount": { "type": "integer", "minimum": 1 },
+                  "currency": { "type": "string", "default": "USD", "pattern": "^[A-Z]{3}$" } } },
+      "request": { "method": "POST", "url": "{config.host}/charges", "body": { "$": "input" } },
+      "output": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } },
+      "result": { "id": "$.id" } } } }
+```
+```json
+"connectors": { "pay": { "kind": "pay", "host": "https://pay.example" } }
+{ "block": "connector.call", "connector": "pay", "op": "charge", "input": { "amount": "= total * 100" } }
+```
+
+- A connector's keys are validated against the descriptor's `config` schema (closed unless it says
+  `additionalProperties: true`). `input` is validated against the operation's schema: unknown keys,
+  missing `required`, wrong types are refused. The checker judges literal values and the type of a
+  `@row.field` (`money` is a number, `int` an integer or number, `ref` an integer, text/enum/date a
+  string, `bool` a boolean); values only known at run time are judged when the step runs.
+- Schemas: `type` (`object array string integer number boolean null`), `properties`, `required`,
+  `additionalProperties` (false unless declared, once `properties` is given), `items`, `enum`, `format`
+  (`email date-time uri`), `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`; annotations `default`
+  (fills a missing input), `title`, `description`, `message`, `hint`. Any other keyword is an error.
+- Templates: `{config.x}`, `{input.x}`, `{secret.x}`, `{base}` in strings; `{"$": "input.x"}` for a whole
+  value of any type; `"..."` spreads an object. `{secret.*}` never in `url`. No expressions, no conditionals.
+- An operation says `idempotent: true|false` (no default). `timeoutMs` is at most 30000. `result` maps names
+  to `$.a.b[0]` paths of the answer and needs an `output` schema.
+- The outbox row of a call has `op`, the completed input as `payload`, and after delivery `response` (the
+  answer text, up to 16 KB), `result` and `drift`. An answer that does not fit `output` sets `drift` to 1 and
+  writes `contract_drift` to the trace; the row stays `sent` because the effect happened.
+- `http` is the built-in descriptor of today's connector: `"url"` (required), `"method"` (POST unless
+  set), `"headers"` merged over the JSON content type, `"timeout"` (3000 ms unless set). Its one
+  operation `send` takes `body` and `path`, so `connector.call { connector, op: "send", input: { body, path } }`
+  is `http.send`. Plugin code (`.mjs`) and descriptors (`.json`) coexist in one `plugins` list.
 
 ## Search
 

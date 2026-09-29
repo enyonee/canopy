@@ -273,6 +273,11 @@ Every connector follows one contract, so each new one is cheap and safe:
 - recorded responses for hermetic tests, and contract-drift detection when a provider's
   answer stops matching its schema.
 
+**Status:** the design is accepted and staged in [docs/CONNECTORS.md](docs/CONNECTORS.md); stage C1
+has landed (the descriptor format, its checker and engine, the `connector.call` block, `http` as a
+built-in descriptor, `drift` detection). Next: retries and the circuit breaker (C3), the secret
+store and sandbox/live mode (C2), inbound webhooks (C4), then the first providers.
+
 Import from an OpenAPI spec should cover the long tail. A settings screen for connectors and
 secrets means a non-programmer can connect an app to real services.
 
