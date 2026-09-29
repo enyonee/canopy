@@ -10,9 +10,9 @@
 
 | слой | модули | зачем |
 |---|---|---|
-| 0 | `fields.mjs`, `functions.mjs`, `transports.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/sqlite.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
-| 1 | `expr.mjs`, `spec.mjs`, `driver.mjs` | алгебра выражений и разбор спецификации поля; `driver.mjs` — `open(fileOrDriver)`, выбор драйвера хранилища |
-| 2 | `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
+| 0 | `fields.mjs`, `functions.mjs`, `transports.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/dialects.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
+| 1 | `expr.mjs`, `spec.mjs`, `driver/sqlite.mjs` | алгебра выражений и разбор спецификации поля; `driver/sqlite.mjs` — единственный исполнитель SQL, SQL-текст берёт у диалекта |
+| 2 | `driver.mjs`, `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
 | 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
 | 4 | `store.mjs`, `outbox.mjs` | хранилище (говорит с базой только через `this.drv`) и исходящий ящик |
 | 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
@@ -45,6 +45,15 @@
   IN-списков, чей текст почти не повторяется). `Store` держит драйвер в `this.drv`
   (4-й аргумент конструктора — свой драйвер), всё остальное в `store/` ходит только через
   него; пока синхронно, ничего не `await`-ится.
+  **S2, диалекты** — `runtime/driver/dialects.mjs` (лист, чистый текст без ввода-вывода):
+  объекты `sqlite` и `postgres` со всеми местами, где SQL зависит от движка: плейсхолдеры
+  (`ph/phs`: `?` или `$n`), `quote`, типы (`idType`, `colType`: `INTEGER` → `BIGINT`),
+  `insert`/`returning`, `upsert`, `like/likeArg/lowerEq`, `bucket(col, unit)`,
+  `order/collate` (NULLS, `COLLATE "C"` и tie-break по `id` — только в pg), `boolInt`,
+  `named/args` (`today`/`now`), SQL интроспекции схемы, `createTable/addColumn/createIndex`,
+  `indexName` (pg: 63 байта, усечение + хеш). Билдеры в `store/` берут диалект из
+  `this.drv.dialect` и сами не пишут SQLite-специфичных слов (арх-гейт); драйвер
+  исполняет то, что продиктовал диалект. В SQLite текст запросов не менял поведение.
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.

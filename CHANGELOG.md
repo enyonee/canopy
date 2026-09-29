@@ -5,6 +5,27 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Portable SQL and dialect hooks (PostgreSQL roadmap, stage S2).** New
+  `runtime/driver/dialects.mjs` (a pure leaf): a `sqlite` and a `postgres` dialect with every
+  hook the store builders need: placeholders (`?` / `$n`), `quote`, id and integer column types
+  (`BIGINT` identity on pg), insert-returning, `LOWER(..) LIKE .. ESCAPE`, date buckets,
+  NULL order and collation, boolean-to-int wrappers, upsert, schema introspection SQL and index
+  names. `query.mjs`, `aggsql.mjs`, `aggexpr.mjs`, `state.mjs`, `migrate.mjs` and `store.mjs`
+  build their SQL through `drv.dialect`; the SQLite driver takes its DDL and catalog queries
+  from it too. SQLite is still the only executor and behaves byte-identically: `IFNULL` is
+  `COALESCE`, every identifier of `_outbox`/`_session` is quoted (`user` is reserved on pg,
+  `updatedAt` folds on pg), booleans in compiled aggregates are `CASE .. THEN 1 ELSE 0` (no
+  engine boolean type). Nothing about ordering changed in SQLite; the `id` tie-break, `NULLS
+  FIRST/LAST` and `COLLATE "C"` exist in the postgres dialect only. SQLite keeps `strftime` for
+  date buckets (a `time` field accepts any text `Date` parses, which `SUBSTR` would not
+  normalise the same way); pg uses `SUBSTR`. SQLite index names are exactly today's; pg
+  names over 63 bytes are cut on a character boundary and end in an 8-digit hash, so a
+  restart finds the index it created.
+- Gates: `tests/dialect.test.mjs` (golden SQL for every builder shape per dialect, in
+  `tests/golden/`, pg text generated with no server and checked for `$n` numbering), an arch
+  gate "runtime/store** names no SQLite-only keyword", 27 mutations `S2:` and re-pointed old
+  ones.
+
 ## 0.2.0 (2026-09-29)
 
 Two roadmap items move: horizontal scaling (the outbox is safe under overlapping deliveries) and
