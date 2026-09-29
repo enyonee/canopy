@@ -1,11 +1,11 @@
 # R10 design: async Driver seam and PostgreSQL (README roadmap step 1)
 
-**Status: design accepted (option C4); S1 done in 0.2.x.** Status per stage:
+**Status: design accepted (option C4); S1 and S2 done in 0.2.x.** Status per stage:
 
 | stage | what | status |
 |---|---|---|
 | S1 | sync `Driver` seam (`runtime/driver/sqlite.mjs`, `runtime/driver.mjs`) | **done** (0.2.x) |
-| S2 | portable SQL and dialect hooks | not started |
+| S2 | portable SQL and dialect hooks (`runtime/driver/dialects.mjs`) | **done** (0.2.x) |
 | S3a-c | snapshot evaluation on prefetched data | not started |
 | S4a-d | await-first conversion | not started |
 | S5 | flip to an async driver | not started |
@@ -13,7 +13,7 @@
 | S7 | benchmark before/after, load test | not started |
 
 Sections below are the design as accepted; line numbers in section 1 cite v0.1.2 and
-predate S1.
+predate S1 and S2.
 
 Read-only analysis of canopy v0.1.2 (main). Nothing was run; sizes are estimates from
 line counts and call-site greps. Cites are `file:line` on current main.
@@ -144,11 +144,40 @@ Compatibility shim: yes, for SQLite only, and it is free by construction: a sync
 - Tests: 27 `store.db.*` sites (edges, store, store2, blocks, perf) use `store.drv.db` or `store.drv.columns/indexes`; perf.test.mjs:164 (monkeypatched `db.prepare` to count queries) switches to a driver query hook (`onQuery`), which S3 reuses. Mutations re-pointed: backfill (store.mjs:71), ROLLBACK (:167), DROP INDEX (migrate:65), exists/LOWER (:185), item-20 guards (:141,164); added: tx rollback in the driver, LRU eviction, `run().lastId`.
 - Behaviour byte-identical; JSON of the benchmark routes unchanged.
 
-**S2 - Portable SQL and dialect hooks (SQLite still the only executor).** ~+200/-60, ~9 files.
+**S2 - Portable SQL and dialect hooks (SQLite still the only executor). DONE.** ~+200/-60, ~9 files.
 - New `runtime/driver/dialects.mjs` (layer 0, pure): `sqlite` and `postgres` dialect objects: `placeholders`, `quote`, `idType`, `intType (BIGINT)`, `insertReturning`, `lowerLike`, `bucket(col, unit)`, `nullsOrder`, `boolCond`. Store builders call the dialect (query.mjs:28,65,194; aggsql.mjs:86; state.mjs:25).
 - Portable-by-construction rewrites in SQLite: `IFNULL`->`COALESCE`, quote every column in `_outbox`/`_session` DDL and DML, make aggsql booleans CASE-wrapped 0/1 instead of relying on SQLite's boolean integers, `ORDER BY ... , id` tie-break (see risks: must keep benchmark JSON identical, measure).
 - New `tests/dialect.test.mjs`: golden SQL text per dialect (pg text generated without a server), plus the arch gate "runtime/store/** contains no SQLite-only keyword" (list in section 6).
 - Mutations: LIKE/escape, month bucket, coalesce, tie-break, quoting.
+
+As built (where it differs from the plan above):
+- Hooks are `ph/phs` (placeholders), `quote`, `idType`, `colType` (`INTEGER` -> `BIGINT`), `insert` +
+  `returning`, `upsert`, `like/likeArg/lowerEq`, `bucket`, `order` + `collate`, `boolInt`,
+  `named/args` (the compiled aggregates' `today`/`now`), `createTable/addColumn/createIndex/dropIndex`,
+  `tablesSql/columnsSql/indexesSql` and `indexName`. The SQLite driver builds its DDL and catalog
+  queries from the same object; `Driver#dialect` is that object.
+- **No `id` tie-break in SQLite** (nothing about SQLite ordering changed). The tie-break (`, id ASC`),
+  `NULLS FIRST/LAST` (NULLs smallest) and `COLLATE "C"` are in the postgres dialect only. SQLite's own
+  order among equal keys is unspecified (it follows the plan: scan order, or an index read backwards),
+  so `id ASC` is the closest stable stand-in, not a reproduction. Grouped text in `aggregate` is
+  collated where it is selected (`SUBSTR(..) COLLATE "C" AS grp`), because an output alias cannot take a
+  `COLLATE` in `ORDER BY`.
+- **Date buckets: SQLite keeps `strftime`, pg uses `SUBSTR`.** They are not byte-identical in SQLite: a
+  `time` field accepts anything `Date` parses (`"March 5 2024"`, an offset), which `strftime` refuses
+  or converts to UTC and `SUBSTR` would cut as text. Changing the SQLite text would change answers.
+- **Booleans**: `compileBool` always yields 0/1 (`CASE WHEN .. THEN 1 ELSE 0 END`); `AND`/`OR`/`NOT` are
+  written over `<> 0` / `= 0` inside such a wrapper. An ordering comparison needs no NULL branch: NULL
+  falls to the `ELSE 0`. Same result in SQLite; strictly typed on pg.
+- **Named parameters**: the compiled aggregates bind `$today`/`$now`. SQLite takes them from one object
+  (first parameter); the postgres dialect numbers them `$1..$k` in plan order and the row values follow
+  (`$k+1..`), `args(names, named, vals)` builds that list. S6 only has to execute it.
+- Index names: SQLite `idx_<table>_<cols>` exactly as before; pg the same when it fits in 63 bytes,
+  otherwise the head cut on a character boundary plus `_` and a 32-bit FNV-1a hash of the whole name.
+- Not done here on purpose: `id`/`ref` type mismatches (row 16), result-type normalisation (19, 20) and
+  the `LOWER` Unicode difference (11, 12) are driver/S6 concerns; `.changes`/`lastInsertRowid` stay
+  behind `drv.run()`.
+- Proof: `tests/dialect.test.mjs` + `tests/golden/dialect.{sqlite,postgres}.sql`; the arch gate
+  "runtime/store** names no SQLite-only keyword"; 27 `S2:` mutations.
 
 **S3a - Snapshot evaluation (sync driver): plan + snapshot for derived fields.** ~+450/-200 runtime, +300 tests.
 - New `store/plan.mjs` (pure, layer with query/aggsql), new `store/snapshot.mjs`; `hydrate.mjs` becomes the loader (level-batched: hops, aggregates, derived closure); `store.mjs` `ctx/derived/hydrate` (:231-289) read from the snapshot; `labelOf`, `count` use it.
