@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../runtime/store.mjs';
+import { Snapshot } from '../runtime/store/snapshot.mjs';
 
 const BENCH_GRAPH = {
   app: 'bench',
@@ -164,8 +165,10 @@ test('a ref label reads only the label field, never the target row\'s other deri
   let derivedCalls = 0;
   const orig = store.derived;
   store.derived = function counted(...args) { derivedCalls++; return orig.apply(this, args); };
+  const snap = Snapshot.prototype.derived; // the snapshot path evaluates through this one
+  Snapshot.prototype.derived = function counted(...args) { derivedCalls++; return snap.apply(this, args); };
   let label;
-  try { label = store.labelOf('Customer', c); } finally { store.derived = orig; }
+  try { label = store.labelOf('Customer', c); } finally { store.derived = orig; Snapshot.prototype.derived = snap; }
   assert.equal(label, 'Solo');
   // Customer.orders/spent are both derived and both expensive (they aggregate
   // every one of this customer's orders) — labelOf must touch neither, only
