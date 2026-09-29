@@ -5,6 +5,38 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Delivery reliability (connector library, stage C3; roadmap "Horizontal scaling": retries and
+  background delivery).** A failed delivery is now classified: a network error, a timeout, `429` and
+  `5xx` are retryable, any other `4xx` is final. Only an operation with `idempotent: true` is retried;
+  a non-idempotent one that got no answer (a timeout, a reset: the request may have landed) ends in the
+  new status `unknown` and is never retried automatically, while one that certainly never left (DNS,
+  connection refused) may be. A retry puts the row back to `queued` with `nextAttemptAt = now +
+  min(capMs, baseMs·2^(attempts-1))`, less a deterministic jitter (from a hash of the idempotency key
+  and the attempt: no `Math.random`) and never less than `Retry-After`; after `max` attempts (default
+  5) it is `failed`. Descriptors may override with `retry` `{max, baseMs, capMs, jitter}` and
+  `breaker` `{threshold, cooldownMs, maxCooldownMs}` (checked, fail closed) and name the header that
+  carries the **idempotency key**, computed once when the row is queued (`idemKey`) and the same on every
+  retry and after a lease takeover (`idempotency: {header}`). A request's timeout is the descriptor's
+  `timeoutMs` (or the connector's `timeout`), never above half the lease. A persisted **circuit
+  breaker** per connector and mode (`_breaker`) opens after N consecutive retryable failures (`4xx`
+  never counts), spares the provider (its rows are not claimed, their `nextAttemptAt` moves to the end of
+  the cooldown, no attempt is counted), lets exactly one probe through after the cooldown (an atomic
+  claim) and doubles the cooldown, up to a maximum, when the probe fails. A background **flusher**
+  (interval plus a one-shot to the earliest `nextAttemptAt`, unref'd, stopped on close) delivers due
+  retries without a request; it is off under `AG_NO_TIMERS`/`noTimers`, so `verify` and the tests stay
+  deterministic. One injectable clock `{now, setTimer, clear}` (`serve({clock})`) runs through the flush,
+  the delivery, the request timeout and the flusher; the tests use a fake clock with `advance(ms)`, and
+  a new architecture gate bans wall-clock reads and `Math.random` in the delivery modules. `/outbox`
+  shows `unknown` rows with "Mark sent" (`POST /outbox/:id/sent`) and "Retry" (which now resets attempts
+  and the schedule), the time of the next attempt of a waiting row, and the state of each breaker.
+  `_outbox` gains `nextAttemptAt` and `idemKey` and a `_breaker` table is created, all in place in
+  existing databases and quoted through the dialect. New: `runtime/connectors/backoff.mjs` (a pure leaf),
+  `runtime/settle.mjs`, `runtime/clock.mjs`. Gates: `tests/backoff.test.mjs` (tables, jitter determinism,
+  a property test of the breaker over random event sequences), `tests/reliability.test.mjs` (a scripted
+  network and a fake clock: schedule, caps, Retry-After, `unknown`, no retry on 4xx, breaker
+  open/half-open/probe/close/reopen with doubling, flusher, lease and retry, old database, an
+  outage-recovery cycle on the server), 72 `C3:` mutations.
+
 ## 0.3.0 (2026-09-29)
 
 Two roadmap items move: the connector library starts (stage C1 of `docs/CONNECTORS.md`: a

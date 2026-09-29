@@ -392,13 +392,18 @@ test('the flusher does not overlap itself, survives a failing flush, and stays s
   const step = t.clock.advance(1000);
   await Promise.resolve();
   assert.equal(net.calls.length, 1);
-  const overlapping = t.clock.advance(0);
-  await overlapping;
-  assert.equal(net.calls.length, 1);
+  const later = queue(t.store);
+  t.store.outboxUpdate(later, { nextAttemptAt: t.clock.now() + 10 });
+  f.arm();
+  await t.clock.advance(10);
+  assert.equal(net.calls.length, 1, 'woken while a flush is running: it does not start another');
+  const distant = queue(t.store);
+  t.store.outboxUpdate(distant, { nextAttemptAt: t.clock.now() + 5000 });
   f.stop();
   release();
   await step;
-  assert.equal(t.clock.pending(), 0, 'stopped while busy: nothing is armed again');
+  assert.equal(t.clock.pending(), 0, 'stopped while busy: nothing is armed again, though a retry is still waiting');
+  assert.equal(t.store.outboxGet(later).status, 'queued');
 
   const broken = make();
   const bad = flusher(broken, { args: { intervalMs: 1000, store: { outboxDue() { throw new Error('db gone'); }, outboxNextDue: () => null } } });

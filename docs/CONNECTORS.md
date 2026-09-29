@@ -1,8 +1,9 @@
 # Canopy connector library: design (v0.2.0 baseline)
 
-**Status: design accepted (maintainer decisions, section 9). Stage C1 is done** (descriptor, checker,
-engine, `connector.call`, `http` on it; see "C1 as built" at the end). C2 to C7 are next, in the order of
-section 9.
+**Status: design accepted (maintainer decisions, section 9). Stages C1 and C3 are done** (C1: descriptor,
+checker, engine, `connector.call`, `http` on it; C3: retries with backoff, `unknown`, timeouts, circuit
+breaker, background flusher, injectable clock; see "C1 as built" and "C3 as built" at the end). C2, C4 to C7
+are next, in the order of section 9.
 
 The study below was read-only. All line numbers refer to /home/vyacheslav/code/canopy at main, before C1.
 
@@ -301,3 +302,36 @@ Where the code differs from, or narrows, the sketch above:
 - **Not yet:** modes, sandbox rules, idempotency keys, retries, `unknown` status, settlement events,
   inbound. The columns for them (`mode`, `idemKey`, `nextAttemptAt`, `settledAt`, `refEntity`, `refId`)
   are added by the stage that needs them.
+
+## 11. C3 as built
+
+Where the code differs from, or narrows, section 4:
+- **Modules.** `runtime/connectors/backoff.mjs` (a pure leaf: `classify`, `decide`, `delayFor`, `retryAfterMs`,
+  `breakerStep`, `idemKeyOf`, `checkPolicy`), `runtime/settle.mjs` (turns what a transport returned or threw
+  into the outbox patch and the breaker event), `runtime/clock.mjs` (`systemClock`, `resolveClock`); `outbox.mjs`
+  keeps `deliver`/`flush`, `startFlusher` is in `server.mjs`, the breaker and queue queries are in `store/state.mjs`.
+- **Columns and tables.** `_outbox` gains `nextAttemptAt` and `idemKey` (added in place to old databases, like
+  `claimedAt`); `_breaker(key, connector, mode, state, failures, openUntil, cooldownMs, probeClaimedAt)` is new,
+  keyed by `connector|mode`, all names quoted through the dialect. `cooldownMs` is stored so the doubling survives
+  a restart. `settledAt`, `mode` and `refEntity/refId` belong to stages that need them (C2, settlement).
+- **Only `idempotent` gates a retry.** An operation with an `idempotency` header is still retried only when it
+  says `idempotent: true`; declaring the header is how the key reaches the provider, not a promise of safety.
+  So a Stripe-style POST with a key is written `idempotent: true` by its author, who knows the provider dedups.
+- **Faults.** The engine tags a request that throws with why (`timeout`, `unsent`, `net`); anything thrown
+  before the request exists (a bad template, a missing secret) or by a plugin transport is final and tells the
+  breaker nothing, so a plugin that returns `failed` without a code behaves as before.
+- **The breaker's mode** is `live` until C2 supplies `opts.mode`. A `4xx` counts as a sign of life: it resets
+  the failure count (and closes a half-open breaker). A probe whose outcome tells nothing (a plugin failure with
+  no code) leaves the breaker half-open until its lease (the outbox lease) runs out.
+- **Probe atomicity.** The claim is one `UPDATE` that matches only the state the caller read; failures and
+  successes are read-modify-write, atomic within one process. On pg with several instances they need
+  `SELECT … FOR UPDATE` (S6), like the outbox claim.
+- **The clock.** `serve({ clock })` reaches `flush`, `deliver`, the engine's timeout timer (an `AbortController`
+  fired by `clock.setTimer`, so a fake clock can time a request out) and `startFlusher`. `flush({ now })` still
+  works and overrides only the reading of the time. `tests/arch.test.mjs` bans wall-clock reads and
+  `Math.random` in the delivery modules.
+- **The flusher.** A self-rearming interval timer plus a one-shot to the earliest `nextAttemptAt` still ahead,
+  re-armed after every tick; a retry scheduled by a request's own flush waits for the next tick (at most the
+  interval). It does not yet re-fire unsettled events (there are none until settlement lands).
+- **Operator.** `POST /outbox/:id/retry` resets `attempts` and `nextAttemptAt` and flushes (an open breaker still
+  holds the row back); `POST /outbox/:id/sent` settles only an `unknown` row, guarded in the `UPDATE`.

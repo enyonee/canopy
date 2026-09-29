@@ -117,7 +117,9 @@ What the format covers ([docs/FORMAT.md](docs/FORMAT.md) is the full reference):
   `dashboards` with cards, grouped tables and SVG charts; `pages` with live sections; site-wide
   `search`. Every route also answers JSON on `Accept: application/json`.
 - **Effects**: an outbox. HTTP, mail, SMS/WhatsApp and a sandbox card gateway are delivered only
-  after the transaction commits, with status and retry at `/outbox`.
+  after the transaction commits, with status and retry at `/outbox`. A failed delivery is retried with
+  backoff when its operation is idempotent; a non-idempotent call that got no answer is `unknown` and waits
+  for an operator; a provider that keeps failing trips a circuit breaker.
 - **Plugins**: ES modules next to an app, registering field kinds, functions, blocks,
   transports or **client widgets** under the same contracts as the built-ins. Game rules
   (chess legality, poker hand ranking, 2048 merges) live in server-side plugin blocks. A widget
@@ -199,7 +201,7 @@ failing test in `tests/arch.test.mjs`, part of `npm test`.
 - **A product UI.** The derived screens are a scaffold, not a designed interface. Widgets cover
   interactive cores (boards, canvases, editors); bespoke layouts are out of scope.
 - **Conditional permissions per row by parent status** (e.g. "order lines are frozen once the
-  order is placed"), background delivery (the outbox flushes within the request; see the roadmap), real SMTP or
+  order is placed"), delivery by several instances (retries and the breaker run in one process; see the roadmap), real SMTP or
   SMS gateways (the outbox records messages; HTTP is really sent).
 - **Isolation for plugin code.** Plugins are trusted modules. The closed part is the graph.
 
@@ -289,7 +291,10 @@ process on one core sustains ~1.8k reads/s and ~1.7k writes/s at 50 concurrent c
 - **outbox delivery by workers**: the claim part is done (a row is claimed by one atomic
   `UPDATE` before delivery, `queued → sending → sent|failed`, a 60 s lease recovers rows of a dead
   process: exactly-once, at-least-once across a crash). Next: claim with `FOR UPDATE SKIP LOCKED`
-  on Postgres, keep delivering after the request returns, retry with backoff;
+  on Postgres. Done: delivery continues after the request returns (a background flusher on an injectable
+  clock), retries with exponential backoff, deterministic jitter and `Retry-After`, an `unknown` status for a
+  non-idempotent call that got no answer, per-descriptor timeouts, and a persisted circuit breaker per
+  connector. Next: the same flusher and breaker across instances, which needs the pg driver's row locks;
 - **schedules with one leader** (an advisory lock), so a timer fires once per cluster;
 - **files in object storage** (S3-compatible) instead of the app directory;
 - **many apps per process** for dense hosting. Each process costs ~75 MB of Node baseline, and

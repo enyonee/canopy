@@ -195,8 +195,9 @@ Steps run inside one transaction; a block that refuses (not enough stock, no suc
 everything back and answers 400 with its message. Outgoing effects wait in the outbox and are
 delivered after the commit; `/outbox` shows every delivery with its status and a retry button. A row queued by `connector.call` also records `op`, the answer and its mapped `result`.
 
-Delivery statuses: `queued` (waiting) → `sending` (claimed by one flush, request in flight) →
-`sent` or `failed` (`failed` gets the retry button, which sets it back to `queued`). A row is
+Delivery statuses: `queued` (waiting, possibly for its `nextAttemptAt`) → `sending` (claimed by one
+flush, request in flight) → `sent`, `failed` or `unknown`. `failed` and `unknown` get a retry button
+(it starts the row over: `queued`, attempts 0, no wait); `unknown` also gets "mark sent". A row is
 claimed by one atomic update before it is delivered, so overlapping flushes (two requests
 committing together, later several instances) never deliver one row twice. A row that stays in
 `sending` for longer than the 60 s lease (the process died mid-delivery) is claimed again. So
@@ -204,6 +205,33 @@ delivery is exactly-once, except across a crash, where it is at-least-once: a co
 send an idempotency key (the outbox row id, `@delivery`) that its receiver can deduplicate on.
 A delivery that outlives its lease and finds the row re-claimed does not write its result: the
 newer claim owns the row.
+
+**Retries.** What an attempt came to decides the row (`runtime/connectors/backoff.mjs`): a 2xx is
+`sent`; a network error, a timeout, `429` and `5xx` are retryable; any other answer (`4xx`) is final
+and `failed`. Only an operation with `idempotent: true` is retried after an answer or after a request
+that may have arrived. A non-idempotent operation that got a `5xx`/`429` is `failed` (the provider
+answered); one that got **no answer** (a timeout, a connection reset: the request may have landed) is
+`unknown`, never retried by the runtime, and waits for an operator ("mark sent" if the effect happened,
+"retry" if not). A request that certainly never left (DNS, connection refused) is retried whatever the
+operation. A retry puts the row back to `queued` with `nextAttemptAt` (epoch ms) `= now + min(capMs,
+baseMs · 2^(attempts−1))`, less a deterministic jitter (up to `jitter` of it, from a hash of the row's
+idempotency key and the attempt, never random), and never less than the answer's `Retry-After` (itself
+capped at `capMs`). After `max` attempts the row is `failed`. Defaults: `max` 5 (the first attempt
+counts), `baseMs` 1000, `capMs` 60000, `jitter` 0.2. A background flusher (every 5 s, and once at the
+earliest `nextAttemptAt`) delivers due retries without a request; it is off under `AG_NO_TIMERS`, where
+only a request or the retry button delivers.
+
+The **idempotency key** of a row (`idemKey`, 32 hex digits: a hash of the app, connector, row id and
+creation time) is computed once when the row is queued and never changes; every retry and a delivery
+after a lease takeover send the same one, in the header a descriptor names under `idempotency`.
+
+**Circuit breaker.** Per connector and mode (`_breaker`): after `threshold` consecutive retryable
+failures (default 5; a `4xx` never counts, any answer that is not retryable resets the count) the breaker
+opens for `cooldownMs` (30000). While it is open the flusher does not claim the connector's rows; it
+moves their `nextAttemptAt` to the end of the cooldown and counts no attempt. After the cooldown exactly
+one call is let through (an atomic claim, the probe): if it succeeds the breaker closes, if it fails the
+breaker reopens with the cooldown doubled up to `maxCooldownMs` (600000). `/outbox` lists the state of each
+breaker.
 
 A row that `db.create`/`db.createRow`/`db.ensure` makes fires its entity's own `created` event,
 exactly like an HTTP create — so `events` sees every row however it was made, including one a
@@ -348,8 +376,14 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   origin (scheme, host, port) may come only from those: an `{input.*}` or `{key}` before the first `/` after
   the host (`https://{input.host}/x`, `{base}{input.id}`) is a descriptor error. Header values that hold a
   CR or LF (from input or config) fail the delivery.
-- An operation says `idempotent: true|false` (no default). `timeoutMs` is at most 30000. `result` maps names
+- An operation says `idempotent: true|false` (no default). `timeoutMs` is at most 30000 (half the lease); a
+  connector's own `timeout` may not raise it past that either. `result` maps names
   to `$.a.b[0]` paths of the answer and needs an `output` schema.
+- Reliability keys of a descriptor (top level, all optional; see "Retries" above): `retry`
+  `{ max 1-20, baseMs, capMs, jitter 0-1 }` and `breaker` `{ threshold, cooldownMs, maxCooldownMs }` override the
+  defaults (`capMs` may not be below `baseMs`, nor `maxCooldownMs` below `cooldownMs`); `idempotency`
+  `{ "header": "Idempotency-Key" }` sends the row's key in that request header. `{key}` in a template is
+  still an error: the header is the only way the key leaves.
 - The outbox row of a call has `op`, the completed input as `payload`, and after delivery `response` (the
   answer text, up to 16 KB), `result` and `drift`. An answer that does not fit `output` sets `drift` to 1 and
   writes `contract_drift` to the trace; the row stays `sent` because the effect happened.
@@ -371,7 +405,7 @@ the `/search` page itself.
 
 ## Routes the runtime serves
 
-`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `/outbox`, `POST /outbox/:id/retry` · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
+`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
 
 Every successful POST answers 303 to a page with `?ok=<flash>`; validation failures answer 400 with the form and the messages; refusals 403; a transition from the wrong status 409.
 
