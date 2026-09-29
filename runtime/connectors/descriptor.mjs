@@ -4,7 +4,7 @@
 // a descriptor written for a later stage cannot half-work today. It returns
 // [[path, message, hint?]], empty when the descriptor is usable.
 import { checkSchema } from './schema.mjs';
-import { refs, pathSteps } from './template.mjs';
+import { refs, pathSteps, originProblem } from './template.mjs';
 
 // The longest an operation may wait: half the outbox lease (runtime/outbox.mjs LEASE_MS),
 // so a slow provider cannot outlive the claim on its row and be delivered twice.
@@ -39,7 +39,12 @@ function checkRequest(req, path, ctx) {
   if (!isObject(req)) return [[path, 'an operation needs a "request" object']];
   const out = unknownKeys(req, REQUEST, path);
   if (typeof req.url !== 'string') out.push([`${path}/url`, 'a request needs "url" as a template string']);
-  else out.push(...checkRefs(req.url, `${path}/url`, { ...ctx, noSecret: true }));
+  else {
+    const bad = checkRefs(req.url, `${path}/url`, { ...ctx, noSecret: true });
+    out.push(...bad);
+    const origin = bad.length ? null : originProblem(req.url);
+    if (origin) out.push([`${path}/url`, origin, 'https://{config.host}/items/{input.id}']);
+  }
   if (req.method !== undefined) {
     if (typeof req.method !== 'string') out.push([`${path}/method`, '"method" is a string']);
     else if (!req.method.includes('{') && !METHODS.includes(req.method)) out.push([`${path}/method`, `unsupported method "${req.method}"`, METHODS.join(', ')]);

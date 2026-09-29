@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { prepare, buildRequest, mapResponse, deliverRow, synthesize, DEFAULT_TIMEOUT_MS, RESPONSE_CAP } from '../runtime/connectors/engine.mjs';
 import { validate } from '../runtime/connectors/schema.mjs';
 import { checkDescriptor } from '../runtime/connectors/descriptor.mjs';
+import { originProblem } from '../runtime/connectors/template.mjs';
 import { BUILTIN } from '../runtime/connectors/builtin.mjs';
 import { TRANSPORTS } from '../runtime/transports.mjs';
 import { fakeFetch } from './helpers.mjs';
@@ -183,17 +184,51 @@ test('http: the configuration is checked with the same words as before', () => {
   assert.equal(TRANSPORTS.http.summary, 'a JSON request to "url" (POST by default) with optional "headers" and "timeout"');
 });
 
-test('http as an operation: "send" takes a body and a path; the request is the connector\'s url plus the path', async () => {
+test('http as an operation: "send" takes a body; the request goes to the connector\'s url (no input can extend it)', async () => {
   const c = { kind: 'http', url: 'http://s.test/h', method: 'PUT' };
-  assert.deepEqual(prepare(BUILTIN.http, c, 'send', { body: { a: 1 }, path: '/x' }), { input: { body: { a: 1 }, path: '/x' }, target: 'http://s.test/h/x' });
+  assert.deepEqual(prepare(BUILTIN.http, c, 'send', { body: { a: 1 } }), { input: { body: { a: 1 } }, target: 'http://s.test/h' });
   assert.deepEqual(prepare(BUILTIN.http, c, 'send', {}), { input: {}, target: 'http://s.test/h' });
-  assert.throws(() => prepare(BUILTIN.http, c, 'send', { path: 5, bogus: 1 }), /input\/path: must be a string; input\/bogus: unknown property/);
+  assert.throws(() => prepare(BUILTIN.http, c, 'send', { path: '/x' }), /input\/path: unknown property "path"/);
   const net = fakeFetch();
-  const patch = await TRANSPORTS.http.deliver({ id: 1, op: 'send', target: 'http://s.test/h/x', payload: { body: { a: 1 }, path: '/x' } }, c, { fetchImpl: net.fetchImpl });
+  const patch = await TRANSPORTS.http.deliver({ id: 1, op: 'send', target: 'http://s.test/h', payload: { body: { a: 1 } } }, c, { fetchImpl: net.fetchImpl });
   assert.deepEqual(patch, { code: 200, status: 'sent', error: null });
-  assert.deepEqual([net.calls[0].url, net.calls[0].method, net.calls[0].body], ['http://s.test/h/x', 'PUT', { a: 1 }]);
+  assert.deepEqual([net.calls[0].url, net.calls[0].method, net.calls[0].body], ['http://s.test/h', 'PUT', { a: 1 }]);
   const get = fakeFetch();
   await TRANSPORTS.http.deliver({ id: 2, op: 'send', payload: {} }, { url: 'http://s.test', method: 'GET' }, { fetchImpl: get.fetchImpl });
   assert.equal(get.calls[0].body, null, 'no body was sent');
   assert.deepEqual(validate(BUILTIN.http.operations.send.input, { body: null }), []);
+});
+
+// --- what data may not do to a request ------------------------------------------------------------
+
+const urlOp = (url, headers) => ({ descriptor: 1, name: 'u', base: '{config.host}', config: { type: 'object', properties: { host: { type: 'string' } } },
+  operations: { get: { idempotent: true, input: { type: 'object', properties: { id: { type: 'string' }, h: { type: 'string' } } }, request: { method: 'GET', url, headers } } } });
+const U = { kind: 'u', host: 'https://api.test' };
+const target = (input, url = '{base}/items/{input.id}/x') => prepare(urlOp(url), U, 'get', input).target;
+
+test('an input in a url is percent-encoded whole: it cannot leave its segment', () => {
+  assert.equal(target({ id: '42/../../admin?x=1#' }), 'https://api.test/items/42%2F..%2F..%2Fadmin%3Fx%3D1%23/x');
+  assert.equal(target({ id: '..' }), 'https://api.test/items/../x', 'a bare dot segment is the operator\'s to avoid; slashes cannot build one');
+  assert.equal(target({ id: '100%' }), 'https://api.test/items/100%25/x');
+  assert.equal(target({ id: 'a b&c=d' }), 'https://api.test/items/a%20b%26c%3Dd/x');
+  assert.equal(target({ id: 'Zażółć/日本' }), 'https://api.test/items/Za%C5%BC%C3%B3%C5%82%C4%87%2F%E6%97%A5%E6%9C%AC/x');
+  assert.equal(target({ id: 'k' }, '{base}/s?q={input.id}&r=1'), 'https://api.test/s?q=k&r=1');
+  assert.equal(target({}, '{base}/items/{input.id}'), 'https://api.test/items/', 'absent is empty');
+  assert.equal(new URL(target({ id: 'x/../../../etc?a#b' })).origin, 'https://api.test');
+});
+
+test('an input may never choose the host: the descriptor checker rejects it, and so does the origin rule', () => {
+  const bad = (url) => checkDescriptor(urlOp(url)).map(([, m]) => m).join('|');
+  for (const url of ['https://{input.id}/x', 'https://{input.id}.evil.test/x', '{base}{input.id}', 'https://api.test{input.id}', 'https://api.test:{input.id}/x', '{input.id}/x', 'https://x.test?{input.id}', 'https://x.test'.concat('{input.id}')])
+    assert.match(bad(url), /data must never choose where the request goes/, url);
+  for (const url of ['https://api.test/{input.id}', '{base}/items/{input.id}', '{config.host}/a?q={input.id}', 'https://{config.host}/x', '{base}/x']) assert.equal(bad(url), '', url);
+  assert.equal(originProblem('https://a.test/{key}'), null);
+  assert.match(originProblem('https://a.test{key}'), /after the first "\/"/);
+});
+
+test('an input cannot put a line break in a header', () => {
+  const d = urlOp('{base}/x', { 'x-h': '{input.h}' });
+  assert.equal(buildRequest(d, U, 'get', { h: 'fine' }).headers['x-h'], 'fine');
+  for (const h of ['a\r\nX-Evil: 1', 'a\nb', 'a\rb']) assert.throws(() => buildRequest(d, U, 'get', { h }), /header "x-h" holds a line break/);
+  assert.throws(() => buildRequest(urlOp('{base}/x', { '...': { $: 'config.hh' } }), { ...U, hh: { 'x\nk': '1' } }, 'get', {}), /holds a line break/);
 });

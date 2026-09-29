@@ -731,6 +731,18 @@ const MUTATIONS = [
   { name: "C1: the delivery does not pass its trace to the transport", file: "runtime/outbox.mjs",
     find: "{ fetchImpl, trace }));",
     replace: "{ fetchImpl }));" },
+  { name: "C1: an input in a url is not percent-encoded", file: "runtime/connectors/template.mjs",
+    find: "? encodeURIComponent(v) : v;",
+    replace: "? v : v;" },
+  { name: "C1: an input may choose the host (descriptor check off)", file: "runtime/connectors/descriptor.mjs",
+    find: "if (origin) out.push(",
+    replace: "if (false) out.push(" },
+  { name: "C1: an input inside the origin is not noticed by the origin rule", file: "runtime/connectors/template.mjs",
+    find: "return end < 0 || first < end ?",
+    replace: "return end < 0 ?" },
+  { name: "C1: a line break in a header is sent", file: "runtime/connectors/engine.mjs",
+    find: "if (/[\\r\\n]/.test(k) || /[\\r\\n]/.test(String(v))) throw",
+    replace: "if (false) throw" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

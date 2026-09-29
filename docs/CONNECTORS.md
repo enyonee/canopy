@@ -285,6 +285,11 @@ Where the code differs from, or narrows, the sketch above:
   validated when the step runs; the row's `payload` is that input and its `target` the built url. `ref` is
   accepted and shape-checked (`"@row"`, `"@found"`), and has no effect yet: the events that use it arrive
   with settlement (section 2.3).
+- **URL safety (added after review).** `{input.*}` and `{key}` in a `url` are percent-encoded with
+  `encodeURIComponent`; `{config.*}`, `{base}` and literals stay raw. The descriptor checker rejects a url
+  template where an input or key would sit in the origin (before the first `/` after the host). Header
+  values with CR/LF fail the delivery. Consequently `http`'s `send` has no `path` input (the legacy
+  `http.send` block still appends its `path` as before: its author writes it into the graph).
 - **Secrets.** `{secret.x}` may appear in headers and bodies, never in `url`/`method`/`base`. There is no
   store: delivery fails closed with `secret "x" cannot be resolved: the secret store is not available yet`
   (C2 supplies `opts.secret`). `app.json` may not hold a secret: a string under a key matching

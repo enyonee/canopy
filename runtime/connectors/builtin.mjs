@@ -28,10 +28,10 @@ export const BUILTIN = {
     operations: {
       send: {
         idempotent: false,
-        input: { type: 'object', properties: { body: {}, path: { type: 'string' } } },
+        input: { type: 'object', properties: { body: {} } },
         request: {
           method: '{config.method}',
-          url: '{config.url}{input.path}',
+          url: '{config.url}',
           headers: { 'content-type': 'application/json', '...': { $: 'config.headers' } },
           body: { $: 'input.body' },
         },

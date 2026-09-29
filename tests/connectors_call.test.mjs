@@ -205,7 +205,7 @@ const graphOf = (dir) => {
       { name: 'charge', in: 'Order', confirm: 'charged', do: [{ block: 'connector.call', connector: 'p', op: 'charge', input: { amount: '= qty * 100', ref: '@row.ref', total: '@row.total' } }] },
       { name: 'secured', in: 'Order', confirm: 'queued', do: [{ block: 'connector.call', connector: 'p', op: 'secured', input: {} }] },
       { name: 'legacy', in: 'Order', confirm: 'queued', do: [{ block: 'http.send', connector: 'hook', body: { r: '@row.ref' }, path: '/x' }] },
-      { name: 'viaHttp', in: 'Order', confirm: 'queued', do: [{ block: 'connector.call', connector: 'hook', op: 'send', input: { body: { r: '@row.ref' }, path: '/y' } }] },
+      { name: 'viaHttp', in: 'Order', confirm: 'queued', do: [{ block: 'connector.call', connector: 'hook', op: 'send', input: { body: { r: '@row.ref' } } }] },
     ] };
 };
 const session = async (respond) => {
@@ -281,11 +281,11 @@ test('http.send still queues a legacy row (no op) and http through connector.cal
     await s.post(`/Order/${order}/action/legacy`, {});
     await s.post(`/Order/${order}/action/viaHttp`, {});
     const rows = s.app.store.outbox().reverse();
-    assert.deepEqual(rows.map((r) => [r.kind, r.op, r.target, r.status]), [['http', null, 'http://sink.test/h/x', 'sent'], ['http', 'send', 'http://sink.test/h/y', 'sent']]);
+    assert.deepEqual(rows.map((r) => [r.kind, r.op, r.target, r.status]), [['http', null, 'http://sink.test/h/x', 'sent'], ['http', 'send', 'http://sink.test/h', 'sent']]);
     assert.deepEqual(rows[0].payload, { r: 'R-1' });
-    assert.deepEqual(rows[1].payload, { body: { r: 'R-1' }, path: '/y' });
-    assert.deepEqual(sent.map((c) => [c.url, c.init.method, c.init.body]), [['http://sink.test/h/x', 'POST', '{"r":"R-1"}'], ['http://sink.test/h/y', 'POST', '{"r":"R-1"}']]);
-    assert.match((await s.get('/outbox')).html, /sink\.test\/h\/y/, 'the outbox screen still lists them');
+    assert.deepEqual(rows[1].payload, { body: { r: 'R-1' } });
+    assert.deepEqual(sent.map((c) => [c.url, c.init.method, c.init.body]), [['http://sink.test/h/x', 'POST', '{"r":"R-1"}'], ['http://sink.test/h', 'POST', '{"r":"R-1"}']]);
+    assert.match((await s.get('/outbox')).html, /sink\.test\/h/, 'the outbox screen still lists them');
   } finally { s.close(); }
 });
 
