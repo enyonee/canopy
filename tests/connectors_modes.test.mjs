@@ -15,7 +15,7 @@ import { Store } from '../runtime/store.mjs';
 import { flush, deliver } from '../runtime/outbox.mjs';
 import { serve } from '../runtime/server.mjs';
 import { main } from '../runtime/cli.mjs';
-import { fakeClock, boot, tmpDir, tmpGraph } from './helpers.mjs';
+import { fakeClock, boot, tmpDir, tmpGraph, rows } from './helpers.mjs';
 
 const KEY = 'sk_live_TOPSECRET-1234';
 const PREV = 'sk_live_OLDSECRET-5678';
@@ -331,7 +331,8 @@ test('redaction, end to end: after deliveries with secrets nothing on the server
     assert.deepEqual(scan(KEY, page.html, s.trace(), s.app.store.outbox(), files), []);
     const failedNow = (await s.get('/outbox')).html;
     assert.match(failedNow, /Connector modes/);
-    assert.match(failedNow, /<td>p<\/td><td>sbx<\/td><td><span class="status">live<\/span><\/td><td>sandbox, live<\/td>/);
+    assert.match(failedNow, /<li><b>p<\/b> \(sbx\): <span class="status">live<\/span> <span class="muted">offers sandbox, live<\/span><\/li>/);
+    assert.equal(rows(failedNow).length, s.app.store.outbox().length, 'the modes are not rows of the outbox table');
   } finally { s.close(); }
 });
 
@@ -342,7 +343,7 @@ test('/outbox shows each connector with its mode and the modes it offers; no con
   fs.writeFileSync(path.join(dir, 'sbx.json'), JSON.stringify(SBX));
   const s = await boot(tmpGraph({ app: 'modes', plugins: [path.join(dir, 'sbx.json')], data: { A: { n: 'text' } }, connectors: { p: { kind: 'sbx', host: 'https://x.test' }, web: { kind: 'http', url: 'https://h.test' }, letters: { kind: 'mail' } } }));
   try {
-    const cell = (html, name) => new RegExp(`<td>${name}</td><td>(\\w+)</td><td><span class="status">(\\w+)</span></td><td>([^<]*)</td>`).exec(html).slice(1);
+    const cell = (html, name) => new RegExp(`<li><b>${name}</b> \\((\\w+)\\): <span class="status">(\\w+)</span> <span class="muted">offers ([^<]*)</span></li>`).exec(html).slice(1);
     let html = (await s.get('/outbox')).html;
     assert.deepEqual([cell(html, 'p'), cell(html, 'web'), cell(html, 'letters')], [['sbx', 'sandbox', 'sandbox, live'], ['http', 'live', 'live'], ['mail', 'sandbox', 'sandbox']]);
     fs.writeFileSync(path.join(s.dir, 'deploy.json'), JSON.stringify({ connectors: { p: 'live' } }));
