@@ -120,15 +120,57 @@ function findFunctionOpenBraces(masked) {
 // as using what they forward). Dynamic import() of a non-literal path (the
 // plugin loader) is deliberately not part of the static module graph.
 // ---------------------------------------------------------------------------
-function parseImportSpecifiers(src) {
-  const specs = [];
-  const re = /\b(?:import|export)\b[^;]*?\bfrom\s+['"]([^'"]+)['"]/g;
-  let m;
-  while ((m = re.exec(src))) specs.push(m[1]);
-  // Bare `import 'x'` / dynamic `import('x')` with a literal path also count.
-  for (const m2 of src.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(m2[1]);
-  return specs;
+// Statements are located on the MASKED text (so `import`/`export` inside a string or comment never
+// counts), but the specifier is read from the ORIGINAL source at the same offset: masking blanks the
+// literal itself, and it is same-length, so offsets line up.
+function literalAt(src, idx, re) {
+  const r = new RegExp(re.source, 'y');
+  r.lastIndex = idx;
+  const m = r.exec(src);
+  return m ? m[2] : null;
 }
+function parseImportSpecifiers(masked, src) {
+  const found = [];
+  // `import x from 'y'`, `import {a,\n b} from 'y'`, `import * as n from 'y'`, `export ... from 'y'`
+  for (const m of masked.matchAll(/\b(?:import|export)\b[\w$*{},\s]*?\bfrom\b/g)) {
+    const spec = literalAt(src, m.index + m[0].length, /\s*(['"])([^'"\n]+)\1/);
+    if (spec !== null) found.push([m.index, spec]);
+  }
+  // bare `import 'y'`
+  for (const m of masked.matchAll(/\bimport\b/g)) {
+    const spec = literalAt(src, m.index + m[0].length, /\s*(['"])([^'"\n]+)\1/);
+    if (spec !== null) found.push([m.index, spec]);
+  }
+  // dynamic `import('y')` with a literal path
+  for (const m of masked.matchAll(/\bimport\s*\(/g)) {
+    const spec = literalAt(src, m.index + m[0].length, /\s*(['"])([^'"\n]+)\1(?=\s*\))/);
+    if (spec !== null) found.push([m.index, spec]);
+  }
+  return found.sort((x, y) => x[0] - y[0]).map(([, spec]) => spec);
+}
+
+test('parseImportSpecifiers reads specifiers from the original source, ignores imports in strings and comments', () => {
+  const src = [
+    "import a from './one.mjs';",
+    "import {",
+    "  b,",
+    "  c as d,",
+    "} from './two.mjs';",
+    "import * as n from 'node:fs';",
+    "import './bare.mjs';",
+    "export { e } from \"./three.mjs\";",
+    "export * from './four.mjs';",
+    "const lazy = await import('./five.mjs');",
+    "const dyn = await import(pathVar);",
+    "const s = \"import x from './fake-string.mjs'\";",
+    "const t = `import('./fake-template.mjs')`;",
+    "// import y from './fake-comment.mjs'",
+    "/* export { z } from './fake-block.mjs' */",
+    "export const k = 1;",
+  ].join('\n');
+  assert.deepEqual(parseImportSpecifiers(mask(src), src),
+    ['./one.mjs', './two.mjs', 'node:fs', './bare.mjs', './three.mjs', './four.mjs', './five.mjs']);
+});
 
 // ===========================================================================
 test('module size budget: no runtime module exceeds ' + MAX_MODULE_LINES + ' lines', () => {
@@ -265,7 +307,7 @@ function resolveSpecifier(fromFile, spec) {
 test('layering: every internal import is in the explicit allow-list, every node: built-in is where it should be', () => {
   const badInternal = [], badBuiltin = [];
   for (const f of RUNTIME_FILES) {
-    for (const spec of parseImportSpecifiers(MASKED[f])) {
+    for (const spec of parseImportSpecifiers(MASKED[f], SOURCE[f])) {
       const resolved = resolveSpecifier(f, spec);
       if (resolved === null) continue;
       if (resolved.startsWith('node:')) {
