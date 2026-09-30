@@ -325,8 +325,8 @@ const MUTATIONS = [
 
   // --- R3: the refactor's own new gates and fixes ---
   { name: 'a throwing rule passes instead of refusing the write (fail-open regression)', file: 'runtime/store/rules.mjs',
-    find: "    catch (e) { this.trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); problems.push(rule.message); continue; }",
-    replace: "    catch (e) { this.trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); ok = true; }" },
+    find: "    } catch (e) { this.trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); problems.push(rule.message); continue; }",
+    replace: "    } catch (e) { this.trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); ok = true; }" },
   { name: 'anonymous access is never asked to sign in', file: 'runtime/server.mjs',
     find: "  if (ctx.perms.enabled && !ctx.role) { ctx.deny('Please sign in.'); return; }", replace: "" },
 
@@ -996,7 +996,7 @@ const MUTATIONS = [
   { name: "S3a: a hop key is not normalized (a numeric string with a leading zero, a float) and never finds its row", file: "runtime/store/snapshot.mjs",
     find: "  return Number.isNaN(n) ? null : String(n);", replace: "  return Number.isNaN(n) ? null : String(v);" },
   { name: "S3a: the snapshot's contexts do not carry the evaluation's clock", file: "runtime/store/snapshot.mjs",
-    find: "    super(snap.store, entity, row, stack, false, null, snap.clock);", replace: "    super(snap.store, entity, row, stack, false, null, undefined);" },
+    find: "    super(snap.store, entity, row, stack, allowSecret, null, snap.clock);", replace: "    super(snap.store, entity, row, stack, allowSecret, null, undefined);" },
   { name: "S3a: a snapshot cycle is not reported (the stack is never checked)", file: "runtime/store/ctx.mjs",
     find: "  if (stack.includes(key)) throw new Error(", replace: "  if (false) throw new Error(" },
   { name: "S3a: the loader binds a compiled aggregate batch to its own clock instead of the snapshot's", file: "runtime/store/hydrate.mjs",
@@ -1160,8 +1160,8 @@ const MUTATIONS = [
   { name: "S3b: a rule that does not parse is reported as a failed rule instead of crashing the write", file: "runtime/store/rules.mjs",
     find: "  for (const r of checks) ruleExpr(this, r); // an expression that does not parse is a crash, not a failed rule\n", replace: "" },
   { name: "S3b: a step's path is read from a snapshot loaded for the first step that asked (stale after the step's own writes)", file: "runtime/interp.mjs",
-    find: "  const readFrom = (entity, row, path) => store.evalCtx(entity, row, `path:${path.join('.')}`, [{ t: 'path', p: path }]).get(path);",
-    replace: "  const stale = new Map();\n  const readFrom = (entity, row, path) => { const k = `${entity}|${row.id}|${path}`; if (!stale.has(k)) stale.set(k, store.evalCtx(entity, row, `path:${path.join('.')}`, [{ t: 'path', p: path }]).get(path)); return stale.get(k); };" },
+    find: "    return store.evalCtx(entity, row, key, asts).get(path);",
+    replace: "    const sk = `${entity}|${row.id}|${name}`, memo = (readFrom.memo ??= new Map());\n    if (!memo.has(sk)) memo.set(sk, store.evalCtx(entity, row, key, asts).get(path));\n    return memo.get(sk);" },
   { name: "S3b: a step's expression reads the snapshot loaded for the first step that asked (stale after the step's own writes)", file: "runtime/interp.mjs",
     find: "    const base = store.evalCtx(ctx.rowEntity, ctx.row, `step:${src}`, [compiled(src)]);",
     replace: "    const k = `${ctx.rowEntity}|${ctx.id}|${src}`, stale = (exprCtx.stale ??= new Map());\n    const base = stale.get(k) ?? stale.set(k, store.evalCtx(ctx.rowEntity, ctx.row, `step:${src}`, [compiled(src)])).get(k);" },
