@@ -29,6 +29,19 @@ function buildProbe(store, entity, values, existing) {
   return probe;
 }
 
+// The parsed expression of a check rule, cached by its source.
+function ruleExpr(store, rule) {
+  if (!store.ruleExprs.has(rule.check)) store.ruleExprs.set(rule.check, parseExpr(rule.check, store.registry.functions));
+  return store.ruleExprs.get(rule.check);
+}
+
+// The context every check of `list` evaluates over: what they can reach (hops, aggregates, derived
+// fields, all planned from the expressions) is loaded here, once, before the first is evaluated —
+// evaluating them then never asks the driver anything (runtime/store/hydrate.mjs's evalCtx).
+function checkCtx(store, entity, checks, probe) {
+  return store.evalCtx(entity, probe, `rules:${checks.map((r) => r.check).join('\u0000')}`, checks.map((r) => ruleExpr(store, r)), true);
+}
+
 // Returns the failed rules' messages (empty when none fail). A rule whose
 // expression throws refuses the write too — fail-closed on purpose, a rule
 // the runtime cannot evaluate never lets the write through (tests/interp.test.mjs).
@@ -36,7 +49,9 @@ export function checkRules(entity, values, existing = null) {
   const list = this.graph.rules?.[entity];
   if (!list?.length) return [];
   const probe = buildProbe(this, entity, values, existing);
-  const problems = [];
+  const problems = [], checks = list.filter((r) => r.unique === undefined);
+  for (const r of checks) ruleExpr(this, r); // an expression that does not parse is a crash, not a failed rule
+  let ctx = null;
   for (const rule of list) {
     if (rule.unique !== undefined) {
       if (!Array.isArray(rule.unique)) {
@@ -52,12 +67,13 @@ export function checkRules(entity, values, existing = null) {
       if (known && this.existsAll(entity, names, probe, existing?.id)) problems.push(rule.message || `${names.join(' + ')} must be unique together`);
       continue;
     }
-    if (!this.ruleExprs.has(rule.check)) this.ruleExprs.set(rule.check, parseExpr(rule.check, this.registry.functions));
     let ok;
     // A rule checks the candidate row before it is stored: "probe" still holds the
     // plain submitted value of any password field, never the hash a real row has.
-    try { ok = evaluate(this.ruleExprs.get(rule.check), this.ctx(entity, probe, [], { allowSecret: true }), this.registry.functions); }
-    catch (e) { this.trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); problems.push(rule.message); continue; }
+    try {
+      ctx ??= checkCtx(this, entity, checks, probe);
+      ok = evaluate(ruleExpr(this, rule), ctx, this.registry.functions);
+    } catch (e) { this.trace({ kind: 'error', message: `rule ${rule.check}: ${e.message}` }); problems.push(rule.message); continue; }
     if (!ok) problems.push(rule.message);
   }
   return problems;

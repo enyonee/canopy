@@ -97,6 +97,20 @@ export function planFor(store, entity, fields = null) {
   return root;
 }
 
+/**
+ * The read-set of expressions `asts` evaluated over one row of `entity` (a rule's check, a step's
+ * `= expr` or `@path`): the plan of a derived field's expression, taken from the expression itself.
+ * Cached in `store.plans` under `key` (what the expressions are made of) and the entity.
+ */
+export function planExpr(store, entity, key, asts) {
+  const cache = store.plans, id = `${key}|${entity}`;
+  if (cache.has(id)) return cache.get(id);
+  const cx = { store, cuts: 0 }, root = new Node(entity);
+  for (const ast of asts) walk(cx, ast, [root], [], false);
+  cache.set(id, root);
+  return root;
+}
+
 /** A compiled aggregate that declined at run time (integers past SQLite's range) is evaluated over child rows: plan them. */
 export function planFallback(store, node, entry) {
   if (entry.sub) return;

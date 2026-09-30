@@ -27,6 +27,9 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
 
   // --- names inside steps: "@row.x", "@me", "@created", "= qty * price", "{row.title}" ------------
   const ROWS = { row: 'rowEntity', each: 'eachEntity', found: 'foundEntity', picked: 'pickedEntity' };
+  // `path` read from `row` of `entity`: its read-set is loaded now (inside the step's transaction, so
+  // the step's own earlier writes are seen), then the path is read from the snapshot.
+  const readFrom = (entity, row, path) => store.evalCtx(entity, row, `path:${path.join('.')}`, [{ t: 'path', p: path }]).get(path);
   const refValue = (ctx, pathParts) => {
     const [head, ...rest] = pathParts;
     if (head === 'me') {
@@ -34,7 +37,7 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
       if (!rest.length) return id;
       const ent = graph.roles?.entity || graph.identity?.entity;
       const who = ent && store.raw(ent, id);
-      return who ? store.ctx(ent, who).get(rest) : null;
+      return who ? readFrom(ent, who, rest) : null;
     }
     if (head === 'now') return new Date().toISOString();
     if (head === 'today') return new Date().toISOString().slice(0, 10);
@@ -43,24 +46,32 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
       const obj = ctx[head];
       if (!obj) return null;
       if (!rest.length || rest[0] === 'id') return obj.id;
-      return store.ctx(ctx[ROWS[head]], obj).get(rest);
+      return readFrom(ctx[ROWS[head]], obj, rest);
     }
     return rest.length ? undefined : ctx[head];
   };
-  // The checker only lets bare names and aggregates through where a row exists.
-  const exprCtx = (ctx) => ({
-    get(p) {
-      const [head] = p;
-      if (['me', 'now', 'today', 'values', 'created', 'delivery'].includes(head) || ROWS[head]) return refValue(ctx, p);
-      return store.ctx(ctx.rowEntity, ctx.row).get(p);
-    },
-    rows: (child, via) => store.ctx(ctx.rowEntity, ctx.row).rows(child, via),
-  });
+  // The checker only lets bare names and aggregates through where a row exists. The expression is
+  // planned and loaded for the row it runs on before evaluate() starts (evalCtx); a name that is not
+  // the row's (`me`, `values`, `each`…) is read by refValue, which loads for itself.
+  const exprCtx = (ctx, src) => {
+    const base = store.evalCtx(ctx.rowEntity, ctx.row, `step:${src}`, [compiled(src)]);
+    return {
+      clock: base.clock,
+      get(p) {
+        const [head] = p;
+        if (['me', 'now', 'today', 'values', 'created', 'delivery'].includes(head) || ROWS[head]) return refValue(ctx, p);
+        return base.get(p);
+      },
+      rows: (child, via) => base.rows(child, via),
+      // The old lazy context had no compiled aggregates: its expressions always walked the child rows.
+      ...(store.lazyEval ? {} : { agg: (node, clock) => base.agg(node, clock) }),
+    };
+  };
   const resolve = (ctx) => {
     const one = (v) => {
       if (typeof v === 'string') {
         if (v.startsWith('@')) return refValue(ctx, v.slice(1).split('.'));
-        if (isExpression(v)) return evaluate(compiled(stripExpression(v)), exprCtx(ctx), registry.functions);
+        if (isExpression(v)) { const src = stripExpression(v); return evaluate(compiled(src), exprCtx(ctx, src), registry.functions); }
         return v;
       }
       if (Array.isArray(v)) return v.map(one);
@@ -69,14 +80,22 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     };
     return one;
   };
-  const interpolate = (text, ctx) => String(text).replace(/\{([^}]+)\}/g, (_, p) => {
-    const parts = p.trim().split('.');
-    const v = refValue(ctx, parts);
+  // "{row.title} is {status}": collect the names, load and read each value, then format. The
+  // replace below only formats — nothing is loaded inside String#replace.
+  const TEMPLATE = /\{([^}]+)\}/g;
+  const show = (ctx, parts, v) => {
     if (v === undefined || v === null) return '';
     const f = ROWS[parts[0]] && ctx[ROWS[parts[0]]] ? store.fieldAt(ctx[ROWS[parts[0]]], parts.slice(1)) : null;
     if (f?.kind === 'money') return formatMoney(Math.round(v * 100));
     return typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v);
-  });
+  };
+  const interpolate = (text, ctx) => {
+    const src = String(text);
+    const names = [...src.matchAll(TEMPLATE)].map((m) => m[1].trim().split('.'));
+    const values = names.map((parts) => refValue(ctx, parts));
+    let i = 0;
+    return src.replace(TEMPLATE, () => { const at = i++; return show(ctx, names[at], values[at]); });
+  };
   // "/Order/{order}" — a path may name fields of the row it lands on; {id} is the row id.
   const afterPath = (template, entity, id, extra = {}) => String(template).replace(/\{(\w+)\}/g, (_, k) => {
     if (k === 'id') return String(id);
