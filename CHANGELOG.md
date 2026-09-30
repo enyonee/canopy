@@ -67,7 +67,23 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   plan (also for `row.*` correlation and for aggregates with no link back, which used to be
   fetched once per row). The query count depends on the size of the plan, not on the number of
   rows. `Store#get`, `hydrate`, `list`, `listPage`, `count`, `labelOf`, CSV and dashboards use it;
-  rules and step values (S3b) and render/perms (S3c) still read through the lazy `RowCtx`.
+  rules and step values (S3b, below) and render/perms (S3c) still read through the lazy `RowCtx`.
+- **Rules and step values evaluate over a prefetched snapshot (PostgreSQL roadmap, stage S3b).**
+  `checkRules` and the step-value context of the interpreter (`refValue`, `exprCtx`, `resolve`,
+  `interpolate`) perform zero driver calls while `evaluate()` runs, as derived fields did after S3a.
+  The new `planExpr` (`runtime/store/plan.mjs`) plans the read-set of an expression (a rule's check, a
+  step's `= expr` or `@path`) over a row of an entity; `Store#evalCtx` (`runtime/store/hydrate.mjs`)
+  loads it for the row being written (for a rule, the probe row: id 0, or the stored row with the new
+  values over it) or for the row the step runs on, inside the transaction the step runs in, so a step
+  sees its own earlier writes. `interpolate` is now collect, load, format: nothing is loaded inside
+  `String#replace`. Same error texts and same order of failed rules. A step expression answers a
+  compilable aggregate from the SQL batch (as a derived field does) instead of walking child rows.
+  Only render, perms and field hooks (S3c) still use the lazy `RowCtx`. The old lazy contexts stay
+  behind the test-only `store.lazyEval`.
+- Gates: `tests/snapshot.test.mjs` (no driver call while a rule or a step value is evaluated; the
+  loads sit inside the transaction; no load inside `String#replace`; one context per write),
+  `tests/evaldiff.test.mjs` (generated writes over every app's rules and every declared step value, through
+  both paths: same outcomes, error texts and stored rows); `S3b:` mutations.
 - This also removes the reference-hop N+1: a list page whose derived fields read `customer.name`
   or `order.customer.discount` used to issue one query per hop per row; it now issues a constant
   number (`tests/perf.test.mjs`). Answers are byte-identical: the JSON and CSV of the benchmark

@@ -1,29 +1,40 @@
 # R10 design: async Driver seam and PostgreSQL (README roadmap step 1)
 
-**Status: design accepted (option C4); S1, S2 and S3a done in 0.2.x.** Status per stage:
+**Status: design accepted (option C4); S1, S2, S3a and S3b done in 0.2.x.** Status per stage:
 
 | stage | what | status |
 |---|---|---|
 | S1 | sync `Driver` seam (`runtime/driver/sqlite.mjs`, `runtime/driver.mjs`) | **done** (0.2.x) |
 | S2 | portable SQL and dialect hooks (`runtime/driver/dialects.mjs`) | **done** (0.2.x) |
 | S3a | snapshot evaluation of derived fields (`store/plan.mjs`, `snapshot.mjs`, `hydrate.mjs`) | **done** (0.2.x) |
-| S3b-c | rules and step values (S3b), render/perms/field hooks (S3c) on prefetched data | not started |
+| S3b | rules and step values on the snapshot (`store/plan.mjs` `planExpr`, `hydrate.mjs` `evalCtx`, `rules.mjs`, `interp.mjs`) | **done** (0.2.x) |
+| S3c | render/perms/field hooks on prefetched data | not started |
 | S4a-d | await-first conversion | not started |
 | S5 | flip to an async driver | not started |
 | S6 | `runtime/driver/postgres.mjs` | not started |
 | S7 | benchmark before/after, load test | not started |
 
-What S3a delivered and what stays lazy. **Snapshot-based** (zero driver calls while `evaluate` runs,
-gated by `tests/snapshot.test.mjs`): `Store#hydrate`, `get`, `list`, `listPage`, `count` and
+What S3a and S3b delivered and what stays lazy. **Snapshot-based** (zero driver calls while `evaluate`
+runs, gated by `tests/snapshot.test.mjs`): `Store#hydrate`, `get`, `list`, `listPage`, `count` and
 `aggregate` over derived fields, `labelOf` (`deriveOne`), CSV and dashboards, i.e. everything that
-reaches `hydratePage`. A miss throws `not loaded: <Entity.field>`. **Still on the lazy `RowCtx`**
-(`store/ctx.mjs`, queries while evaluating): `checkRules` (`rules.mjs`, S3b) and the step-value
-context of `interp.mjs` (`refValue`/`exprCtx`, S3b); render, perms and field hooks (S3c) call
-`labelOf` and `store.raw` per cell as before. The old lazy hydration (`store/lazy.mjs`) stays one
-release behind the test-only switch `store.lazyEval = true`; `tests/snapshot.test.mjs` hydrates every
-row of every app through both and requires identical JSON. Deliberate difference from the design
-text: the read-set is over-approximate (both branches of `if`, both sides of `and`/`or` are loaded)
-and a derived-field cycle is cut where evaluation cuts it, so the error text is unchanged.
+reaches `hydratePage` (S3a); **S3b:** `checkRules` (`rules.mjs`: the read-set of every check of the
+entity is planned with `planExpr` and loaded once for the probe row, id 0 or the stored row with the
+new values over it) and the step values of `interp.mjs` (`refValue`, `exprCtx`, `resolve`: planned
+and loaded per resolve, inside the transaction the step runs in, so a step sees its own earlier
+writes; `interpolate` is collect, load, format, nothing is loaded inside `String#replace`). The one
+entry point is `Store#evalCtx(entity, row, key, asts, allowSecret)`. A miss throws
+`not loaded: <Entity.field>`. **Still on the lazy `RowCtx`** (`store/ctx.mjs`, queries while
+evaluating): nothing in rules or `interp.mjs`; only render, perms and field hooks (S3c), which call
+`labelOf` and `store.raw` per cell as before. The old lazy paths (`store/lazy.mjs`, and `evalCtx`
+returning a `RowCtx`) stay one release behind the test-only switch `store.lazyEval = true`;
+`tests/snapshot.test.mjs` hydrates every row of every app through both, and
+`tests/evaldiff.test.mjs` runs generated writes against every app's rules and every step value the
+apps declare through both and requires identical outcomes, error texts and stored rows. Deliberate
+differences from the design text: the read-set is over-approximate (both branches of `if`, both
+sides of `and`/`or` are loaded), a derived-field cycle is cut where evaluation cuts it (error text
+unchanged), and a step expression now answers a compilable aggregate from the SQL batch like a
+derived field does (the old context always walked the child rows). A rule whose load fails is
+refused like a rule whose evaluation fails (fail closed, traced).
 
 Sections below are the design as accepted; line numbers in section 1 cite v0.1.2 and
 predate S1 and S2.
