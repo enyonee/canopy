@@ -5,7 +5,6 @@
 // A secret's value is read from stdin, never from an argument (the shell would keep it in its history),
 // and nothing here prints one. Every refusal says what to do and changes nothing.
 import fs from 'node:fs';
-import crypto from 'node:crypto';
 import { openSecrets } from './secrets.mjs';
 import { readDeploy, writeMode, connectorModes, MODES } from './deploy.mjs';
 import { secretSlots, secretName } from './connectors/engine.mjs';
@@ -61,9 +60,7 @@ async function simulate(ctx, name, event, file, port) {
   let payload;
   try { payload = JSON.parse(raw.toString('utf8')); } catch (e) { refuse(`${file} is not JSON: ${e.message}`); }
   const headers = { 'content-type': 'application/json' };
-  for (const [k, spec] of [['type', inbound.type], ['eventId', inbound.eventId]]) {
-    if (typeof spec !== 'string') headers[spec.header.toLowerCase()] = k === 'type' ? event : `sim-${crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16)}`;
-  }
+  if (typeof inbound.type !== 'string') headers[inbound.type.header.toLowerCase()] = event; // a header-carried type is set from EVENT
   if (typeOf(inbound, payload, headers) !== event) refuse(`${file} does not carry the event type "${event}" where "${c.kind}" puts it (${JSON.stringify(inbound.type)})`);
   const secret = secrets.current(secretName(c, inbound.secret)) ?? refuse(`the secret "${secretName(c, inbound.secret)}" is not in the store: --secrets set ${secretName(c, inbound.secret)}`);
   Object.assign(headers, signHeaders(inbound.signature, { raw, secret, now: clock.now() }));

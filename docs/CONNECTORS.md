@@ -1,9 +1,10 @@
 # Canopy connector library: design (v0.2.0 baseline)
 
-**Status: design accepted (maintainer decisions, section 9). Stages C1, C3 and C2 are done** (C1: descriptor,
+**Status: design accepted (maintainer decisions, section 9). Stages C1, C3, C2 and C4 are done** (C1: descriptor,
 checker, engine, `connector.call`, `http` on it; C3: retries with backoff, `unknown`, timeouts, circuit
-breaker, background flusher, injectable clock; C2: encrypted secret store, sandbox and live mode; see "C1 as
-built", "C3 as built" and "C2 as built" at the end). C4 to C7 are next, in the order of section 9.
+breaker, background flusher, injectable clock; C2: encrypted secret store, sandbox and live mode; C4: inbound
+webhooks, signed and deduplicated; see "C1 as built", "C3 as built", "C2 as built" and "C4 as built" at the end).
+C5 to C7 are next, in the order of section 9.
 
 The study below was read-only. All line numbers refer to /home/vyacheslav/code/canopy at main, before C1.
 
@@ -373,3 +374,75 @@ Where the code differs from, or narrows, sections 2.1, 3 and 6:
   or a wrong master key. `CANOPY_SECRET_VALUE` and the `_deploy_log` of section 3 were not built.
 - **Not yet.** Rotation is by hand (`--secrets set NAME.prev`, then `set NAME`); a descriptor cannot yet ask for the
   list of values (C4's signature check will); the https-only check of live bases and the settings screen (C7).
+
+## 13. C4 as built
+
+Where the code differs from, or narrows, sections 2.1, 2.2, 5 and 6:
+- **Modules.** `runtime/connectors/signature.mjs` (a pure leaf, `node:crypto`: `verifySignature`, `signHeaders`,
+  `safeEqual`, `checkRecipe`), `runtime/connectors/inbound.mjs` (a pure leaf over schema/template: `checkInbound`,
+  `typeOf`, `eventIdOf`, `valuesOf`, `payloadProblems`), `runtime/routes/hooks.mjs` (the route), `rawBody` in
+  `routes/context.mjs`, `_inbound` and its three queries in `store/state.mjs`/`migrate.mjs`, `fireInbound` in
+  `interp.mjs`, `inbound:` events in `check/events.mjs`, the `simulate` command in `admin.mjs`, the pruning in
+  `server.mjs#startFlusher`.
+- **The descriptor block, as built.** `inbound` is `{signature, secret, toleranceS, eventId, type, events}` (the
+  sketch of 2.1 nested `secret` and `toleranceS` inside `signature`; here the recipe says how, the block says with
+  what and how late). `signature` is `{scheme: "stripe"}` (optional `header`), `{scheme: "slack"}`,
+  `{scheme: "basic"}` or `{scheme: "hmac", header, algo, encoding, prefix?, signed?, timestampHeader?}`; unknown keys
+  per scheme are errors, `timestampHeader` exists only with `signed: "ts.raw"` (a timestamp outside the signed text
+  proves nothing), `toleranceS` is 1 to 86400 (default 300). `type` is a `$.path` into the JSON body or
+  `{"header": "name"}`; `eventId` is a `$.path` into the signed body **only**: no recipe signs headers, so a header id
+  (which a replayer of a captured request could change into a new event) is a descriptor error. `events` maps a type to `{schema, map?}`: `schema` (type object) is applied open (a provider
+  may send more), `map` names the values the app's steps get. The `match` rule and the `ref`/`amount` mapping of
+  the sketch became `type` + `map`: there is one rule ("the type is the key") and no expression language.
+- **The graph side.** `{"inbound": "<connector>.<type>", "do": [...]}` in `events` (instead of `on`; both is an error):
+  the connector is up to the first dot, the type (which may have dots) is the rest. The checker refuses an unknown
+  connector, a kind whose descriptor has no `inbound`, and a type the descriptor does not declare. The steps have no
+  row and no user; the payload arrives as `@values.<name>` (and `= values.name`): the `map` picks when there is one,
+  else the top-level scalars of the payload. Nested values need a `map`. `@values.x` is not checked, like every
+  `@values` name. `secretSlots` includes the inbound slot, so `--connectors status` shows the webhook secret as
+  set/MISSING and `--connectors live` refuses while it is missing.
+- **The route, in order.** Unknown connector, no `inbound`, or an inherited name (`constructor`) is 404; another
+  method is 405 (`Allow: POST`); the body is read as bytes up to 1 MiB (413 and `Connection: close`, by declared
+  length or while streaming, nothing past the cap kept); the signature is verified before anything is parsed (401
+  `{ok:false,error:"unauthorized"}` whatever the reason; the reason is only in the trace line `webhook_rejected`);
+  invalid JSON / no type / a payload the schema refuses / an unusable event id (missing, not text or integer, over
+  255 characters) is 400 with a fixed word; an unknown type, or a declared one that no graph event subscribes to, is
+  `200 {ok:true, ignored:true}` with a `webhook_ignored` trace (the type, cut at 64 characters, is the one thing of a
+  payload the trace keeps); then one transaction: `inboundSeen`, `inboundAdd`, the steps. A duplicate is
+  `200 {ok:true, duplicate:true}`; a throwing step rolls everything back and answers `500 {ok:false, error:"failed"}`
+  (the message goes to the trace as `webhook_failed`, never to the client). After the commit the outbox is
+  flushed; a flush that throws is traced and does not change the answer. The answer is always JSON, `accept` is
+  ignored, no cookie is set, no session is read for any decision.
+- **Dedup.** `_inbound(key PRIMARY KEY, connector, eventId, receivedAt)` with `key = connector|eventId`: the primary
+  key is the UNIQUE(connector, eventId) of the design (connector names cannot hold `|`), as `_breaker` does. The read
+  and the insert are in the steps' transaction, so the row exists exactly when the steps committed; a second
+  instance that passes the read at the same moment fails the key and answers 500, and the provider's retry finds
+  the row. Rows older than `INBOUND_RETENTION_MS` (30 days) are deleted by the flusher, at most once an hour, on
+  the injected clock. Not built: the flusher does not run under `AG_NO_TIMERS`, so verify never prunes.
+- **Signatures.** `stripe` reads `t=<unix>,v1=<hex>[,v1=...]` (any `v1` may match) over `t.raw`; `slack` reads
+  `x-slack-signature` (`v0=` + hex) over `v0:<x-slack-request-timestamp>:raw`; `hmac` is sha256/sha1, hex/base64, an
+  optional prefix, over `raw` or `ts.raw`; `basic` compares the `Authorization` header with `Basic` + the base64 of
+  the stored value (store `user:password`). Every candidate is compared with `timingSafeEqual` after an equal-length
+  check (a length mismatch is a plain refusal and does not throw), against every secret of the list
+  (`get(name)`: the name and `name.prev`) without stopping at the first match. The replay window is applied only
+  after the signature is proven, so a forged stale request is reported as a bad signature. No secret in the store is
+  a refusal (`secret_not_set`), never a pass. Reasons: `signature_missing`, `signature_malformed`,
+  `signature_mismatch`, `timestamp_stale`, `secret_not_set`.
+- **`--connectors simulate NAME EVENT --data FILE [--port N]`.** `FILE` is the complete payload as the provider would
+  send it (its type and id where the descriptor looks); the command refuses unless it carries the event type asked
+  for, then signs the bytes with the stored secret and POSTs them to `http://127.0.0.1:<port>/hook/NAME` (default
+  port 8901), prints the status and the answer, and exits 1 on a non-2xx. A header-carried type is set from `EVENT`;
+  the event id is the file's own, so the same file twice is the same event. There is no fixed
+  development secret: with none in the store it refuses and says which name to set. verify puts the secrets an app's
+  `checks.mjs` exports (`export const secrets = {...}`) into the app's store before boot.
+- **What an unauthenticated POST can do** (the route is the only unauthenticated write path; everything below is
+  bounded): (1) read at most 1 MiB and hash it (HMAC, a few milliseconds) per request: bounded by the cap, the
+  server's header/request timeouts and nothing else (no rate limit: "can wait" in section 8); (2) append one fixed-size
+  trace line per refused request (`webhook_rejected`, connector name from the graph, a reason code; never the body, the
+  header or a secret): disk growth proportional to the request rate, unbounded without a rate limit; (3) nothing else
+  without a valid signature: no parse, no row, no step, no outbox row, no answer that depends on the payload. With a
+  valid signature (the provider, or anyone holding a captured request): (4) one `_inbound` row and the event's
+  steps per distinct event id, at most once per id for 30 days; a replay of a captured request inside the window is a
+  duplicate, and a scheme with a timestamp also refuses it after `toleranceS`; (5) the event id can only come from the signed body
+  (a header id is a descriptor error), so a replay cannot become a new event. Residual: a header-carried `type` is not
+  signed, so a replayer could route a captured body to another declared type whose schema it also satisfies.

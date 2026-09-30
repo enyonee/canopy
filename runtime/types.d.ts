@@ -178,11 +178,11 @@ export interface ConnectorDescriptor {
   inbound?: InboundSpec;
 }
 
-/** The `inbound` block of a descriptor: `type` and `eventId` are a `$.path` into the body or `{ header }`. */
+/** The `inbound` block of a descriptor: `type` is a `$.path` into the body or `{ header }`, `eventId` a `$.path` into the signed body. */
 export interface InboundSpec {
   signature: { scheme: 'stripe' | 'slack' | 'hmac' | 'basic'; header?: string; algo?: 'sha256' | 'sha1'; encoding?: 'hex' | 'base64'; prefix?: string; signed?: 'raw' | 'ts.raw'; timestampHeader?: string };
   secret: string; toleranceS?: number;
-  eventId: string | { header: string }; type: string | { header: string };
+  eventId: string; type: string | { header: string };
   events: Record<string, { schema: SchemaNode; map?: Record<string, string> }>;
 }
 
