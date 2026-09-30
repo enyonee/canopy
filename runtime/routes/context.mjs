@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { forbiddenPage, csv, plain, label } from '../render.mjs';
+import { forbiddenPage, csv, plain, label, prefetched, refPairs } from '../render.mjs';
 
 const readText = (req) => new Promise((resolve) => {
   let data = '';
@@ -83,7 +83,9 @@ function createListHelpers(url, store, sendCsv, vc) {
   };
   const exportRows = (name, entity, rows, cols, labels) => {
     const fields = store.fields[entity];
-    const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels, vc) : r[c]; };
+    // The labels of every reference cell, loaded before the first line is formatted.
+    const pre = prefetched(store.labelsFor(refPairs(fields, cols, rows)));
+    const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels, vc, pre) : r[c]; };
     return sendCsv(name, cols.map(label), rows.map((r) => cols.map((c) => pick(r, c))));
   };
   return { paged, sortOf, exportRows };
@@ -117,6 +119,7 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
     ownField: (e) => perms.ownField(user, e),
     ownWhere: (e, op) => ownWhere(e, op),
     ownOk: (e, row, op) => perms.ownOk(user, e, row, op),
+    prime: (e, rows) => perms.prime(user, e, rows),
     outbox: !perms.enabled || perms.isAdmin(user),
   };
   const deny = (message) => {

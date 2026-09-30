@@ -11,14 +11,13 @@ import fs from 'node:fs';
 import { Store } from '../runtime/store.mjs';
 import { validate } from '../runtime/validate.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
-import { page, widgetBlock, rowJSON } from '../runtime/render.mjs';
+import { page, widgetBlock, rowJSON, noPre } from '../runtime/render.mjs';
 import { staticPage } from '../runtime/render/pages.mjs';
-import { detailView } from '../runtime/render/detail.mjs';
-import { dashboardView, chartBlock } from '../runtime/render/dashboard.mjs';
+import { chartBlock } from '../runtime/render/dashboard.mjs';
 import { api, mountWidgets } from '../runtime/client/api.mjs';
 import { validEvery, everyMs } from '../runtime/schedule.mjs';
 import messaging from '../plugins/messaging.mjs';
-import { boot, rows, tmpGraph, tmpDir } from './helpers.mjs';
+import { boot, rows, tmpGraph, tmpDir, viewer } from './helpers.mjs';
 
 // ---------------------------------------------------------------------------
 // Widgets: the registry table, the checker, the markup, the serving routes.
@@ -84,7 +83,7 @@ test('a page widget and a detail widget render through staticPage/detailView', (
   const g = { app: 'w', data: { Match: { name: 'text!' } }, override: { 'Match.detail': { widget: { use: 'chess', fen: 'abc' } } } };
   const s = new Store(g, ':memory:');
   const id = s.insert('Match', { name: 'final' });
-  const detail = detailView(g, s, 'Match', s.fields.Match, s.get('Match', id));
+  const detail = viewer(g, s).detail('Match', s.get('Match', id));
   assert.match(detail, /data-widget="chess"/);
   assert.match(detail, /data-row=/);
   const staticHtml = staticPage(g, { id: 'p', title: 'P', widget: { use: 'chess', fen: 'abc' } });
@@ -320,17 +319,18 @@ test('chartBlock: bar and line share axes/labels, pie shares a total; every mark
   s.insert('Sale', { region: 'north', amount: 15 });
   s.insert('Sale', { region: 'south', amount: 20 });
   const chart = (type) => ({ title: 'By region', entity: 'Sale', type, groupBy: 'region', metric: { fn: 'sum', field: 'amount' } });
-  const bar = chartBlock(s, chart('bar'), 'teal');
+  const rowsOf = (c) => s.aggregate(c.entity, { groupBy: c.groupBy, metrics: [{ fn: c.metric.fn, field: c.metric.field, as: 'v' }], where: {} });
+  const bar = chartBlock(s, chart('bar'), 'teal', rowsOf(chart('bar')), noPre);
   assert.match(bar, /<svg role="img" aria-label="By region"/);
   assert.match(bar, /<title>By region<\/title>/);
   assert.match(bar, /<rect[^>]*fill="teal"[^>]*><title>North: 15\.00<\/title><\/rect>/);
   assert.match(bar, /<text[^>]*>20\.00<\/text>/, 'the y axis top label is money-formatted, not raw minor units');
   assert.match(bar, /<table class="chart-data">/);
   assert.match(bar, /<td>North<\/td><td>15\.00<\/td>/);
-  const line = chartBlock(s, chart('line'), 'teal');
+  const line = chartBlock(s, chart('line'), 'teal', rowsOf(chart('line')), noPre);
   assert.match(line, /<polyline fill="none" stroke="teal"/);
   assert.match(line, /<circle[^>]*fill="teal"[^>]*><title>South: 20\.00<\/title>/);
-  const pie = chartBlock(s, chart('pie'), 'teal');
+  const pie = chartBlock(s, chart('pie'), 'teal', rowsOf(chart('pie')), noPre);
   assert.match(pie, /<path d="M/);
   assert.match(pie, /<title>North: 15\.00<\/title>/);
   assert.match(pie, /<td>South<\/td><td>20\.00<\/td>/, 'the same numbers follow the SVG as a table, whatever the chart type');
@@ -338,7 +338,7 @@ test('chartBlock: bar and line share axes/labels, pie shares a total; every mark
 
 test('a dashboard with only charts still renders, and an empty chart divides by zero safely', () => {
   const s = new Store(salesGraph, ':memory:');
-  const html = dashboardView(salesGraph, s, { id: 'd', title: 'D',
+  const html = viewer(salesGraph, s).dashboard({ id: 'd', title: 'D',
     charts: [{ title: 'Empty', entity: 'Sale', type: 'pie', groupBy: 'region', metric: { fn: 'count' } }] }, '');
   assert.match(html, /<h3>Empty<\/h3>/);
   assert.match(html, /<table class="chart-data">/);
@@ -373,7 +373,7 @@ test('a page and a dashboard render <meta http-equiv="refresh"> only when declar
   const s = new Store(g, ':memory:');
   assert.match(staticPage(g, { id: 'p', title: 'P', refresh: 15 }), /<meta http-equiv="refresh" content="15">/);
   assert.ok(!/http-equiv="refresh"/.test(staticPage(g, { id: 'p', title: 'P' })), 'no refresh meta without "refresh"');
-  assert.match(dashboardView(g, s, { id: 'd', title: 'D', refresh: 60 }, ''), /<meta http-equiv="refresh" content="60">/);
+  assert.match(viewer(g, s).dashboard({ id: 'd', title: 'D', refresh: 60 }, ''), /<meta http-equiv="refresh" content="60">/);
 });
 
 // ---------------------------------------------------------------------------

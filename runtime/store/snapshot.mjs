@@ -17,6 +17,28 @@ export function refKey(v) {
   return Number.isNaN(n) ? null : String(n);
 }
 
+/**
+ * The labels of the rows a page shows, loaded before it renders (Store#labelsFor): `get` answers a
+ * reference from a Map, '' for one that points at nothing, and THROWS for a row nobody asked for — a
+ * label is never looked up by a query while a page is formatted.
+ */
+export class Labels {
+  constructor() { this.byTarget = new Map(); }
+
+  put(target, key, label) {
+    if (!this.byTarget.has(target)) this.byTarget.set(target, new Map());
+    this.byTarget.get(target).set(key, label);
+  }
+
+  get(target, id) {
+    const key = refKey(id);
+    if (key === null) return '';
+    const known = this.byTarget.get(target);
+    if (!known?.has(key)) throw notLoaded(`label ${target}#${id}`);
+    return known.get(key);
+  }
+}
+
 export class Snapshot {
   constructor(store, clock) {
     this.store = store; this.clock = clock;

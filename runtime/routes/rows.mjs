@@ -2,7 +2,7 @@
 // action, a state transition ("go"), or an inline add to a related child
 // table. Called from routes/entity.mjs once it has the row in hand.
 import { errorPage, forbiddenPage, label, transitionsFor, rowJSON, mayRunAction } from '../render.mjs';
-import { detailView } from '../render/detail.mjs';
+import { renderDetail } from './load.mjs';
 
 async function runAction(ctx, entity, fields, id, row) {
   const { graph, store, vc, user, interp, trace, ok, parts } = ctx;
@@ -15,13 +15,13 @@ async function runAction(ctx, entity, fields, id, row) {
     // like a transition's own `fields`.
     const problems = interp.validateValues(entity, submitted, { partial: true, existing: row });
     for (const f of action.fields) if (submitted[f] === undefined || String(submitted[f]).trim() === '') problems.push(`${f} is required`);
-    if (problems.length) { ctx.answer(400, detailView(graph, store, entity, fields, row, problems.join('; '), vc), { ok: false, status: 400, errors: problems }); return true; }
+    if (problems.length) { ctx.answer(400, renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
   }
   let out;
   try { out = await interp.attempt(() => interp.runSteps(action.do, { rowEntity: entity, id, row, values: submitted, user })); }
   catch (e) {
     trace({ kind: 'refused', entity, id, action: action.name, message: e.message });
-    ctx.answer(400, detailView(graph, store, entity, fields, row, e.message, vc), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
   const flash = action.confirm ? interp.interpolate(action.confirm, out) : '';
@@ -46,7 +46,7 @@ async function runTransition(ctx, entity, fields, id, row) {
   for (const f of t.fields || []) if (submitted[f] !== undefined) values[f] = submitted[f];
   const problems = interp.validateValues(entity, { ...values, [st.field]: t.to }, { partial: true, existing: row });
   for (const f of t.fields || []) if (values[f] === undefined || String(values[f]).trim() === '') problems.push(`${f} is required`);
-  if (problems.length) { ctx.answer(400, detailView(graph, store, entity, fields, row, problems.join('; '), vc), { ok: false, status: 400, errors: problems }); return true; }
+  if (problems.length) { ctx.answer(400, renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
   let out;
   try {
     out = await interp.attempt(() => {
@@ -56,7 +56,7 @@ async function runTransition(ctx, entity, fields, id, row) {
     });
   } catch (e) {
     trace({ kind: 'refused', entity, id, transition: t.name, message: e.message });
-    ctx.answer(400, detailView(graph, store, entity, fields, row, e.message, vc), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
   const flash = t.confirm ? interp.interpolate(t.confirm, out) : `${label(entity)} is now ${t.to}`;
@@ -82,7 +82,7 @@ async function addRelated(ctx, entity, fields, id, row) {
   const own = perms.ownField(user, child);
   if (own) values[own] = user.id;
   const problems = interp.validateValues(child, values);
-  if (problems.length) { ctx.answer(400, detailView(graph, store, entity, fields, row, problems.join('; '), vc), { ok: false, status: 400, errors: problems }); return true; }
+  if (problems.length) { ctx.answer(400, renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
   let kid;
   try {
     await interp.attempt(() => {
@@ -92,7 +92,7 @@ async function addRelated(ctx, entity, fields, id, row) {
     });
   } catch (e) {
     trace({ kind: 'refused', entity: child, message: e.message });
-    ctx.answer(400, detailView(graph, store, entity, fields, row, e.message, vc), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
   const flash = rel.confirm || `${label(child)} added successfully`;

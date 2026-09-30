@@ -12,7 +12,7 @@
 // for their own plans: `evalCtx` below.
 import { compileAgg, runAggOne, runAggBatch, aggKey } from './aggsql.mjs';
 import { planFor, planExpr, planFallback } from './plan.mjs';
-import { Snapshot, refKey } from './snapshot.mjs';
+import { Snapshot, Labels, refKey } from './snapshot.mjs';
 
 // The values of a compiled aggregate for `ids`: one grouped query, or — for a lone row (a detail
 // page, a re-read after a step) — the parent-by-parent query the statement cache already holds.
@@ -92,6 +92,41 @@ export function compileAggIn(entity, node) { return compileAgg(this, entity, nod
 export function deriveOne(entity, row, f) {
   if (this.lazyEval) return this.derived(entity, row, f);
   return this.loadSnapshot(entity, [row], [f.name]).derived(entity, row, f);
+}
+
+// The labels of the rows `pairs` ([entity, id]) point at — what a page of reference cells shows — in ONE
+// query per target entity (plus the batched snapshot of a derived label field), whatever the number of
+// cells. Same text `labelOf` gives: '' for a row that is gone, `#id` for a blank label. The render phase
+// reads them from the returned `Labels`, it never asks the store (S3c).
+export function labelsFor(pairs) {
+  const want = new Map();
+  for (const [target, id] of pairs) {
+    const key = refKey(id);
+    if (key === null) continue;
+    if (!want.has(target)) want.set(target, new Set());
+    want.get(target).add(key);
+  }
+  const labels = new Labels();
+  for (const [target, keys] of want) {
+    const rows = this.listRawByIds(target, [...keys]);
+    const lf = this.labelField(target), f = lf && this.field(target, lf);
+    const snap = f?.derive && rows.length ? this.loadSnapshot(target, rows, [f.name]) : null;
+    const byId = new Map(rows.map((r) => [String(r.id), r]));
+    for (const key of keys) {
+      const row = byId.get(key);
+      const v = !row || !f ? null : snap ? snap.derived(target, row, f) : row[lf];
+      labels.put(target, key, !row ? '' : v ? String(v) : `#${row.id}`);
+    }
+  }
+  return labels;
+}
+
+// The rows a reference input offers, per target entity (`[{ id, label }]`, every row of it) — loaded
+// by the form route before the form renders, read by an `input` hook as `ctx.options(target)`.
+export function optionsFor(targets) {
+  const out = new Map();
+  for (const target of targets) if (!out.has(target)) out.set(target, this.list(target, {}).map((r) => ({ id: r.id, label: this.label(target, r) })));
+  return out;
 }
 
 // How many rows to load and hydrate at once. A page of thousands of rows (a full CSV export,

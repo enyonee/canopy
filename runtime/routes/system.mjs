@@ -42,6 +42,7 @@ function file(ctx) {
   if (!vc.can(entity, 'view')) { ctx.deny(); return true; }
   const row = store.get(entity, id);
   if (!row || !row[fieldName]) { send(404, errorPage(graph, 'no such file')); return true; }
+  vc.prime(entity, [row]);
   if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
   const at = path.join(filesDir, path.basename(row[fieldName]));
   if (!fs.existsSync(at)) { send(404, errorPage(graph, 'file is missing on disk')); return true; }
