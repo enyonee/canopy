@@ -478,18 +478,18 @@ test('checker: sms.send needs a declared connector of the right kind', async () 
   assert.match(bad.find((e) => e.path.endsWith('/connector')).message, /needs an sms or whatsapp connector/);
 });
 
-test('sms.send validates "to" and "text" at run time, and interpolates {row.field}', () => {
+test('sms.send validates "to" and "text" at run time, and interpolates {row.field}', async () => {
   const store = new Store(msgGraph, ':memory:');
   const lead = store.insert('Lead', { phone: '+15559876543' });
-  const text = (t) => t.replace('{row.phone}', '+15559876543');
-  const ok = messaging.blocks['sms.send'].run(msgCtx(store, { entity: 'Lead', id: lead,
-    step: { connector: 'alert', to: '@row.phone', text: 'Hi {row.phone}' }, resolve: () => ({ v: '+15559876543' }), text }));
+  const text = async (t) => t.replace('{row.phone}', '+15559876543');
+  const ok = await messaging.blocks['sms.send'].run(msgCtx(store, { entity: 'Lead', id: lead,
+    step: { connector: 'alert', to: '@row.phone', text: 'Hi {row.phone}' }, resolve: async () => ({ v: '+15559876543' }), text }));
   const row = store.outboxGet(ok.delivery);
   assert.equal(row.kind, 'sms'); assert.equal(row.target, '+15559876543');
   assert.deepEqual(row.payload, { from: '+15551234567', to: '+15559876543', text: 'Hi +15559876543' });
-  assert.throws(() => messaging.blocks['sms.send'].run(msgCtx(store, { step: { connector: 'alert', to: 'notaphone', text: 'hi' }, resolve: () => ({ v: 'notaphone' }), text: () => 'hi' })),
+  await assert.rejects(() => messaging.blocks['sms.send'].run(msgCtx(store, { step: { connector: 'alert', to: 'notaphone', text: 'hi' }, resolve: async () => ({ v: 'notaphone' }), text: async () => 'hi' })),
     /"to" must be an E\.164 number/);
-  assert.throws(() => messaging.blocks['sms.send'].run(msgCtx(store, { step: { connector: 'alert', to: '+15559876543', text: '  ' }, resolve: () => ({ v: '+15559876543' }), text: () => '   ' })),
+  await assert.rejects(() => messaging.blocks['sms.send'].run(msgCtx(store, { step: { connector: 'alert', to: '+15559876543', text: '  ' }, resolve: async () => ({ v: '+15559876543' }), text: async () => '   ' })),
     /"text" cannot be empty/);
 });
 

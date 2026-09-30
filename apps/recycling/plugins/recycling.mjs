@@ -11,19 +11,19 @@ export default {
     'recycle.drop': {
       summary: 'sort "item" into "bin" for the current GameSession: refuses a finished game or a repeat of the same item, otherwise grades the drop against WasteItem.correctBin, updates the running score, and finishes the game (with a badge at 5+ correct) once every item has been sorted once',
       effects: ['db.write'], requires: ['item', 'bin'],
-      run: ({ store, entity, id, step, resolve }) => {
-        const session = store.get(entity, id);
+      run: async ({ store, entity, id, step, resolve }) => {
+        const session = await store.get(entity, id);
         if (session.status !== 'playing') throw new Error('This game is already over — start a new one to play again');
-        const itemId = Number(resolve({ v: step.item }).v);
-        const binId = Number(resolve({ v: step.bin }).v);
-        const item = store.get('WasteItem', itemId);
+        const itemId = Number((await resolve({ v: step.item })).v);
+        const binId = Number((await resolve({ v: step.bin })).v);
+        const item = await store.get('WasteItem', itemId);
         if (!item) throw new Error('No such item');
-        const bin = store.get('Bin', binId);
+        const bin = await store.get('Bin', binId);
         if (!bin) throw new Error('No such bin');
         const done = JSON.parse(session.dropped || '[]');
         if (done.includes(itemId)) throw new Error('That item is already sorted');
         const correct = Number(item.correctBin) === binId;
-        store.insert('Drop', { gameSession: session.id, item: itemId, bin: binId, correct: correct ? 1 : 0 });
+        await store.insert('Drop', { gameSession: session.id, item: itemId, bin: binId, correct: correct ? 1 : 0 });
         const total = session.total + 1;
         const correctCount = session.correct + (correct ? 1 : 0);
         const score = session.score + (correct ? 10 : 0);
@@ -31,15 +31,15 @@ export default {
         let message;
         if (correct) message = `Nice! ${item.name} belongs in the ${bin.name} bin.`;
         else {
-          const rightBin = store.get('Bin', Number(item.correctBin));
+          const rightBin = await store.get('Bin', Number(item.correctBin));
           message = `Not quite — ${item.name} actually belongs in the ${rightBin.name} bin. You'll get it next time!`;
         }
-        const totalItems = store.list('WasteItem', {}).length;
+        const totalItems = (await store.list('WasteItem', {})).length;
         if (total >= totalItems) {
           set.status = 'finished';
           if (correctCount >= 5) set.badge = 'Recycling Star';
         }
-        store.update(entity, id, set);
+        await store.update(entity, id, set);
         return { message };
       },
     },

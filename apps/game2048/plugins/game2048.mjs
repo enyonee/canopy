@@ -97,22 +97,22 @@ export default {
     'game2048.seedTiles': {
       summary: 'place the two starting tiles (2 or 4) on a freshly created Game, seeded by its own id',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id }) => {
+      run: async ({ store, entity, id }) => {
         let board = new Array(SIZE * SIZE).fill(0);
         let draw = 0;
         ({ board, draw } = spawnTile(board, id, draw));
         ({ board, draw } = spawnTile(board, id, draw));
-        store.update(entity, id, { board: formatBoard(board), draws: draw });
+        await store.update(entity, id, { board: formatBoard(board), draws: draw });
         return {};
       },
     },
     'game2048.move': {
       summary: 'slide/merge the board toward "direction" (up/down/left/right); refuses if the game is over, the direction is invalid, or nothing would move; otherwise merges, scores, spawns one tile and updates status/won',
       effects: ['db.write'], requires: ['direction'],
-      run: ({ store, entity, id, step, resolve }) => {
-        const row = store.get(entity, id);
+      run: async ({ store, entity, id, step, resolve }) => {
+        const row = await store.get(entity, id);
         if (row.status !== 'playing') throw new Error('The game is already over');
-        const direction = String(resolve({ v: step.direction }).v);
+        const direction = String((await resolve({ v: step.direction })).v);
         if (!DIRECTIONS.includes(direction)) throw new Error(`direction must be one of: ${DIRECTIONS.join(', ')}`);
         const board = parseBoard(row.board);
         const { board: moved, scoreGain } = applyDirection(board, direction);
@@ -120,7 +120,7 @@ export default {
         const { board: spawned, draw } = spawnTile(moved, id, row.draws);
         const won = row.won || hasWon(spawned) ? 1 : 0;
         const status = canMove(spawned) ? 'playing' : 'over';
-        store.update(entity, id, { board: formatBoard(spawned), score: row.score + scoreGain, draws: draw, won, status });
+        await store.update(entity, id, { board: formatBoard(spawned), score: row.score + scoreGain, draws: draw, won, status });
         return {};
       },
     },
@@ -132,12 +132,12 @@ export default {
     'game2048.sync': {
       summary: 'recompute status (over, if no direction moves anything) and won (if a 2048 tile is present) from the current board',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id }) => {
-        const row = store.get(entity, id);
+      run: async ({ store, entity, id }) => {
+        const row = await store.get(entity, id);
         const board = parseBoard(row.board);
         const won = row.won || hasWon(board) ? 1 : 0;
         const status = canMove(board) ? 'playing' : 'over';
-        store.update(entity, id, { won, status });
+        await store.update(entity, id, { won, status });
         return {};
       },
     },

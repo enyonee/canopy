@@ -12,15 +12,15 @@ const BOT_EMAIL = 'ai@bot.test';
 // every comparison against row.white/row.black must go through this.
 const sameUser = (a, b) => a !== null && a !== undefined && b !== null && b !== undefined && Number(a) === Number(b);
 
-function bumpStats(store, row, result) {
-  const bump = (userId, field) => {
+async function bumpStats(store, row, result) {
+  const bump = async (userId, field) => {
     if (!userId) return;
-    const u = store.get('User', userId);
-    if (u) store.update('User', userId, { [field]: (u[field] || 0) + 1 });
+    const u = await store.get('User', userId);
+    if (u) await store.update('User', userId, { [field]: (u[field] || 0) + 1 });
   };
-  if (result === 'draw') { bump(row.white, 'draws'); bump(row.black, 'draws'); }
-  else if (result === 'white') { bump(row.white, 'wins'); bump(row.black, 'losses'); }
-  else if (result === 'black') { bump(row.black, 'wins'); bump(row.white, 'losses'); }
+  if (result === 'draw') { await bump(row.white, 'draws'); await bump(row.black, 'draws'); }
+  else if (result === 'white') { await bump(row.white, 'wins'); await bump(row.black, 'losses'); }
+  else if (result === 'black') { await bump(row.black, 'wins'); await bump(row.white, 'losses'); }
 }
 
 export default {
@@ -28,24 +28,24 @@ export default {
     'chess.setupGame': {
       summary: 'after a Game is created: in AI mode, assign the shared bot user as black and start play immediately; in human mode, leave black empty and status "waiting" for someone to join',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id }) => {
-        const row = store.get(entity, id);
+      run: async ({ store, entity, id }) => {
+        const row = await store.get(entity, id);
         if (row.mode !== 'ai') return {};
-        let bot = store.list('User', { where: { email: BOT_EMAIL } })[0];
-        if (!bot) { const botId = store.insert('User', { email: BOT_EMAIL, password: 'not-a-real-login-1', name: 'Computer', role: 'player' }); bot = store.get('User', botId); }
-        store.update(entity, id, { black: bot.id, status: 'playing' });
+        let bot = (await store.list('User', { where: { email: BOT_EMAIL } }))[0];
+        if (!bot) { const botId = await store.insert('User', { email: BOT_EMAIL, password: 'not-a-real-login-1', name: 'Computer', role: 'player' }); bot = await store.get('User', botId); }
+        await store.update(entity, id, { black: bot.id, status: 'playing' });
         return {};
       },
     },
     'chess.join': {
       summary: 'the current user joins an open human-mode game as black',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id, user }) => {
-        const row = store.get(entity, id);
+      run: async ({ store, entity, id, user }) => {
+        const row = await store.get(entity, id);
         if (row.mode !== 'human') throw new Error('This game is not open for a second human player');
         if (row.black) throw new Error('This game already has a second player');
         if (!user || sameUser(user.id, row.white)) throw new Error('You cannot join your own game');
-        store.update(entity, id, { black: user.id });
+        await store.update(entity, id, { black: user.id });
         return {};
       },
     },
@@ -56,11 +56,11 @@ export default {
       // decide *which* side that player was.
       summary: 'the current user resigns; the other side is awarded the win',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id, user }) => {
-        const row = store.get(entity, id);
+      run: async ({ store, entity, id, user }) => {
+        const row = await store.get(entity, id);
         const result = sameUser(user.id, row.white) ? 'black' : 'white';
-        store.update(entity, id, { status: 'finished', result, endReason: 'resignation' });
-        bumpStats(store, row, result);
+        await store.update(entity, id, { status: 'finished', result, endReason: 'resignation' });
+        await bumpStats(store, row, result);
         return {};
       },
     },
@@ -71,12 +71,12 @@ export default {
       // string there — see docs/FORMAT.md's step table.
       summary: 'apply a legal move ("fromSq","to", optional "promotion" — default queen) for whichever colour is to move; refuses illegal moves, a move out of turn, or a game that is not in progress; in AI mode the bot replies immediately in the same request',
       effects: ['db.write'], requires: ['fromSq', 'to'],
-      run: ({ store, entity, id, step, resolve, user }) => {
-        const row = store.get(entity, id);
+      run: async ({ store, entity, id, step, resolve, user }) => {
+        const row = await store.get(entity, id);
         if (row.status !== 'playing') throw new Error('This game is not in progress');
-        const from = String(resolve({ v: step.fromSq }).v);
-        const to = String(resolve({ v: step.to }).v);
-        const promotionRaw = step.promotion !== undefined ? resolve({ v: step.promotion }).v : null;
+        const from = String((await resolve({ v: step.fromSq })).v);
+        const to = String((await resolve({ v: step.to })).v);
+        const promotionRaw = step.promotion !== undefined ? (await resolve({ v: step.promotion })).v : null;
         const promotion = promotionRaw || 'q';
         const before = parseFen(row.fen);
         const mover = before.turn === 'w' ? row.white : row.black;
@@ -84,8 +84,8 @@ export default {
         let outcome;
         try { outcome = makeMove(row.fen, { from, to, promotion }); }
         catch { throw new Error('Illegal move'); }
-        let ply = store.list('Move', { where: { game: id } }).length + 1;
-        store.insert('Move', { game: id, ply, by: user.id, from, to, notation: outcome.notation, fenAfter: outcome.fen });
+        let ply = (await store.list('Move', { where: { game: id } })).length + 1;
+        await store.insert('Move', { game: id, ply, by: user.id, from, to, notation: outcome.notation, fenAfter: outcome.fen });
         let fen = outcome.fen;
         let final = null;
         if (outcome.isCheckmate) final = { result: before.turn === 'w' ? 'white' : 'black', endReason: 'checkmate' };
@@ -97,14 +97,14 @@ export default {
             const aiFrom = indexToSq(aiMove.from), aiTo = indexToSq(aiMove.to);
             const aiOutcome = makeMove(fen, { from: aiFrom, to: aiTo, promotion: aiMove.promotion });
             ply += 1;
-            store.insert('Move', { game: id, ply, by: row.black, from: aiFrom, to: aiTo, notation: aiOutcome.notation, fenAfter: aiOutcome.fen });
+            await store.insert('Move', { game: id, ply, by: row.black, from: aiFrom, to: aiTo, notation: aiOutcome.notation, fenAfter: aiOutcome.fen });
             fen = aiOutcome.fen;
             if (aiOutcome.isCheckmate) final = { result: aiTurnColor === 'w' ? 'white' : 'black', endReason: 'checkmate' };
             else if (aiOutcome.isStalemate) final = { result: 'draw', endReason: 'stalemate' };
           }
         }
-        if (final) { store.update(entity, id, { fen, status: 'finished', result: final.result, endReason: final.endReason }); bumpStats(store, row, final.result); }
-        else store.update(entity, id, { fen });
+        if (final) { await store.update(entity, id, { fen, status: 'finished', result: final.result, endReason: final.endReason }); await bumpStats(store, row, final.result); }
+        else await store.update(entity, id, { fen });
         return {};
       },
     },
@@ -113,15 +113,15 @@ export default {
       // this game" here too.
       summary: 'reverse the last move — and, in AI mode, the bot\'s reply with it — restoring the board (and status) to how it was beforehand',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id }) => {
-        const row = store.get(entity, id);
-        const moves = store.list('Move', { where: { game: id }, sort: { field: 'id', dir: 'desc' } });
+      run: async ({ store, entity, id }) => {
+        const row = await store.get(entity, id);
+        const moves = await store.list('Move', { where: { game: id }, sort: { field: 'id', dir: 'desc' } });
         if (!moves.length) throw new Error('No moves to undo');
         const popCount = row.mode === 'ai' && sameUser(moves[0].by, row.black) && moves.length >= 2 ? 2 : 1;
-        for (let i = 0; i < popCount; i++) store.remove('Move', moves[i].id);
+        for (let i = 0; i < popCount; i++) await store.remove('Move', moves[i].id);
         const remaining = moves.slice(popCount);
         const fen = remaining.length ? remaining[0].fenAfter : START_FEN;
-        store.update(entity, id, { fen, status: 'playing', result: 'none', endReason: 'none' });
+        await store.update(entity, id, { fen, status: 'playing', result: 'none', endReason: 'none' });
         return {};
       },
     },

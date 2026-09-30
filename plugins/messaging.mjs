@@ -22,13 +22,13 @@ export default {
         const c = h.graph.connectors?.[step.connector];
         if (c && !['sms', 'whatsapp'].includes(c.kind)) h.err(`${h.path}/connector`, `connector "${step.connector}" is ${c.kind}, sms.send needs an sms or whatsapp connector`);
       },
-      run: ({ store, graph, step, resolve, text }) => {
+      run: async ({ store, graph, step, resolve, text }) => {
         const c = graph.connectors[step.connector];
-        const to = String(resolve({ v: step.to }).v ?? '');
+        const to = String((await resolve({ v: step.to })).v ?? '');
         if (!E164.test(to)) throw new Error('sms.send: "to" must be an E.164 number, e.g. "+15551234567"');
-        const body = text(step.text);
+        const body = await text(step.text);
         if (!body.trim()) throw new Error('sms.send: "text" cannot be empty');
-        return { delivery: store.enqueue({ kind: c.kind, connector: step.connector, target: to, payload: { from: c.from, to, text: body } }) };
+        return { delivery: await store.enqueue({ kind: c.kind, connector: step.connector, target: to, payload: { from: c.from, to, text: body } }) };
       },
     },
   },

@@ -33,12 +33,12 @@ export default {
         const f = h.fields[step.entity]?.[step.field];
         if (f && !f.type.numeric) h.err(`${h.path}/field`, `loyalty.award needs a numeric field; ${step.entity}.${step.field} is ${f.kind}`);
       },
-      run: ({ store, step, resolve }) => {
-        const id = resolve({ v: step.id }).v;
-        const row = store.get(step.entity, id);
+      run: async ({ store, step, resolve }) => {
+        const id = (await resolve({ v: step.id })).v;
+        const row = await store.get(step.entity, id);
         if (!row) throw new Error(`loyalty.award: no ${step.entity} #${id}`);
-        const points = Math.floor(Number(resolve({ v: step.amount }).v) || 0);
-        store.update(step.entity, id, { [step.field]: (row[step.field] || 0) + points });
+        const points = Math.floor(Number((await resolve({ v: step.amount })).v) || 0);
+        await store.update(step.entity, id, { [step.field]: (row[step.field] || 0) + points });
         return { points };
       },
     },

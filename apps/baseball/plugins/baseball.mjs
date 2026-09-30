@@ -3,8 +3,8 @@
 // shape as apps/chess/engine.mjs and apps/poker/engine.mjs).
 import { simulateGame } from '../engine.mjs';
 
-function lineupOf(store, teamId) {
-  return store.list('Player', { where: { team: teamId }, sort: { field: 'battingOrder', dir: 'asc' } })
+async function lineupOf(store, teamId) {
+  return (await store.list('Player', { where: { team: teamId }, sort: { field: 'battingOrder', dir: 'asc' } }))
     .map((p) => ({ id: p.id, name: p.name, rating: p.rating }));
 }
 
@@ -19,29 +19,29 @@ export default {
     'baseball.simulate': {
       summary: 'simulate the freshly-created game inning by inning (seeded by its own id), writing the play-by-play, the final score, each batter\'s stat line and both teams\' win/loss record',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id }) => {
-        const game = store.get(entity, id);
-        const home = store.get('Team', game.home);
-        const away = store.get('Team', game.away);
-        const homeLineup = lineupOf(store, game.home);
-        const awayLineup = lineupOf(store, game.away);
+      run: async ({ store, entity, id }) => {
+        const game = await store.get(entity, id);
+        const home = await store.get('Team', game.home);
+        const away = await store.get('Team', game.away);
+        const homeLineup = await lineupOf(store, game.home);
+        const awayLineup = await lineupOf(store, game.away);
         if (!homeLineup.length || !awayLineup.length) throw new Error('Both teams need at least one player on the roster before simulating');
         const result = simulateGame(id, homeLineup, awayLineup, home.defenseStrategy, away.defenseStrategy, game.innings);
         for (const p of result.log)
-          store.insert('Play', { game: id, seq: p.seq, inning: p.inning, half: p.half, description: p.description, homeScoreAfter: p.homeScoreAfter, awayScoreAfter: p.awayScoreAfter });
+          await store.insert('Play', { game: id, seq: p.seq, inning: p.inning, half: p.half, description: p.description, homeScoreAfter: p.homeScoreAfter, awayScoreAfter: p.awayScoreAfter });
         for (const [playerId, delta] of result.stats) {
-          const player = store.get('Player', playerId);
-          store.update('Player', playerId, { atBats: player.atBats + delta.atBats, hits: player.hits + delta.hits, homeRuns: player.homeRuns + delta.homeRuns, rbis: player.rbis + delta.rbis });
+          const player = await store.get('Player', playerId);
+          await store.update('Player', playerId, { atBats: player.atBats + delta.atBats, hits: player.hits + delta.hits, homeRuns: player.homeRuns + delta.homeRuns, rbis: player.rbis + delta.rbis });
         }
-        store.update(entity, id, {
+        await store.update(entity, id, {
           status: 'finished', homeScore: result.homeScore, awayScore: result.awayScore,
           homeDefenseUsed: home.defenseStrategy, awayDefenseUsed: away.defenseStrategy,
         });
         if (result.homeScore !== result.awayScore) {
           const winner = result.homeScore > result.awayScore ? game.home : game.away;
           const loser = result.homeScore > result.awayScore ? game.away : game.home;
-          const wt = store.get('Team', winner); store.update('Team', winner, { wins: wt.wins + 1 });
-          const lt = store.get('Team', loser); store.update('Team', loser, { losses: lt.losses + 1 });
+          const wt = await store.get('Team', winner); await store.update('Team', winner, { wins: wt.wins + 1 });
+          const lt = await store.get('Team', loser); await store.update('Team', loser, { losses: lt.losses + 1 });
         }
         return {};
       },

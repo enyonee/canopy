@@ -8,7 +8,7 @@ export default {
     'raw.insert': {
       summary: 'insert a row of "entity" straight from "values" — the store, nothing else',
       effects: ['db.write'], requires: ['entity', 'values'],
-      run: ({ store, step, resolve }) => ({ id: store.insert(step.entity, resolve(step.values)) }),
+      run: async ({ store, step, resolve }) => ({ id: await store.insert(step.entity, await resolve(step.values)) }),
     },
   },
 };

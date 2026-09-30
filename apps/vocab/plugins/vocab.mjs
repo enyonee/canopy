@@ -17,17 +17,17 @@ export default {
     'vocab.grade': {
       summary: 'grade a submitted quiz attempt ("kind", "wordSet", "answers" as a JSON array of {wordId, value} or {wordId, type, value} for matching, or {wordId, knew} for flashcard) against the stored Word rows, and record the result as an Attempt',
       effects: ['db.write'], requires: ['kind', 'wordSet', 'answers'],
-      run: ({ store, step, resolve }) => {
-        const kind = String(resolve({ v: step.kind }).v);
+      run: async ({ store, step, resolve }) => {
+        const kind = String((await resolve({ v: step.kind })).v);
         if (!['matching', 'fillblank', 'unjumble', 'crossword', 'flashcard'].includes(kind)) throw new Error('unknown quiz kind');
-        const wordSet = Number(resolve({ v: step.wordSet }).v);
-        const raw = resolve({ v: step.answers }).v;
+        const wordSet = Number((await resolve({ v: step.wordSet })).v);
+        const raw = (await resolve({ v: step.answers })).v;
         let answers;
         try { answers = JSON.parse(raw); } catch { throw new Error('answers must be valid JSON'); }
         if (!Array.isArray(answers) || !answers.length) throw new Error('answers must be a non-empty list');
         let score = 0;
         for (const a of answers) {
-          const word = store.get('Word', a.wordId);
+          const word = await store.get('Word', a.wordId);
           if (!word || Number(word.wordSet) !== wordSet) throw new Error('an answer refers to a word outside this word set');
           if (kind === 'flashcard') { if (a.knew) score++; continue; }
           const expected = answerKey(word, kind, a.type);
@@ -35,7 +35,7 @@ export default {
           if (expected && got === expected) score++;
         }
         const total = answers.length;
-        const id = store.insert('Attempt', { kind, wordSet, score, total });
+        const id = await store.insert('Attempt', { kind, wordSet, score, total });
         return { id, score, total };
       },
     },

@@ -134,7 +134,7 @@ test('every app: rules and step values give the same answers over the snapshot a
         for (const row of rows) for (const s of leaves(g.steps)) {
           const one = (k) => {
             const ctx = { rowEntity: g.entity, id: row?.id, row, values: row || {}, user: null };
-            const run = () => (s.startsWith('@') || s.startsWith('=') ? interps[k].resolve(ctx)(s) : interps[k].interpolate(s, ctx));
+            const run = async () => (s.startsWith('@') || s.startsWith('=') ? interps[k].resolve(ctx)(s) : await interps[k].interpolate(s, ctx));
             return attempt(run);
           };
           assert.equal(one(0), one(1), `${app}/${g.entity}#${row?.id}: ${s} resolves differently`);

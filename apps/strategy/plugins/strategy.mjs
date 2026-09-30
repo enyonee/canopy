@@ -26,7 +26,7 @@ export default {
     'strategy.chooseRace': {
       summary: 'the current user adopts the Race row this action runs on',
       effects: ['db.write'], requires: [],
-      run: ({ store, id, user }) => { store.update('User', user.id, { race: id }); return {}; },
+      run: async ({ store, id, user }) => { await store.update('User', user.id, { race: id }); return {}; },
     },
     // A formula-resolved battle: soldiers x attack/defense rating, each side
     // jittered +/-20% by a seed derived from both sides' ids and current
@@ -37,9 +37,9 @@ export default {
     'strategy.attack': {
       summary: 'the current user attacks the User row this action runs on; the higher (soldiers x rating, jittered) side wins and loots some gold',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id, user }) => {
-        const defender = store.get(entity, id);
-        const attacker = store.get(entity, user.id);
+      run: async ({ store, entity, id, user }) => {
+        const defender = await store.get(entity, id);
+        const attacker = await store.get(entity, user.id);
         if (sameUser(defender.id, attacker.id)) throw new Error('You cannot attack yourself');
         if (!attacker.race || !defender.race) throw new Error('Both sides need to have chosen a race first');
         const rnd = mulberry32(Number(attacker.id) * 97 + Number(defender.id) * 13 + attacker.gold + defender.gold);
@@ -48,15 +48,15 @@ export default {
         const attackerWins = attackPower > defensePower;
         const loot = attackerWins ? Math.min(Math.round(defender.gold * 0.1), defender.gold) : 0;
         if (attackerWins && loot > 0) {
-          store.update(entity, defender.id, { gold: defender.gold - loot });
-          store.update(entity, attacker.id, { gold: attacker.gold + loot });
+          await store.update(entity, defender.id, { gold: defender.gold - loot });
+          await store.update(entity, attacker.id, { gold: attacker.gold + loot });
         }
         const summary = attackerWins
           ? `${attacker.name} defeated ${defender.name} (power ${Math.round(attackPower)} vs ${Math.round(defensePower)}) and looted ${loot} gold`
           : `${attacker.name} attacked ${defender.name} and lost (power ${Math.round(attackPower)} vs ${Math.round(defensePower)})`;
-        store.insert('Report', { user: attacker.id, summary });
-        store.insert('Report', { user: defender.id, summary });
-        store.insert('Message', { toUser: defender.id, fromUser: attacker.id, subject: 'You were attacked!', body: summary });
+        await store.insert('Report', { user: attacker.id, summary });
+        await store.insert('Report', { user: defender.id, summary });
+        await store.insert('Message', { toUser: defender.id, fromUser: attacker.id, subject: 'You were attacked!', body: summary });
         return {};
       },
     },
