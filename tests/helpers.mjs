@@ -119,3 +119,34 @@ export const compilerOff = (store, fn) => {
   store.buildAggCache = () => ({ groups: new Map(), scalars: new Map(), clock: new Date() });
   try { return fn(); } finally { delete store.compileAggIn; store.plans.clear(); store.aggValue = aggValue; store.buildAggCache = buildAggCache; }
 };
+
+// Rows for every entity the app's own seed left empty (and a few extra for the seeded ones), in reference
+// order, each ref pointing at a row that exists: enough for every hop and aggregate to have something to read.
+export function populate(store, graph, perEntity = 8) {
+  const refs = (e) => store.fields[e].filter((f) => f.kind === 'ref').map((f) => f.target).filter((t) => t !== e);
+  const order = [], seen = new Set();
+  const visit = (e) => { if (seen.has(e)) return; seen.add(e); refs(e).forEach(visit); order.push(e); };
+  Object.keys(graph.data).forEach(visit);
+  const value = (f, i, ids) => {
+    switch (f.kind) {
+      case 'ref': return ids[f.target]?.length && i % 5 !== 4 ? ids[f.target][i % ids[f.target].length] : undefined;
+      case 'enum': return f.options[i % f.options.length];
+      case 'int': return (i % 7) - 1;
+      case 'money': return ((i % 9) + 1) * 1.25;
+      case 'bool': return i % 2 === 0;
+      case 'date': return `2026-0${1 + (i % 9)}-1${i % 10}`;
+      case 'time': return `2026-0${1 + (i % 9)}-1${i % 10}T0${i % 10}:30:00.000Z`;
+      case 'file': case 'image': return undefined;
+      default: return `${f.name} ${i}`;
+    }
+  };
+  const ids = {};
+  for (const e of order) {
+    ids[e] = store.list(e, {}).map((r) => r.id);
+    for (let i = 0; i < perEntity; i++) {
+      const row = {};
+      for (const f of store.fields[e]) if (!f.derive) row[f.name] = value(f, i, ids);
+      try { ids[e].push(store.insert(e, row)); } catch { /* a rule or a required column refused this generated row: fewer rows, same test */ }
+    }
+  }
+}
