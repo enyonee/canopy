@@ -372,10 +372,10 @@ test('the flusher is off under noTimers, and stops when the server closes', asyn
   const live = flusher(t);
   assert.equal(t.clock.pending(), 1, 'the interval (no waiting row, so no one-shot)');
   queue(t.store);
-  live.f.arm();
+  await live.f.arm();
   assert.equal(t.clock.pending(), 1);
   t.store.outboxUpdate(1, { nextAttemptAt: t.clock.now() + 500 });
-  live.f.arm();
+  await live.f.arm();
   assert.equal(t.clock.pending(), 2, 'the interval and the one-shot');
   live.server.emit('close');
   assert.equal(t.clock.pending(), 0);
@@ -395,7 +395,7 @@ test('the flusher does not overlap itself, survives a failing flush, and stays s
   assert.equal(net.calls.length, 1);
   const later = queue(t.store);
   t.store.outboxUpdate(later, { nextAttemptAt: t.clock.now() + 10 });
-  f.arm();
+  await f.arm();
   await t.clock.advance(10);
   assert.equal(net.calls.length, 1, 'woken while a flush is running: it does not start another');
   const distant = queue(t.store);

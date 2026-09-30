@@ -54,6 +54,7 @@ async function withServer(fn, graph = 'app.json') {
   const port = freshPort();
   const bootStart = performance.now();
   const app = serve({ graphFile, dbFile, traceFile: undefined, port, noTimers: true });
+  await app.ready;
   const bootMs = performance.now() - bootStart;
   try { await fn(app, `http://127.0.0.1:${port}`, bootMs); }
   finally { await new Promise((resolve) => app.server.close(resolve)); fs.rmSync(dir, { recursive: true, force: true }); }

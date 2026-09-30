@@ -30,14 +30,21 @@ import { flush } from './outbox.mjs';
 import { systemClock } from './clock.mjs';
 import { connectorEnv } from './deploy.mjs';
 
-function invalidGraphServer(graph, errors, port, host) {
+// What a server answers while the graph cannot be served: the errors, on every path.
+function invalidHandler(graph, errors) {
   console.error(`graph is invalid:\n${formatErrors(errors)}`);
-  const server = http.createServer((_, res) => {
+  return (_, res) => {
     res.writeHead(500, { 'content-type': 'text/html; charset=utf-8' });
     res.end(errorPage(null, formatErrors(errors)));
-  });
+  };
+}
+
+function invalidGraphServer(graph, errors, port, host) {
+  const server = http.createServer(invalidHandler(graph, errors));
   server.listen(port, host);
-  return { server, graph, invalid: true };
+  const app = { server, graph, invalid: true, ready: null };
+  app.ready = Promise.resolve(app);
+  return app;
 }
 
 async function dispatch(ctx) {
@@ -60,10 +67,10 @@ async function dispatch(ctx) {
 function startTimers(graph, interp, trace, server, noTimers) {
   if (noTimers) return;
   for (const sched of graph.schedule || []) {
-    const timer = setInterval(() => {
+    const timer = setInterval(async () => {
       trace({ kind: 'schedule', name: sched.name, manual: false });
-      interp.attempt(() => interp.runSteps(sched.do, { rowEntity: null, id: null, values: {}, user: null }))
-        .catch((e) => trace({ kind: 'error', message: String(e && e.message) }));
+      try { await interp.attempt(async (tx) => await interp.runSteps(sched.do, { rowEntity: null, id: null, values: {}, user: null, tx })); }
+      catch (e) { trace({ kind: 'error', message: String(e && e.message) }); }
     }, everyMs(sched.every));
     timer.unref();
     server.on('close', () => clearInterval(timer));
@@ -80,9 +87,11 @@ const PRUNE_EVERY_MS = 3600 * 1000;
 export function startFlusher({ store, graph, server, trace, noTimers, clock = systemClock, intervalMs = 5000, ...flushOpts }) {
   if (noTimers) return null;
   let every = null, shot = null, stopped = false, busy = false, prunedAt = -Infinity;
-  const arm = () => {
+  // Read first, then swap the timer: nothing is left unarmed while the store answers.
+  const arm = async () => {
+    const at = await store.outboxNextDue(clock.now());
+    if (stopped) return;
     clock.clear(shot);
-    const at = store.outboxNextDue(clock.now());
     shot = at === null ? null : clock.setTimer(tick, at - clock.now());
   };
   const tick = async () => {
@@ -90,20 +99,48 @@ export function startFlusher({ store, graph, server, trace, noTimers, clock = sy
     busy = true;
     try {
       await flush(store, graph, { ...flushOpts, trace, clock });
-      if (clock.now() - prunedAt >= PRUNE_EVERY_MS) { prunedAt = clock.now(); store.inboundPrune(prunedAt - INBOUND_RETENTION_MS); }
+      if (clock.now() - prunedAt >= PRUNE_EVERY_MS) { prunedAt = clock.now(); await store.inboundPrune(prunedAt - INBOUND_RETENTION_MS); }
     }
     catch (e) { trace({ kind: 'error', message: String(e && e.message) }); }
     finally { busy = false; }
-    if (!stopped) arm();
+    if (!stopped) await arm();
   };
   const loop = () => { every = clock.setTimer(async () => { await tick(); if (!stopped) loop(); }, intervalMs); };
   const stop = () => { stopped = true; clock.clear(every); clock.clear(shot); };
   server.on('close', stop);
   loop();
-  arm();
+  arm().catch((e) => trace({ kind: 'error', message: String(e && e.message) }));
   return { stop, arm };
 }
 
+// The request handler of a booted app: one request context per request, the route modules in order.
+function requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env }) {
+  return async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const ctx = await createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile });
+    try {
+      await dispatch(ctx);
+    } catch (e) {
+      if (e instanceof TooBig) { trace({ kind: 'refused', message: e.message }); ctx.send(413, noticePage(graph, ctx.vc, 'Too large', e.message)); return; }
+      trace({ kind: 'error', message: String(e && e.message), stack: String(e && e.stack) });
+      console.error(e && e.stack);
+      ctx.send(500, errorPage(graph, String(e && e.message)));
+    }
+  };
+}
+
+// The scaffold's identity row and the declared seed rows. A seed row is checked against the graph's own rules
+// exactly like any other write (Store#insert/#update's guard, runtime/store/rules.mjs): a violation is a boot
+// error, not a crash, served the way a statically invalid graph is (item 20).
+async function bootData(graph, store, graphFile, filesDir) {
+  const meId = await bootstrapIdentity(graph, store);
+  await bootstrapSeed(graph, store, path.dirname(graphFile), filesDir);
+  return meId;
+}
+
+// `serve()` answers at once with `{ server, ready, ... }`; the server starts listening only after `ready`, i.e. after the
+// store is migrated and the seed is in, so the first request finds a finished database. `ready` resolves to the app
+// itself (`invalid` is then final: a seed or deploy-file error is served as the errors, on the same server).
 export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [], noTimers = false, clock = systemClock }) {
   const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
   const errors = [...pluginErrors, ...validate(graph, registry)];
@@ -115,43 +152,28 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
   store.migrations.forEach((m) => console.log(`migration: ${m}`));
   const perms = permissions(graph, store);
   const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key'), store) : null;
-
-  // A seed row is checked against the graph's own rules exactly like any other
-  // write (Store#insert/#update's guard, runtime/store/rules.mjs) — a
-  // violation is a boot error, not a crash: served the same way a statically
-  // invalid graph is (item 20).
-  let meId;
-  try {
-    meId = bootstrapIdentity(graph, store);
-    bootstrapSeed(graph, store, path.dirname(graphFile), filesDir);
-  } catch (e) {
-    return invalidGraphServer(graph, [{ path: '/seed', message: e.message }], port, host);
-  }
-
   const trace = (event) => {
     if (!traceFile) return;
     fs.appendFileSync(traceFile, JSON.stringify({ at: new Date().toISOString(), ...event }) + '\n');
   };
-  // The deploy file (each connector's mode) must be sound before anything is delivered.
-  const env = connectorEnv(dir, graph.app);
-  try { env.deploy(); } catch (e) { return invalidGraphServer(graph, [{ path: '/deploy.json', message: e.message }], port, host); }
-  const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl, clock, env });
 
-  const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const ctx = createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile });
-    try {
-      await dispatch(ctx);
-    } catch (e) {
-      if (e instanceof TooBig) { trace({ kind: 'refused', message: e.message }); ctx.send(413, noticePage(graph, ctx.vc, 'Too large', e.message)); return; }
-      trace({ kind: 'error', message: String(e && e.message), stack: String(e && e.stack) });
-      console.error(e && e.stack);
-      ctx.send(500, errorPage(graph, String(e && e.message)));
-    }
-  });
+  let handle = (_, res) => { res.writeHead(503); res.end(); }; // nothing listens before `ready`; the real handler replaces this
+  const server = http.createServer((req, res) => handle(req, res));
+  const app = { server, graph, store, perms, flusher: null, invalid: false, ready: null };
+  const refuse = (list) => { handle = invalidHandler(graph, list); app.invalid = true; server.listen(port, host); return app; };
 
-  startTimers(graph, interp, trace, server, noTimers);
-  const flusher = startFlusher({ store, graph, server, trace, noTimers, clock, registry, fetchImpl, env });
-  server.listen(port, host);
-  return { server, graph, store, perms, flusher, invalid: false };
+  app.ready = (async () => {
+    let meId;
+    try { meId = await bootData(graph, store, graphFile, filesDir); } catch (e) { return refuse([{ path: '/seed', message: e.message }]); }
+    // The deploy file (each connector's mode) must be sound before anything is delivered.
+    const env = connectorEnv(dir, graph.app);
+    try { env.deploy(); } catch (e) { return refuse([{ path: '/deploy.json', message: e.message }]); }
+    const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl, clock, env, graphFile });
+    handle = requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile });
+    startTimers(graph, interp, trace, server, noTimers);
+    app.flusher = startFlusher({ store, graph, server, trace, noTimers, clock, registry, fetchImpl, env });
+    server.listen(port, host);
+    return app;
+  })();
+  return app;
 }

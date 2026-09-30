@@ -79,16 +79,16 @@ function home(ctx) {
   return true;
 }
 
-function page(ctx) {
+async function page(ctx) {
   const { graph, store, parts, send, flash, vc } = ctx;
   const p = (graph.pages || []).find((x) => x.id === parts[1]);
   if (!p) { send(404, errorPage(graph, `no page ${parts[1]}`)); return true; }
   if (!vc.canSee(p)) { ctx.deny(); return true; }
-  send(200, staticPage(graph, p, flash, vc, store, pagePre(ctx, p)));
+  send(200, staticPage(graph, p, flash, vc, store, await pagePre(ctx, p)));
   return true;
 }
 
-function dashboard(ctx) {
+async function dashboard(ctx) {
   const { graph, store, parts, flash, vc, url, trace, wantsCsv, resolveTop, ownWhere } = ctx;
   const d = (graph.dashboards || []).find((x) => x.id === parts[1]);
   if (!d) { ctx.answer(404, errorPage(graph, `no dashboard ${parts[1]}`), { ok: false, status: 404, errors: [`no dashboard ${parts[1]}`] }); return true; }
@@ -97,30 +97,31 @@ function dashboard(ctx) {
   trace({ kind: 'dashboard', id: d.id, period });
   // A card is a read like any other: an own-scoped role counts its own rows, and a
   // card over an entity the role may not view is not on its dashboard at all.
-  const scoped = (x) => ({ ...x, where: { ...resolveTop(x.where || {}), ...ownWhere(x.entity) } });
-  const mine = { ...d, cards: (d.cards || []).map(scoped), tables: (d.tables || []).map(scoped), charts: (d.charts || []).map(scoped) };
-  const pre = dashboardPre(ctx, d, mine, period);
+  const scoped = async (x) => ({ ...x, where: { ...await resolveTop(x.where || {}), ...await ownWhere(x.entity) } });
+  const mine = { ...d, cards: [], tables: [], charts: [] };
+  for (const part of ['cards', 'tables', 'charts']) for (const x of d[part] || []) mine[part].push(await scoped(x));
+  const pre = await dashboardPre(ctx, d, mine, period);
   if (wantsCsv) { dashboardCsv(ctx, d, mine, pre); return true; }
   if (ctx.wantsJSON) { dashboardJson(ctx, mine, pre); return true; }
   ctx.send(200, dashboardView(graph, store, mine, flash, vc, period, pre));
   return true;
 }
 
-function list(ctx) {
+async function list(ctx) {
   const { graph, store, parts, flash, vc, url, wantsCsv, resolveTop, ownWhere, sortOf, paged, exportRows } = ctx;
   const l = (graph.lists || []).find((x) => x.id === parts[1]);
   if (!l) { ctx.answer(404, errorPage(graph, `no list ${parts[1]}`), { ok: false, status: 404, errors: [`no list ${parts[1]}`] }); return true; }
   if (!vc.canSee(l) || !vc.can(l.entity, 'view')) { ctx.deny(); return true; }
-  const where = { ...resolveTop(l.where || {}), ...ownWhere(l.entity) };
+  const where = { ...await resolveTop(l.where || {}), ...await ownWhere(l.entity) };
   const view = { ...(graph.override?.[`${l.entity}.list`] || {}), ...l, create: l.create ?? false };
   const sort = sortOf(l.entity, view);
   const opts = { where, sort, search: l.search || [], q: url.searchParams.get('q') || '' };
   const cols = view.columns || store.fields[l.entity].filter((f) => !f.type.secret).map((f) => f.name);
-  if (wantsCsv) { exportRows(l.id, l.entity, store.list(l.entity, opts), cols, view.labels || {}); return true; }
-  const pg = paged(l.entity, opts, view);
+  if (wantsCsv) { await exportRows(l.id, l.entity, await store.list(l.entity, opts), cols, view.labels || {}); return true; }
+  const pg = await paged(l.entity, opts, view);
   if (ctx.wantsJSON) { ctx.sendJson(200, { rows: pg.rows.map((r) => rowJSON(store, l.entity, store.fields[l.entity], r, vc)), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
   const g = { ...graph, override: { ...graph.override, [`${l.entity}.list`]: view } };
-  const pre = listPre(ctx, l.entity, store.fields[l.entity], view, pg.rows);
+  const pre = await listPre(ctx, l.entity, store.fields[l.entity], view, pg.rows);
   ctx.send(200, listView(g, store, l.entity, store.fields[l.entity], pg.rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, pre, path: `/list/${l.id}`,
     query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }));
   return true;
@@ -129,19 +130,20 @@ function list(ctx) {
 // One result section per /search entity (item 7): each entity's own
 // Entity.list "search" fields, scoped by the viewer's own permissions —
 // nothing is queried until a real "q" arrives.
-function search(ctx) {
+async function search(ctx) {
   const { graph, store, vc, url } = ctx;
   const q = url.searchParams.get('q') || '';
-  const results = graph.search.entities.filter((e) => vc.can(e, 'view')).map((entity) => {
+  const results = [];
+  for (const entity of graph.search.entities.filter((e) => vc.can(e, 'view'))) {
     const ov = graph.override?.[`${entity}.list`] || {};
-    const rows = q && (ov.search || []).length ? store.list(entity, { search: ov.search, q, where: vc.ownWhere(entity) }) : [];
-    return { entity, rows };
-  });
+    const rows = q && (ov.search || []).length ? await store.list(entity, { search: ov.search, q, where: await vc.ownWhere(entity) }) : [];
+    results.push({ entity, rows });
+  }
   if (ctx.wantsJSON) {
     ctx.sendJson(200, { results: results.map(({ entity, rows }) => ({ entity, rows: rows.map((r) => rowJSON(store, entity, store.fields[entity], r, vc)) })) });
     return true;
   }
-  ctx.send(200, searchView(graph, store, q, results, vc, searchPre(ctx, results)));
+  ctx.send(200, searchView(graph, store, q, results, vc, await searchPre(ctx, results)));
   return true;
 }
 

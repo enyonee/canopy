@@ -42,18 +42,18 @@ export function sessions(keyFile, store = null) {
     if (!m) return null;
     try { return decodeURIComponent(m[1]); } catch { return null; }
   };
-  const start = (userId) => {
+  const start = async (userId) => {
     const sid = crypto.randomBytes(16).toString('hex');
-    store.sessionSet(sid, userId);
+    await store.sessionSet(sid, userId);
     return sign(sid);
   };
-  const read = (cookieHeader) => {
+  const read = async (cookieHeader) => {
     const sid = verify(token(cookieHeader));
-    return sid ? store.sessionUser(sid) : null;
+    return sid ? await store.sessionUser(sid) : null;
   };
-  const end = (cookieHeader) => {
+  const end = async (cookieHeader) => {
     const sid = verify(token(cookieHeader));
-    if (sid) store.sessionEnd(sid);
+    if (sid) await store.sessionEnd(sid);
   };
   const setCookie = (tok) => `ag_session=${encodeURIComponent(tok)}; Path=/; HttpOnly; SameSite=Lax`;
   const clearCookie = () => 'ag_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
@@ -102,12 +102,12 @@ function matchesPath(parents, store, entity, row, path, userId) {
 
 // The load phase of matchesPath: the parents of `rows` along one one-hop path, in ONE query, whatever
 // the number of rows. A blank or non-numeric reference points at nothing, like `store.raw` read it.
-function primePath(parents, store, entity, rows, refField) {
+async function primePath(parents, store, entity, rows, refField) {
   const f = store.field(entity, refField);
   if (!f) return;
   const todo = rows.filter((r) => !parents.byRow.get(r)?.has(refField));
   const keys = [...new Set(todo.map((r) => r[refField]).filter((v) => v !== null && v !== undefined && v !== '' && !Number.isNaN(Number(v))).map((v) => String(Number(v))))];
-  const found = new Map((keys.length ? store.listRawByIds(f.target, keys) : []).map((p) => [String(p.id), p]));
+  const found = new Map((keys.length ? await store.listRawByIds(f.target, keys) : []).map((p) => [String(p.id), p]));
   for (const r of todo) {
     const v = r[refField];
     parents.put(r, refField, v === null || v === undefined || v === '' ? null : found.get(String(Number(v))) ?? null);
@@ -118,14 +118,14 @@ function primePath(parents, store, entity, rows, refField) {
 // of `entity` owned by `userId` under one path, using only the public store API
 // (store.list, which already knows "in") — no raw SQL here. A LOADER: it queries, so routes call it
 // (through `ownWhere`) while they load a page, never while a view renders.
-function idsForPath(store, entity, path, userId) {
-  if (path.length === 1) return store.list(entity, { where: { [path[0]]: userId } }).map((r) => r.id);
+async function idsForPath(store, entity, path, userId) {
+  if (path.length === 1) return (await store.list(entity, { where: { [path[0]]: userId } })).map((r) => r.id);
   const [refField, subField] = path;
   const f = store.field(entity, refField);
   if (!f) return [];
-  const parentIds = store.list(f.target, { where: { [subField]: userId } }).map((r) => r.id);
+  const parentIds = (await store.list(f.target, { where: { [subField]: userId } })).map((r) => r.id);
   if (!parentIds.length) return [];
-  return store.list(entity, { where: { [refField]: { in: parentIds } } }).map((r) => r.id);
+  return (await store.list(entity, { where: { [refField]: { in: parentIds } } })).map((r) => r.id);
 }
 
 // --- the permission matrix --------------------------------------------------------
@@ -190,14 +190,15 @@ function ownFieldFor(spec, roleOf, user, entity) {
 // A where-fragment that narrows a list/dashboard/related read to owned rows — {}
 // when the role has no own grant on this entity, or when `op` (default "view")
 // is one of its unscoped "all" operations.
-function ownWhereFor(spec, store, roleOf, user, entity, op) {
+async function ownWhereFor(spec, store, roleOf, user, entity, op) {
   if (!spec) return {};
   const e = entitySpecFor(spec, roleOf(user), entity);
   if (!e?.own || opAllowed(e.all, op)) return {};
   const userId = user ? user.id : -1;
   if (e.own.length === 1 && e.own[0].length === 1) return { [e.own[0][0]]: userId };
   if (!user) return { id: { in: [] } };
-  const ids = new Set(e.own.flatMap((p) => idsForPath(store, entity, p, userId)));
+  const ids = new Set();
+  for (const p of e.own) for (const id of await idsForPath(store, entity, p, userId)) ids.add(id);
   return { id: { in: [...ids] } };
 }
 
@@ -212,10 +213,10 @@ export function permissions(graph, store = null) {
     // Before `can`/`ownOk` judge rows of `entity` for `user`: the load phase of their ownership checks.
     // A one-hop `own` path reads the row's parent, so the parents of all `rows` are loaded here, in one
     // query per path; a row that was not primed makes the check throw `not primed`.
-    prime(user, entity, rows) {
+    async prime(user, entity, rows) {
       if (!spec || !store) return;
       const e = entitySpecFor(spec, roleOf(user), entity);
-      for (const p of e?.own || []) if (p.length === 2) primePath(parents, store, entity, rows, p[0]);
+      for (const p of e?.own || []) if (p.length === 2) await primePath(parents, store, entity, rows, p[0]);
     },
     can: (user, entity, op, row = null) => canOp(spec, parents, store, roleOf, user, entity, op, row),
     ownOk: (user, entity, row, op = null) => ownOkFor(spec, parents, store, roleOf, user, entity, row, op),

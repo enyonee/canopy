@@ -111,7 +111,8 @@ test('every app: rules and step values give the same answers over the snapshot a
       const rehash = (e, row) => { for (const n of secrets(e)) if (row[n]) row[n] = HASH; };
       for (const [e, rows] of Object.entries(graph.seed || {})) rows.forEach((r) => rehash(e, r));
       if (graph.identity) rehash(graph.identity.entity, graph.identity.defaults || {});
-      const meIds = stores.map((s) => { const id = bootstrapIdentity(graph, s); bootstrapSeed(graph, s, dir, null); return id; });
+      const meIds = [];
+      for (const s of stores) { const id = await bootstrapIdentity(graph, s); await bootstrapSeed(graph, s, dir, null); meIds.push(id); }
       const [a, b] = writeAll(stores, graph);
       assert.deepEqual(a, b, `${app}: a write ended differently`);
       const messages = new Set(Object.values(graph.rules || {}).flat().filter((r) => r.check).map((r) => `error ${r.message}`));

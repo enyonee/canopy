@@ -198,9 +198,15 @@ export class Store {
     return Number(row.n);
   }
 
+  // `fn` gets the transaction-bound view of the store and must use it for everything it reads and writes
+  // (docs/POSTGRES.md section 3). `within(tx)` is where S5 binds the driver's transaction handle to the store.
+  // With the synchronous SQLite driver the view is the store itself, so nothing changes.
+  // A `fn` that returns a promise is awaited by the driver before it commits.
   transaction(fn) {
-    return this.drv.transaction(fn);
+    return this.drv.transaction((tx) => fn(this.within(tx)));
   }
+
+  within(_tx) { return this; }
 
   // --- derived fields ----------------------------------------------------------
   // Pages, `get`, labels, CSV and dashboards evaluate over a snapshot loaded before evaluation

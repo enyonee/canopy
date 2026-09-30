@@ -41,6 +41,7 @@ export async function main(argv, { log = console.log, err = console.error, stdin
     port, registry, pluginErrors,
     noTimers: Boolean(process.env.AG_NO_TIMERS),
   });
+  await app.ready; // the store is migrated and seeded, and the server starts listening
   log(`${app.invalid ? 'invalid graph served at' : 'app running at'} http://127.0.0.1:${port}`);
   return { code: 0, app };
 }

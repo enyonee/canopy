@@ -72,26 +72,26 @@ const safeNext = (to) => (typeof to === 'string' && /^\/(?![/\\])[^\s\x00-\x1f]*
 // not the whole matching set: it takes the entity and the same query options
 // listRaw/list would, never an already-fetched row array.
 function createListHelpers(url, store, sendCsv, vc) {
-  const paged = (entity, opts, ov) => {
+  const paged = async (entity, opts, ov) => {
     const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
-    return store.listPage(entity, opts, { page, pageSize: ov.pageSize || 50 });
+    return await store.listPage(entity, opts, { page, pageSize: ov.pageSize || 50 });
   };
   const sortOf = (entity, ov) => {
     const field = url.searchParams.get('sort');
     if (field && (field === 'id' || store.field(entity, field))) return { field, dir: url.searchParams.get('dir') === 'desc' ? 'desc' : 'asc' };
     return ov.sort || null;
   };
-  const exportRows = (name, entity, rows, cols, labels) => {
+  const exportRows = async (name, entity, rows, cols, labels) => {
     const fields = store.fields[entity];
     // The labels of every reference cell, loaded before the first line is formatted.
-    const pre = prefetched(store.labelsFor(refPairs(fields, cols, rows)));
+    const pre = prefetched(await store.labelsFor(refPairs(fields, cols, rows)));
     const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels, vc, pre) : r[c]; };
     return sendCsv(name, cols.map(label), rows.map((r) => cols.map((c) => pick(r, c))));
   };
   return { paged, sortOf, exportRows };
 }
 
-export function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
+export async function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
   const parts = url.pathname.split('/').filter(Boolean);
   const wantsCsv = parts.length > 0 && parts[parts.length - 1].endsWith('.csv');
   if (wantsCsv) parts[parts.length - 1] = parts[parts.length - 1].slice(0, -4);
@@ -108,18 +108,18 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
   // called at the exact point a route would otherwise `send(code, html)`.
   const answer = (code, html, json) => (wantsJSON ? sendJson(code, json) : send(code, html));
 
-  const user = sess ? store.get(graph.roles.entity, sess.read(req.headers.cookie)) : null;
+  const user = sess ? await store.get(graph.roles.entity, await sess.read(req.headers.cookie)) : null;
   const role = perms.enabled ? perms.roleOf(user) : null;
-  const ownWhere = (entity, op = 'view') => perms.ownWhere(user, entity, op);
+  const ownWhere = async (entity, op = 'view') => await perms.ownWhere(user, entity, op);
   const vc = {
     user, role,
     can: (e, op, row) => perms.can(user, e, op, row),
     canSee: (item) => perms.canSee(user, item),
     isAdmin: !perms.enabled || perms.isAdmin(user),
     ownField: (e) => perms.ownField(user, e),
-    ownWhere: (e, op) => ownWhere(e, op),
+    ownWhere: async (e, op) => await ownWhere(e, op),
     ownOk: (e, row, op) => perms.ownOk(user, e, row, op),
-    prime: (e, rows) => perms.prime(user, e, rows),
+    prime: async (e, rows) => { await perms.prime(user, e, rows); },
     outbox: !perms.enabled || perms.isAdmin(user),
     settings: !perms.enabled || perms.isAdmin(user),
   };
