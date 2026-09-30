@@ -7,9 +7,9 @@
 // from here once the row itself is resolved.
 import { errorPage, label, rowJSON } from '../render.mjs';
 import { listView } from '../render/list.mjs';
-import { formView, formFieldsFor } from '../render/form.mjs';
-import { detailView } from '../render/detail.mjs';
+import { formFieldsFor } from '../render/form.mjs';
 import { handleRow } from './rows.mjs';
+import { listPre, renderForm, renderDetail } from './load.mjs';
 
 function listRoute(ctx, entity, fields, ov) {
   const { store, vc, url, ownWhere, resolveTop, sortOf, paged, exportRows, wantsCsv, trace, user, flash, graph, send } = ctx;
@@ -40,7 +40,8 @@ function listRoute(ctx, entity, fields, ov) {
   }
   const pg = paged(entity, opts, ov);
   trace({ kind: 'query', entity, q, where, rows: pg.total, who: user?.id ?? null });
-  ctx.answer(200, listView(graph, store, entity, fields, pg.rows, { q, where, flash, vc, range, query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }),
+  const pre = listPre(ctx, entity, fields, ov, pg.rows);
+  ctx.answer(200, listView(graph, store, entity, fields, pg.rows, { q, where, flash, vc, range, pre, query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }),
     { rows: pg.rows.map((r) => rowJSON(store, entity, fields, r, vc)), total: pg.total, page: pg.page, pages: pg.pages });
   return true;
 }
@@ -57,7 +58,7 @@ async function createRoute(ctx, entity, fields, formOv) {
   const problems = interp.validateValues(entity, values);
   if (problems.length) {
     trace({ kind: 'rejected', entity, problems });
-    ctx.answer(400, formView(graph, store, entity, fields, submitted, 'new', problems, vc), { ok: false, status: 400, errors: problems });
+    ctx.answer(400, renderForm(ctx, entity, fields, submitted, 'new', problems), { ok: false, status: 400, errors: problems });
     return true;
   }
   let id;
@@ -70,7 +71,7 @@ async function createRoute(ctx, entity, fields, formOv) {
     });
   } catch (e) {
     trace({ kind: 'refused', entity, message: e.message });
-    ctx.answer(400, formView(graph, store, entity, fields, submitted, 'new', [e.message], vc), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, renderForm(ctx, entity, fields, submitted, 'new', [e.message]), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
   // item 15: "{row.field}" in confirm/confirmEdit interpolates the just-written
@@ -90,7 +91,7 @@ async function updateRoute(ctx, entity, fields, formOv, id, row) {
   interp.dropEmptyUploads(entity, submitted);
   const problems = interp.validateValues(entity, submitted, { partial: true, existing: store.raw(entity, id) });
   if (problems.length) {
-    ctx.answer(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', problems, vc), { ok: false, status: 400, errors: problems });
+    ctx.answer(400, renderForm(ctx, entity, fields, { ...row, ...submitted }, 'edit', problems), { ok: false, status: 400, errors: problems });
     return true;
   }
   try {
@@ -101,7 +102,7 @@ async function updateRoute(ctx, entity, fields, formOv, id, row) {
     });
   } catch (e) {
     trace({ kind: 'refused', entity, id, message: e.message });
-    ctx.answer(400, formView(graph, store, entity, fields, { ...row, ...submitted }, 'edit', [e.message], vc), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, renderForm(ctx, entity, fields, { ...row, ...submitted }, 'edit', [e.message]), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
   const updated = store.get(entity, id);
@@ -122,7 +123,7 @@ async function deleteRoute(ctx, entity, fields, id, row) {
     });
   } catch (e) {
     trace({ kind: 'refused', entity, id, message: e.message });
-    ctx.answer(400, detailView(ctx.graph, store, entity, fields, row, e.message, vc), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
   const flash = `${label(entity)} deleted`;
@@ -147,19 +148,20 @@ async function getRoutes(ctx, entity, fields, ov) {
   const { parts, vc, store, flash, send, graph } = ctx;
   if (parts.length === 1) return listRoute(ctx, entity, fields, ov);
   if (parts[1] === 'new') {
-    if (vc.can(entity, 'create')) send(200, formView(graph, store, entity, fields, {}, 'new', [], vc, flash)); else ctx.deny();
+    if (vc.can(entity, 'create')) send(200, renderForm(ctx, entity, fields, {}, 'new', [], flash)); else ctx.deny();
     return true;
   }
   if (parts.length === 2 || parts[2] === 'edit') {
     const row = store.get(entity, parts[1]);
     if (!row) { ctx.answer(404, errorPage(graph, `no ${entity} #${parts[1]}`), { ok: false, status: 404, errors: [`no ${entity} #${parts[1]}`] }); return true; }
+    vc.prime(entity, [row]);
     if (parts.length === 2) {
       if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
       const current = await fireViewed(ctx, entity, row);
-      ctx.answer(200, detailView(graph, store, entity, fields, current, flash, vc), rowJSON(store, entity, fields, current, vc));
+      ctx.answer(200, renderDetail(ctx, entity, fields, current, flash), rowJSON(store, entity, fields, current, vc));
       return true;
     }
-    if (vc.can(entity, 'edit', row)) send(200, formView(graph, store, entity, fields, row, 'edit', [], vc, flash)); else ctx.deny();
+    if (vc.can(entity, 'edit', row)) send(200, renderForm(ctx, entity, fields, row, 'edit', [], flash)); else ctx.deny();
     return true;
   }
   return undefined;
@@ -183,6 +185,7 @@ export async function handle(ctx) {
   const id = parts[1];
   const row = ctx.store.get(entity, id);
   if (!row) { ctx.answer(404, errorPage(graph, `no ${entity} #${id}`), { ok: false, status: 404, errors: [`no ${entity} #${id}`] }); return true; }
+  ctx.vc.prime(entity, [row]);
 
   if (parts[2] === 'delete') return deleteRoute(ctx, entity, fields, id, row);
   if (['action', 'go', 'add'].includes(parts[2])) return handleRow(ctx, entity, fields, id, row);

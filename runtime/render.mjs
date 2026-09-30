@@ -14,7 +14,33 @@ export const plural = (word) => /[^aeiou]y$/i.test(word) ? word.slice(0, -1) + '
 export { esc, label };
 
 /** @type {import('./types.d.ts').ViewContext} */
-export const anyone = { user: null, role: null, can: (_e, _op, _row) => true, canSee: (_item) => true, isAdmin: true, ownField: (_e) => null, ownWhere: (_e) => ({}), ownOk: (_e, _row, _op) => true, enabled: false };
+export const anyone = { user: null, role: null, can: (_e, _op, _row) => true, canSee: (_item) => true, isAdmin: true, ownField: (_e) => null, ownWhere: (_e) => ({}), ownOk: (_e, _row, _op) => true, prime: (_e, _rows) => {}, enabled: false };
+
+// What a response needs loaded before any view formats a byte (S3c): the routes load it (routes/load.mjs),
+// views only read it. `label(target, id)` is a reference's label, `options(target)` every row of a target
+// for a select; a read of anything that was not loaded THROWS, it never becomes a query. The routes add
+// what their own page needs: `kids` (a detail's related rows, by related section), `sections` (a page's
+// embedded lists, by section), `dash` (a dashboard's aggregates).
+const notLoaded = (what) => new Error(`not loaded: ${what}`);
+export const loaded = (map, key, what) => { if (!map.has(key)) throw notLoaded(what); return map.get(key); };
+/** @param {{ get: (target: string, id: any) => string }} labels @param {Map<string, any[]>} [options] @param {any} [more] @returns {import('./types.d.ts').Prefetched} */
+export const prefetched = (labels, options = new Map(), more = {}) => ({
+  label: (target, id) => labels.get(target, id),
+  options: (target) => loaded(options, target, `options ${target}`),
+  ...more,
+});
+/** Nothing loaded: a view of rows with no reference cell, no reference input and no related table needs no more. */
+export const noPre = prefetched({ get: (target, id) => { if (id === null || id === undefined || id === '') return ''; throw notLoaded(`label ${target}#${id}`); } },
+  new Map(), { kids: new Map(), sections: new Map(), dash: null });
+
+// The columns a list-like table shows: the declared ones, else every field that is not a secret.
+export const columnsOf = (ov, fields) => ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name);
+
+// The [target, id] of every reference cell of `rows` under columns `cols`, for Store#labelsFor.
+export const refPairs = (fields, cols, rows) => {
+  const refs = cols.map((c) => fields.find((f) => f.name === c)).filter((f) => f?.target);
+  return rows.flatMap((r) => refs.map((f) => [f.target, r[f.name]]));
+};
 
 export function page(graph, { title, body, flash = '', vc = anyone, refresh = null }) {
   const bg = graph.theme?.background || 'white';
@@ -101,15 +127,15 @@ function mayReadField(graph, entity, field, row, vc = anyone) {
 }
 const HIDDEN = '<span class="muted">Hidden</span>';
 
-// One value, formatted by its field kind. HTML out, already escaped.
-export function fmt(store, entity, f, row, labels = {}, vc = anyone) {
+// One value, formatted by its field kind over what was loaded for the page. HTML out, already escaped.
+export function fmt(store, entity, f, row, labels = {}, vc = anyone, pre = noPre) {
   if (!mayReadField(store.graph, entity, f.name, row, vc)) return HIDDEN;
-  return f.type.format(row[f.name], f, { esc, label, store, entity, row, labels });
+  return f.type.format(row[f.name], f, { esc, title: label, label: pre.label, entity, row, labels, statusField: store.graph?.states?.[entity]?.field });
 }
 
-export const cell = (store, entity, fields, r, c, labels = {}, vc = anyone) => {
+export const cell = (store, entity, fields, r, c, labels = {}, vc = anyone, pre = noPre) => {
   const f = fields.find((x) => x.name === c);
-  return `<td>${f ? fmt(store, entity, f, r, labels, vc) : esc(r[c])}</td>`;
+  return `<td>${f ? fmt(store, entity, f, r, labels, vc, pre) : esc(r[c])}</td>`;
 };
 
 // Whether this viewer may run this declared action on this row — the one
@@ -166,10 +192,10 @@ export function csv(header, rows) {
   return [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
 }
 // A cell's plain-text value for export: labels for references and booleans, money as 12.34.
-export function plain(store, entity, f, row, labels = {}, vc = anyone) {
+export function plain(store, entity, f, row, labels = {}, vc = anyone, pre = noPre) {
   if (!mayReadField(store.graph, entity, f.name, row, vc)) return 'Hidden';
   const v = row[f.name];
-  if (f.kind === 'ref') return store.labelOf(f.target, v);
+  if (f.kind === 'ref') return pre.label(f.target, v);
   if (f.kind === 'bool') { const pair = labels[f.name] || ['No', 'Yes']; return v ? pair[1] : pair[0]; }
   if (f.kind === 'money') return formatMoney(v);
   if (f.type.secret) return '';

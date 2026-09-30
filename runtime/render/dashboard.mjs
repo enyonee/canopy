@@ -1,7 +1,7 @@
 // The dashboard view: metric cards, grouped tables and charts, all narrowable
 // by a from/to period form when the dashboard declares one.
 import { formatMoney } from '../spec.mjs';
-import { esc, label, anyone, page } from '../render.mjs';
+import { esc, label, anyone, noPre, page } from '../render.mjs';
 
 const metricValue = (store, entity, fieldName, v) => {
   if (v === null || v === undefined) return '—';
@@ -13,22 +13,20 @@ const metricValue = (store, entity, fieldName, v) => {
 // One row's category label, the same rules a dashboard table already uses for
 // its "grp" column (a ref renders its label, an enum its title-case name, a
 // bool Yes/No).
-function groupLabel(store, groupField, g) {
-  if (groupField?.kind === 'ref') return store.labelOf(groupField.target, g) || '—';
+function groupLabel(groupField, g, pre) {
+  if (groupField?.kind === 'ref') return pre.label(groupField.target, g) || '—';
   if (groupField?.kind === 'enum') return g === null ? '—' : label(g);
   if (groupField?.kind === 'bool') return g ? 'Yes' : 'No';
   return String(g ?? '—');
 }
 
-// The rows a chart draws, computed by the same store.aggregate() a table
-// uses — one metric named "v" — with each row's category already labelled
-// and its value already display-formatted (money, decimals), so the SVG and
+// The rows a chart draws, loaded by the route with the same store.aggregate() a table
+// uses — one metric named "v" — with each row's category labelled here
+// and its value display-formatted (money, decimals), so the SVG and
 // the accessible data table below it read the same numbers.
-function chartRows(store, chart) {
-  const rows = store.aggregate(chart.entity, { groupBy: chart.groupBy, groupUnit: chart.groupUnit,
-    metrics: [{ fn: chart.metric.fn, field: chart.metric.field, as: 'v' }], sort: chart.sort, limit: chart.limit, where: chart.where || {} });
+function chartRows(store, chart, rows, pre) {
   const groupField = chart.groupBy ? store.field(chart.entity, chart.groupBy) : null;
-  return rows.map((r) => ({ label: groupLabel(store, groupField, r.grp), v: r.v,
+  return rows.map((r) => ({ label: groupLabel(groupField, r.grp, pre), v: r.v,
     display: metricValue(store, chart.entity, chart.metric.fn === 'count' ? null : chart.metric.field, r.v) }));
 }
 
@@ -83,8 +81,8 @@ function chartTable(chart, data) {
 // `<svg role="img" aria-label=…>` + `<title>`, bars/points/slices in the theme
 // accent, axis labels — followed by the same numbers as a data table, so
 // checks and screen readers read values without decoding the SVG.
-export function chartBlock(store, chart, accent) {
-  const data = chartRows(store, chart);
+export function chartBlock(store, chart, accent, rows, pre) {
+  const data = chartRows(store, chart, rows, pre);
   const max = Math.max(1, ...data.map((d) => d.v ?? 0));
   const maxDisplay = metricValue(store, chart.entity, chart.metric.fn === 'count' ? null : chart.metric.field, max);
   const body = chart.type === 'pie' ? pieSlices(data, accent) : barsAndLine(chart, data, accent, maxDisplay);
@@ -94,33 +92,24 @@ export function chartBlock(store, chart, accent) {
     ${chartTable(chart, data)}`;
 }
 
-export function dashboardView(graph, store, dash, flash, vc = anyone, period = {}) {
-  const inPeriod = (entity, where = {}) => {
-    const f = dash.period?.[entity];
-    if (!f || (!period.from && !period.to)) return where;
-    const kind = store.field(entity, f).kind;
-    const range = {};
-    if (period.from) range.gte = kind === 'time' ? `${period.from}T00:00:00` : period.from;
-    if (period.to) range.lte = kind === 'time' ? `${period.to}T23:59:59.999Z` : period.to;
-    return { ...where, [f]: range };
-  };
+export function dashboardView(graph, store, dash, flash, vc = anyone, period = {}, pre = noPre) {
+  const data = pre.dash;
+  if (!data) throw new Error(`not loaded: dashboard ${dash.id}`);
   const periodForm = dash.period ? `<form class="card" method="get" action="/dashboard/${dash.id}"><div class="range">
       <div><label for="from">From</label><input type="date" id="from" name="from" value="${esc(period.from || '')}"></div>
       <div><label for="to">To</label><input type="date" id="to" name="to" value="${esc(period.to || '')}"></div>
       <div><button type="submit">Apply</button> <a class="btn" href="/dashboard/${dash.id}">All time</a></div></div></form>` : '';
-  const cards = (dash.cards || []).map((c) => {
-    const [row] = store.aggregate(c.entity, { metrics: [{ fn: c.fn || 'count', field: c.field, as: 'v' }], where: inPeriod(c.entity, c.where || {}) });
-    const v = row?.v ?? 0;
+  const cards = (dash.cards || []).map((c, i) => {
+    const v = data.cards[i] ?? 0;
     return `<div class="metric"><b>${esc(metricValue(store, c.entity, c.fn === 'count' || !c.fn ? null : c.field, v))}</b>${esc(c.title)}</div>`;
   }).join('');
-  const tables = (dash.tables || []).map((t) => {
-    const rows = store.aggregate(t.entity, { ...t, where: inPeriod(t.entity, t.where || {}) });
+  const tables = (dash.tables || []).map((t, i) => {
     const groupField = t.groupBy ? store.field(t.entity, t.groupBy) : null;
     const head = (t.groupBy ? `<th>${esc(t.groupTitle || label(t.groupBy))}</th>` : '') +
       (t.metrics || []).map((m) => `<th>${esc(m.title ?? label(m.as))}</th>`).join('');
-    const body = rows.map((r) => {
+    const body = data.tables[i].map((r) => {
       let g = r.grp;
-      if (groupField?.kind === 'ref') g = store.labelOf(groupField.target, g) || null;
+      if (groupField?.kind === 'ref') g = pre.label(groupField.target, g) || null;
       if (groupField?.kind === 'enum') g = g === null ? null : label(g);
       if (groupField?.kind === 'bool') g = g ? 'Yes' : 'No';
       return `<tr>${t.groupBy ? `<td>${esc(g ?? '—')}</td>` : ''}${
@@ -129,7 +118,7 @@ export function dashboardView(graph, store, dash, flash, vc = anyone, period = {
     return `<h3>${esc(t.title)}</h3><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }).join('');
   const accent = graph.theme?.accent || 'navy';
-  const charts = (dash.charts || []).map((c) => chartBlock(store, { ...c, where: inPeriod(c.entity, c.where || {}) }, accent)).join('');
+  const charts = (dash.charts || []).map((c, i) => chartBlock(store, c, accent, data.charts[i], pre)).join('');
   return page(graph, {
     title: dash.title, flash, vc, refresh: dash.refresh,
     body: `<h2>${esc(dash.title)}</h2>${dash.intro ? `<p>${esc(dash.intro)}</p>` : ''}${periodForm}

@@ -7,43 +7,38 @@ import { staticPage } from '../render/pages.mjs';
 import { dashboardView } from '../render/dashboard.mjs';
 import { listView } from '../render/list.mjs';
 import { searchView } from '../render/search.mjs';
+import { listPre, pagePre, searchPre, dashboardPre } from './load.mjs';
 
-function dashboardCsv(ctx, d, mine, period) {
+// The CSV of a dashboard: the aggregates and labels the route loaded (routes/load.mjs), one line per value.
+function dashboardCsv(ctx, d, mine, pre) {
   const { store, sendCsv } = ctx;
   const lines = [];
-  const inPeriod = (entity, where) => {
-    const f = d.period?.[entity];
-    if (!f || (!period.from && !period.to)) return where;
-    const kind = store.field(entity, f).kind;
-    const r = {};
-    if (period.from) r.gte = kind === 'time' ? `${period.from}T00:00:00` : period.from;
-    if (period.to) r.lte = kind === 'time' ? `${period.to}T23:59:59.999Z` : period.to;
-    return { ...where, [f]: r };
-  };
-  for (const c of mine.cards) {
-    const [row] = store.aggregate(c.entity, { metrics: [{ fn: c.fn || 'count', field: c.field, as: 'v' }], where: inPeriod(c.entity, c.where) });
+  mine.cards.forEach((c, i) => {
+    const v = pre.dash.cards[i];
     const f = c.field && store.field(c.entity, c.field);
-    lines.push(['card', c.title, '', f?.kind === 'money' && c.fn !== 'count' ? formatMoney(Math.round(row?.v ?? 0)) : (row?.v ?? 0)]);
-  }
-  for (const t of mine.tables) for (const r of store.aggregate(t.entity, { ...t, where: inPeriod(t.entity, t.where) })) {
+    lines.push(['card', c.title, '', f?.kind === 'money' && c.fn !== 'count' ? formatMoney(Math.round(v ?? 0)) : (v ?? 0)]);
+  });
+  const group = (g, grp) => {
+    if (g?.kind === 'ref') return pre.label(g.target, grp);
+    return g?.kind === 'bool' ? (grp ? 'Yes' : 'No') : grp;
+  };
+  mine.tables.forEach((t, i) => {
     const g = t.groupBy ? store.field(t.entity, t.groupBy) : null;
-    let grp = r.grp;
-    if (g?.kind === 'ref') grp = store.labelOf(g.target, grp);
-    if (g?.kind === 'bool') grp = grp ? 'Yes' : 'No';
-    for (const m of t.metrics || []) {
-      const mf = m.field && store.field(t.entity, m.field);
-      lines.push([t.title, m.title ?? m.as, grp ?? '', mf?.kind === 'money' && m.fn !== 'count' && r[m.as] != null ? formatMoney(Math.round(r[m.as])) : (r[m.as] ?? '')]);
+    for (const r of pre.dash.tables[i]) {
+      const grp = group(g, r.grp);
+      for (const m of t.metrics || []) {
+        const mf = m.field && store.field(t.entity, m.field);
+        lines.push([t.title, m.title ?? m.as, grp ?? '', mf?.kind === 'money' && m.fn !== 'count' && r[m.as] != null ? formatMoney(Math.round(r[m.as])) : (r[m.as] ?? '')]);
+      }
     }
-  }
-  for (const c of mine.charts || []) for (const r of store.aggregate(c.entity, { groupBy: c.groupBy, groupUnit: c.groupUnit,
-    metrics: [{ fn: c.metric.fn, field: c.metric.field, as: 'v' }], sort: c.sort, limit: c.limit, where: inPeriod(c.entity, c.where) })) {
+  });
+  (mine.charts || []).forEach((c, i) => {
     const g = c.groupBy ? store.field(c.entity, c.groupBy) : null;
-    let grp = r.grp;
-    if (g?.kind === 'ref') grp = store.labelOf(g.target, grp);
-    if (g?.kind === 'bool') grp = grp ? 'Yes' : 'No';
     const mf = c.metric.field && store.field(c.entity, c.metric.field);
-    lines.push([c.title, c.metric.fn, grp ?? '', mf?.kind === 'money' && c.metric.fn !== 'count' && r.v != null ? formatMoney(Math.round(r.v)) : (r.v ?? '')]);
-  }
+    for (const r of pre.dash.charts[i]) {
+      lines.push([c.title, c.metric.fn, group(g, r.grp) ?? '', mf?.kind === 'money' && c.metric.fn !== 'count' && r.v != null ? formatMoney(Math.round(r.v)) : (r.v ?? '')]);
+    }
+  });
   return sendCsv(d.id, ['Section', 'Metric', 'Group', 'Value'], lines);
 }
 
@@ -58,29 +53,15 @@ function moneyAggregate(store, entity, fieldName, fn, v) {
   return f?.kind === 'money' ? Number(formatMoney(Math.round(v))) : v;
 }
 
-// The same numbers dashboardView()/dashboardCsv() compute, as JSON: one
+// The same numbers dashboardView()/dashboardCsv() show, as JSON: one
 // metric per card/chart, one row per group in a table/chart.
-function dashboardJson(ctx, d, mine, period) {
+function dashboardJson(ctx, mine, pre) {
   const { store } = ctx;
-  const inPeriod = (entity, where) => {
-    const f = d.period?.[entity];
-    if (!f || (!period.from && !period.to)) return where;
-    const kind = store.field(entity, f).kind;
-    const r = {};
-    if (period.from) r.gte = kind === 'time' ? `${period.from}T00:00:00` : period.from;
-    if (period.to) r.lte = kind === 'time' ? `${period.to}T23:59:59.999Z` : period.to;
-    return { ...where, [f]: r };
-  };
-  const cards = mine.cards.map((c) => {
-    const [row] = store.aggregate(c.entity, { metrics: [{ fn: c.fn || 'count', field: c.field, as: 'v' }], where: inPeriod(c.entity, c.where) });
-    return { title: c.title, value: moneyAggregate(store, c.entity, c.field, c.fn || 'count', row?.v) ?? 0 };
-  });
-  const grouped = (t) => store.aggregate(t.entity, { ...t, where: inPeriod(t.entity, t.where) })
-    .map((r) => { const out = { ...r }; for (const m of t.metrics || []) out[m.as] = moneyAggregate(store, t.entity, m.field, m.fn, r[m.as]); return out; });
-  const tables = mine.tables.map((t) => ({ title: t.title, rows: grouped(t) }));
-  const charts = (mine.charts || []).map((c) => ({ title: c.title, type: c.type,
-    rows: store.aggregate(c.entity, { groupBy: c.groupBy, groupUnit: c.groupUnit, metrics: [{ fn: c.metric.fn, field: c.metric.field, as: 'v' }], sort: c.sort, limit: c.limit, where: inPeriod(c.entity, c.where) })
-      .map((r) => ({ ...r, v: moneyAggregate(store, c.entity, c.metric.field, c.metric.fn, r.v) })) }));
+  const cards = mine.cards.map((c, i) => ({ title: c.title, value: moneyAggregate(store, c.entity, c.field, c.fn || 'count', pre.dash.cards[i]) ?? 0 }));
+  const tables = mine.tables.map((t, i) => ({ title: t.title, rows: pre.dash.tables[i]
+    .map((r) => { const out = { ...r }; for (const m of t.metrics || []) out[m.as] = moneyAggregate(store, t.entity, m.field, m.fn, r[m.as]); return out; }) }));
+  const charts = (mine.charts || []).map((c, i) => ({ title: c.title, type: c.type,
+    rows: pre.dash.charts[i].map((r) => ({ ...r, v: moneyAggregate(store, c.entity, c.metric.field, c.metric.fn, r.v) })) }));
   ctx.sendJson(200, { cards, tables, charts });
 }
 
@@ -99,11 +80,11 @@ function home(ctx) {
 }
 
 function page(ctx) {
-  const { graph, store, parts, send, flash, vc, resolveTop } = ctx;
+  const { graph, store, parts, send, flash, vc } = ctx;
   const p = (graph.pages || []).find((x) => x.id === parts[1]);
   if (!p) { send(404, errorPage(graph, `no page ${parts[1]}`)); return true; }
   if (!vc.canSee(p)) { ctx.deny(); return true; }
-  send(200, staticPage(graph, p, flash, vc, store, resolveTop));
+  send(200, staticPage(graph, p, flash, vc, store, pagePre(ctx, p)));
   return true;
 }
 
@@ -118,9 +99,10 @@ function dashboard(ctx) {
   // card over an entity the role may not view is not on its dashboard at all.
   const scoped = (x) => ({ ...x, where: { ...resolveTop(x.where || {}), ...ownWhere(x.entity) } });
   const mine = { ...d, cards: (d.cards || []).map(scoped), tables: (d.tables || []).map(scoped), charts: (d.charts || []).map(scoped) };
-  if (wantsCsv) { dashboardCsv(ctx, d, mine, period); return true; }
-  if (ctx.wantsJSON) { dashboardJson(ctx, d, mine, period); return true; }
-  ctx.send(200, dashboardView(graph, store, mine, flash, vc, period));
+  const pre = dashboardPre(ctx, d, mine, period);
+  if (wantsCsv) { dashboardCsv(ctx, d, mine, pre); return true; }
+  if (ctx.wantsJSON) { dashboardJson(ctx, mine, pre); return true; }
+  ctx.send(200, dashboardView(graph, store, mine, flash, vc, period, pre));
   return true;
 }
 
@@ -138,7 +120,8 @@ function list(ctx) {
   const pg = paged(l.entity, opts, view);
   if (ctx.wantsJSON) { ctx.sendJson(200, { rows: pg.rows.map((r) => rowJSON(store, l.entity, store.fields[l.entity], r, vc)), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
   const g = { ...graph, override: { ...graph.override, [`${l.entity}.list`]: view } };
-  ctx.send(200, listView(g, store, l.entity, store.fields[l.entity], pg.rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, path: `/list/${l.id}`,
+  const pre = listPre(ctx, l.entity, store.fields[l.entity], view, pg.rows);
+  ctx.send(200, listView(g, store, l.entity, store.fields[l.entity], pg.rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, pre, path: `/list/${l.id}`,
     query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }));
   return true;
 }
@@ -158,7 +141,7 @@ function search(ctx) {
     ctx.sendJson(200, { results: results.map(({ entity, rows }) => ({ entity, rows: rows.map((r) => rowJSON(store, entity, store.fields[entity], r, vc)) })) });
     return true;
   }
-  ctx.send(200, searchView(graph, store, q, results, vc));
+  ctx.send(200, searchView(graph, store, q, results, vc, searchPre(ctx, results)));
   return true;
 }
 

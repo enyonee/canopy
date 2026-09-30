@@ -1,6 +1,7 @@
 // /login, /register, POST /logout — real sessions when /roles is declared.
 import { verifyPassword } from '../auth.mjs';
 import { loginView, registerView } from '../render/pages.mjs';
+import { registerPre } from './load.mjs';
 
 export async function handle(ctx) {
   const { sess, graph, store, interp, trace } = ctx;
@@ -38,16 +39,16 @@ export async function handle(ctx) {
 
   if (parts[0] === 'register' && parts.length === 1 && graph.roles.register) {
     const entity = graph.roles.entity, fields = store.fields[entity];
-    if (req.method === 'GET') { send(200, registerView(graph, store, fields, {}, [], vc)); return true; }
+    if (req.method === 'GET') { send(200, registerView(graph, store, fields, {}, [], vc, registerPre(ctx, fields))); return true; }
     const submitted = interp.dropEmptyUploads(entity, interp.checkboxes(entity, await ctx.body()));
     delete submitted[graph.roles.role];
     const values = { ...submitted, [graph.roles.role]: graph.roles.register };
     const problems = interp.validateValues(entity, values);
     if (!problems.length && store.exists(entity, graph.roles.login, values[graph.roles.login])) problems.push(`${graph.roles.login} is already registered`);
-    if (problems.length) { trace({ kind: 'rejected', entity, problems }); send(400, registerView(graph, store, fields, submitted, problems, vc)); return true; }
+    if (problems.length) { trace({ kind: 'rejected', entity, problems }); send(400, registerView(graph, store, fields, submitted, problems, vc, registerPre(ctx, fields))); return true; }
     let id;
     try { id = await interp.attempt(() => { const n = store.insert(entity, values); interp.fireEvents('created', entity, n, values, null); return n; }); }
-    catch (e) { trace({ kind: 'refused', entity, message: e.message }); send(400, registerView(graph, store, fields, submitted, [e.message], vc)); return true; }
+    catch (e) { trace({ kind: 'refused', entity, message: e.message }); send(400, registerView(graph, store, fields, submitted, [e.message], vc, registerPre(ctx, fields))); return true; }
     headers['set-cookie'] = sess.setCookie(sess.start(id));
     trace({ kind: 'register', who: id });
     ok('/', `Welcome, ${values[graph.roles.login]}`);

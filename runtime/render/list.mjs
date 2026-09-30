@@ -2,7 +2,7 @@
 // export link. `ctx` here is the render-time context built by the /Entity and
 // /list routes (q, where, flash, vc, range, query, sort, dir, rows, total,
 // page, pages) — not the HTTP request context in routes/context.mjs.
-import { esc, label, plural, anyone, page, cell, rowButtons } from '../render.mjs';
+import { esc, label, plural, anyone, noPre, refPairs, columnsOf, page, cell, rowButtons } from '../render.mjs';
 
 function rangeForm(entity, path, filters, ctx) {
   const ranges = filters.filter((f) => f.range);
@@ -16,10 +16,19 @@ function rangeForm(entity, path, filters, ctx) {
   return `<form class="card" method="get" action="${path}">${inputs}<p><button type="submit">Apply</button> <a class="btn" href="${path}">Reset</a></p></form>`;
 }
 
+// The columns a list shows, and what showing them needs loaded first (S3c): the label of every reference
+// cell, and the rows a reference filter offers. The route loads both (routes/load.mjs), then renders.
+const refFilters = (store, entity, ov) => (ov.filters || []).filter((f) => !f.range && !f.options && store.field(entity, f.field)?.kind === 'ref');
+
+export function listNeeds(store, entity, fields, ov, rows) {
+  return { pairs: refPairs(fields, columnsOf(ov, fields), rows), targets: refFilters(store, entity, ov).map((f) => store.field(entity, f.field).target) };
+}
+
 export function listView(graph, store, entity, fields, rows, ctx) {
   const vc = ctx.vc || anyone;
+  const pre = ctx.pre || noPre;
   const ov = graph.override?.[`${entity}.list`] || {};
-  const cols = ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name);
+  const cols = columnsOf(ov, fields);
   const actions = ov.rowActions ?? ['edit', 'delete'];
   const doneField = fields.find((f) => f.kind === 'bool');
   const path = ctx.path || `/${entity}`;
@@ -28,7 +37,7 @@ export function listView(graph, store, entity, fields, rows, ctx) {
     const field = store.field(entity, f.field);
     let options = f.options;
     if (!options && field?.kind === 'ref') {
-      options = [{ label: 'All' }, ...store.list(field.target, {}).map((r) => ({ label: store.label(field.target, r), eq: r.id }))];
+      options = [{ label: 'All' }, ...pre.options(field.target).map((o) => ({ label: o.label, eq: o.id }))];
     }
     if (!options && field?.kind === 'enum') {
       options = [{ label: 'All' }, ...field.options.map((o) => ({ label: label(o), eq: o }))];
@@ -57,7 +66,7 @@ export function listView(graph, store, entity, fields, rows, ctx) {
   const pageHref = (n) => { const q = new URLSearchParams(ctx.query || ''); q.set('page', String(n)); return `${path}?${q}`; };
   const pager = ctx.pages > 1 ? `<p class="pages">Page ${ctx.page} of ${ctx.pages} · ${ctx.page > 1 ? `<a href="${pageHref(ctx.page - 1)}">Previous</a>` : ''}${ctx.page < ctx.pages ? `<a href="${pageHref(ctx.page + 1)}">Next</a>` : ''}</p>` : '';
   const body = rows.map((r) => {
-    const cells = cols.map((c) => cell(store, entity, fields, r, c, ov.labels || {}, vc)).join('');
+    const cells = cols.map((c) => cell(store, entity, fields, r, c, ov.labels || {}, vc, pre)).join('');
     const btns = actions.length ? rowButtons(graph, store, entity, r, actions, vc) : '';
     const isDone = doneField && r[doneField.name] && ov.strikeDone !== false && doneField.name === 'done';
     return `<tr class="${isDone ? 'done' : ''}">${cells}${actions.length ? `<td>${btns}</td>` : ''}</tr>`;

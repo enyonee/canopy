@@ -10,11 +10,16 @@
 //   derivable   may be the kind of a ":=" field
 //   def(f)      stored default from the declared "=…" (f.def is the raw string)
 //   coerce(raw) stored value from a form / seed / step value
-//   validate(v, f) a message when the submitted value is unacceptable, else null
+//   validate(v, f) a message when the submitted value is unacceptable, else null; pure: it gets no
+//               store (a reference's existence is the kernel's check, Store#checkValue)
 //   toExpr(v)   stored → expression value (money → major units, bool → boolean)
 //   fromExpr(v) expression value → stored (derived fields)
-//   format(v, f, ctx) safe HTML for a cell; ctx: { esc, store, entity, row, labels, label }
-//   input(f, v, ctx)  the form control, or null when the kind never appears on forms
+//   format(v, f, ctx) safe HTML for a cell; pure over data loaded before the page renders. ctx: { esc,
+//               title(name) "createdAt" -> "Created At", label(target, id) the label of a row a
+//               reference points at (prefetched, '' for none), entity, row, labels (the declared
+//               boolean captions), statusField (the entity's state field, or null) }
+//   input(f, v, ctx)  the form control, or null when the kind never appears on forms; ctx: { esc,
+//               options(target) every row of a target as [{ id, label }] (prefetched), entity, row }
 const today = () => new Date().toISOString().slice(0, 10);
 // "2026-02-31" has the shape of a date and is not one: the calendar must agree.
 const isCalendarDate = (v) => {
@@ -78,15 +83,15 @@ export const FIELDS = {
   enum: { sql: 'TEXT', exprKind: 'text', derivable: false, structural: true,
     def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)),
     validate: (v, f) => (v && !f.options.includes(String(v)) ? `${f.name} must be one of: ${f.options.join(', ')}` : null),
-    format: (v, f, { esc, label, store, entity }) => (f.name === store?.graph?.states?.[entity]?.field
-      ? `<span class="status">${esc(label(v ?? ''))}</span>` : esc(v)),
+    format: (v, f, { esc, title, statusField }) => (f.name === statusField
+      ? `<span class="status">${esc(title(v ?? ''))}</span>` : esc(v)),
     input: (f, v, { esc }) => `<select id="f_${f.name}" name="${f.name}">` + f.options.map((o) => `<option${String(v) === o ? ' selected' : ''}>${esc(o)}</option>`).join('') + '</select>' },
   ref: { sql: 'TEXT', exprKind: 'ref', derivable: false, structural: true,
     def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)),
-    validate: (v, f, store) => (v && store && !store.raw(f.target, v) ? `${f.name}: there is no ${f.target} #${v}` : null),
-    format: (v, f, { esc, store }) => { const lbl = store.labelOf(f.target, v); return lbl ? `<a href="/${f.target}/${v}">${esc(lbl)}</a>` : '—'; },
-    input: (f, v, { esc, store }) => `<select id="f_${f.name}" name="${f.name}"><option value="">—</option>` + store.list(f.target, {}).map((r) =>
-      `<option value="${r.id}"${String(v) === String(r.id) ? ' selected' : ''}>${esc(store.label(f.target, r))}</option>`).join('') + '</select>' },
+    validate: () => null,
+    format: (v, f, { esc, label }) => { const lbl = label(f.target, v); return lbl ? `<a href="/${f.target}/${v}">${esc(lbl)}</a>` : '—'; },
+    input: (f, v, { esc, options }) => `<select id="f_${f.name}" name="${f.name}"><option value="">—</option>` + options(f.target).map((o) =>
+      `<option value="${o.id}"${String(v) === String(o.id) ? ' selected' : ''}>${esc(o.label)}</option>`).join('') + '</select>' },
   file: { sql: 'TEXT', exprKind: 'text', derivable: false, upload: true,
     def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)), validate: () => null,
     format: (v, f, { esc, entity, row }) => (v ? `<a href="/file/${entity}/${row.id}/${f.name}">${esc(String(v).replace(/^\d+-/, ''))}</a>` : '—'),

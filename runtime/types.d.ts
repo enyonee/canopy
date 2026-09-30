@@ -106,11 +106,45 @@ export interface FieldType {
   upload?: boolean;
   def: (f: Field) => any;
   coerce: (raw: any) => any;
-  validate: (v: any, f: Field, store?: any) => string | null;
+  validate: (v: any, f: Field) => string | null;
   toExpr?: (v: any) => any;
   fromExpr?: (v: any) => any;
-  format: (v: any, f: Field, ctx: any) => string;
-  input: ((f: Field, v: any, ctx: any) => string) | null;
+  format: (v: any, f: Field, ctx: FormatContext) => string;
+  input: ((f: Field, v: any, ctx: InputContext) => string) | null;
+}
+
+/** What a field kind's `format` hook gets: pure helpers and data loaded before the page renders. */
+export interface FormatContext {
+  esc: (s: any) => string;
+  /** "createdAt" -> "Created At". */
+  title: (name: string) => string;
+  /** The label of the row a reference points at ('' for none); a row that was not loaded throws. */
+  label: (target: string, id: any) => string;
+  entity: string; row: any;
+  /** The declared captions of a boolean column. */
+  labels: Record<string, any>;
+  /** The entity's state field, or null. */
+  statusField: string | null | undefined;
+}
+
+/** What a field kind's `input` hook gets. */
+export interface InputContext {
+  esc: (s: any) => string;
+  /** Every row of a target entity, for a select; a target that was not loaded throws. */
+  options: (target: string) => Array<{ id: any; label: string }>;
+  entity: string; row: any;
+}
+
+/** What a response loads before a view formats a byte (runtime/routes/load.mjs); views only read it. */
+export interface Prefetched {
+  label: (target: string, id: any) => string;
+  options: (target: string) => Array<{ id: any; label: string }>;
+  /** A detail page's related rows, by related section. */
+  kids: Map<any, any[]>;
+  /** A static page's embedded saved lists, by section. */
+  sections: Map<any, any[]>;
+  /** A dashboard's aggregates: one value per card, one row set per table and chart. */
+  dash: { cards: any[]; tables: any[][]; charts: any[][] } | null;
 }
 
 /** A registry.blocks[name] entry — the step catalog (docs/FORMAT.md's block table). */
@@ -246,6 +280,8 @@ export interface ViewContext {
   ownField: (entity: string) => string | null;
   ownWhere: (entity: string, op?: string) => Record<string, any>;
   ownOk: (entity: string, row: any, op?: string) => boolean;
+  /** Loads what ownership checks over `rows` of `entity` read (perms.prime); call before can/ownOk on them. */
+  prime: (entity: string, rows: any[]) => void;
   isAdmin?: boolean;
   outbox?: boolean;
   enabled?: boolean;
@@ -323,6 +359,8 @@ declare module './store.mjs' {
     clauses(entity: string, where: Record<string, any>): { clauses: string[]; vals: any[]; later: [string, any][] };
     listRaw(entity: string, opts?: Record<string, any>): any[];
     labelOf(entity: string, id: any): string;
+    labelsFor(pairs: Array<[string, any]>): { get(target: string, id: any): string };
+    optionsFor(targets: Iterable<string>): Map<string, Array<{ id: any; label: string }>>;
     listRawPage(entity: string, opts: Record<string, any>, limit: number, offset: number): any[];
     listRawIn(entity: string, via: string, ids: any[]): any[];
     countRaw(entity: string, opts?: Record<string, any>): number;

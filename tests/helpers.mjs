@@ -4,6 +4,11 @@ import path from 'node:path';
 import { once } from 'node:events';
 import { serve } from '../runtime/server.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
+import { anyone } from '../runtime/render.mjs';
+import { listView } from '../runtime/render/list.mjs';
+import { dashboardView } from '../runtime/render/dashboard.mjs';
+import { staticPage } from '../runtime/render/pages.mjs';
+import { listPre, renderForm, renderDetail, dashboardPre, pagePre } from '../runtime/routes/load.mjs';
 
 // Every directory a test makes goes through here and is removed when the test file's process
 // ends, pass or fail (a leaked one costs an inode for ever; the mutation gate runs the suite
@@ -150,3 +155,18 @@ export function populate(store, graph, perEntity = 8) {
     }
   }
 }
+
+// The views over a store, the way a route drives them (S3c): load what the page reads (runtime/routes/load.mjs),
+// then render. `vc` defaults to "anyone"; the route context is just what the loaders read from it.
+export const viewer = (graph, store, vc = anyone) => {
+  const ctx = { graph, store, vc, resolveTop: (x) => x };
+  return {
+    ctx,
+    list: (entity, rows, extra = {}) => listView(graph, store, entity, store.fields[entity], rows,
+      { q: '', where: {}, vc, ...extra, pre: listPre(ctx, entity, store.fields[entity], graph.override?.[`${entity}.list`] || {}, rows) }),
+    form: (entity, row, mode, errors = []) => renderForm(ctx, entity, store.fields[entity], row, mode, errors),
+    detail: (entity, row, flash) => renderDetail(ctx, entity, store.fields[entity], row, flash),
+    dashboard: (dash, flash = '', period = {}) => dashboardView(graph, store, dash, flash, vc, period, dashboardPre(ctx, dash, dash, period)),
+    page: (p, flash) => staticPage(graph, p, flash, vc, store, pagePre(ctx, p)),
+  };
+};

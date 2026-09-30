@@ -8,11 +8,8 @@ import { Store } from '../runtime/store.mjs';
 import { CATALOG } from '../runtime/blocks.mjs';
 import { validate } from '../runtime/validate.mjs';
 import { listView } from '../runtime/render/list.mjs';
-import { formView } from '../runtime/render/form.mjs';
-import { detailView } from '../runtime/render/detail.mjs';
-import { dashboardView } from '../runtime/render/dashboard.mjs';
 import { serve } from '../runtime/server.mjs';
-import { boot, rows, flash, tmpDir } from './helpers.mjs';
+import { boot, rows, flash, tmpDir, viewer } from './helpers.mjs';
 
 test('an entity with no fields still gets a table, and unknown entities answer emptily', () => {
   const store = new Store({ app: 'x', data: { Empty: {}, A: { n: 'int' } } }, ':memory:');
@@ -75,10 +72,10 @@ test('an intro, a required number and a related section with all columns', () =>
   const store = new Store(graph, ':memory:');
   const id = store.insert('P', { name: 'parent', n: 1 });
   store.insert('C', { p: id, note: 'child' });
-  const form = formView(graph, store, 'P', store.fields.P, {}, 'new');
+  const form = viewer(graph, store).form('P', {}, 'new');
   assert.match(form, /fill it in/);
   assert.match(form, /type="number"[^>]*required/);
-  const detail = detailView(graph, store, 'P', store.fields.P, store.get('P', id));
+  const detail = viewer(graph, store).detail('P', store.get('P', id));
   assert.match(detail, /<th>Note<\/th>/, 'a related section with no declared columns shows every child field but the link');
   assert.ok(!/<th>P<\/th>/.test(detail.split('<h3>')[1]), 'the link column is not repeated');
   assert.match(detail, /method="post"/, 'form: true means the full child form');
@@ -88,7 +85,7 @@ test('a dashboard card without a function counts, and a missing metric reads zer
   const graph = { app: 'x', data: { A: { name: 'text!' } } };
   const store = new Store(graph, ':memory:');
   store.insert('A', { name: 'one' });
-  const html = dashboardView(graph, store, { id: 'd', title: 'D',
+  const html = viewer(graph, store).dashboard({ id: 'd', title: 'D',
     cards: [{ title: 'Rows', entity: 'A' }],
     tables: [{ title: 'T', entity: 'A', groupBy: 'name', metrics: [{ fn: 'count', as: 'n' }, { fn: 'count', as: 'missing' }] }] });
   assert.match(html, /<b>1<\/b>Rows/);
@@ -180,13 +177,13 @@ test('the last defensive paths: no options, no metrics, no actions, missing valu
   assert.ok(!/<td><\/td>/.test(html));
 
   const empty = new Store({ app: 'x', data: { B: { n: 'int' } } }, ':memory:');
-  const dash = dashboardView({ app: 'x', data: { B: { n: 'int' } } }, empty, { id: 'd', title: 'D',
+  const dash = viewer({ app: 'x', data: { B: { n: 'int' } } }, empty).dashboard({ id: 'd', title: 'D',
     cards: [{ title: 'Sum of nothing', entity: 'B', fn: 'sum', field: 'n' }],
     tables: [{ title: 'T', entity: 'B', groupBy: 'n' }] });
   assert.match(dash, /<b>0<\/b>Sum of nothing/, 'an aggregate over no rows reads zero, not blank');
   assert.match(dash, /<h3>T<\/h3>/, 'a table with no metrics still renders its heading');
   empty.insert('B', { n: 1 });
-  const dashRows = dashboardView({ app: 'x', data: { B: { n: 'int' } } }, empty,
+  const dashRows = viewer({ app: 'x', data: { B: { n: 'int' } } }, empty).dashboard(
     { id: 'd', title: 'D', tables: [{ title: 'T', entity: 'B', groupBy: 'n' }] });
   assert.match(dashRows, /<tr><td>1<\/td><\/tr>/, 'a grouped table with no metrics lists its groups and nothing else');
 });

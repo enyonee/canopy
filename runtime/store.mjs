@@ -105,8 +105,10 @@ export class Store {
   // A write is a write: a step, a seed and a form all meet the same declared kind.
   // Without this, "closed set" means "closed on the form route only".
   checkValue(entity, f, v) {
-    const bad = f.type.validate(v, f, this);
+    const bad = f.type.validate(v, f);
     if (bad) throw new Error(bad);
+    // A reference must point at a row: the kernel asks the store, a field kind never does.
+    if (f.kind === 'ref' && v && !this.raw(f.target, v)) throw new Error(`${f.name}: there is no ${f.target} #${v}`);
     return v;
   }
 

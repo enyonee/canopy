@@ -69,22 +69,55 @@ const parseOwnPaths = (spec) => {
   return names.map((n) => String(n).split('.'));
 };
 
+// The parents a one-hop `own` path reads, loaded before any decision (`prime`, below): row object ->
+// { ref field -> the row it points at, or null }. Keyed by the row object itself, so a fresh row is
+// never judged on a stale parent and a row nobody primed is an error, not a query.
+class Parents {
+  constructor() { this.byRow = new WeakMap(); }
+
+  put(row, field, parent) {
+    if (!this.byRow.has(row)) this.byRow.set(row, new Map());
+    this.byRow.get(row).set(field, parent);
+  }
+
+  of(entity, row, field) {
+    const known = this.byRow.get(row);
+    if (!known?.has(field)) throw new Error(`not primed: ${entity}.${field} (perms.prime(user, entity, rows) loads the parents an ownership check reads)`);
+    return known.get(field);
+  }
+}
+
 // Does `row` match this one path? Direct: compare the field to the user id.
-// One-hop: follow the ref field on `row`, load that row, compare its subfield.
-function matchesPath(store, entity, row, path, userId) {
+// One-hop: the ref field's parent (primed), compare its subfield.
+function matchesPath(parents, store, entity, row, path, userId) {
   if (path.length === 1) return String(row[path[0]]) === String(userId);
   if (!store) return false;
   const [refField, subField] = path;
   const f = store.field(entity, refField);
   const refId = row[refField];
   if (!f || refId === null || refId === undefined) return false;
-  const parent = store.raw(f.target, refId);
+  const parent = parents.of(entity, row, refField);
   return parent ? String(parent[subField]) === String(userId) : false;
+}
+
+// The load phase of matchesPath: the parents of `rows` along one one-hop path, in ONE query, whatever
+// the number of rows. A blank or non-numeric reference points at nothing, like `store.raw` read it.
+function primePath(parents, store, entity, rows, refField) {
+  const f = store.field(entity, refField);
+  if (!f) return;
+  const todo = rows.filter((r) => !parents.byRow.get(r)?.has(refField));
+  const keys = [...new Set(todo.map((r) => r[refField]).filter((v) => v !== null && v !== undefined && v !== '' && !Number.isNaN(Number(v))).map((v) => String(Number(v))))];
+  const found = new Map((keys.length ? store.listRawByIds(f.target, keys) : []).map((p) => [String(p.id), p]));
+  for (const r of todo) {
+    const v = r[refField];
+    parents.put(r, refField, v === null || v === undefined || v === '' ? null : found.get(String(Number(v))) ?? null);
+  }
 }
 
 // The row-set version of matchesPath, for list/dashboard/related scoping: the ids
 // of `entity` owned by `userId` under one path, using only the public store API
-// (store.list, which already knows "in") — no raw SQL here.
+// (store.list, which already knows "in") — no raw SQL here. A LOADER: it queries, so routes call it
+// (through `ownWhere`) while they load a page, never while a view renders.
 function idsForPath(store, entity, path, userId) {
   if (path.length === 1) return store.list(entity, { where: { [path[0]]: userId } }).map((r) => r.id);
   const [refField, subField] = path;
@@ -118,10 +151,10 @@ function entitySpecFor(spec, role, entity) {
   return { own: parseOwnPaths(e.own), ops: e.can || [], all: e.all || [] };
 }
 
-const ownedMatch = (store, entity, row, paths, userId) => paths.some((p) => matchesPath(store, entity, row, p, userId));
+const ownedMatch = (parents, store, entity, row, paths, userId) => paths.some((p) => matchesPath(parents, store, entity, row, p, userId));
 
 // May this user do `op` on `entity`, and on this particular row if one is given?
-function canOp(spec, store, roleOf, user, entity, op, row) {
+function canOp(spec, parents, store, roleOf, user, entity, op, row) {
   if (!spec) return true;
   const role = roleOf(user);
   if (!role) return false;
@@ -130,18 +163,18 @@ function canOp(spec, store, roleOf, user, entity, op, row) {
   const unscoped = opAllowed(e.all, op);
   if (!unscoped && !opAllowed(e.ops, op)) return false;
   if (unscoped || !e.own || !row || op === 'create') return true;
-  return user ? ownedMatch(store, entity, row, e.own, user.id) : false;
+  return user ? ownedMatch(parents, store, entity, row, e.own, user.id) : false;
 }
 
 // Does this row belong to the user, when the role is own-scoped? A "by"-gated
 // action still may not reach another user's row — unless `op` names an unscoped
 // ("all") operation, in which case "by" already settled it.
-function ownOkFor(spec, store, roleOf, user, entity, row, op) {
+function ownOkFor(spec, parents, store, roleOf, user, entity, row, op) {
   if (!spec || !row) return true;
   const e = entitySpecFor(spec, roleOf(user), entity);
   if (!e?.own) return true;
   if (op && opAllowed(e.all, op)) return true;
-  return user ? ownedMatch(store, entity, row, e.own, user.id) : false;
+  return user ? ownedMatch(parents, store, entity, row, e.own, user.id) : false;
 }
 
 // The single field a value may be silently filled into on create: the first own
@@ -171,13 +204,24 @@ function ownWhereFor(spec, store, roleOf, user, entity, op) {
 export function permissions(graph, store = null) {
   const spec = graph.roles;
   const roleOf = (user) => (user ? String(user[spec.role]) : spec.anonymous || null);
+  const parents = new Parents();
   return {
     enabled: Boolean(spec),
     roleOf,
     isAdmin: (user) => Boolean(spec) && spec.can?.[roleOf(user)] === '*',
-    can: (user, entity, op, row = null) => canOp(spec, store, roleOf, user, entity, op, row),
-    ownOk: (user, entity, row, op = null) => ownOkFor(spec, store, roleOf, user, entity, row, op),
+    // Before `can`/`ownOk` judge rows of `entity` for `user`: the load phase of their ownership checks.
+    // A one-hop `own` path reads the row's parent, so the parents of all `rows` are loaded here, in one
+    // query per path; a row that was not primed makes the check throw `not primed`.
+    prime(user, entity, rows) {
+      if (!spec || !store) return;
+      const e = entitySpecFor(spec, roleOf(user), entity);
+      for (const p of e?.own || []) if (p.length === 2) primePath(parents, store, entity, rows, p[0]);
+    },
+    can: (user, entity, op, row = null) => canOp(spec, parents, store, roleOf, user, entity, op, row),
+    ownOk: (user, entity, row, op = null) => ownOkFor(spec, parents, store, roleOf, user, entity, row, op),
     ownField: (user, entity) => ownFieldFor(spec, roleOf, user, entity),
+    // The explicit loader of "which rows does this viewer own": queries when `own` is a one-hop or
+    // multi-path grant, so a route calls it while loading and hands the result to the read it scopes.
     ownWhere: (user, entity, op = 'view') => ownWhereFor(spec, store, roleOf, user, entity, op),
     // Pages, lists and dashboards carry an optional "roles" list; absent means everyone.
     canSee(user, item) {
