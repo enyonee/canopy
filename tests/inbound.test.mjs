@@ -160,6 +160,7 @@ test('checkInbound: every rule of the block is an error with a path', () => {
   for (const eventId of [undefined, 5, 'id', '$.a[', ['$.id']]) assert.match(bad({ ...INBOUND, eventId }).join('\n'), /eventId/, JSON.stringify(eventId));
   for (const eventId of [{ header: 'X-Delivery' }, { header: 'a b' }, { header: 'x', more: 1 }]) assert.match(bad({ ...INBOUND, eventId }).join('\n'), /header is not covered by the signature/, 'an unsigned header cannot be the dedup key');
   assert.match(bad({ ...INBOUND, type: 'type' }).join('\n'), /inbound\/type/);
+  for (const type of [5, { header: 'a b' }, { header: 'x', more: 1 }, undefined]) assert.match(bad({ ...INBOUND, type }).join('\n'), /"type" is a \$\.path into the JSON body or \{"header"/, JSON.stringify(type));
   for (const events of [undefined, {}, [], 'x']) assert.match(bad({ ...INBOUND, events }).join('\n'), /"events"/, JSON.stringify(events));
   assert.match(bad({ ...INBOUND, events: { a: 5 } })[0], /an inbound event is an object/);
   assert.match(bad({ ...INBOUND, events: { a: {} } })[0], /needs a "schema"/);
