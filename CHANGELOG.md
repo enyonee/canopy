@@ -58,6 +58,11 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   with identical JSON; no driver call while evaluate runs over list, detail, CSV and dashboard;
   `not loaded` throws), `tests/plan.test.mjs`, the hop gate in `tests/perf.test.mjs`, the snapshot
   vs lazy comparison in `tests/aggfuzz.test.mjs`; `S3a:` mutations.
+- **Fixes: the layering gate checked nothing.** `tests/arch.test.mjs` parsed import specifiers from the
+  masked text, where string literals are blanked, so no `from '...'` ever matched and an illegal import
+  passed. The parser now finds statements on the masked text and reads the specifier from the original
+  source at the same offset (multi-line, `export ... from`, bare and literal dynamic `import`); a self-test
+  covers it, including imports inside strings and comments. All 166 real edges match the allow-list.
 
 ## 0.3.0 (2026-09-29)
 
