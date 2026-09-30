@@ -574,9 +574,22 @@ test('registry entries have their documented contract keys — built-ins and eve
   };
   const { DEFAULT } = await import(pathToFileURL(path.resolve('runtime/registry.mjs')).href);
   const problems = [];
+  // S3c: the hooks of a field kind are pure over what the page loaded. `validate(v, f)` takes no store; `format`
+  // and `input` get exactly the documented ctx (docs/FORMAT.md "Plugins") — a read of anything else throws here.
+  const strict = (base) => new Proxy(base, { get: (t, k) => { if (k in t) return t[k]; throw new Error(`reads ctx.${String(k)}, which is not in the contract`); } });
+  const formatCtx = strict({ esc: String, title: String, label: () => 'L', entity: 'E', row: { id: 1 }, labels: {}, statusField: null });
+  const inputCtx = strict({ esc: String, options: () => [{ id: 1, label: 'L' }], entity: 'E', row: { id: 1 } });
+  const checkHooks = (source, name, entry) => {
+    if (entry.validate.length > 2) problems.push(`${source}: fields.${name}.validate takes ${entry.validate.length} parameters; the contract is (v, f)`);
+    const f = { name: 'x', kind: name, options: ['a'], target: 'T', required: false, type: entry };
+    for (const [hook, run] of [['validate', () => entry.validate('1', f)], ['format', () => entry.format('1', f, formatCtx)], ['input', () => entry.input?.(f, '1', inputCtx)]]) {
+      try { run(); } catch (e) { problems.push(`${source}: fields.${name}.${hook} ${e.message}`); }
+    }
+  };
   const checkTable = (source, table, entries) => {
     for (const [name, entry] of Object.entries(entries || {})) {
       for (const key of CONTRACT[table]) if (!(key in entry)) problems.push(`${source}: ${table}.${name} is missing "${key}"`);
+      if (table === 'fields' && CONTRACT.fields.every((key) => key in entry)) checkHooks(source, name, entry);
     }
   };
   for (const table of Object.keys(CONTRACT)) checkTable('built-in', table, DEFAULT[table]);

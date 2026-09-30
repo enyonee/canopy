@@ -19,7 +19,7 @@ export function listPre({ store, vc }, entity, fields, ov, rows) {
 }
 
 // The options of the reference inputs of a form: the fields formView shows for this viewer.
-function formPre({ graph, store, vc }, entity, fields) {
+export function formPre({ graph, store, vc }, entity, fields) {
   const { only, skip } = formSpec(graph, entity, vc);
   return prefetched(store.labelsFor([]), store.optionsFor(inputTargets(store, entity, fields, only, skip)));
 }
@@ -29,7 +29,7 @@ export const renderForm = (ctx, entity, fields, row, mode, errors = [], flash = 
 
 // A detail page: the row, each related table the viewer may see (read with the viewer's own scope), the
 // labels of all their reference cells and the options of every form the page offers.
-function detailPre(ctx, entity, fields, row) {
+export function detailPre(ctx, entity, fields, row) {
   const { graph, store, vc } = ctx;
   vc.prime(entity, [row]);
   const kids = new Map();
