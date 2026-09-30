@@ -1,0 +1,27 @@
+{
+  "descriptor": 1,
+  "name": "psp",
+  "title": "a payment provider that tells the shop about payments with a signed webhook",
+  "version": "2026-09",
+  "config": { "type": "object", "properties": { "host": { "type": "string", "default": "http://127.0.0.1:8999" } } },
+  "operations": {
+    "status": {
+      "summary": "read the state of a payment (declared so the descriptor has an operation; the shop only receives)",
+      "idempotent": true,
+      "input": { "type": "object", "required": ["payment"], "properties": { "payment": { "type": "string" } } },
+      "request": { "method": "GET", "url": "{config.host}/payments/{input.payment}" }
+    }
+  },
+  "inbound": {
+    "signature": { "scheme": "hmac", "header": "x-psp-signature", "algo": "sha256", "encoding": "hex", "prefix": "sha256=", "signed": "ts.raw", "timestampHeader": "x-psp-timestamp" },
+    "secret": "webhookSecret",
+    "toleranceS": 300,
+    "eventId": "$.id",
+    "type": "$.type",
+    "events": {
+      "payment.succeeded": {
+        "schema": { "type": "object", "required": ["id", "type", "order"], "properties": { "id": { "type": "string" }, "type": { "type": "string" }, "order": { "type": "integer", "minimum": 1 } } }
+      }
+    }
+  }
+}

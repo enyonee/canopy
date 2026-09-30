@@ -11,6 +11,7 @@ import { make, startSink } from './lib.mjs';
 import { applyPatch } from '../runtime/patch.mjs';
 import { validate, formatErrors } from '../runtime/validate.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
+import { openSecrets } from '../runtime/secrets.mjs';
 
 const BOOT_DEADLINE = 10_000; // apps in this repo start in well under a second (see REPORT.md); this is generous headroom
 const CHECK_TIMEOUT = Number(process.env.AG_CHECK_TIMEOUT || 20) * 1000; // one hung fetch must not stall the whole run
@@ -121,12 +122,18 @@ for (const app of apps) {
     summary.push([`${app} (no checks.mjs)`, 0, 0]);
     continue;
   }
-  for (const f of ['data.sqlite', 'trace.jsonl', 'session.key']) fs.rmSync(path.join(dir, f), { force: true });
+  for (const f of ['data.sqlite', 'trace.jsonl', 'session.key', 'secrets.enc', 'secrets.key']) fs.rmSync(path.join(dir, f), { force: true });
   fs.rmSync(path.join(dir, 'files'), { recursive: true, force: true });
   for (const f of fs.readdirSync(dir)) if (/^\.stage\d+\.json$/.test(f)) fs.rmSync(path.join(dir, f));
 
   const mod = await import(`${dir}/checks.mjs?v=${Date.now()}`);
   let graphFile = `apps/${app}/app.json`;
+  // An app that receives webhooks says which secrets its checks sign with: `export const secrets = { <store name>: <value> }`.
+  // They go into the app's own secret store before it boots, the way an operator would put them there.
+  if (mod.secrets) {
+    const store = openSecrets({ dir, app: JSON.parse(fs.readFileSync(graphFile, 'utf8')).app });
+    for (const [name, value] of Object.entries(mod.secrets)) store.set(name, value);
+  }
   if (await portBusy(port)) failLoud(`port ${port} (for ${app}) is already in use by something else; set AG_PORT or free it`);
   let child = boot(graphFile, port);
   const ready = await waitReady(child, port);
