@@ -100,14 +100,15 @@ export function planFor(store, entity, fields = null) {
 /**
  * The read-set of expressions `asts` evaluated over one row of `entity` (a rule's check, a step's
  * `= expr` or `@path`): the plan of a derived field's expression, taken from the expression itself.
- * Cached in `store.plans` under `key` (what the expressions are made of) and the entity.
+ * Cached in `store.plans`: by `key` (what the expressions are made of), then by entity.
  */
 export function planExpr(store, entity, key, asts) {
-  const cache = store.plans, id = `${key}|${entity}`;
-  if (cache.has(id)) return cache.get(id);
+  let byEntity = store.plans.get(key);
+  if (!byEntity) store.plans.set(key, byEntity = new Map());
+  if (byEntity.has(entity)) return byEntity.get(entity);
   const cx = { store, cuts: 0 }, root = new Node(entity);
   for (const ast of asts) walk(cx, ast, [root], [], false);
-  cache.set(id, root);
+  byEntity.set(entity, root);
   return root;
 }
 

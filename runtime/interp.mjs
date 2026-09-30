@@ -29,7 +29,13 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   const ROWS = { row: 'rowEntity', each: 'eachEntity', found: 'foundEntity', picked: 'pickedEntity' };
   // `path` read from `row` of `entity`: its read-set is loaded now (inside the step's transaction, so
   // the step's own earlier writes are seen), then the path is read from the snapshot.
-  const readFrom = (entity, row, path) => store.evalCtx(entity, row, `path:${path.join('.')}`, [{ t: 'path', p: path }]).get(path);
+  const pathPlans = new Map(); // "a.b" -> { key, asts }: the plan cache key and expression of a path, made once
+  const readFrom = (entity, row, path) => {
+    const name = path.join('.');
+    if (!pathPlans.has(name)) pathPlans.set(name, { key: `path:${name}`, asts: [{ t: 'path', p: path }] });
+    const { key, asts } = pathPlans.get(name);
+    return store.evalCtx(entity, row, key, asts).get(path);
+  };
   const refValue = (ctx, pathParts) => {
     const [head, ...rest] = pathParts;
     if (head === 'me') {

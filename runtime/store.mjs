@@ -201,8 +201,8 @@ export class Store {
 
   // --- derived fields ----------------------------------------------------------
   // Pages, `get`, labels, CSV and dashboards evaluate over a snapshot loaded before evaluation
-  // (runtime/store/hydrate.mjs, snapshot.mjs). What follows is the lazy context: rules and step
-  // values (S3b) and the test-only `lazyEval` path still run on it.
+  // (runtime/store/hydrate.mjs, snapshot.mjs), and so do rules and step values (Store#evalCtx). What
+  // follows is the lazy context: render/perms/field hooks (S3c) and the test-only `lazyEval` path.
   // The evaluation context of a row — runtime/store/ctx.mjs.
   /** @param {string} entity @param {any} row @param {string[]} [stack] @param {{ allowSecret?: boolean, cache?: any, clock?: Date }} [opts] */
   ctx(entity, row, stack = [], { allowSecret = false, cache = null, clock = undefined } = {}) {

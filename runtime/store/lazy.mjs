@@ -1,7 +1,7 @@
 // The lazy path — what hydration was before S3a: every read that is not in the page cache asks
 // the store while evaluate() runs. Kept for one release behind the test-only switch
-// `store.lazyEval = true` (tests/snapshot.test.mjs diffs it against the snapshot path over every
-// app); rules and step values (S3b) still run on it through Store#ctx. Attached to
+// `store.lazyEval = true` (tests/snapshot.test.mjs and tests/evaldiff.test.mjs diff it against the
+// snapshot path over every app; rules and step values reach it through Store#evalCtx). Attached to
 // Store.prototype by store.mjs like the other store/ modules (`this` is the Store).
 import { compileAgg, runAggOne, runAggBatch, aggKey } from './aggsql.mjs';
 

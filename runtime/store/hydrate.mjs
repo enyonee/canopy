@@ -8,7 +8,8 @@
 // lookups and whose miss throws.
 //
 // Attached to Store.prototype by store.mjs (`this` is the Store). The old lazy path (lazy.mjs)
-// stays behind the test-only switch `store.lazyEval`; rules and step values still use it.
+// stays behind the test-only switch `store.lazyEval`. Rules and step values (S3b) load the same way,
+// for their own plans: `evalCtx` below.
 import { compileAgg, runAggOne, runAggBatch, aggKey } from './aggsql.mjs';
 import { planFor, planExpr, planFallback } from './plan.mjs';
 import { Snapshot, refKey } from './snapshot.mjs';
