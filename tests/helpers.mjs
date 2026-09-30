@@ -170,3 +170,47 @@ export const viewer = (graph, store, vc = anyone) => {
     page: (p, flash) => staticPage(graph, p, flash, vc, store, pagePre(ctx, p)),
   };
 };
+
+// S3c: a graph whose pages read everything a render can reach: reference cells (one of them a derived label),
+// reference filters and selects, a related table, transitions with fields, an embedded saved list, a dashboard
+// grouped by references, and a role whose rows are owned through a ONE-HOP path (`Post.profile.user`, `Comment.post.owner`).
+export const PAGES_GRAPH = {
+  app: 'pages',
+  data: {
+    User: { login: 'text!', password: 'password', role: 'enum[admin,member]=member' },
+    Profile: { user: 'ref:User!', nick: 'text!' },
+    Tag: { label: 'text := concat(code, "!")', code: 'text!' },
+    Post: { profile: 'ref:Profile!', owner: 'ref:User', tag: 'ref:Tag', title: 'text!', status: 'enum[open,done]=open', score: 'money=0', shout: 'text := upper(title)' },
+    Comment: { post: 'ref:Post!', tag: 'ref:Tag', body: 'text!' },
+  },
+  roles: { entity: 'User', login: 'login', password: 'password', role: 'role',
+    can: { admin: '*', member: {
+      Post: { own: 'profile.user', can: ['view', 'create', 'edit', 'delete', 'go:*'] },
+      Comment: { own: 'post.owner', can: ['view', 'create', 'edit'] },
+      Profile: ['view'], Tag: ['view'], User: ['view'] } } },
+  states: { Post: { field: 'status', transitions: [{ name: 'finish', from: 'open', to: 'done', fields: ['tag'] }] } },
+  override: {
+    'Post.list': { columns: ['title', 'profile', 'tag', 'shout', 'score', 'status'], filters: [{ field: 'tag' }], search: ['title'], rowActions: ['edit', 'delete', 'go:finish'] },
+    'Post.detail': { related: [{ entity: 'Comment', via: 'post', columns: ['body', 'tag'], rowActions: ['edit'] }] },
+  },
+  lists: [{ id: 'posts', title: 'Posts', entity: 'Post', columns: ['title', 'profile', 'tag'] }],
+  pages: [{ id: 'home', title: 'Home', sections: [{ list: 'posts', limit: 5 }, { form: 'Comment' }] }],
+  dashboards: [{ id: 'd', title: 'D', cards: [{ title: 'Posts', entity: 'Post' }],
+    tables: [{ title: 'By tag', entity: 'Post', groupBy: 'tag', metrics: [{ fn: 'count', as: 'n' }] }],
+    charts: [{ title: 'By profile', entity: 'Post', type: 'bar', groupBy: 'profile', metric: { fn: 'count' } }] }],
+  search: { entities: ['Post'] },
+  views: 'auto',
+};
+
+// Users 1 (admin), 2 and 3 (members, each with a profile), three tags, `posts` posts split between the members
+// (Post.profile -> Profile.user is the ownership path) and `comments` comments on each post of member 2.
+export function seedPages(store, posts = 12, comments = 2) {
+  store.insert('User', { login: 'root', password: 'pw', role: 'admin' });
+  for (const m of [2, 3]) { store.insert('User', { login: `m${m}`, password: 'pw', role: 'member' }); store.insert('Profile', { user: m, nick: `nick ${m}` }); }
+  for (const c of ['a', 'b', 'c']) store.insert('Tag', { code: c });
+  for (let i = 0; i < posts; i++) {
+    const member = 2 + (i % 2);
+    const id = store.insert('Post', { profile: member - 1, owner: member, tag: 1 + (i % 3), title: `post ${i}`, score: i });
+    if (member === 2) for (let c = 0; c < comments; c++) store.insert('Comment', { post: id, tag: 1 + (c % 3), body: `comment ${c}` });
+  }
+}

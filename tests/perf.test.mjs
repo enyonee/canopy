@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../runtime/store.mjs';
 import { Snapshot } from '../runtime/store/snapshot.mjs';
+import { boot, tmpGraph, PAGES_GRAPH, seedPages } from './helpers.mjs';
 
 const BENCH_GRAPH = {
   app: 'bench',
@@ -288,4 +289,33 @@ test('the lazy path still batches a page: a non-compilable aggregate over a deri
   const c100 = page(small), c2000 = page(big);
   assert.equal(c100, c2000, `lazy Customer list issued ${c100} queries at 100 rows but ${c2000} at 2000 — not O(1)`);
   assert.ok(c100 <= 6, `expected a small constant through the nested aggregate, got ${c100}`);
+});
+
+// --- S3c: render, perms and field hooks read prefetched data, so a page costs a constant number of queries -------------
+// A member who owns posts through a ONE-HOP path (Post.profile -> Profile.user) opens the list (reference columns,
+// a derived label, a reference filter, Edit/Delete/transition buttons judged per row), one post's detail (related
+// comments judged through `Comment.post.owner`, selects), the dashboard, the page with an embedded list, the search
+// and a CSV: each issues the same number of driver calls at 6 rows as at 60.
+test('a page of owned rows, reference columns and per-row permissions costs the same number of queries at 6 rows and at 60', async () => {
+  const counts = [];
+  for (const posts of [12, 120]) {
+    const s = await boot(tmpGraph(PAGES_GRAPH));
+    try {
+      seedPages(s.app.store, posts, 2);
+      assert.equal((await s.login('m2', 'pw')).status, 303);
+      const one = s.app.store.list('Post', { where: { owner: 2 } })[0].id;
+      const n = {};
+      for (const path of ['/Post', '/Post.csv', `/Post/${one}`, `/Post/${one}/edit`, '/Post/new', '/dashboard/d', '/dashboard/d.csv', '/page/home', '/list/posts', '/search?q=post']) {
+        const queries = [];
+        s.app.store.drv.onQuery = (sql) => queries.push(sql);
+        const r = await s.get(path);
+        s.app.store.drv.onQuery = null;
+        assert.equal(r.status, 200, `${path}: ${r.status}`);
+        n[path.replace(/\/\d+/, '/:id')] = queries.length;
+      }
+      counts.push(n);
+    } finally { s.close(); }
+  }
+  assert.deepEqual(counts[0], counts[1], `queries per page at 6 owned rows vs 60: ${JSON.stringify(counts)}`);
+  for (const [path, n] of Object.entries(counts[0])) assert.ok(n <= 24, `${path} issued ${n} queries — expected a small constant`);
 });

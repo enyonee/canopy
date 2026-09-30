@@ -14,7 +14,17 @@ import { DEFAULT } from '../runtime/registry.mjs';
 import { Snapshot } from '../runtime/store/snapshot.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
 import { bootstrapIdentity, bootstrapSeed } from '../runtime/boot.mjs';
-import { boot, tmpGraph, freezeClock, populate } from './helpers.mjs';
+import { permissions } from '../runtime/auth.mjs';
+import { createContext } from '../runtime/routes/context.mjs';
+import { listView } from '../runtime/render/list.mjs';
+import { detailView } from '../runtime/render/detail.mjs';
+import { formView } from '../runtime/render/form.mjs';
+import { dashboardView } from '../runtime/render/dashboard.mjs';
+import { staticPage } from '../runtime/render/pages.mjs';
+import { searchView } from '../runtime/render/search.mjs';
+import { plain, prefetched, refPairs } from '../runtime/render.mjs';
+import { listPre, detailPre, formPre, pagePre, searchPre, dashboardPre } from '../runtime/routes/load.mjs';
+import { boot, tmpGraph, freezeClock, populate, PAGES_GRAPH, seedPages } from './helpers.mjs';
 
 const NOW = '2026-09-29T12:00:00.000Z';
 
@@ -443,4 +453,136 @@ test('a step expression reads the clock its snapshot was loaded with', (t) => {
   const today = interp.resolve(ctx)('= today');
   assert.equal(loaded.length, 1);
   assert.equal(today, loaded[0].toISOString().slice(0, 10), 'evaluate() read a clock of its own');
+});
+
+// --- S3c: render, perms and field hooks run on prefetched data ------------------------------------------------------
+// Every page is two phases: the LOAD phase asks the store for everything the page will read (queries are fine,
+// and few), then the RENDER phase formats it — and the driver must not be called at all. `twoPhase` runs them with
+// `onQuery` recording, then throwing.
+function twoPhase(store, load, render) {
+  const loads = [];
+  store.drv.onQuery = (sql) => loads.push(sql);
+  let pre;
+  try { pre = load(); } finally { store.drv.onQuery = null; }
+  store.drv.onQuery = (sql) => { throw new Error(`driver call while rendering: ${sql}`); };
+  try { return { html: render(pre), loads }; } finally { store.drv.onQuery = null; }
+}
+
+function pagesWorld(userId, at = '/') {
+  const store = new Store(PAGES_GRAPH, ':memory:');
+  seedPages(store);
+  const perms = permissions(PAGES_GRAPH, store);
+  const ctx = createContext({ req: { headers: {}, method: 'GET' }, res: {}, url: new URL(`http://x${at}`), graph: PAGES_GRAPH, store, perms,
+    sess: { read: () => userId }, interp: { resolve: () => (x) => x }, trace: () => {}, registry: DEFAULT, filesDir: '.' });
+  return { store, perms, ctx, vc: ctx.vc, graph: PAGES_GRAPH };
+}
+
+test('S3c: a list page renders without a driver call: reference cells, filters, buttons of owned rows', () => {
+  const { store, ctx, vc, graph } = pagesWorld(2, '/Post');
+  const fields = store.fields.Post, ov = graph.override['Post.list'];
+  const pg = store.listPage('Post', { where: ctx.ownWhere('Post') }, { page: 1, pageSize: 50 });
+  assert.equal(pg.total, 6, 'member 2 owns half of the posts');
+  const { html, loads } = twoPhase(store, () => listPre(ctx, 'Post', fields, ov, pg.rows),
+    (pre) => listView(graph, store, 'Post', fields, pg.rows, { q: '', where: {}, vc, pre, ...pg }));
+  assert.match(html, /<a href="\/Profile\/1">nick 2<\/a>/, 'a reference cell shows its label');
+  assert.match(html, /<a href="\/Tag\/1">a!<\/a>/, 'a derived label is derived before rendering');
+  assert.match(html, /<a class="btn" href="\/Post\/\d+\/edit">Edit<\/a>/, 'the row buttons read the primed parents');
+  assert.match(html, /aria-current|<a class="btn" href="\/Post\?tag=1">a!<\/a>/, 'the reference filter offers the loaded rows');
+  assert.ok(loads.length <= 8, `a whole list page loads in a handful of queries, got ${loads.length}: ${loads.join(' | ')}`);
+});
+
+test('S3c: a detail page renders without a driver call: related rows, transition fields, row actions', () => {
+  const { store, vc, ctx, graph } = pagesWorld(2);
+  const fields = store.fields.Post;
+  const row = store.get('Post', store.list('Post', { where: { owner: 2 } })[0].id);
+  const { html } = twoPhase(store, () => detailPre(ctx, 'Post', fields, row), (pre) => detailView(graph, store, 'Post', fields, row, '', vc, pre));
+  assert.match(html, /<h3>Comments<\/h3>/);
+  assert.match(html, /<td>comment 0<\/td><td><a href="\/Tag\/1">a!<\/a><\/td>/, 'the related table shows loaded labels');
+  assert.match(html, /<select id="f_tag" name="tag"><option value="">—<\/option><option value="3">c!<\/option>.*<option value="2" selected>b!<\/option>/, "the transition form offers the loaded options");
+  assert.match(html, /\/go\/finish/);
+});
+
+test('S3c: a form, a page, a search and a dashboard render without a driver call', () => {
+  const { store, vc, ctx, graph } = pagesWorld(2);
+  const form = twoPhase(store, () => formPre(ctx, 'Post', store.fields.Post), (pre) => formView(graph, store, 'Post', store.fields.Post, {}, 'new', [], vc, '', pre));
+  assert.match(form.html, /<select id="f_tag" name="tag">.*<option value="3">c!<\/option>/, 'a reference input offers every row of its target');
+  assert.ok(form.loads.length <= 3, `a form loads its options and nothing else: ${form.loads.join(' | ')}`);
+
+  const home = graph.pages[0];
+  const page = twoPhase(store, () => pagePre(ctx, home), (pre) => staticPage(graph, home, '', vc, store, pre));
+  assert.match(page.html, /<h3>Posts<\/h3>/);
+  assert.match(page.html, /<a href="\/Profile\/1">nick 2<\/a>/, 'the embedded saved list shows the viewer\'s own rows, labelled');
+  assert.match(page.html, /<select id="f_tag"/, 'the embedded create form has its options');
+
+  const results = [{ entity: 'Post', rows: store.list('Post', { search: ['title'], q: 'post', where: ctx.ownWhere('Post') }) }];
+  const found = twoPhase(store, () => searchPre(ctx, results), (pre) => searchView(graph, store, 'post', results, vc, pre));
+  assert.match(found.html, /nick 2/);
+
+  const d = graph.dashboards[0];
+  const scoped = (x) => ({ ...x, where: { ...ctx.resolveTop(x.where || {}), ...ctx.ownWhere(x.entity) } });
+  const mine = { ...d, cards: d.cards.map(scoped), tables: d.tables.map(scoped), charts: d.charts.map(scoped) };
+  const dash = twoPhase(store, () => dashboardPre(ctx, d, mine, {}), (pre) => dashboardView(graph, store, mine, '', vc, {}, pre));
+  assert.match(dash.html, /<b>6<\/b>Posts/, 'an own-scoped card counts the viewer\'s own rows');
+  assert.match(dash.html, /<td>a!<\/td><td>2<\/td>/, 'a group on a reference reads its label');
+});
+
+test('S3c: a CSV cell is formatted from loaded labels, and a label nobody loaded throws', () => {
+  const { store, vc } = pagesWorld(1);
+  const fields = store.fields.Post, rows = store.list('Post', {});
+  const pre = prefetched(store.labelsFor(refPairs(fields, ['profile', 'tag'], rows)));
+  store.drv.onQuery = (sql) => { throw new Error(`driver call while formatting: ${sql}`); };
+  try {
+    assert.equal(plain(store, 'Post', fields.find((f) => f.name === 'tag'), rows.find((r) => r.tag === '1'), {}, vc, pre), 'a!');
+    assert.equal(plain(store, 'Post', fields.find((f) => f.name === 'profile'), rows[0], {}, vc, pre).startsWith('nick'), true);
+    assert.throws(() => plain(store, 'Post', fields.find((f) => f.name === 'tag'), { tag: 77 }, {}, vc, pre), /not loaded: label Tag#77/);
+  } finally { store.drv.onQuery = null; }
+});
+
+test('S3c: permission checks over owned rows make no driver call once primed, and throw on a row nobody primed', () => {
+  const { store, perms, vc } = pagesWorld(2);
+  const rows = store.list('Post', {}), queries = [];
+  const owned = rows.map((r) => String(store.raw('Profile', r.profile).user) === '2');
+  store.drv.onQuery = (sql) => queries.push(sql);
+  vc.prime('Post', rows);
+  store.drv.onQuery = (sql) => { throw new Error(`driver call in a permission check: ${sql}`); };
+  try {
+    rows.forEach((r, i) => {
+      assert.equal(vc.can('Post', 'edit', r), owned[i], `Post #${r.id}`);
+      assert.equal(vc.ownOk('Post', r, 'do:x'), owned[i]);
+    });
+    assert.throws(() => vc.can('Post', 'edit', { ...rows[0] }), /not primed: Post\.profile/, 'a row nobody primed fails closed, it does not query');
+  } finally { store.drv.onQuery = null; }
+  assert.equal(queries.length, 1, 'the parents of every row come in ONE query');
+  assert.equal(perms.prime(null, 'Post', rows), undefined, 'an anonymous viewer has no one-hop path to read');
+});
+
+test('S3c: labelsFor asks once per target entity however many cells point there; a gone row is empty, an unasked one throws', () => {
+  const { store } = pagesWorld(1);
+  const queries = [];
+  store.drv.onQuery = (sql) => queries.push(sql);
+  const labels = store.labelsFor([['Tag', 1], ['Tag', '2'], ['Tag', 1], ['Tag', 99], ['Tag', null], ['Tag', ''], ['Profile', 1], ['Profile', 2], ['Profile', 'x']]);
+  store.drv.onQuery = null;
+  assert.equal(queries.length, 2, `one query per target entity: ${queries.join(' | ')}`);
+  assert.deepEqual([labels.get('Tag', 1), labels.get('Tag', '2'), labels.get('Profile', 2)], ['a!', 'b!', 'nick 3'], 'a derived label is derived over the loaded rows');
+  assert.deepEqual([labels.get('Tag', 99), labels.get('Tag', null), labels.get('Tag', ''), labels.get('Profile', 'x')], ['', '', '', ''], 'nothing there, nothing shown');
+  assert.throws(() => labels.get('Tag', 3), /not loaded: label Tag#3/);
+  assert.throws(() => labels.get('Comment', 1), /not loaded: label Comment#1/);
+  for (const id of [1, '2', 99]) assert.equal(labels.get('Tag', id), store.labelOf('Tag', id), 'the same text labelOf gives');
+
+  const bare = new Store({ app: 'b', data: { Bare: { n: 'int' }, Named: { name: 'text' } } }, ':memory:');
+  bare.insert('Bare', { n: 1 });
+  bare.insert('Named', { name: '' });
+  const l2 = bare.labelsFor([['Bare', 1], ['Named', 1]]);
+  assert.deepEqual([l2.get('Bare', 1), l2.get('Named', 1)], ['#1', '#1'], 'no label field, or a blank one, reads as #id');
+  assert.equal(bare.labelsFor([]).get('Bare', null), '');
+});
+
+test('S3c: optionsFor reads each target once, in the order the page lists it, and a target nobody asked for throws', () => {
+  const { store } = pagesWorld(1);
+  const options = store.optionsFor(['Tag', 'Tag', 'Profile']);
+  assert.deepEqual([...options.keys()], ['Tag', 'Profile']);
+  assert.deepEqual(options.get('Tag'), store.list('Tag', {}).map((r) => ({ id: r.id, label: store.label('Tag', r) })));
+  const pre = prefetched({ get: () => '' }, options);
+  assert.equal(pre.options('Tag').length, 3);
+  assert.throws(() => pre.options('Comment'), /not loaded: options Comment/);
 });
