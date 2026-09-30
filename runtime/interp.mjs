@@ -113,8 +113,9 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   // Deliver what is due (after a commit, or when an operator asks); the delivery path takes its time from `clock`.
   const flushNow = () => flush(store, graph, { fetchImpl, trace, registry, clock, env });
   const modes = () => connectorModes(graph, registry, env ? env.deploy() : { connectors: {} });
+  // `fn` gets the transaction-bound view of the store (Store#transaction) and uses it for every read and write.
   const withEffects = async (fn) => {
-    const out = store.transaction(fn);
+    const out = await store.transaction(fn);
     await flushNow();
     return out;
   };
@@ -133,15 +134,17 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   // the very next pass) never gets close to the limit.
   const MAX_EVENT_DEPTH = 8;
   const fireCreatedFor = (ctx) => (entity, id, values) =>
-    fireEvents('created', entity, id, values, ctx.user, null, (ctx.eventDepth || 0) + 1);
+    fireEvents('created', entity, id, values, ctx.user, null, (ctx.eventDepth || 0) + 1, ctx.tx);
 
   // --- steps run inside the caller's transaction; effects wait in the outbox -------------------
+  // `ctx.tx` is the transaction view the steps run in (attempt hands it to its callback); without one, the store.
   const runSteps = (steps, ctx) => {
-    if (ctx.rowEntity && ctx.id && !ctx.row) ctx.row = store.get(ctx.rowEntity, ctx.id);
+    const db = ctx.tx ?? store;
+    if (ctx.rowEntity && ctx.id && !ctx.row) ctx.row = db.get(ctx.rowEntity, ctx.id);
     for (const [i, step] of steps.entries()) {
       const block = CATALOG[step.block];
       const out = block.run({
-        store, graph, registry, entity: ctx.rowEntity, id: ctx.id, values: ctx.values, step, user: ctx.user,
+        store: db, graph, registry, entity: ctx.rowEntity, id: ctx.id, values: ctx.values, step, user: ctx.user,
         resolve: resolve(ctx), trace, text: (s) => interpolate(s, ctx),
         run: (sub, extra) => runSteps(sub, { ...ctx, ...extra }),
         fireCreated: fireCreatedFor(ctx),
@@ -152,18 +155,18 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
       if (createdId) ctx.created = createdId;
       if (out.found) ctx.foundEntity = step.entity;
       if (out.picked) ctx.pickedEntity = step.from;
-      if (ctx.rowEntity && ctx.id) ctx.row = store.get(ctx.rowEntity, ctx.id) || ctx.row;
+      if (ctx.rowEntity && ctx.id) ctx.row = db.get(ctx.rowEntity, ctx.id) || ctx.row;
       trace({ kind: 'step', i, block: step.block, effects: block.effects, entity: ctx.rowEntity, id: ctx.id,
         out: out.picked ? { picked: out.picked.id } : out.found ? { found: out.found.id } : out });
     }
     return ctx;
   };
-  const fireEvents = (trigger, entity, id, values, user, snapshot = null, depth = 0) => {
+  const fireEvents = (trigger, entity, id, values, user, snapshot = null, depth = 0, tx = null) => {
     if (depth > MAX_EVENT_DEPTH) throw new Error(`too many nested "${trigger}" events — check for a cycle through ${entity}.${trigger}`);
     for (const ev of graph.events || []) {
       if (ev.on !== `${entity}.${trigger}`) continue;
       trace({ kind: 'event', on: ev.on, entity, id });
-      runSteps(ev.do, { rowEntity: entity, id, row: snapshot, values, user, eventDepth: depth });
+      runSteps(ev.do, { rowEntity: entity, id, row: snapshot, values, user, eventDepth: depth, tx });
     }
   };
 

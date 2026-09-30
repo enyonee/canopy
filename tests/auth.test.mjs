@@ -19,7 +19,7 @@ test('passwords are salted hashes that verify only against their own plain text'
   assert.equal(verifyPassword('x', `scrypt$${h.split('$')[1]}$abcd`), false, 'a hash of the wrong length never verifies');
 });
 
-test('sessions are rows: the cookie carries an opaque id, logout ends it, a broken cookie is not a crash', () => {
+test('sessions are rows: the cookie carries an opaque id, logout ends it, a broken cookie is not a crash', async () => {
   const dir = tmpDir('ag-auth-');
   const keyFile = path.join(dir, 'session.key');
   const rows = new Map();
@@ -30,35 +30,35 @@ test('sessions are rows: the cookie carries an opaque id, logout ends it, a brok
   };
   const a = sessions(keyFile, store);
   assert.ok(fs.existsSync(keyFile), 'the key is written next to the database');
-  const token = a.start(7);
+  const token = await a.start(7);
   assert.equal(a.verify(token), token.split('.')[0], 'the token is a signed session id');
   assert.notEqual(token.split('.')[0], '7', 'the cookie never carries the user id');
-  assert.notEqual(a.start(7), token, 'two logins of the same user are two sessions');
+  assert.notEqual(await a.start(7), token, 'two logins of the same user are two sessions');
   const cookie = `x=1; ag_session=${encodeURIComponent(token)}; y=2`;
-  assert.equal(a.read(cookie), 7);
+  assert.equal(await a.read(cookie), 7);
   assert.equal(a.verify('7.deadbeef'), null, 'a forged signature is rejected');
   assert.equal(a.verify('7'), null);
   assert.equal(a.verify(''), null);
   assert.equal(a.verify(null), null);
   assert.equal(a.verify(`${token}0`), null, 'a signature of the wrong length is rejected');
-  assert.equal(a.read('x=1'), null, 'no cookie, no session');
-  assert.equal(a.read(undefined), null);
-  assert.equal(a.read('ag_session=%ZZ'), null, 'a malformed escape is a wrong cookie, not a throw');
+  assert.equal(await a.read('x=1'), null, 'no cookie, no session');
+  assert.equal(await a.read(undefined), null);
+  assert.equal(await a.read('ag_session=%ZZ'), null, 'a malformed escape is a wrong cookie, not a throw');
   assert.equal(a.token('ag_session=%ZZ'), null);
   const b = sessions(keyFile, store);
-  assert.equal(b.read(cookie), 7, 'a restart with the same key keeps live sessions valid');
-  a.end(cookie);
-  assert.equal(a.read(cookie), null, 'signing out ends the session for that very token');
-  assert.equal(b.read(cookie), null, 'and for every other process sharing the store');
+  assert.equal(await b.read(cookie), 7, 'a restart with the same key keeps live sessions valid');
+  await a.end(cookie);
+  assert.equal(await a.read(cookie), null, 'signing out ends the session for that very token');
+  assert.equal(await b.read(cookie), null, 'and for every other process sharing the store');
   assert.match(a.setCookie(token), /^ag_session=.+; Path=\/; HttpOnly; SameSite=Lax$/);
   assert.match(a.clearCookie(), /Max-Age=0/);
   assert.match(a.clearCookie(), /SameSite=Lax/);
   const c = sessions(null, store);
-  const own = c.start(1);
+  const own = await c.start(1);
   assert.equal(c.verify(own), own.split('.')[0], 'without a key file the key lives in memory');
   assert.equal(c.verify(token), null, 'and differs from every other instance');
-  assert.equal(c.read(`ag_session=${encodeURIComponent(token)}`), null, "another instance's cookie is not read");
-  c.end('ag_session=nope');
+  assert.equal(await c.read(`ag_session=${encodeURIComponent(token)}`), null, "another instance's cookie is not read");
+  await c.end('ag_session=nope');
 });
 
 const graph = {
@@ -145,16 +145,16 @@ test('S3c: prime loads the one-hop parents in one query; blank, dangling and non
     rows = store.listRaw('Note'); // fresh row objects: what was primed belongs to the row it was primed for
     const queries = [];
     store.drv.onQuery = (sql) => queries.push(sql);
-    perms.prime(user, 'Note', rows);
-    perms.prime(user, 'Note', rows);
+    await perms.prime(user, 'Note', rows);
+    await perms.prime(user, 'Note', rows);
     store.drv.onQuery = null;
     assert.equal(queries.length, 1, `user ${who}: every parent in one query, and a primed row is not loaded again`);
     assert.deepEqual(rows.filter((r) => perms.can(user, 'Note', 'edit', r)).map((r) => r.id).sort(), expected(who), `user ${who} edits exactly the rows they own`);
     assert.deepEqual(rows.filter((r) => perms.ownOk(user, 'Note', r)).map((r) => r.id).sort(), expected(who));
     assert.equal(rows.every((r) => perms.can(user, 'Note', 'go:x', r)), true, 'an "all" operation is not scoped, so it reads no parent');
-    assert.deepEqual(perms.ownWhere(user, 'Note').id.in.map(Number).sort(), expected(who), 'the loader answers with the same rows, by every path of the grant');
+    assert.deepEqual((await perms.ownWhere(user, 'Note')).id.in.map(Number).sort(), expected(who), 'the loader answers with the same rows, by every path of the grant');
   }
   assert.throws(() => perms.can(store.get('User', 1), 'Note', 'edit', { ...rows[0] }), /not primed: Note\.profile/);
   assert.equal(permissions(HOP_GRAPH).can(store.get('User', 1), 'Note', 'edit', rows[0]), false, 'without a store a one-hop grant owns nothing');
-  assert.equal(permissions(HOP_GRAPH).prime(store.get('User', 1), 'Note', rows), undefined);
+  assert.equal(await permissions(HOP_GRAPH).prime(store.get('User', 1), 'Note', rows), undefined);
 });

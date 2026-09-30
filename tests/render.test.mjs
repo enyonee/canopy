@@ -37,31 +37,31 @@ test('without a theme the page still paints itself', () => {
   assert.ok(!/class="flash"/.test(html), 'no flash unless there is one');
 });
 
-test('a list with no override shows every field, offers create, and renders each kind', () => {
+test('a list with no override shows every field, offers create, and renders each kind', async () => {
   const s = store();
   const peer = s.insert('Thing', { name: 'peer' });
   s.insert('Thing', { name: 'row', body: 'text', n: 3, flag: 'true', kind: 'b', peer });
-  const html = viewer(bare, s).list('Thing', s.list('Thing', {}));
+  const html = await viewer(bare, s).list('Thing', s.list('Thing', {}));
   assert.match(html, /<th><a [^>]*>Name<\/a><\/th>/);
   assert.match(html, /<td>Yes<\/td>/, 'a boolean without declared labels reads Yes');
   assert.match(html, /<td>No<\/td>/);
   assert.match(html, /<a href="\/Thing\/1">peer<\/a>/, 'a reference renders as a link to the row');
   assert.match(html, /Add Thing/);
   assert.ok(!/<td>—<\/td>/.test(html) === false || true);
-  const dangling = viewer(bare, s).list('Numbered', [{ id: 1, n: 5 }]);
+  const dangling = await viewer(bare, s).list('Numbered', [{ id: 1, n: 5 }]);
   assert.match(dangling, /<td>5<\/td>/);
 });
 
-test('an empty reference renders as a dash, not as a broken link', () => {
+test('an empty reference renders as a dash, not as a broken link', async () => {
   const s = store();
   s.insert('Thing', { name: 'lonely' });
-  const html = viewer(bare, s).list('Thing', s.list('Thing', {}));
+  const html = await viewer(bare, s).list('Thing', s.list('Thing', {}));
   assert.match(html, /<td>—<\/td>/);
 });
 
-test('a form renders one control per kind and never asks for a timestamp', () => {
+test('a form renders one control per kind and never asks for a timestamp', async () => {
   const s = store();
-  const html = viewer(bare, s).form('Thing', {}, 'new');
+  const html = await viewer(bare, s).form('Thing', {}, 'new');
   assert.match(html, /<input type="text" id="f_name"[^>]*required/);
   assert.match(html, /<textarea id="f_body"/);
   assert.match(html, /<input type="checkbox" id="f_flag"/);
@@ -70,41 +70,41 @@ test('a form renders one control per kind and never asks for a timestamp', () =>
   assert.match(html, /<select id="f_peer" name="peer"><option value="">—<\/option>/);
   assert.ok(!/f_at/.test(html));
   assert.match(html, />Submit</);
-  const edit = viewer(bare, s).form('Thing', { id: 7, name: 'x', flag: 1, kind: 'b' }, 'edit');
+  const edit = await viewer(bare, s).form('Thing', { id: 7, name: 'x', flag: 1, kind: 'b' }, 'edit');
   assert.match(edit, /action="\/Thing\/7"/);
   assert.match(edit, /checked/);
   assert.match(edit, /<option selected>b<\/option>/);
   assert.match(edit, />Save</);
-  const withErrors = viewer(bare, s).form('Thing', {}, 'new', ['name is required']);
+  const withErrors = await viewer(bare, s).form('Thing', {}, 'new', ['name is required']);
   assert.match(withErrors, /Please fix the following/);
   assert.match(withErrors, /name is required/);
 });
 
-test('a detail view without related sections still shows every field', () => {
+test('a detail view without related sections still shows every field', async () => {
   const s = store();
   const id = s.insert('Thing', { name: 'solo', flag: 'true' });
-  const html = viewer(bare, s).detail('Thing', s.get('Thing', id));
+  const html = await viewer(bare, s).detail('Thing', s.get('Thing', id));
   assert.match(html, /<th>Flag<\/th><td>Yes<\/td>/);
   assert.match(html, /<th>Peer<\/th><td>—<\/td>/);
   assert.ok(!/<h3>/.test(html), 'nothing is invented when nothing is declared');
 });
 
-test('a related section can be read-only, and carries its own columns', () => {
+test('a related section can be read-only, and carries its own columns', async () => {
   const g = { ...bare, override: { 'Thing.detail': { related: [{ entity: 'Thing', via: 'peer', form: false, columns: ['name'] }] } } };
   const s = store();
   const parent = s.insert('Thing', { name: 'parent' });
   s.insert('Thing', { name: 'child', peer: parent });
-  const html = viewer(g, s).detail('Thing', s.get('Thing', parent));
+  const html = await viewer(g, s).detail('Thing', s.get('Thing', parent));
   assert.match(html, /<h3>Things<\/h3>/);
   assert.match(html, /child/);
   assert.ok(!/method="post"/.test(html), 'form: false means no form');
 });
 
-test('dashboards render floats, empty groups and tables without a group', () => {
+test('dashboards render floats, empty groups and tables without a group', async () => {
   const s = store();
   s.insert('Numbered', { n: 1 });
   s.insert('Numbered', { n: 2 });
-  const html = viewer({ ...bare }, s).dashboard({
+  const html = await viewer({ ...bare }, s).dashboard({
     id: 'd', title: 'D',
     cards: [{ title: 'Average', entity: 'Numbered', fn: 'avg', field: 'n' }, { title: 'Count', entity: 'Numbered', fn: 'count' }],
     tables: [{ title: 'Flat', entity: 'Numbered', metrics: [{ fn: 'sum', field: 'n', as: 'total' }] },
@@ -114,10 +114,10 @@ test('dashboards render floats, empty groups and tables without a group', () => 
   assert.match(html, /<b>2<\/b>Count/);
   assert.match(html, /<h3>Flat<\/h3>/);
   assert.match(html, /<th>Total<\/th>/);
-  const empty = viewer(bare, s).dashboard({ id: 'e', title: 'E' });
+  const empty = await viewer(bare, s).dashboard({ id: 'e', title: 'E' });
   assert.match(empty, /<h2>E<\/h2>/);
   s.insert('Thing', { name: 'no peer' });
-  const withRefGroup = viewer(bare, s).dashboard({ id: 'r', title: 'R',
+  const withRefGroup = await viewer(bare, s).dashboard({ id: 'r', title: 'R',
     tables: [{ title: 'By peer', entity: 'Thing', groupBy: 'peer', metrics: [{ fn: 'count', as: 'n' }] }] });
   assert.match(withRefGroup, /<td>—<\/td>/, 'a group on an empty reference reads as a dash');
 });

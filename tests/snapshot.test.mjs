@@ -42,8 +42,8 @@ test('every app hydrates byte-identically through the snapshot and through the l
       const dir = path.join('apps', app), graph = JSON.parse(fs.readFileSync(path.join(dir, 'app.json'), 'utf8'));
       const { registry } = await loadPlugins(graph, path.resolve(dir));
       const store = new Store(graph, ':memory:', registry);
-      bootstrapIdentity(graph, store);
-      bootstrapSeed(graph, store, dir, null);
+      await bootstrapIdentity(graph, store);
+      await bootstrapSeed(graph, store, dir, null);
       populate(store, graph);
       for (const entity of Object.keys(graph.data)) {
         const both = (fn) => { const snap = answer(fn); store.lazyEval = true; try { return [snap, answer(fn)]; } finally { store.lazyEval = false; } };
@@ -459,30 +459,30 @@ test('a step expression reads the clock its snapshot was loaded with', (t) => {
 // Every page is two phases: the LOAD phase asks the store for everything the page will read (queries are fine,
 // and few), then the RENDER phase formats it — and the driver must not be called at all. `twoPhase` runs them with
 // `onQuery` recording, then throwing.
-function twoPhase(store, load, render) {
+async function twoPhase(store, load, render) {
   const loads = [];
   store.drv.onQuery = (sql) => loads.push(sql);
   let pre;
-  try { pre = load(); } finally { store.drv.onQuery = null; }
+  try { pre = await load(); } finally { store.drv.onQuery = null; }
   store.drv.onQuery = (sql) => { throw new Error(`driver call while rendering: ${sql}`); };
   try { return { html: render(pre), loads }; } finally { store.drv.onQuery = null; }
 }
 
-function pagesWorld(userId, at = '/') {
+async function pagesWorld(userId, at = '/') {
   const store = new Store(PAGES_GRAPH, ':memory:');
   seedPages(store);
   const perms = permissions(PAGES_GRAPH, store);
-  const ctx = createContext({ req: { headers: {}, method: 'GET' }, res: {}, url: new URL(`http://x${at}`), graph: PAGES_GRAPH, store, perms,
+  const ctx = await createContext({ req: { headers: {}, method: 'GET' }, res: {}, url: new URL(`http://x${at}`), graph: PAGES_GRAPH, store, perms,
     sess: { read: () => userId }, interp: { resolve: () => (x) => x }, trace: () => {}, registry: DEFAULT, filesDir: '.' });
   return { store, perms, ctx, vc: ctx.vc, graph: PAGES_GRAPH };
 }
 
-test('S3c: a list page renders without a driver call: reference cells, filters, buttons of owned rows', () => {
-  const { store, ctx, vc, graph } = pagesWorld(2, '/Post');
+test('S3c: a list page renders without a driver call: reference cells, filters, buttons of owned rows', async () => {
+  const { store, ctx, vc, graph } = await pagesWorld(2, '/Post');
   const fields = store.fields.Post, ov = graph.override['Post.list'];
-  const pg = store.listPage('Post', { where: ctx.ownWhere('Post') }, { page: 1, pageSize: 50 });
+  const pg = store.listPage('Post', { where: await ctx.ownWhere('Post') }, { page: 1, pageSize: 50 });
   assert.equal(pg.total, 6, 'member 2 owns half of the posts');
-  const { html, loads } = twoPhase(store, () => listPre(ctx, 'Post', fields, ov, pg.rows),
+  const { html, loads } = await twoPhase(store, async () => await listPre(ctx, 'Post', fields, ov, pg.rows),
     (pre) => listView(graph, store, 'Post', fields, pg.rows, { q: '', where: {}, vc, pre, ...pg }));
   assert.match(html, /<a href="\/Profile\/1">nick 2<\/a>/, 'a reference cell shows its label');
   assert.match(html, /<a href="\/Tag\/1">a!<\/a>/, 'a derived label is derived before rendering');
@@ -491,43 +491,44 @@ test('S3c: a list page renders without a driver call: reference cells, filters, 
   assert.ok(loads.length <= 8, `a whole list page loads in a handful of queries, got ${loads.length}: ${loads.join(' | ')}`);
 });
 
-test('S3c: a detail page renders without a driver call: related rows, transition fields, row actions', () => {
-  const { store, vc, ctx, graph } = pagesWorld(2);
+test('S3c: a detail page renders without a driver call: related rows, transition fields, row actions', async () => {
+  const { store, vc, ctx, graph } = await pagesWorld(2);
   const fields = store.fields.Post;
   const row = store.get('Post', store.list('Post', { where: { owner: 2 } })[0].id);
-  const { html } = twoPhase(store, () => detailPre(ctx, 'Post', fields, row), (pre) => detailView(graph, store, 'Post', fields, row, '', vc, pre));
+  const { html } = await twoPhase(store, async () => await detailPre(ctx, 'Post', fields, row), (pre) => detailView(graph, store, 'Post', fields, row, '', vc, pre));
   assert.match(html, /<h3>Comments<\/h3>/);
   assert.match(html, /<td>comment 0<\/td><td><a href="\/Tag\/1">a!<\/a><\/td>/, 'the related table shows loaded labels');
   assert.match(html, /<label for="f_profile">Profile \*<\/label><select id="f_profile" name="profile"><option value="">—<\/option><option value="2">nick 3<\/option><option value="1" selected>nick 2<\/option>/, "the transition form offers the options of its own field (no other form on the page has a Profile select)");
   assert.match(html, /\/go\/finish/);
 });
 
-test('S3c: a form, a page, a search and a dashboard render without a driver call', () => {
-  const { store, vc, ctx, graph } = pagesWorld(2);
-  const form = twoPhase(store, () => formPre(ctx, 'Post', store.fields.Post), (pre) => formView(graph, store, 'Post', store.fields.Post, {}, 'new', [], vc, '', pre));
+test('S3c: a form, a page, a search and a dashboard render without a driver call', async () => {
+  const { store, vc, ctx, graph } = await pagesWorld(2);
+  const form = await twoPhase(store, async () => await formPre(ctx, 'Post', store.fields.Post), (pre) => formView(graph, store, 'Post', store.fields.Post, {}, 'new', [], vc, '', pre));
   assert.match(form.html, /<select id="f_tag" name="tag">.*<option value="3">c!<\/option>/, 'a reference input offers every row of its target');
   assert.ok(form.loads.length <= 3, `a form loads its options and nothing else: ${form.loads.join(' | ')}`);
 
   const home = graph.pages[0];
-  const page = twoPhase(store, () => pagePre(ctx, home), (pre) => staticPage(graph, home, '', vc, store, pre));
+  const page = await twoPhase(store, async () => await pagePre(ctx, home), (pre) => staticPage(graph, home, '', vc, store, pre));
   assert.match(page.html, /<h3>Posts<\/h3>/);
   assert.match(page.html, /<a href="\/Profile\/1">nick 2<\/a>/, 'the embedded saved list shows the viewer\'s own rows, labelled');
   assert.match(page.html, /<select id="f_tag"/, 'the embedded create form has its options');
 
-  const results = [{ entity: 'Post', rows: store.list('Post', { search: ['title'], q: 'post', where: ctx.ownWhere('Post') }) }];
-  const found = twoPhase(store, () => searchPre(ctx, results), (pre) => searchView(graph, store, 'post', results, vc, pre));
+  const results = [{ entity: 'Post', rows: store.list('Post', { search: ['title'], q: 'post', where: await ctx.ownWhere('Post') }) }];
+  const found = await twoPhase(store, async () => await searchPre(ctx, results), (pre) => searchView(graph, store, 'post', results, vc, pre));
   assert.match(found.html, /nick 2/);
 
   const d = graph.dashboards[0];
-  const scoped = (x) => ({ ...x, where: { ...ctx.resolveTop(x.where || {}), ...ctx.ownWhere(x.entity) } });
-  const mine = { ...d, cards: d.cards.map(scoped), tables: d.tables.map(scoped), charts: d.charts.map(scoped) };
-  const dash = twoPhase(store, () => dashboardPre(ctx, d, mine, {}), (pre) => dashboardView(graph, store, mine, '', vc, {}, pre));
+  const scoped = async (x) => ({ ...x, where: { ...ctx.resolveTop(x.where || {}), ...await ctx.ownWhere(x.entity) } });
+  const mine = { ...d, cards: [], tables: [], charts: [] };
+  for (const part of ['cards', 'tables', 'charts']) for (const x of d[part]) mine[part].push(await scoped(x));
+  const dash = await twoPhase(store, async () => await dashboardPre(ctx, d, mine, {}), (pre) => dashboardView(graph, store, mine, '', vc, {}, pre));
   assert.match(dash.html, /<b>6<\/b>Posts/, 'an own-scoped card counts the viewer\'s own rows');
   assert.match(dash.html, /<td>a!<\/td><td>2<\/td>/, 'a group on a reference reads its label');
 });
 
-test('S3c: a CSV cell is formatted from loaded labels, and a label nobody loaded throws', () => {
-  const { store, vc } = pagesWorld(1);
+test('S3c: a CSV cell is formatted from loaded labels, and a label nobody loaded throws', async () => {
+  const { store, vc } = await pagesWorld(1);
   const fields = store.fields.Post, rows = store.list('Post', {});
   const pre = prefetched(store.labelsFor(refPairs(fields, ['profile', 'tag'], rows)));
   store.drv.onQuery = (sql) => { throw new Error(`driver call while formatting: ${sql}`); };
@@ -538,12 +539,12 @@ test('S3c: a CSV cell is formatted from loaded labels, and a label nobody loaded
   } finally { store.drv.onQuery = null; }
 });
 
-test('S3c: permission checks over owned rows make no driver call once primed, and throw on a row nobody primed', () => {
-  const { store, perms, vc } = pagesWorld(2);
+test('S3c: permission checks over owned rows make no driver call once primed, and throw on a row nobody primed', async () => {
+  const { store, perms, vc } = await pagesWorld(2);
   const rows = store.list('Post', {}), queries = [];
   const owned = rows.map((r) => String(store.raw('Profile', r.profile).user) === '2');
   store.drv.onQuery = (sql) => queries.push(sql);
-  vc.prime('Post', rows);
+  await vc.prime('Post', rows);
   store.drv.onQuery = (sql) => { throw new Error(`driver call in a permission check: ${sql}`); };
   try {
     rows.forEach((r, i) => {
@@ -553,11 +554,11 @@ test('S3c: permission checks over owned rows make no driver call once primed, an
     assert.throws(() => vc.can('Post', 'edit', { ...rows[0] }), /not primed: Post\.profile/, 'a row nobody primed fails closed, it does not query');
   } finally { store.drv.onQuery = null; }
   assert.equal(queries.length, 1, 'the parents of every row come in ONE query');
-  assert.equal(perms.prime(null, 'Post', rows), undefined, 'an anonymous viewer has no one-hop path to read');
+  assert.equal(await perms.prime(null, 'Post', rows), undefined, 'an anonymous viewer has no one-hop path to read');
 });
 
-test('S3c: labelsFor asks once per target entity however many cells point there; a gone row is empty, an unasked one throws', () => {
-  const { store } = pagesWorld(1);
+test('S3c: labelsFor asks once per target entity however many cells point there; a gone row is empty, an unasked one throws', async () => {
+  const { store } = await pagesWorld(1);
   const queries = [];
   store.drv.onQuery = (sql) => queries.push(sql);
   const labels = store.labelsFor([['Tag', 1], ['Tag', '2'], ['Tag', 1], ['Tag', 99], ['Tag', null], ['Tag', ''], ['Profile', 1], ['Profile', 2], ['Profile', 'x']]);
@@ -577,8 +578,8 @@ test('S3c: labelsFor asks once per target entity however many cells point there;
   assert.equal(bare.labelsFor([]).get('Bare', null), '');
 });
 
-test('S3c: optionsFor reads each target once, in the order the page lists it, and a target nobody asked for throws', () => {
-  const { store } = pagesWorld(1);
+test('S3c: optionsFor reads each target once, in the order the page lists it, and a target nobody asked for throws', async () => {
+  const { store } = await pagesWorld(1);
   const options = store.optionsFor(['Tag', 'Tag', 'Profile']);
   assert.deepEqual([...options.keys()], ['Tag', 'Profile']);
   assert.deepEqual(options.get('Tag'), store.list('Tag', {}).map((r) => ({ id: r.id, label: store.label('Tag', r) })));
@@ -587,8 +588,8 @@ test('S3c: optionsFor reads each target once, in the order the page lists it, an
   assert.throws(() => pre.options('Comment'), /not loaded: options Comment/);
 });
 
-test('S3c: a reference must point at a row: the kernel checks it on insert and update, the field kind no longer does', () => {
-  const { store } = pagesWorld(1);
+test('S3c: a reference must point at a row: the kernel checks it on insert and update, the field kind no longer does', async () => {
+  const { store } = await pagesWorld(1);
   assert.throws(() => store.insert('Post', { profile: 99, title: 'x' }), /profile: there is no Profile #99/);
   const id = store.insert('Post', { profile: 1, title: 'x' });
   assert.throws(() => store.update('Post', id, { tag: 77 }), /tag: there is no Tag #77/);

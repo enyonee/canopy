@@ -339,7 +339,8 @@ export interface Driver {
   get(sql: string, params?: any[], opts?: { cache?: boolean }): any;
   run(sql: string, params?: any[], opts?: { cache?: boolean }): { changes: number; lastId: number };
   exec(sql: string): void;
-  transaction<T>(fn: () => T): T;
+  /** `fn` gets the transaction handle; a synchronous `fn` answers with its value, one that returns a promise is awaited before COMMIT. */
+  transaction<T>(fn: (tx: Driver) => T): T;
   close(): void;
   tables(): string[];
   columns(table: string): Array<{ name: string; type: string }>;

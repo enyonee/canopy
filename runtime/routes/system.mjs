@@ -13,10 +13,10 @@ const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'im
 async function outboxAction(ctx, row, action) {
   const { store, ok, interp } = ctx;
   if (action === 'retry') {
-    store.outboxUpdate(row.id, { status: 'queued', nextAttemptAt: null, attempts: 0 });
+    await store.outboxUpdate(row.id, { status: 'queued', nextAttemptAt: null, attempts: 0 });
     await interp.flushNow();
-    ok('/outbox', `Delivery #${row.id} retried: ${store.outboxGet(row.id).status}`);
-  } else if (store.outboxMark(row.id, 'unknown', { status: 'sent', error: null })) ok('/outbox', `Delivery #${row.id} marked as sent`);
+    ok('/outbox', `Delivery #${row.id} retried: ${(await store.outboxGet(row.id)).status}`);
+  } else if (await store.outboxMark(row.id, 'unknown', { status: 'sent', error: null })) ok('/outbox', `Delivery #${row.id} marked as sent`);
   else ok('/outbox', `Delivery #${row.id} is not waiting for a decision`);
 }
 
@@ -24,25 +24,25 @@ async function outbox(ctx) {
   const { graph, store, parts, req, send, vc } = ctx;
   if (!vc.outbox) { ctx.deny(); return true; }
   if (['retry', 'sent'].includes(parts[2]) && req.method === 'POST') {
-    const row = store.outboxGet(parts[1]);
+    const row = await store.outboxGet(parts[1]);
     if (!row) { send(404, errorPage(graph, `no delivery #${parts[1]}`)); return true; }
     await outboxAction(ctx, row, parts[2]);
     return true;
   }
-  send(200, outboxView(graph, store.outbox(), ctx.flash, vc, store.breakers(), ctx.interp.modes()));
+  send(200, outboxView(graph, await store.outbox(), ctx.flash, vc, await store.breakers(), ctx.interp.modes()));
   return true;
 }
 
-function file(ctx) {
+async function file(ctx) {
   const { graph, store, parts, send, vc, filesDir, headers, res, url } = ctx;
   const [, e, id, fieldName] = parts;
   const entity = Object.keys(graph.data).find((x) => x.toLowerCase() === e.toLowerCase());
   const f = entity && store.field(entity, fieldName);
   if (!entity || !f || !f.type.upload) { send(404, errorPage(graph, 'no such file')); return true; }
   if (!vc.can(entity, 'view')) { ctx.deny(); return true; }
-  const row = store.get(entity, id);
+  const row = await store.get(entity, id);
   if (!row || !row[fieldName]) { send(404, errorPage(graph, 'no such file')); return true; }
-  vc.prime(entity, [row]);
+  await vc.prime(entity, [row]);
   if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
   const at = path.join(filesDir, path.basename(row[fieldName]));
   if (!fs.existsSync(at)) { send(404, errorPage(graph, 'file is missing on disk')); return true; }
@@ -69,15 +69,15 @@ async function globalAction(ctx) {
     if (problems.length) { ctx.answer(400, noticePage(graph, vc, 'Not done', problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
   }
   let out;
-  try { out = await interp.attempt(() => interp.runSteps(action.do, { rowEntity: null, id: null, values, user })); }
+  try { out = await interp.attempt(async (tx) => await interp.runSteps(action.do, { rowEntity: null, id: null, values, user, tx })); }
   catch (e) {
     trace({ kind: 'refused', action: action.name, message: e.message });
     ctx.answer(400, noticePage(graph, vc, 'Not done', e.message), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
-  const flash = action.confirm ? interp.interpolate(action.confirm, out) : '';
+  const flash = action.confirm ? await interp.interpolate(action.confirm, out) : '';
   if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, created: out.created, flash }); return true; }
-  ok(interp.afterPath(action.after || '/', null, null, { created: out.created }), flash);
+  ok(await interp.afterPath(action.after || '/', null, null, { created: out.created }), flash);
   return true;
 }
 

@@ -2,7 +2,7 @@
 // it (runtime/store*) speaks this small contract — `all/get/run/exec/transaction`
 // plus schema helpers — so PRAGMA, sqlite_master and AUTOINCREMENT stay in here
 // and another engine can implement the same object later. Synchronous today; the
-// contract says results "may be awaited", and no caller in this repo awaits.
+// contract says results "may be awaited", and every caller in runtime/ and plugins awaits (S4).
 import { DatabaseSync } from 'node:sqlite';
 import { sqlite as dialect } from './dialects.mjs';
 
@@ -46,10 +46,15 @@ export function openSqlite(file) {
       if (drv.onQuery) drv.onQuery(sql);
       db.exec(sql);
     },
+    // `fn` gets the transaction handle (this driver: itself). A synchronous `fn` runs BEGIN..COMMIT
+    // and returns its value; one that returns a promise is awaited before COMMIT (or ROLLBACK), and the
+    // answer is then a promise.
     transaction(fn) {
       drv.exec('BEGIN');
-      try { const out = fn(); drv.exec('COMMIT'); return out; }
-      catch (e) { drv.exec('ROLLBACK'); throw e; }
+      let out;
+      try { out = fn(drv); } catch (e) { drv.exec('ROLLBACK'); throw e; }
+      if (typeof out?.then !== 'function') { drv.exec('COMMIT'); return out; }
+      return out.then((v) => { drv.exec('COMMIT'); return v; }, (e) => { drv.exec('ROLLBACK'); throw e; });
     },
     close() { db.close(); },
 

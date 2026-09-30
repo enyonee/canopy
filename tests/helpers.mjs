@@ -162,12 +162,12 @@ export const viewer = (graph, store, vc = anyone) => {
   const ctx = { graph, store, vc, resolveTop: (x) => x };
   return {
     ctx,
-    list: (entity, rows, extra = {}) => listView(graph, store, entity, store.fields[entity], rows,
-      { q: '', where: {}, vc, ...extra, pre: listPre(ctx, entity, store.fields[entity], graph.override?.[`${entity}.list`] || {}, rows) }),
-    form: (entity, row, mode, errors = []) => renderForm(ctx, entity, store.fields[entity], row, mode, errors),
-    detail: (entity, row, flash) => renderDetail(ctx, entity, store.fields[entity], row, flash),
-    dashboard: (dash, flash = '', period = {}) => dashboardView(graph, store, dash, flash, vc, period, dashboardPre(ctx, dash, dash, period)),
-    page: (p, flash) => staticPage(graph, p, flash, vc, store, pagePre(ctx, p)),
+    list: async (entity, rows, extra = {}) => listView(graph, store, entity, store.fields[entity], rows,
+      { q: '', where: {}, vc, ...extra, pre: await listPre(ctx, entity, store.fields[entity], graph.override?.[`${entity}.list`] || {}, rows) }),
+    form: async (entity, row, mode, errors = []) => await renderForm(ctx, entity, store.fields[entity], row, mode, errors),
+    detail: async (entity, row, flash) => await renderDetail(ctx, entity, store.fields[entity], row, flash),
+    dashboard: async (dash, flash = '', period = {}) => dashboardView(graph, store, dash, flash, vc, period, await dashboardPre(ctx, dash, dash, period)),
+    page: async (p, flash) => staticPage(graph, p, flash, vc, store, await pagePre(ctx, p)),
   };
 };
 

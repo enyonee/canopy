@@ -79,11 +79,11 @@ test('rowJSON drops secret fields, includes derived fields, and reads money in m
   assert.deepEqual(json, { id, name: 'x', tip: 5, ok: true, net: 10 });
 });
 
-test('a page widget and a detail widget render through staticPage/detailView', () => {
+test('a page widget and a detail widget render through staticPage/detailView', async () => {
   const g = { app: 'w', data: { Match: { name: 'text!' } }, override: { 'Match.detail': { widget: { use: 'chess', fen: 'abc' } } } };
   const s = new Store(g, ':memory:');
   const id = s.insert('Match', { name: 'final' });
-  const detail = viewer(g, s).detail('Match', s.get('Match', id));
+  const detail = await viewer(g, s).detail('Match', s.get('Match', id));
   assert.match(detail, /data-widget="chess"/);
   assert.match(detail, /data-row=/);
   const staticHtml = staticPage(g, { id: 'p', title: 'P', widget: { use: 'chess', fen: 'abc' } });
@@ -336,9 +336,9 @@ test('chartBlock: bar and line share axes/labels, pie shares a total; every mark
   assert.match(pie, /<td>South<\/td><td>20\.00<\/td>/, 'the same numbers follow the SVG as a table, whatever the chart type');
 });
 
-test('a dashboard with only charts still renders, and an empty chart divides by zero safely', () => {
+test('a dashboard with only charts still renders, and an empty chart divides by zero safely', async () => {
   const s = new Store(salesGraph, ':memory:');
-  const html = viewer(salesGraph, s).dashboard({ id: 'd', title: 'D',
+  const html = await viewer(salesGraph, s).dashboard({ id: 'd', title: 'D',
     charts: [{ title: 'Empty', entity: 'Sale', type: 'pie', groupBy: 'region', metric: { fn: 'count' } }] }, '');
   assert.match(html, /<h3>Empty<\/h3>/);
   assert.match(html, /<table class="chart-data">/);
@@ -368,12 +368,12 @@ test('checker: refresh must be a positive integer, on a page and on a dashboard'
   assert.deepEqual(at({ dashboards: [{ id: 'd', title: 'D', refresh: 5 }] }), []);
 });
 
-test('a page and a dashboard render <meta http-equiv="refresh"> only when declared', () => {
+test('a page and a dashboard render <meta http-equiv="refresh"> only when declared', async () => {
   const g = { app: 'r', data: { A: { n: 'int' } } };
   const s = new Store(g, ':memory:');
   assert.match(staticPage(g, { id: 'p', title: 'P', refresh: 15 }), /<meta http-equiv="refresh" content="15">/);
   assert.ok(!/http-equiv="refresh"/.test(staticPage(g, { id: 'p', title: 'P' })), 'no refresh meta without "refresh"');
-  assert.match(viewer(g, s).dashboard({ id: 'd', title: 'D', refresh: 60 }, ''), /<meta http-equiv="refresh" content="60">/);
+  assert.match(await viewer(g, s).dashboard({ id: 'd', title: 'D', refresh: 60 }, ''), /<meta http-equiv="refresh" content="60">/);
 });
 
 // ---------------------------------------------------------------------------

@@ -606,3 +606,91 @@ test('registry entries have their documented contract keys — built-ins and eve
   }
   assert.deepEqual(problems, [], problems.join('\n'));
 });
+
+// ---------------------------------------------------------------------------
+// S4: await-first. The store is still synchronous, but every caller awaits it, so that S5 can flip the driver
+// to Promises without touching a caller. A call that forgets its `await` works today and returns a Promise
+// where a row was expected tomorrow, so the scan below is what keeps the conversion from eroding.
+// ---------------------------------------------------------------------------
+// Where the gate looks. It is tightened per sub-stage and ends as "all of runtime/ except the store and the driver
+// themselves (they call their own methods synchronously, through `this`), all of plugins/, all of apps/*/plugins/".
+const PLUGIN_FILES = [...walk('plugins'), ...walk('apps').filter((f) => f.includes('/plugins/'))].sort();
+const AWAIT_SCOPE = [
+  ...RUNTIME_FILES.filter((f) => f.startsWith('runtime/routes/') || ['runtime/server.mjs', 'runtime/boot.mjs', 'runtime/auth.mjs', 'runtime/cli.mjs'].includes(f)),
+];
+const PLUGIN_MASKED = Object.fromEntries(PLUGIN_FILES.map((f) => [f, mask(fs.readFileSync(f, 'utf8'))]));
+const MASKED_ANY = (f) => MASKED[f] ?? PLUGIN_MASKED[f];
+
+// Store methods that are synchronous BY DESIGN: pure lookups in the schema the store derived from the graph, which
+// S5 does not turn into Promises. Everything else a `store.`/`tx.` call can name reads or writes the database.
+const SYNC_STORE = new Set([
+  'field',      // a field's declaration: the parsed graph
+  'fieldAt',    // a dotted path's last declaration, following references: the parsed graph
+  'label',      // the display name of a row already in hand: its first text field or #id
+  'labelField', // which field that is: the parsed graph
+  'childVia',   // the reference field a child points through: the parsed graph
+  'within',     // the transaction-bound view of the store: a factory, not a query
+]);
+// Helpers that load (they ask the store) and therefore answer with a Promise once it does.
+const LOADERS = [
+  'perms.prime', 'vc.prime', 'perms.ownWhere', 'vc.ownWhere', 'ctx.ownWhere', 'sess.start', 'sess.read', 'sess.end',
+  'interp.attempt', 'interp.runSteps', 'interp.fireEvents', 'interp.interpolate', 'interp.validateValues', 'interp.afterPath', 'interp.flushNow',
+];
+const LOADER_FNS = ['ownWhere', 'resolveTop', 'exportRows', 'paged', 'renderForm', 'renderDetail', 'listPre', 'formPre', 'detailPre', 'pagePre',
+  'searchPre', 'registerPre', 'dashboardPre', 'bootstrapIdentity', 'bootstrapSeed', 'createContext'];
+
+// Calls in `masked` that are not awaited: `store.m(`, `tx.m(`, `ctx.store.m(` (m not in SYNC_STORE) and the loaders.
+function unawaitedCalls(masked) {
+  const out = [];
+  const awaited = (idx) => /\bawait\s*\(?\s*$/.test(masked.slice(Math.max(0, idx - 24), idx));
+  for (const m of masked.matchAll(/(?<![\w$])(?:[\w$]+\.)*?(?:store|tx)\.([A-Za-z_$][\w$]*)\s*\(/g)) {
+    if (SYNC_STORE.has(m[1]) || awaited(m.index)) continue;
+    out.push([m.index, m[0].trim()]);
+  }
+  for (const name of LOADERS) {
+    for (const m of masked.matchAll(new RegExp(`(?<![\\w$.])${name.replace('.', '\\.')}\\s*\\(`, 'g'))) if (!awaited(m.index)) out.push([m.index, m[0]]);
+  }
+  for (const name of LOADER_FNS) {
+    for (const m of masked.matchAll(new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g'))) {
+      const before = masked.slice(Math.max(0, m.index - 24), m.index);
+      if (!awaited(m.index) && !/\bfunction\s+$/.test(before)) out.push([m.index, m[0]]);
+    }
+  }
+  return out.sort((a, b) => a[0] - b[0]);
+}
+
+test('unawaitedCalls sees a store call without await, allows the sync-by-design lookups, reads only real code', () => {
+  const src = [
+    'const a = await store.get(1);',
+    'const b = (await ctx.store.list(x)).length;',
+    'const c = store.field(e, n);',
+    'const d = store.insert(e, v);',
+    'return tx.update(e, id, v);',
+    'const s = "store.get(1)"; // tx.remove(1)',
+    'const e = `${store.count(x)}`;',
+    'perms.prime(u, e, rows);',
+    'await vc.ownWhere(e);',
+    'export async function listPre(ctx) {}',
+    'const f = paged(a);',
+  ].join('\n');
+  assert.deepEqual(unawaitedCalls(mask(src)).map(([, t]) => t), ['store.insert(', 'tx.update(', 'perms.prime(', 'paged(']);
+  assert.deepEqual(unawaitedCalls(mask('const n = store.count(x);')).map(([, t]) => t), ['store.count('], 'a template placeholder is masked away, so it cannot hide a call outside it');
+});
+
+test('await-first: no store call, transaction-view call or loader is left without `await` in the converted modules', () => {
+  const found = [];
+  for (const f of AWAIT_SCOPE) {
+    for (const [idx, text] of unawaitedCalls(MASKED_ANY(f))) found.push(`${f}:${lineOf(MASKED_ANY(f), idx)} ${text}`);
+  }
+  assert.deepEqual(found, [], `a call that will return a Promise is not awaited: ${found.join(', ')}`);
+});
+
+test('no async function is passed to filter/some/every/find/sort/forEach: a Promise is always truthy, and sort/forEach never wait', () => {
+  const found = [];
+  for (const f of [...RUNTIME_FILES, ...PLUGIN_FILES]) {
+    const masked = MASKED_ANY(f);
+    for (const m of masked.matchAll(/\.(filter|some|every|find|findIndex|findLast|findLastIndex|sort|forEach)\(\s*async\b/g)) found.push(`${f}:${lineOf(masked, m.index)} .${m[1]}(async …)`);
+  }
+  assert.deepEqual(found, [], found.join(', '));
+  assert.deepEqual([...'x.filter(async (r) => ok(r)); y.map(async (r) => r)'.matchAll(/\.(filter|some|every|find|findIndex|findLast|findLastIndex|sort|forEach)\(\s*async\b/g)].map((m) => m[1]), ['filter']);
+});

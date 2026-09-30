@@ -13,20 +13,20 @@ async function runAction(ctx, entity, fields, id, row) {
   if (action.fields?.length) {
     // Item 19: a row action's declared fields are typed and required, exactly
     // like a transition's own `fields`.
-    const problems = interp.validateValues(entity, submitted, { partial: true, existing: row });
+    const problems = await interp.validateValues(entity, submitted, { partial: true, existing: row });
     for (const f of action.fields) if (submitted[f] === undefined || String(submitted[f]).trim() === '') problems.push(`${f} is required`);
-    if (problems.length) { ctx.answer(400, renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
+    if (problems.length) { ctx.answer(400, await renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
   }
   let out;
-  try { out = await interp.attempt(() => interp.runSteps(action.do, { rowEntity: entity, id, row, values: submitted, user })); }
+  try { out = await interp.attempt(async (tx) => await interp.runSteps(action.do, { rowEntity: entity, id, row, values: submitted, user, tx })); }
   catch (e) {
     trace({ kind: 'refused', entity, id, action: action.name, message: e.message });
-    ctx.answer(400, renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, await renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
-  const flash = action.confirm ? interp.interpolate(action.confirm, out) : '';
-  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
-  ok(interp.afterPath(action.after || `/${entity}`, entity, id, { created: out.created }), flash);
+  const flash = action.confirm ? await interp.interpolate(action.confirm, out) : '';
+  if (ctx.wantsJSON) { const updated = await store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
+  ok(await interp.afterPath(action.after || `/${entity}`, entity, id, { created: out.created }), flash);
   return true;
 }
 
@@ -44,24 +44,24 @@ async function runTransition(ctx, entity, fields, id, row) {
   const submitted = await ctx.body();
   const values = {};
   for (const f of t.fields || []) if (submitted[f] !== undefined) values[f] = submitted[f];
-  const problems = interp.validateValues(entity, { ...values, [st.field]: t.to }, { partial: true, existing: row });
+  const problems = await interp.validateValues(entity, { ...values, [st.field]: t.to }, { partial: true, existing: row });
   for (const f of t.fields || []) if (values[f] === undefined || String(values[f]).trim() === '') problems.push(`${f} is required`);
-  if (problems.length) { ctx.answer(400, renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
+  if (problems.length) { ctx.answer(400, await renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
   let out;
   try {
-    out = await interp.attempt(() => {
-      store.update(entity, id, { ...values, [st.field]: t.to });
+    out = await interp.attempt(async (tx) => {
+      await tx.update(entity, id, { ...values, [st.field]: t.to });
       trace({ kind: 'transition', entity, id, name: t.name, from: row[st.field], to: t.to, who: user?.id ?? null });
-      return interp.runSteps(t.do || [], { rowEntity: entity, id, values: submitted, user });
+      return await interp.runSteps(t.do || [], { rowEntity: entity, id, values: submitted, user, tx });
     });
   } catch (e) {
     trace({ kind: 'refused', entity, id, transition: t.name, message: e.message });
-    ctx.answer(400, renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, await renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
-  const flash = t.confirm ? interp.interpolate(t.confirm, out) : `${label(entity)} is now ${t.to}`;
-  if (ctx.wantsJSON) { const updated = store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
-  ok(interp.afterPath(t.after || `/${entity}/${id}`, entity, id, { created: out.created }), flash);
+  const flash = t.confirm ? await interp.interpolate(t.confirm, out) : `${label(entity)} is now ${t.to}`;
+  if (ctx.wantsJSON) { const updated = await store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
+  ok(await interp.afterPath(t.after || `/${entity}/${id}`, entity, id, { created: out.created }), flash);
   return true;
 }
 
@@ -78,25 +78,25 @@ async function addRelated(ctx, entity, fields, id, row) {
   // never had one, unlike a plain Entity.form's top-level "fill", which runs before
   // any row of this new entity exists.
   const fillRow = interp.resolve({ user, values: submitted, rowEntity: entity, id, row });
-  const values = { ...submitted, [rel.via]: id, ...fillRow(rel.fill || {}) };
+  const values = { ...submitted, [rel.via]: id, ...await fillRow(rel.fill || {}) };
   const own = perms.ownField(user, child);
   if (own) values[own] = user.id;
-  const problems = interp.validateValues(child, values);
-  if (problems.length) { ctx.answer(400, renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
+  const problems = await interp.validateValues(child, values);
+  if (problems.length) { ctx.answer(400, await renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
   let kid;
   try {
-    await interp.attempt(() => {
-      kid = store.insert(child, values);
+    await interp.attempt(async (tx) => {
+      kid = await tx.insert(child, values);
       trace({ kind: 'create', entity: child, id: kid, via: rel.via, effects: ['db.write'], who: user?.id ?? null });
-      interp.fireEvents('created', child, kid, values, user);
+      await interp.fireEvents('created', child, kid, values, user, null, 0, tx);
     });
   } catch (e) {
     trace({ kind: 'refused', entity: child, message: e.message });
-    ctx.answer(400, renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
+    ctx.answer(400, await renderDetail(ctx, entity, fields, row, e.message), { ok: false, status: 400, errors: [e.message] });
     return true;
   }
   const flash = rel.confirm || `${label(child)} added successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: kid, created: kid, flash, row: rowJSON(store, child, store.fields[child], store.get(child, kid), vc) }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: kid, created: kid, flash, row: rowJSON(store, child, store.fields[child], await store.get(child, kid), vc) }); return true; }
   ok(`/${entity}/${id}`, flash);
   return true;
 }

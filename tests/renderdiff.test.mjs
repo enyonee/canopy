@@ -76,13 +76,13 @@ async function render(s, graph, viewer, paths) {
 }
 
 // can / ownOk over every row of every entity for the viewer's user, ownWhere and ownField per entity.
-function matrix(store, perms, graph, viewer) {
+async function matrix(store, perms, graph, viewer) {
   const user = viewer.id === undefined ? null : store.get(graph.roles.entity, viewer.id);
   const out = [];
   for (const entity of Object.keys(graph.data)) {
     const rows = store.list(entity, {});
-    perms.prime?.(user, entity, rows);
-    out.push([entity, perms.ownField(user, entity), JSON.stringify(perms.ownWhere(user, entity)), JSON.stringify(perms.ownWhere(user, entity, 'edit'))]);
+    await perms.prime?.(user, entity, rows);
+    out.push([entity, perms.ownField(user, entity), JSON.stringify(await perms.ownWhere(user, entity)), JSON.stringify(await perms.ownWhere(user, entity, 'edit'))]);
     for (const r of rows) {
       const ops = ['view', 'edit', 'delete', 'go:x', 'do:y'].map((op) => `${perms.can(user, entity, op, r) ? 1 : 0}${perms.ownOk(user, entity, r, op) ? 1 : 0}`);
       out.push([entity, r.id, ops.join('')]);
@@ -110,7 +110,7 @@ test('every app renders byte-identically to the output before S3c (HTML, JSON, C
           requests += seen.length;
           actual[`${app}|${v.name}`] = seen.map(([, d]) => d).join('');
           paths[`${app}|${v.name}`] = seen.map(([p]) => p);
-          if (graph.roles) actual[`${app}|${v.name}|perms`] = matrix(store, perms, graph, v);
+          if (graph.roles) actual[`${app}|${v.name}|perms`] = await matrix(store, perms, graph, v);
         }
       } finally { s.close(); }
     }

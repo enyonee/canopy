@@ -13,7 +13,7 @@ export async function handle(ctx) {
   if (!sched) { ctx.answer(404, errorPage(graph, `no schedule "${parts[1]}"`), { ok: false, status: 404, errors: [`no schedule "${parts[1]}"`] }); return true; }
   if (!vc.outbox) { ctx.deny('Only an operator may run a schedule by hand.'); return true; }
   trace({ kind: 'schedule', name: sched.name, manual: true });
-  await interp.attempt(() => interp.runSteps(sched.do, { rowEntity: null, id: null, values: {}, user }));
+  await interp.attempt(async (tx) => await interp.runSteps(sched.do, { rowEntity: null, id: null, values: {}, user, tx }));
   const flash = `Ran "${sched.name}"`;
   if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, flash }); return true; }
   ok('/', flash);
