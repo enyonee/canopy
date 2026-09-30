@@ -15,6 +15,29 @@ const readText = (req) => new Promise((resolve) => {
 
 export class TooBig extends Error {}
 
+// The largest body a webhook may send.
+const MAX_RAW = 1024 * 1024;
+
+/**
+ * The request body as bytes, exactly as sent (a signature is over these, not over what a parser makes of them).
+ * Throws TooBig as soon as the declared length or the bytes read pass `cap`; nothing past the cap is kept.
+ * @param {import('node:http').IncomingMessage} req
+ */
+export function rawBody(req, cap = MAX_RAW) {
+  return new Promise((resolve, reject) => {
+    if (Number(req.headers['content-length']) > cap) { reject(new TooBig(`the body is larger than ${cap} bytes`)); return; }
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+      if (size > cap) return; // already refused: what still arrives is dropped, never kept
+      size += c.length;
+      if (size > cap) { chunks.length = 0; reject(new TooBig(`the body is larger than ${cap} bytes`)); } else chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 const MAX_UPLOAD = Number(process.env.AG_MAX_UPLOAD || 8 * 1024 * 1024);
 
 function parseBody(req, filesDir) {
@@ -66,7 +89,7 @@ function createListHelpers(url, store, sendCsv, vc) {
   return { paged, sortOf, exportRows };
 }
 
-export function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl }) {
+export function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env }) {
   const parts = url.pathname.split('/').filter(Boolean);
   const wantsCsv = parts.length > 0 && parts[parts.length - 1].endsWith('.csv');
   if (wantsCsv) parts[parts.length - 1] = parts[parts.length - 1].slice(0, -4);
@@ -110,9 +133,9 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
 
   return {
     req, res, url, parts, flash, wantsCsv, wantsJSON, headers,
-    graph, store, perms, sess, registry, interp, trace, filesDir, fetchImpl,
+    graph, store, perms, sess, registry, interp, trace, filesDir, fetchImpl, clock, env,
     user, role, vc, ownWhere, deny,
     send, redirect, ok, sendCsv, exportRows, sendJson, answer,
-    body, resolveTop, paged, sortOf, safeNext,
+    body, rawBody: () => rawBody(req), resolveTop, paged, sortOf, safeNext,
   };
 }

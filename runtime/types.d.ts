@@ -51,7 +51,7 @@ export interface ActionSpec {
   [key: string]: any;
 }
 
-export interface EventSpec { on: string; do: StepSpec[] }
+export interface EventSpec { on?: string; inbound?: string; do: StepSpec[] }
 
 export interface StatesSpec {
   field: string;
@@ -174,6 +174,16 @@ export interface ConnectorDescriptor {
   modes?: Array<'sandbox' | 'live'>;
   /** Per operation, the ordered rules that answer in sandbox mode (runtime/connectors/sandbox.mjs). */
   sandbox?: { operations: Record<string, Array<{ when?: Record<string, any>; status?: number; headers?: Record<string, string>; body?: any }>> };
+  /** How the provider's webhooks are authenticated and read (runtime/connectors/inbound.mjs). */
+  inbound?: InboundSpec;
+}
+
+/** The `inbound` block of a descriptor: `type` and `eventId` are a `$.path` into the body or `{ header }`. */
+export interface InboundSpec {
+  signature: { scheme: 'stripe' | 'slack' | 'hmac' | 'basic'; header?: string; algo?: 'sha256' | 'sha1'; encoding?: 'hex' | 'base64'; prefix?: string; signed?: 'raw' | 'ts.raw'; timestampHeader?: string };
+  secret: string; toleranceS?: number;
+  eventId: string | { header: string }; type: string | { header: string };
+  events: Record<string, { schema: SchemaNode; map?: Record<string, string> }>;
 }
 
 /** The retry policy of a descriptor (runtime/connectors/backoff.mjs DEFAULT_RETRY). */
@@ -332,6 +342,9 @@ declare module './store.mjs' {
     breakers(): Array<BreakerState & { connector: string; mode: string }>;
     breakerRecord(connector: string, mode: string, event: 'failure' | 'success', now: number, cfg?: Partial<BreakerPolicy>): { before: BreakerState; after: BreakerState };
     breakerClaim(connector: string, mode: string, now: number, cfg?: Partial<BreakerPolicy>): boolean;
+    inboundSeen(connector: string, eventId: string): boolean;
+    inboundAdd(connector: string, eventId: string, receivedAt: number): void;
+    inboundPrune(before: number): number;
     outboxClaim(id: any, now: number, leaseMs: number): boolean;
     outboxGet(id: any): any;
     outboxUpdate(id: any, patch: Record<string, any>): void;
@@ -342,5 +355,6 @@ declare module './store.mjs' {
     checkRules(entity: string, values: Record<string, any>, existing?: any): string[];
     migrateIndexes(entity: string): void;
     migrateOutbox(): void;
+    migrateInbound(): void;
   }
 }

@@ -7,12 +7,13 @@ import { checkSchema } from './schema.mjs';
 import { refs, pathSteps, originProblem } from './template.mjs';
 import { checkPolicy } from './backoff.mjs';
 import { checkSandbox } from './sandbox.mjs';
+import { checkInbound } from './inbound.mjs';
 
 // The longest an operation may wait: half the outbox lease (runtime/outbox.mjs LEASE_MS),
 // so a slow provider cannot outlive the claim on its row and be delivered twice.
 export const MAX_TIMEOUT_MS = 30000;
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'modes', 'sandbox', 'operations'];
+const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'modes', 'sandbox', 'inbound', 'operations'];
 const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result'];
 const REQUEST = ['method', 'url', 'headers', 'body'];
 const NAME = /^[A-Za-z_][\w-]*$/;
@@ -125,6 +126,7 @@ export function checkDescriptor(d) {
     out.push(...checkOperation(op, `/operations/${name}`, d));
   }
   out.push(...checkSandbox(d.sandbox, d));
+  if (d.inbound !== undefined) out.push(...checkInbound(d.inbound));
   if (d.legacy !== undefined && !ops.some(([n]) => n === d.legacy)) out.push(['/legacy', `"legacy" names an operation this descriptor does not have`]);
   return out;
 }

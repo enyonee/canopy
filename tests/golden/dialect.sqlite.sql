@@ -17,6 +17,7 @@ SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=? AND name LIKE ?
 CREATE TABLE IF NOT EXISTS "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, "kind" TEXT, "connector" TEXT, "target" TEXT, "payload" TEXT, "status" TEXT, "code" INTEGER, "error" TEXT, "attempts" INTEGER DEFAULT 0, "at" TEXT, "updatedAt" TEXT, "claimedAt" INTEGER, "op" TEXT, "response" TEXT, "result" TEXT, "drift" INTEGER, "nextAttemptAt" INTEGER, "idemKey" TEXT)
 PRAGMA table_info("_outbox")
 CREATE TABLE IF NOT EXISTS "_breaker" ("key" TEXT PRIMARY KEY, "connector" TEXT, "mode" TEXT, "state" TEXT, "failures" INTEGER DEFAULT 0, "openUntil" INTEGER DEFAULT 0, "cooldownMs" INTEGER DEFAULT 0, "probeClaimedAt" INTEGER DEFAULT 0)
+CREATE TABLE IF NOT EXISTS "_inbound" ("key" TEXT PRIMARY KEY, "connector" TEXT, "eventId" TEXT, "receivedAt" INTEGER)
 CREATE TABLE IF NOT EXISTS "_session" ("id" TEXT PRIMARY KEY, "user" INTEGER, "at" TEXT)
 -- write
 SELECT id FROM "order" WHERE "title"=? AND "status"=? AND id!=?

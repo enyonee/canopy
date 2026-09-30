@@ -8,7 +8,7 @@ import { validate, formatErrors } from './validate.mjs';
 import { loadPlugins } from './registry.mjs';
 import { admin } from './admin.mjs';
 
-export async function main(argv, { log = console.log, err = console.error, stdin = async () => '' } = {}) {
+export async function main(argv, { log = console.log, err = console.error, stdin = async () => '', fetchImpl = undefined, clock = undefined } = {}) {
   const graphFile = argv.find((a) => !a.startsWith('--'));
   const flag = (name, def) => {
     const i = argv.indexOf(`--${name}`);
@@ -28,7 +28,7 @@ export async function main(argv, { log = console.log, err = console.error, stdin
   }
 
   const dbFile = flag('db', path.join(dir, 'data.sqlite'));
-  const code = await admin(argv, { graph, registry, dir: path.dirname(dbFile), log, err, stdin });
+  const code = await admin(argv, { graph, registry, dir: path.dirname(dbFile), log, err, stdin, fetchImpl, clock });
   if (code !== null) return { code };
 
   const port = Number(flag('port', 8901));
