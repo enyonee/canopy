@@ -188,7 +188,7 @@ export const PAGES_GRAPH = {
       Post: { own: 'profile.user', can: ['view', 'create', 'edit', 'delete', 'go:*'] },
       Comment: { own: 'post.owner', can: ['view', 'create', 'edit'] },
       Profile: ['view'], Tag: ['view'], User: ['view'] } } },
-  states: { Post: { field: 'status', transitions: [{ name: 'finish', from: 'open', to: 'done', fields: ['tag'] }] } },
+  states: { Post: { field: 'status', transitions: [{ name: 'finish', from: 'open', to: 'done', fields: ['profile'] }] } },
   override: {
     'Post.list': { columns: ['title', 'profile', 'tag', 'shout', 'score', 'status'], filters: [{ field: 'tag' }], search: ['title'], rowActions: ['edit', 'delete', 'go:finish'] },
     'Post.detail': { related: [{ entity: 'Comment', via: 'post', columns: ['body', 'tag'], rowActions: ['edit'] }] },

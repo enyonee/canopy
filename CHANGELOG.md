@@ -32,6 +32,28 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   `{ kind: 'where_unresolved', block, key }`. `null` is unchanged (`IS NULL`); list and route `?field=` filters
   are unchanged (absent = no filter). No app relied on the drop. Gates: `tests/blocks2.test.mjs` and four
   `Where:` mutations.
+
+- **Render, permissions and field hooks read prefetched data (PostgreSQL roadmap, stage S3c).** After this stage
+  nothing evaluates on the lazy `RowCtx` and no render, permission or field-hook code queries the store per
+  cell: every page is a load phase in the route (`runtime/routes/load.mjs`) followed by pure formatting
+  (`runtime/render/*`). `Store#labelsFor(pairs)` loads the labels of all reference cells of a page in one query
+  per target entity (a miss throws `not loaded: label <Entity>#<id>`), `Store#optionsFor(targets)` the rows of the
+  reference selects of a form, `perms.prime(user, entity, rows)` the parents a one-hop `own` path reads (one
+  query per path; a check on a row nobody primed throws `not primed`), and `ownWhere` is now the explicit loader
+  of which rows a viewer owns. A detail page's related rows, a static page's embedded lists and a dashboard's
+  aggregates are loaded before the view renders (the dashboard's HTML, CSV and JSON now share one set of
+  aggregates). **Plugin contract (field kinds):** `validate(v, f)` no longer receives the store (the kernel checks a
+  reference's existence in `Store#checkValue`); `format(v, f, ctx)` gets `ctx = { esc, title, label(target, id),
+  entity, row, labels, statusField }` and `input(f, v, ctx)` gets `ctx = { esc, options(target), entity, row }`
+  (`ctx.store` is gone, and `ctx.label` is now the prefetched reference label; the title helper it used to be is
+  `ctx.title`). No plugin field kind used the store, and none needed a change. Pages are byte-identical: a
+  list page with reference columns and owned-parent permissions costs the same number of queries at 6 and at 60
+  rows (`tests/perf.test.mjs`); `tests/renderdiff.test.mjs` compares the HTML, JSON and CSV of every app's pages
+  and its permission matrix with digests made before the stage. The lazy `RowCtx` path stays one more release
+  behind the test-only `store.lazyEval`. Gates: `tests/snapshot.test.mjs` (a list, detail, form, page, search,
+  dashboard, CSV cell and permission checks with the driver throwing on any call), `tests/auth.test.mjs`,
+  the field-hook contract in `tests/arch.test.mjs`; `S3c:` mutations.
+
 - **Secrets and sandbox/live mode (connector library, stage C2).** `{secret.name}` in a descriptor's headers
   and body is now read from an encrypted **secret store**, `secrets.enc` beside the database: one AES-256-GCM
   blob (even the names are hidden) under a key derived with HKDF from `CANOPY_MASTER_KEY` or a `secrets.key` file

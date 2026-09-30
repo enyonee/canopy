@@ -19,6 +19,8 @@
 | 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 5); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
 | 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 5) |
 | 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule,hooks}.mjs` | маршруты, поверх интерпретатора и рендера |
+
+| 8 | `routes/{context,session,views,system,entity,rows,load,widgets,schedule}.mjs` | маршруты, поверх интерпретатора и рендера (`load.mjs` — фаза загрузки страницы, S3c) |
 | 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний и фоновый `startFlusher` |
 | 10 | `cli.mjs`, `run.mjs` | точка входа |
 
@@ -204,7 +206,7 @@
   `SnapCtx extends RowCtx`, который переопределяет только `derivedValue/hop/child/rows/agg`;
   промах — `not loaded: <Entity.field>`, никогда не запрос. Через снимок идут `hydrate`,
   `get`, `list`, `listPage`, `count`, `labelOf`, CSV и дашборды. **Остаются на ленивом
-  `RowCtx`** (`store/ctx.mjs`): только рендер/права/хуки полей (S3c). Старая ленивая гидрация — `store/lazy.mjs`, включается
+  `RowCtx`** (`store/ctx.mjs`): после S3c ничего, кроме тестового переключателя. Старая ленивая гидрация — `store/lazy.mjs`, включается
   только тестами: `store.lazyEval = true`; `tests/snapshot.test.mjs` сравнивает её со снимком
   на каждой строке каждого приложения. Порядок детей (`ORDER BY id DESC`) и одни часы на
   вычисление (`Snapshot.clock`, страница режется на чанки по 500 строк с одними часами)
@@ -270,6 +272,27 @@
   найденной строке. `routes/widgets.mjs` отдаёт `/widget/<name>.mjs` (файл,
   который назвал плагин) и общий `/widget/_api.mjs`; `routes/schedule.mjs` —
   ручной запуск `POST /schedule/<name>/run`, той же проверкой, что и `/outbox`.
+
+  **S3c, рендер, права и хуки полей по предзагруженным данным.** Страница — две фазы, как
+  вычисление. Фаза загрузки — `routes/load.mjs`: маршрут сначала спрашивает всё, что страница
+  покажет, пакетами, и только потом зовёт вид. `Store#labelsFor(pairs)` (`store/hydrate.mjs`) —
+  подписи всех ссылочных ячеек страницы одним запросом на сущность-цель (производное поле-подпись —
+  одним снимком), ответ `Labels` (`store/snapshot.mjs`): пустая строка для исчезнувшей строки, для
+  непрошенной — `not loaded: label <Entity>#<id>`, не запрос. `Store#optionsFor(targets)` — строки для
+  ссылочных `<select>`. `perms.prime(user, entity, rows)` (`auth.mjs`) грузит родителей одноходового
+  `own` одним запросом на путь и кладёт их по самому объекту строки (`WeakMap`); `can`/`ownOk` на
+  непраймленной строке — `not primed: <Entity>.<field>`, отказ вместо запроса. `ownWhere` — явный
+  загрузчик «какие строки принадлежат»: его зовёт маршрут при загрузке, вид не зовёт никогда. Виды
+  (`render/*`) получают готовое в `pre` (`prefetched(labels, options, more)` в `render.mjs`): `pre.label`,
+  `pre.options`, а у страниц — `pre.kids` (связанные строки детали, по секциям), `pre.sections` (встроенные
+  списки страницы), `pre.dash` (значения карточек, строки таблиц и графиков дашборда; HTML, CSV и JSON
+  дашборда берут один набор). Чего `pre` не загрузил, то бросает `not loaded: …`. Хуки видов полей
+  (`fields.mjs`) чисты над этим: `validate(v, f)` без хранилища (существование ссылки проверяет
+  `Store#checkValue`), `format(v, f, ctx)` берёт `ctx.label`, `input(f, v, ctx)` — `ctx.options`.
+  Гейты: `tests/snapshot.test.mjs` (рендер списка, детали, формы, страницы, поиска, дашборда, ячейки
+  CSV и проверки прав над своими строками при драйвере, бросающем на любой вызов), `tests/perf.test.mjs`
+  (одинаковое число запросов на 6 и на 60 своих строк), `tests/renderdiff.test.mjs` (HTML/JSON/CSV и
+  матрица прав всех приложений против хэшей, снятых до S3c); мутации `S3c:`.
 - **`runtime/server.mjs`** — только подъём: валидирует граф, поднимает `Store`,
   права, сессии, интерпретатор, заводит таймеры расписаний (`schedule.mjs`'s
   `everyMs`, отключаемо `noTimers`), и на каждый запрос строит контекст и
