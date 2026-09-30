@@ -1,5 +1,23 @@
 // Reference app "shop" — each check is one requirement of a small web shop.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { execFile } from 'node:child_process';
 import { colorCheck, navCheck } from '../../verify/lib.mjs';
+import { signHeaders } from '../../runtime/connectors/signature.mjs';
+
+// The payment provider signs its webhooks with a secret the shop keeps in its secret store: verify/run.mjs puts
+// these there before the app boots. A check signs exactly as the provider would (the recipe is the descriptor's own).
+export const secrets = { psp_webhook: 'whsec_shop_acceptance_only' };
+const recipe = JSON.parse(fs.readFileSync(new URL('./plugins/psp.json', import.meta.url), 'utf8')).inbound.signature;
+// A webhook as the provider sends it: no cookie, no session, only the signature. `headers` replace or add after signing.
+const hook = async (base, payload, { secret = secrets.psp_webhook, at = Date.now(), headers = {}, sign = true } = {}) => {
+  const raw = Buffer.from(JSON.stringify(payload));
+  const signed = sign ? signHeaders(recipe, { raw, secret, now: at }) : {};
+  const res = await fetch(`${base}/hook/psp`, { method: 'POST', headers: { 'content-type': 'application/json', ...signed, ...headers }, body: raw });
+  return { status: res.status, body: await res.json(), type: res.headers.get('content-type') };
+};
 
 const itemId = (row) => { const m = /\/OrderItem\/(\d+)/.exec(row || ''); return m ? m[1] : null; };
 let annOrder = null, bobOrder = null;
@@ -179,6 +197,40 @@ export const checks = [
       must(new RegExp(`${month}</td><td>2</td>`).test(d.html), 'orders by month misses the current month');
       return 'revenue 100.00, 1 placed, by status, by product, by month, period filter';
     } },
+  { task: 'The payment provider\'s webhook needs a valid signature and no session: unsigned, forged, stale and tampered calls are refused',
+    run: async ({ base, get, must }) => {
+      const ev = { id: 'evt_forged', type: 'payment.succeeded', order: Number(annOrder), note: 'PSP_MARKER_31337' };
+      const refused = { status: 401, body: { ok: false, error: 'unauthorized' } };
+      const same = (r, want) => r.status === want.status && JSON.stringify(r.body) === JSON.stringify(want.body) && /^application\/json/.test(r.type);
+      must(same(await hook(base, ev, { sign: false }), refused), 'an unsigned webhook was not refused');
+      must(same(await hook(base, ev, { secret: 'whsec_somebody_else' }), refused), 'a webhook signed with another secret was not refused');
+      must(same(await hook(base, ev, { at: Date.now() - 10 * 60_000 }), refused), 'a ten-minute-old signature was not refused');
+      const good = signHeaders(recipe, { raw: Buffer.from(JSON.stringify(ev)), secret: secrets.psp_webhook, now: Date.now() });
+      must(same(await hook(base, { ...ev, order: Number(annOrder) + 1 }, { sign: false, headers: good }), refused), 'a tampered body under a valid signature was not refused');
+      must(same(await hook(base, ev, { headers: { 'x-psp-signature': 'sha256=' + 'ab'.repeat(5) } }), refused), 'a short signature was not refused');
+      must((await fetch(`${base}/hook/psp`)).status === 405, 'GET /hook/psp is not 405');
+      must((await fetch(`${base}/hook/mail`, { method: 'POST', body: '{}' })).status === 404, 'a connector without inbound answers /hook');
+      must((await fetch(`${base}/hook/nowhere`, { method: 'POST', body: '{}' })).status === 404, 'an unknown connector answers /hook');
+      const detail = await get(`/Order/${annOrder}`);
+      must(/status">Shipped/.test(detail.html) && !detail.html.includes('PSP_MARKER_31337'), 'a refused webhook changed or was echoed into the order');
+      return 'unsigned, wrong secret, stale, tampered, short: 401; GET 405; unknown connector 404; nothing changed';
+    } },
+  { task: 'A signed payment.succeeded pays only an order that is placed; a retry is recognised and other event types are ignored',
+    run: async ({ base, get, rows, must }) => {
+      const ev = { id: 'evt_cancelled', type: 'payment.succeeded', order: Number(bobOrder) };
+      const first = await hook(base, ev);
+      must(first.status === 200 && first.body.ok === true && !first.body.duplicate, `a signed event was answered ${first.status} ${JSON.stringify(first.body)}`);
+      const again = await hook(base, ev);
+      must(again.status === 200 && again.body.duplicate === true, `a retry was answered ${again.status} ${JSON.stringify(again.body)}`);
+      const other = await hook(base, { id: 'evt_other', type: 'customer.created' });
+      must(other.status === 200 && other.body.ignored === true, 'an event type the shop does not handle was not ignored');
+      const bad = await hook(base, { id: 'evt_bad', type: 'payment.succeeded', order: 0 });
+      must(bad.status === 400 && bad.body.error === 'invalid_payload', `an invalid payload was answered ${bad.status}`);
+      must(/status">Cancelled/.test((await get(`/Order/${bobOrder}`)).html), 'a cancelled order was marked paid');
+      const mails = rows((await get('/outbox')).html).filter((x) => x.includes('<td>mail</td>'));
+      must(mails.length === 3, `the webhook of a cancelled order sent a letter: ${mails.length} in the outbox`);
+      return 'cancelled order untouched, retry reported as duplicate, unknown type ignored, bad payload 400, no letter';
+    } },
   navCheck(3),
   colorCheck('seashell', 'darkslateblue'),
 ];
@@ -243,6 +295,46 @@ export const changes = [
         outbox = await get('/outbox');
         must(/status">sent<\/span> 200/.test(rows(outbox.html)[0]), 'the retried delivery is not sent');
         return 'delivered with header; failure recorded as failed/500; retry → sent';
+      } },
+    { task: 'A placed order is paid by the provider\'s signed webhook exactly once, and the operator can send the same event from the command line',
+      run: async ({ login, base, get, follow, idOf, rowWith, rows, must }) => {
+        const admin = () => login('admin@shop.test', 'admin123');
+        const place = async (product) => {
+          await login('ann@shop.test', 'secret1');
+          const cart = await follow(`/Product/${idOf((await get('/Product')).html, product)}/action/addToCart`, {});
+          const id = idOf(cart.html, 'Cart');
+          must(/status">Placed/.test((await follow(`/Order/${id}/go/place`, { address: '5 Fifth st', paymentMethod: 'card' })).html), `${product}: the order was not placed`);
+          await admin();
+          return id;
+        };
+        const points = async () => /ann@shop.test<\/td><td>Ann<\/td><td>customer<\/td><td>0 %<\/td><td>(\d+)<\/td>/.exec(rowWith((await get('/User')).html, 'ann@shop.test'))?.[1];
+        await admin();
+        const before = Number(await points());
+        const order = await place('Blue mug');
+        const ev = { id: 'evt_paid_1', type: 'payment.succeeded', order: Number(order) };
+        const paid = await hook(base, ev);
+        must(paid.status === 200 && paid.body.ok === true && !paid.body.duplicate, `the webhook was answered ${paid.status} ${JSON.stringify(paid.body)}`);
+        must(/status">Paid/.test((await get(`/Order/${order}`)).html), 'the order is not paid after the webhook');
+        must(Number(await points()) === before + 12, `the loyalty points did not follow the payment: ${before} -> ${await points()}`);
+        const retry = await hook(base, ev);
+        must(retry.body.duplicate === true, 'the provider\'s retry was not recognised');
+        must(Number(await points()) === before + 12, 'the retry awarded the points twice');
+        let outboxHtml = (await get('/outbox')).html;
+        const letters = (id) => rows(outboxHtml).filter((x) => x.includes(`Payment for order #${id} received`)).length;
+        must(letters(order) === 1, `expected one payment letter for order #${order}, got ${letters(order)}`);
+        // the same event from the command line, signed with the stored secret
+        const second = await place('Blue mug');
+        const file = path.join(os.tmpdir(), `shop-sim-${process.pid}.json`);
+        fs.writeFileSync(file, JSON.stringify({ id: 'evt_sim_1', type: 'payment.succeeded', order: Number(second) }));
+        const sim = () => promisify(execFile)('node', ['--no-warnings', 'runtime/run.mjs', 'apps/shop/app.json', '--connectors', 'simulate', 'psp', 'payment.succeeded', '--data', file, '--port', new URL(base).port]);
+        try {
+          must((await sim()).stdout.trim() === '200 {"ok":true}', 'simulate was not accepted');
+          must((await sim()).stdout.trim() === '200 {"ok":true,"duplicate":true}', 'simulate twice was not a duplicate');
+        } finally { fs.rmSync(file, { force: true }); }
+        must(/status">Paid/.test((await get(`/Order/${second}`)).html), 'the simulated event did not pay the order');
+        outboxHtml = (await get('/outbox')).html;
+        must(letters(second) === 1, `expected one payment letter for order #${second}, got ${letters(second)}`);
+        return 'paid by webhook: status, 12 points, one letter; retry is a duplicate; --connectors simulate does the same, once';
       } },
   ] },
 ];

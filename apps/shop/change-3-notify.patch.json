@@ -13,23 +13,21 @@
   },
   {
     "op": "add",
-    "path": "/events",
-    "value": [
-      {
-        "on": "Product.created",
-        "do": [
-          {
-            "block": "http.send",
-            "connector": "analytics",
-            "body": {
-              "event": "product.created",
-              "product": "@row.id",
-              "name": "@row.name",
-              "price": "@row.price"
-            }
+    "path": "/events/-",
+    "value": {
+      "on": "Product.created",
+      "do": [
+        {
+          "block": "http.send",
+          "connector": "analytics",
+          "body": {
+            "event": "product.created",
+            "product": "@row.id",
+            "name": "@row.name",
+            "price": "@row.price"
           }
-        ]
-      }
-    ]
+        }
+      ]
+    }
   }
 ]

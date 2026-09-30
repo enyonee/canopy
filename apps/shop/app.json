@@ -3,7 +3,7 @@
   "note": "Reference app for the shop class: a storefront for guests, the cart as a draft order, checkout as transitions that take stock, pay, mail a confirmation and notify fulfilment over HTTP; the admin sees every order, the sales dashboard and the outbox.",
   "theme": { "background": "seashell", "accent": "darkslateblue" },
   "home": "/Product",
-  "plugins": ["./plugins/loyalty.mjs"],
+  "plugins": ["./plugins/loyalty.mjs", "./plugins/psp.json"],
 
   "data": {
     "User":      { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,customer]=customer", "discount": "percent=0", "points": "int=0" },
@@ -76,8 +76,18 @@
 
   "connectors": {
     "fulfilment": { "kind": "http", "url": "http://127.0.0.1:8999/hooks/shop" },
-    "mail":       { "kind": "mail", "from": "shop@example.test" }
+    "mail":       { "kind": "mail", "from": "shop@example.test" },
+    "psp":        { "kind": "psp", "secrets": { "webhookSecret": "psp_webhook" } }
   },
+
+  "events": [
+    { "inbound": "psp.payment.succeeded", "do": [
+        { "block": "db.each", "from": "Order", "where": { "id": "@values.order", "status": "placed" },
+          "do": [ { "block": "db.set", "entity": "Order", "id": "@each.id", "set": { "status": "paid" } },
+                  { "block": "loyalty.award", "entity": "User", "id": "@each.customer", "field": "points", "amount": "= each.net" },
+                  { "block": "mail.send", "connector": "mail", "to": "@each.customer.email", "subject": "Payment for order #{each.id} received",
+                    "text": "{each.net} received from the payment provider." } ] } ] }
+  ],
 
   "views": "auto",
   "override": {
