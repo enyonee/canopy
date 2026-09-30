@@ -615,10 +615,12 @@ test('registry entries have their documented contract keys — built-ins and eve
 // Where the gate looks. It is tightened per sub-stage and ends as "all of runtime/ except the store and the driver
 // themselves (they call their own methods synchronously, through `this`), all of plugins/, all of apps/*/plugins/".
 const PLUGIN_FILES = [...walk('plugins'), ...walk('apps').filter((f) => f.includes('/plugins/'))].sort();
-const AWAIT_SCOPE = [
-  ...RUNTIME_FILES.filter((f) => f.startsWith('runtime/routes/') || ['runtime/server.mjs', 'runtime/boot.mjs', 'runtime/auth.mjs', 'runtime/cli.mjs'].includes(f)),
-];
 const PLUGIN_MASKED = Object.fromEntries(PLUGIN_FILES.map((f) => [f, mask(fs.readFileSync(f, 'utf8'))]));
+const AWAIT_SCOPE = [
+  ...RUNTIME_FILES.filter((f) => f.startsWith('runtime/routes/')
+    || ['runtime/server.mjs', 'runtime/boot.mjs', 'runtime/auth.mjs', 'runtime/cli.mjs', 'runtime/interp.mjs', 'runtime/blocks.mjs', 'runtime/outbox.mjs'].includes(f)),
+  ...PLUGIN_FILES,
+];
 const MASKED_ANY = (f) => MASKED[f] ?? PLUGIN_MASKED[f];
 
 // Store methods that are synchronous BY DESIGN: pure lookups in the schema the store derived from the graph, which
@@ -635,12 +637,18 @@ const SYNC_STORE = new Set([
 const LOADERS = [
   'perms.prime', 'vc.prime', 'perms.ownWhere', 'vc.ownWhere', 'ctx.ownWhere', 'sess.start', 'sess.read', 'sess.end',
   'interp.attempt', 'interp.runSteps', 'interp.fireEvents', 'interp.interpolate', 'interp.validateValues', 'interp.afterPath', 'interp.flushNow',
+  'block.run',
 ];
 const LOADER_FNS = ['ownWhere', 'resolveTop', 'exportRows', 'paged', 'renderForm', 'renderDetail', 'listPre', 'formPre', 'detailPre', 'pagePre',
-  'searchPre', 'registerPre', 'dashboardPre', 'bootstrapIdentity', 'bootstrapSeed', 'createContext'];
+  'searchPre', 'registerPre', 'dashboardPre', 'bootstrapIdentity', 'bootstrapSeed', 'createContext',
+  // the interpreter's own steps (runtime/interp.mjs) and the outbox (runtime/outbox.mjs)
+  'runSteps', 'fireEvents', 'interpolate', 'refValue', 'readFrom', 'exprCtx', 'afterPath', 'flushNow', 'withEffects', 'admit', 'deliver', 'flush'];
+// What a block's `run(ctx)` is handed: each answers a Promise (resolve/text load, run and fireCreated run steps). Checked in
+// blocks.mjs and in every plugin, where they are plain names destructured from the ctx.
+const BLOCK_FNS = ['resolve', 'text', 'run', 'fireCreated'];
 
 // Calls in `masked` that are not awaited: `store.m(`, `tx.m(`, `ctx.store.m(` (m not in SYNC_STORE) and the loaders.
-function unawaitedCalls(masked) {
+function unawaitedCalls(masked, blockCode = false) {
   const out = [];
   const awaited = (idx) => /\bawait\s*\(?\s*$/.test(masked.slice(Math.max(0, idx - 24), idx));
   for (const m of masked.matchAll(/(?<![\w$])(?:[\w$]+\.)*?(?:store|tx)\.([A-Za-z_$][\w$]*)\s*\(/g)) {
@@ -650,7 +658,7 @@ function unawaitedCalls(masked) {
   for (const name of LOADERS) {
     for (const m of masked.matchAll(new RegExp(`(?<![\\w$.])${name.replace('.', '\\.')}\\s*\\(`, 'g'))) if (!awaited(m.index)) out.push([m.index, m[0]]);
   }
-  for (const name of LOADER_FNS) {
+  for (const name of [...LOADER_FNS, ...(blockCode ? BLOCK_FNS : [])]) {
     for (const m of masked.matchAll(new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g'))) {
       const before = masked.slice(Math.max(0, m.index - 24), m.index);
       if (!awaited(m.index) && !/\bfunction\s+$/.test(before)) out.push([m.index, m[0]]);
@@ -672,15 +680,18 @@ test('unawaitedCalls sees a store call without await, allows the sync-by-design 
     'await vc.ownWhere(e);',
     'export async function listPre(ctx) {}',
     'const f = paged(a);',
+    'const g = block.run(ctx); const h = runSteps(a); const k = await flush(a);',
+    'const r = resolve({ v: 1 }).v; const t = await text(x);',
   ].join('\n');
-  assert.deepEqual(unawaitedCalls(mask(src)).map(([, t]) => t), ['store.insert(', 'tx.update(', 'perms.prime(', 'paged(']);
+  assert.deepEqual(unawaitedCalls(mask(src)).map(([, t]) => t), ['store.insert(', 'tx.update(', 'perms.prime(', 'paged(', 'block.run(', 'runSteps(']);
+  assert.deepEqual(unawaitedCalls(mask(src), true).map(([, t]) => t), ['store.insert(', 'tx.update(', 'perms.prime(', 'paged(', 'block.run(', 'runSteps(', 'resolve('], 'in a block or a plugin, resolve/text/run/fireCreated are loaders too');
   assert.deepEqual(unawaitedCalls(mask('const n = store.count(x);')).map(([, t]) => t), ['store.count('], 'a template placeholder is masked away, so it cannot hide a call outside it');
 });
 
 test('await-first: no store call, transaction-view call or loader is left without `await` in the converted modules', () => {
   const found = [];
   for (const f of AWAIT_SCOPE) {
-    for (const [idx, text] of unawaitedCalls(MASKED_ANY(f))) found.push(`${f}:${lineOf(MASKED_ANY(f), idx)} ${text}`);
+    for (const [idx, text] of unawaitedCalls(MASKED_ANY(f), f === 'runtime/blocks.mjs' || PLUGIN_FILES.includes(f))) found.push(`${f}:${lineOf(MASKED_ANY(f), idx)} ${text}`);
   }
   assert.deepEqual(found, [], `a call that will return a Promise is not awaited: ${found.join(', ')}`);
 });

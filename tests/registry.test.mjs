@@ -15,6 +15,7 @@ const dir = tmpDir('ag-plug-');
 const writePlugin = (name, source) => { const f = path.join(dir, name); fs.writeFileSync(f, source); return f; };
 
 const loyalty = writePlugin('loyalty.mjs', `export default {
+  async: true,
   fields: { percent: { sql: 'INTEGER', exprKind: 'number', numeric: true, derivable: true,
     def: (f) => Number(f.def), coerce: (raw) => (raw === '' || raw == null ? null : Math.round(Number(raw))),
     validate: (v, f) => (v !== undefined && v !== '' && (Number.isNaN(Number(v)) || Number(v) < 0 || Number(v) > 100) ? f.name + ' must be between 0 and 100' : null),
@@ -25,8 +26,8 @@ const loyalty = writePlugin('loyalty.mjs', `export default {
     run: ([a, p]) => (a == null ? null : Math.round(a * (100 - (p || 0))) / 100) } },
   blocks: { 'loyalty.award': { summary: 'add points', effects: ['db.write'], requires: ['entity', 'id', 'field', 'amount'],
     check: (step, h) => { const f = h.fields[step.entity]?.[step.field]; if (f && !f.type.numeric) h.err(h.path + '/field', 'loyalty.award needs a numeric field'); },
-    run: ({ store, step, resolve }) => { const id = resolve({ v: step.id }).v; const row = store.get(step.entity, id); if (!row) throw new Error('loyalty.award: no row #' + id);
-      const points = Math.floor(Number(resolve({ v: step.amount }).v) || 0); store.update(step.entity, id, { [step.field]: (row[step.field] || 0) + points }); return { points }; } } },
+    run: async ({ store, step, resolve }) => { const id = (await resolve({ v: step.id })).v; const row = await store.get(step.entity, id); if (!row) throw new Error('loyalty.award: no row #' + id);
+      const points = Math.floor(Number((await resolve({ v: step.amount })).v) || 0); await store.update(step.entity, id, { [step.field]: (row[step.field] || 0) + points }); return { points }; } } },
   transports: { log: { summary: 'a line in a file', validate: (c) => (c.file ? [] : [['file', 'a log connector needs "file"']]),
     deliver: async (row, c) => { (await import('node:fs')).appendFileSync(c.file, JSON.stringify(row.payload) + '\\n'); return { status: 'sent', code: null, error: null }; } } },
 };`);

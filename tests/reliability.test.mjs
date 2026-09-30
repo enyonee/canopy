@@ -15,6 +15,9 @@ import { startFlusher } from '../runtime/server.mjs';
 import { outboxView } from '../runtime/render/pages.mjs';
 import { fakeClock, boot, tmpGraph, tmpDir, rows } from './helpers.mjs';
 
+// A few microtasks: what an `await` on a store call costs. `tick()` lets a started flush reach its first real wait.
+const tick = () => new Promise((r) => setImmediate(r));
+
 const IN = { type: 'object', properties: {} };
 const D = {
   descriptor: 1, name: 'pay', timeoutMs: 2000, idempotency: { header: 'Idempotency-Key' },
@@ -111,6 +114,7 @@ test('a non-idempotent operation that timed out is unknown and never retried; an
   const id = queue(t.store, 'charge');
   const calls = [];
   const running = flush(t.store, t.graph, opts(t, { fetchImpl: hang(calls) }));
+  await tick(); // flush runs up to the delivery's first real wait (a transport, a timer) in a few microtasks
   assert.equal(t.clock.pending(), 1, 'the timeout is a timer on the clock');
   await t.clock.advance(1999);
   assert.equal(t.store.outboxGet(id).status, 'sending', 'still waiting');
@@ -127,6 +131,7 @@ test('a non-idempotent operation that timed out is unknown and never retried; an
 
   const g = queue(t.store, 'get');
   const p = flush(t.store, t.graph, opts(t, { fetchImpl: hang(calls) }));
+  await tick(); // flush runs up to the delivery's first real wait (a transport, a timer) in a few microtasks
   await t.clock.advance(2000);
   assert.deepEqual(await p, ['queued']);
   assert.equal(t.store.outboxGet(g).nextAttemptAt, t.clock.now() + 1000);
@@ -150,16 +155,19 @@ test('the timeout comes from the descriptor, the connector may change it, and no
   const t = make({}, g);
   queue(t.store);
   const running = flush(t.store, t.graph, opts(t, { fetchImpl: hang() }));
+  await tick(); // flush runs up to the delivery's first real wait (a transport, a timer) in a few microtasks
   assert.equal(t.clock.nextAt() - t.clock.now(), LEASE_MS / 2, '90 s asked, 30 s given');
   await t.clock.advance(LEASE_MS / 2);
   assert.deepEqual(await running, ['queued']);
   const h = make({}, { ...graph, connectors: { p: { kind: 'pay', timeout: 500 } } });
   queue(h.store);
   const short = flush(h.store, h.graph, opts(h, { fetchImpl: hang() }));
+  await tick(); // flush runs up to the delivery's first real wait (a transport, a timer) in a few microtasks
   assert.equal(h.clock.nextAt() - h.clock.now(), 500, 'a shorter connector timeout wins over the descriptor');
   const j = make();
   queue(j.store);
   const small = flush(j.store, j.graph, opts(j, { fetchImpl: hang(), leaseMs: 3000 }));
+  await tick(); // flush runs up to the delivery's first real wait (a transport, a timer) in a few microtasks
   assert.equal(j.clock.nextAt() - j.clock.now(), 1500, 'and a shorter lease shortens it');
   await h.clock.advance(500); await j.clock.advance(1500);
   await short; await small;
@@ -193,6 +201,7 @@ test('lease and retry: a takeover after a lease expired schedules its own retry,
   const gate = new Promise((r) => { release = r; });
   const slow = scripted(() => gate.then(() => answer(200)));
   const first = flush(t.store, t.graph, opts(t, { fetchImpl: slow.fetchImpl }));
+  await tick(); // flush runs up to the delivery's first real wait (a transport, a timer) in a few microtasks
   assert.equal(t.store.outboxGet(id).status, 'sending');
   await t.clock.advance(LEASE_MS);
   assert.deepEqual(await flush(t.store, t.graph, opts(t, { fetchImpl: scripted([answer(503)]).fetchImpl })), ['queued'], 'taken over once the lease ran out');
@@ -251,6 +260,7 @@ test('breaker: two flushes at once send one probe; a claim is one UPDATE that on
   const gate = new Promise((r) => { release = r; });
   const net = scripted(() => gate.then(() => answer(200)));
   const a = flush(t.store, t.graph, opts(t, { fetchImpl: net.fetchImpl }));
+  await tick(); // flush runs up to the delivery's first real wait (a transport, a timer) in a few microtasks
   const b = await flush(t.store, t.graph, opts(t, { fetchImpl: net.fetchImpl }));
   assert.deepEqual(b, [], 'the second flush finds the probe out and leaves the other row alone');
   assert.equal(net.calls.length, 1);
@@ -391,7 +401,7 @@ test('the flusher does not overlap itself, survives a failing flush, and stays s
   const net = scripted(() => gate.then(() => answer(200)));
   const { f, events } = flusher(t, { net, args: { intervalMs: 1000 } });
   const step = t.clock.advance(1000);
-  await Promise.resolve();
+  await tick();
   assert.equal(net.calls.length, 1);
   const later = queue(t.store);
   t.store.outboxUpdate(later, { nextAttemptAt: t.clock.now() + 10 });

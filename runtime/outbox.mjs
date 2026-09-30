@@ -44,16 +44,16 @@ export async function deliver(store, graph, row, opts = {}) {
   const policy = policyOf(registry, row);
   const { patch, event } = settle(row, result, error, { policy, now: clock.now(), idemKey });
   if (event) {
-    const { before, after } = store.breakerRecord(row.connector, mode, event, clock.now(), policy.breaker);
+    const { before, after } = await store.breakerRecord(row.connector, mode, event, clock.now(), policy.breaker);
     if (before.state !== after.state) say({ kind: 'breaker', connector: row.connector, mode, from: before.state, to: after.state, openUntil: after.openUntil });
   }
   // A delivery that came from a flush finishes only while it still holds its claim;
   // one whose lease ran out and was re-claimed is dropped, not written over the new owner.
-  if (claimedAt !== null && !store.outboxFinish(row.id, claimedAt, patch)) {
+  if (claimedAt !== null && !await store.outboxFinish(row.id, claimedAt, patch)) {
     say({ kind: 'delivery', id: row.id, via: row.kind, connector: row.connector, target: row.target, stale: true });
     return 'stale';
   }
-  if (claimedAt === null) store.outboxUpdate(row.id, patch);
+  if (claimedAt === null) await store.outboxUpdate(row.id, patch);
   say({ kind: 'delivery', id: row.id, via: row.kind, connector: row.connector, target: row.target, status: patch.status, code: patch.code ?? null, nextAttemptAt: patch.nextAttemptAt });
   return patch.status;
 }
@@ -62,11 +62,11 @@ export async function deliver(store, graph, row, opts = {}) {
 // being spared: once its cooldown is over exactly one caller wins the probe (an atomic
 // claim), everyone else leaves the row where it is, and while it is still cooling the
 // row's next attempt is pushed to the end of the cooldown — without counting an attempt.
-function admit(store, row, { now, mode, registry, leaseMs }) {
-  const b = store.breakerGet(row.connector, mode);
+async function admit(store, row, { now, mode, registry, leaseMs }) {
+  const b = await store.breakerGet(row.connector, mode);
   if (b.state === 'closed') return true;
-  if (store.breakerClaim(row.connector, mode, now, { ...policyOf(registry, row).breaker, probeLeaseMs: leaseMs })) return true;
-  if (b.state === 'open' && now < b.openUntil) store.outboxDefer(row.id, b.openUntil);
+  if (await store.breakerClaim(row.connector, mode, now, { ...policyOf(registry, row).breaker, probeLeaseMs: leaseMs })) return true;
+  if (b.state === 'open' && now < b.openUntil) await store.outboxDefer(row.id, b.openUntil);
   return false;
 }
 
@@ -79,11 +79,11 @@ export async function flush(store, graph, opts = {}) {
   const clock = resolveClock(opts);
   const deploy = env ? env.deploy() : { connectors: {} };
   const out = [];
-  for (const row of store.outboxDue(clock.now(), leaseMs)) {
+  for (const row of await store.outboxDue(clock.now(), leaseMs)) {
     const mode = modeOf(deploy, row.connector, modesOf(registry, row.kind));
-    if (!admit(store, row, { now: clock.now(), mode, registry, leaseMs })) continue;
+    if (!await admit(store, row, { now: clock.now(), mode, registry, leaseMs })) continue;
     const claimedAt = clock.now();
-    if (store.outboxClaim(row.id, claimedAt, leaseMs)) out.push(await deliver(store, graph, row, { ...opts, mode, secrets: env?.secrets, clock, claimedAt }));
+    if (await store.outboxClaim(row.id, claimedAt, leaseMs)) out.push(await deliver(store, graph, row, { ...opts, mode, secrets: env?.secrets, clock, claimedAt }));
   }
   return out;
 }

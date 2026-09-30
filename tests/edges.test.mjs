@@ -19,12 +19,12 @@ test('an entity with no fields still gets a table, and unknown entities answer e
   assert.equal(store.labelField('A'), null, 'an entity without a text field has no label field');
 });
 
-test('random.pick survives weights that sum to zero', () => {
+test('random.pick survives weights that sum to zero', async () => {
   const store = new Store({ app: 'x', data: { P: { name: 'text!', w: 'int=0' } } }, ':memory:');
   store.insert('P', { name: 'a', w: 0 });
   store.insert('P', { name: 'b', w: 0 });
   const seen = new Set();
-  for (let i = 0; i < 40; i++) seen.add(CATALOG['random.pick'].run({ store, step: { from: 'P', weight: 'w' } }).picked.name);
+  for (let i = 0; i < 40; i++) seen.add((await CATALOG['random.pick'].run({ store, step: { from: 'P', weight: 'w' } })).picked.name);
   assert.equal(seen.size, 2, 'all-zero weights must not make the wheel unpickable');
 });
 
@@ -283,7 +283,7 @@ test('a wheel whose arithmetic runs off the end still returns a prize', async (t
   const real = Math.random;
   Math.random = () => 1;                       // the value Math.random never returns
   try {
-    const { picked } = CATALOG['random.pick'].run({ store, step: { from: 'P', weight: 'w' } });
+    const { picked } = await CATALOG['random.pick'].run({ store, step: { from: 'P', weight: 'w' } });
     assert.equal(picked.name, 'only', 'the fallback catches the edge of the range');
   } finally { Math.random = real; }
 });

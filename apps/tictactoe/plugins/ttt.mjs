@@ -19,10 +19,10 @@ export default {
     'ttt.move': {
       summary: 'apply a move at "cell" (0-8) to the current Game: refuses if the game is over, the cell is out of range, or it is already taken; otherwise flips the turn or resolves the winner/draw',
       effects: ['db.write'], requires: ['cell'],
-      run: ({ store, entity, id, step, resolve }) => {
-        const row = store.get(entity, id);
+      run: async ({ store, entity, id, step, resolve }) => {
+        const row = await store.get(entity, id);
         if (row.status !== 'playing') throw new Error('The game is already over');
-        const cell = Number(resolve({ v: step.cell }).v);
+        const cell = Number((await resolve({ v: step.cell })).v);
         if (!Number.isInteger(cell) || cell < 0 || cell > 8) throw new Error('cell must be 0-8');
         const board = row.board.split('');
         if (board[cell] !== '_') throw new Error('That cell is already taken');
@@ -30,7 +30,7 @@ export default {
         const win = winner(board.join(''));
         const full = !board.includes('_');
         const status = win ? `${row.turn}_won` : full ? 'draw' : 'playing';
-        store.update(entity, id, { board: board.join(''), turn: status === 'playing' ? (row.turn === 'x' ? 'o' : 'x') : row.turn, status });
+        await store.update(entity, id, { board: board.join(''), turn: status === 'playing' ? (row.turn === 'x' ? 'o' : 'x') : row.turn, status });
         return {};
       },
     },

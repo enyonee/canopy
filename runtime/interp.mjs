@@ -27,23 +27,25 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
 
   // --- names inside steps: "@row.x", "@me", "@created", "= qty * price", "{row.title}" ------------
   const ROWS = { row: 'rowEntity', each: 'eachEntity', found: 'foundEntity', picked: 'pickedEntity' };
+  // The store a step reads and writes through: the transaction view it runs in (`ctx.tx`), else the store itself.
+  const dbOf = (ctx) => ctx.tx ?? store;
   // `path` read from `row` of `entity`: its read-set is loaded now (inside the step's transaction, so
   // the step's own earlier writes are seen), then the path is read from the snapshot.
   const pathPlans = new Map(); // "a.b" -> { key, asts }: the plan cache key and expression of a path, made once
-  const readFrom = (entity, row, path) => {
+  const readFrom = async (db, entity, row, path) => {
     const name = path.join('.');
     if (!pathPlans.has(name)) pathPlans.set(name, { key: `path:${name}`, asts: [{ t: 'path', p: path }] });
     const { key, asts } = pathPlans.get(name);
-    return store.evalCtx(entity, row, key, asts).get(path);
+    return (await db.evalCtx(entity, row, key, asts)).get(path);
   };
-  const refValue = (ctx, pathParts) => {
+  const refValue = async (ctx, pathParts) => {
     const [head, ...rest] = pathParts;
     if (head === 'me') {
       const id = ctx.user ? ctx.user.id : meId;
       if (!rest.length) return id;
       const ent = graph.roles?.entity || graph.identity?.entity;
-      const who = ent && store.raw(ent, id);
-      return who ? readFrom(ent, who, rest) : null;
+      const who = ent && await dbOf(ctx).raw(ent, id);
+      return who ? await readFrom(dbOf(ctx), ent, who, rest) : null;
     }
     if (head === 'now') return new Date().toISOString();
     if (head === 'today') return new Date().toISOString().slice(0, 10);
@@ -52,36 +54,55 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
       const obj = ctx[head];
       if (!obj) return null;
       if (!rest.length || rest[0] === 'id') return obj.id;
-      return readFrom(ctx[ROWS[head]], obj, rest);
+      return await readFrom(dbOf(ctx), ctx[ROWS[head]], obj, rest);
     }
     return rest.length ? undefined : ctx[head];
   };
+  // A name that is not the row's own: `me`, `values`, `each`… (refValue reads it, and loads for itself).
+  const STEP_NAMES = ['me', 'now', 'today', 'values', 'created', 'delivery'];
+  const isStepName = (head) => STEP_NAMES.includes(head) || Boolean(ROWS[head]);
+  // The step names an expression reads, outside aggregate bodies (a body reads its own rows; only `row.<name>`
+  // reaches back out). evaluate() is synchronous, so they are loaded before it starts.
+  const stepPaths = (ast, out = [], inBody = false) => {
+    if (ast.t === 'path') {
+      if (!inBody && isStepName(ast.p[0])) out.push(ast.p);
+      if (inBody && ast.p[0] === 'row' && ast.p.length > 1 && isStepName(ast.p[1])) out.push(ast.p.slice(1));
+    } else if (ast.t === 'un') stepPaths(ast.a, out, inBody);
+    else if (ast.t === 'bin') { stepPaths(ast.a, out, inBody); stepPaths(ast.b, out, inBody); }
+    else if (ast.t === 'call') for (const a of ast.args) stepPaths(a, out, inBody);
+    else if (ast.t === 'agg' && ast.body) stepPaths(ast.body, out, true);
+    return out;
+  };
   // The checker only lets bare names and aggregates through where a row exists. The expression is
-  // planned and loaded for the row it runs on before evaluate() starts (evalCtx); a name that is not
-  // the row's (`me`, `values`, `each`…) is read by refValue, which loads for itself.
-  const exprCtx = (ctx, src) => {
-    const base = store.evalCtx(ctx.rowEntity, ctx.row, `step:${src}`, [compiled(src)]);
+  // planned and loaded for the row it runs on before evaluate() starts (evalCtx), and so is every step name it reads.
+  const exprCtx = async (ctx, src) => {
+    const ast = compiled(src);
+    const base = await dbOf(ctx).evalCtx(ctx.rowEntity, ctx.row, `step:${src}`, [ast]);
+    const named = new Map();
+    for (const p of stepPaths(ast)) named.set(p.join('.'), await refValue(ctx, p));
     return {
       clock: base.clock,
       get(p) {
-        const [head] = p;
-        if (['me', 'now', 'today', 'values', 'created', 'delivery'].includes(head) || ROWS[head]) return refValue(ctx, p);
-        return base.get(p);
+        if (!isStepName(p[0])) return base.get(p);
+        if (!named.has(p.join('.'))) throw new Error(`not loaded: ${p.join('.')}`);
+        return named.get(p.join('.'));
       },
       rows: (child, via) => base.rows(child, via),
       // The old lazy context had no compiled aggregates: its expressions always walked the child rows.
       ...(store.lazyEval ? {} : { agg: (node, clock) => base.agg(node, clock) }),
     };
   };
+  // `resolve(ctx)` answers a function that resolves one value; it loads what the value reads, so it answers a promise.
+  // Elements and entries are resolved one after the other, in order: the reads leave the store as they always did.
   const resolve = (ctx) => {
-    const one = (v) => {
+    const one = async (v) => {
       if (typeof v === 'string') {
-        if (v.startsWith('@')) return refValue(ctx, v.slice(1).split('.'));
-        if (isExpression(v)) { const src = stripExpression(v); return evaluate(compiled(src), exprCtx(ctx, src), registry.functions); }
+        if (v.startsWith('@')) return await refValue(ctx, v.slice(1).split('.'));
+        if (isExpression(v)) { const src = stripExpression(v); return evaluate(compiled(src), await exprCtx(ctx, src), registry.functions); }
         return v;
       }
-      if (Array.isArray(v)) return v.map(one);
-      if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, one(x)]));
+      if (Array.isArray(v)) { const out = []; for (const x of v) out.push(await one(x)); return out; }
+      if (v && typeof v === 'object') { const out = {}; for (const [k, x] of Object.entries(v)) out[k] = await one(x); return out; }
       return v;
     };
     return one;
@@ -95,23 +116,30 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     if (f?.kind === 'money') return formatMoney(Math.round(v * 100));
     return typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v);
   };
-  const interpolate = (text, ctx) => {
+  const interpolate = async (text, ctx) => {
     const src = String(text);
     const names = [...src.matchAll(TEMPLATE)].map((m) => m[1].trim().split('.'));
-    const values = names.map((parts) => refValue(ctx, parts));
+    const values = [];
+    for (const parts of names) values.push(await refValue(ctx, parts));
     let i = 0;
     return src.replace(TEMPLATE, () => { const at = i++; return show(ctx, names[at], values[at]); });
   };
   // "/Order/{order}" — a path may name fields of the row it lands on; {id} is the row id.
-  const afterPath = (template, entity, id, extra = {}) => String(template).replace(/\{(\w+)\}/g, (_, k) => {
-    if (k === 'id') return String(id);
-    if (k in extra) return String(extra[k] ?? '');
-    const row = store.raw(entity, id);
-    return row && row[k] !== undefined && row[k] !== null ? String(row[k]) : '';
-  });
+  // The row is read once, before the replace: nothing is loaded inside String#replace.
+  const PLACEHOLDER = /\{(\w+)\}/g;
+  const afterPath = async (template, entity, id, extra = {}) => {
+    const src = String(template);
+    const needsRow = [...src.matchAll(PLACEHOLDER)].some((m) => m[1] !== 'id' && !(m[1] in extra));
+    const row = needsRow ? await store.raw(entity, id) : null;
+    return src.replace(PLACEHOLDER, (_, k) => {
+      if (k === 'id') return String(id);
+      if (k in extra) return String(extra[k] ?? '');
+      return row && row[k] !== undefined && row[k] !== null ? String(row[k]) : '';
+    });
+  };
 
   // Deliver what is due (after a commit, or when an operator asks); the delivery path takes its time from `clock`.
-  const flushNow = () => flush(store, graph, { fetchImpl, trace, registry, clock, env });
+  const flushNow = async () => await flush(store, graph, { fetchImpl, trace, registry, clock, env });
   const modes = () => connectorModes(graph, registry, env ? env.deploy() : { connectors: {} });
   // `fn` gets the transaction-bound view of the store (Store#transaction) and uses it for every read and write.
   const withEffects = async (fn) => {
@@ -133,20 +161,20 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   // with "ensure a default row exists" (the created row is found, not made, on
   // the very next pass) never gets close to the limit.
   const MAX_EVENT_DEPTH = 8;
-  const fireCreatedFor = (ctx) => (entity, id, values) =>
-    fireEvents('created', entity, id, values, ctx.user, null, (ctx.eventDepth || 0) + 1, ctx.tx);
+  const fireCreatedFor = (ctx) => async (entity, id, values) =>
+    await fireEvents('created', entity, id, values, ctx.user, null, (ctx.eventDepth || 0) + 1, ctx.tx);
 
   // --- steps run inside the caller's transaction; effects wait in the outbox -------------------
   // `ctx.tx` is the transaction view the steps run in (attempt hands it to its callback); without one, the store.
-  const runSteps = (steps, ctx) => {
-    const db = ctx.tx ?? store;
-    if (ctx.rowEntity && ctx.id && !ctx.row) ctx.row = db.get(ctx.rowEntity, ctx.id);
+  const runSteps = async (steps, ctx) => {
+    const db = dbOf(ctx);
+    if (ctx.rowEntity && ctx.id && !ctx.row) ctx.row = await db.get(ctx.rowEntity, ctx.id);
     for (const [i, step] of steps.entries()) {
       const block = CATALOG[step.block];
-      const out = block.run({
+      const out = await block.run({
         store: db, graph, registry, entity: ctx.rowEntity, id: ctx.id, values: ctx.values, step, user: ctx.user,
-        resolve: resolve(ctx), trace, text: (s) => interpolate(s, ctx),
-        run: (sub, extra) => runSteps(sub, { ...ctx, ...extra }),
+        resolve: resolve(ctx), trace, text: async (s) => await interpolate(s, ctx),
+        run: async (sub, extra) => await runSteps(sub, { ...ctx, ...extra }),
         fireCreated: fireCreatedFor(ctx),
       });
       // A block's "id" is the row it created, never the row the action runs on.
@@ -155,18 +183,18 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
       if (createdId) ctx.created = createdId;
       if (out.found) ctx.foundEntity = step.entity;
       if (out.picked) ctx.pickedEntity = step.from;
-      if (ctx.rowEntity && ctx.id) ctx.row = db.get(ctx.rowEntity, ctx.id) || ctx.row;
+      if (ctx.rowEntity && ctx.id) ctx.row = await db.get(ctx.rowEntity, ctx.id) || ctx.row;
       trace({ kind: 'step', i, block: step.block, effects: block.effects, entity: ctx.rowEntity, id: ctx.id,
         out: out.picked ? { picked: out.picked.id } : out.found ? { found: out.found.id } : out });
     }
     return ctx;
   };
-  const fireEvents = (trigger, entity, id, values, user, snapshot = null, depth = 0, tx = null) => {
+  const fireEvents = async (trigger, entity, id, values, user, snapshot = null, depth = 0, tx = null) => {
     if (depth > MAX_EVENT_DEPTH) throw new Error(`too many nested "${trigger}" events — check for a cycle through ${entity}.${trigger}`);
     for (const ev of graph.events || []) {
       if (ev.on !== `${entity}.${trigger}`) continue;
       trace({ kind: 'event', on: ev.on, entity, id });
-      runSteps(ev.do, { rowEntity: entity, id, row: snapshot, values, user, eventDepth: depth, tx });
+      await runSteps(ev.do, { rowEntity: entity, id, row: snapshot, values, user, eventDepth: depth, tx });
     }
   };
 
@@ -181,7 +209,7 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   };
 
   // --- validation: types, rules, uniqueness ------------------------------------------------------
-  const validateValues = (entity, values, { partial = false, existing = null } = {}) => {
+  const validateValues = async (entity, values, { partial = false, existing = null } = {}) => {
     const problems = [];
     const fields = store.fields[entity];
     for (const f of fields) {
@@ -198,7 +226,7 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     // there: this form path, a block, and a seed row at boot all end up
     // inside Store#insert/#update. Calling the same function here means the
     // form path reports the exact messages it always has (item 20).
-    problems.push(...store.checkRules(entity, values, existing));
+    problems.push(...await store.checkRules(entity, values, existing));
     return problems;
   };
   // What a client may set on this entity through a form. The form's declared field

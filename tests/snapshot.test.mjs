@@ -319,7 +319,7 @@ const STEPS_GRAPH = {
 
 async function runPrice(store, id) {
   const interp = createInterpreter({ graph: STEPS_GRAPH, store, registry: DEFAULT, perms: {}, meId: 7, fetchImpl: async () => ({ ok: true, status: 200 }) });
-  await interp.attempt(() => interp.runSteps(STEPS_GRAPH.actions[0].do, { rowEntity: 'Order', id, values: { x: 'v' }, user: null }));
+  await interp.attempt(async () => await interp.runSteps(STEPS_GRAPH.actions[0].do, { rowEntity: 'Order', id, values: { x: 'v' }, user: null }));
   return interp;
 }
 
@@ -336,7 +336,7 @@ test('no driver call while a step value is evaluated: set, if, interpolated text
   const o = seedSteps(store);
   const seen = watch(t, store);
   const interp = await runPrice(store, o);
-  store.transaction(() => interp.fireEvents('created', 'Item', 2, {}, null, null));
+  await store.transaction(async () => await interp.fireEvents('created', 'Item', 2, {}, null, null));
   assert.equal(store.get('Order', o).note, 'item 2 of Ann', 'an event step reads the row it fired on');
   assert.deepEqual(seen.inside, [], 'the driver was called while a step value was evaluated');
   assert.ok(seen.outside.length > 10 && seen.evaluations > 10, `the gate must not be vacuous: ${seen.outside.length} queries, ${seen.evaluations} evaluations`);
@@ -356,7 +356,7 @@ test('no driver call while a step value is evaluated: set, if, interpolated text
   assert.deepEqual(hook, { total: 14, who: 'Ann', twice: 28, me: 7 });
 });
 
-test('interpolate loads before it formats: no driver call inside String#replace', (t) => {
+test('interpolate loads before it formats: no driver call inside String#replace', async (t) => {
   const store = new Store(STEPS_GRAPH, ':memory:');
   const o = seedSteps(store);
   const interp = createInterpreter({ graph: STEPS_GRAPH, store, registry: DEFAULT, perms: {}, meId: 7 });
@@ -370,7 +370,7 @@ test('interpolate loads before it formats: no driver call inside String#replace'
   const ctx = { rowEntity: 'Order', id: o, row: store.get('Order', o), values: {} };
   const inside = [], outside = [];
   store.drv.onQuery = (sql) => (inReplace ? inside : outside).push(sql);
-  assert.equal(interp.interpolate('{row.customer.name} owes {row.net} ({row.total}) {nobody}', ctx), 'Ann owes 1.00 (4.00) ');
+  assert.equal(await interp.interpolate('{row.customer.name} owes {row.net} ({row.total}) {nobody}', ctx), 'Ann owes 1.00 (4.00) ');
   assert.deepEqual(inside, [], 'a query ran inside String#replace');
   assert.ok(outside.length >= 3, `the values were loaded, before the replace: ${outside.length} queries`);
 });
@@ -385,7 +385,7 @@ test('a step value is loaded when it is resolved: a later step sees an earlier s
   const store = new Store(g, ':memory:');
   const o = seedSteps(store);
   const interp = createInterpreter({ graph: g, store, registry: DEFAULT, perms: {}, meId: 7, fetchImpl: async () => ({ ok: true, status: 200 }) });
-  await interp.attempt(() => interp.runSteps(g.actions[0].do, { rowEntity: 'Order', id: o, values: {}, user: null }));
+  await interp.attempt(async () => await interp.runSteps(g.actions[0].do, { rowEntity: 'Order', id: o, values: {}, user: null }));
   assert.deepEqual(store.outbox().map((r) => r.payload).reverse(), [
     { at: 'before', total: 4, again: 4, spent: 4 },
     { at: 'after', total: 10, again: 10, spent: 10 },
@@ -393,17 +393,17 @@ test('a step value is loaded when it is resolved: a later step sees an earlier s
 });
 
 // The plan of a path is cached per entity: the same path on two entities is two plans.
-test('one path read on two entities plans each of them', () => {
+test('one path read on two entities plans each of them', async () => {
   const g = { app: 'two', data: { A: { c: 'ref:C!', x: 'int := count(C)' }, B: { c: 'ref:C!', x: 'int := customer.y', customer: 'ref:C' }, C: { y: 'int=3' } }, views: 'auto' };
   const store = new Store(g, ':memory:');
   store.insert('C', {});
   const a = store.insert('A', { c: 1 }), b = store.insert('B', { c: 1, customer: 1 });
   const interp = createInterpreter({ graph: g, store, registry: DEFAULT, perms: {}, meId: 1 });
   const ctx = (entity, id) => ({ rowEntity: entity, id, row: store.get(entity, id), values: {} });
-  assert.equal(interp.resolve(ctx('A', a))('@row.x'), 1);
-  assert.equal(interp.resolve(ctx('B', b))('@row.x'), 3);
-  assert.equal(interp.resolve(ctx('A', a))('= x'), 1);
-  assert.equal(interp.resolve(ctx('B', b))('= x'), 3);
+  assert.equal(await interp.resolve(ctx('A', a))('@row.x'), 1);
+  assert.equal(await interp.resolve(ctx('B', b))('@row.x'), 3);
+  assert.equal(await interp.resolve(ctx('A', a))('= x'), 1);
+  assert.equal(await interp.resolve(ctx('B', b))('= x'), 3);
 });
 
 // The store loads once per check, however many rules it has, and not at all when no rule is a check.
@@ -429,17 +429,17 @@ test('on the lazy switch rules and step values evaluate over the lazy context', 
   const aggs = [];
   const aggValue = store.aggValue;
   store.aggValue = function spied(...a) { aggs.push(a[2].fn); return aggValue.apply(this, a); };
-  assert.equal(interp.resolve(ctx)('= sum(Item: qty * price)'), 4);
+  assert.equal(await interp.resolve(ctx)('= sum(Item: qty * price)'), 4);
   assert.deepEqual(aggs, [], 'the snapshot path answers a compiled aggregate from its batch');
   store.lazyEval = true;
   assert.ok(store.evalCtx('Order', ctx.row, 'k', [], false).constructor.name === 'RowCtx', 'the lazy switch hands out the lazy context');
-  assert.equal(interp.resolve(ctx)('= sum(Item: qty * price)'), 4);
+  assert.equal(await interp.resolve(ctx)('= sum(Item: qty * price)'), 4);
   assert.deepEqual(aggs, [], 'an expression of the old context walks the child rows, it never asks for a compiled aggregate');
-  assert.equal(interp.resolve(ctx)('@row.customer.spent'), 4);
+  assert.equal(await interp.resolve(ctx)('@row.customer.spent'), 4);
 });
 
 // today/now of an expression and of the aggregates it binds are one clock: the one its snapshot was loaded with.
-test('a step expression reads the clock its snapshot was loaded with', (t) => {
+test('a step expression reads the clock its snapshot was loaded with', async (t) => {
   const store = new Store(STEPS_GRAPH, ':memory:');
   const o = seedSteps(store);
   const interp = createInterpreter({ graph: STEPS_GRAPH, store, registry: DEFAULT, perms: {}, meId: 7 });
@@ -450,7 +450,7 @@ test('a step expression reads the clock its snapshot was loaded with', (t) => {
   let day = 0; // every reading of the clock is a day later than the one before
   globalThis.Date = class extends Real { constructor(...a) { super(...(a.length ? a : [Real.UTC(2026, 8, 29 + day++)])); } };
   t.after(() => { globalThis.Date = Real; });
-  const today = interp.resolve(ctx)('= today');
+  const today = await interp.resolve(ctx)('= today');
   assert.equal(loaded.length, 1);
   assert.equal(today, loaded[0].toISOString().slice(0, 10), 'evaluate() read a clock of its own');
 });

@@ -10,18 +10,18 @@ export default {
     'diagram.layout': {
       summary: 'arrange the current diagram\'s nodes by its stored "layout": horizontal row, vertical column, or a radial circle; "free" leaves stored positions untouched',
       effects: ['db.write'], requires: [],
-      run: ({ store, entity, id }) => {
-        const dg = store.get(entity, id);
+      run: async ({ store, entity, id }) => {
+        const dg = await store.get(entity, id);
         if (!dg || dg.layout === 'free') return {};
-        const nodes = store.list('Node', { where: { diagram: dg.id }, sort: { field: 'id', dir: 'asc' } });
+        const nodes = await store.list('Node', { where: { diagram: dg.id }, sort: { field: 'id', dir: 'asc' } });
         const n = nodes.length;
-        nodes.forEach((node, i) => {
+        for (const [i, node] of nodes.entries()) {
           let x, y;
           if (dg.layout === 'horizontal') { x = 120 + i * 160; y = 200; }
           else if (dg.layout === 'vertical') { x = 300; y = 100 + i * 120; }
           else { const angle = n ? (2 * Math.PI * i) / n : 0; x = 400 + Math.round(200 * Math.cos(angle)); y = 260 + Math.round(200 * Math.sin(angle)); }
-          store.update('Node', node.id, { x: Math.round(x), y: Math.round(y) });
-        });
+          await store.update('Node', node.id, { x: Math.round(x), y: Math.round(y) });
+        }
         return { arranged: n };
       },
     },

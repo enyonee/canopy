@@ -289,10 +289,10 @@ test('http.send still queues a legacy row (no op) and http through connector.cal
   } finally { s.close(); }
 });
 
-test('connector.call refuses a connector whose kind has no descriptor when the check was bypassed', () => {
+test('connector.call refuses a connector whose kind has no descriptor when the check was bypassed', async () => {
   const store = new Store({ app: 'x', data: { A: { n: 'text' } } }, ':memory:');
   const graph = { connectors: { m: { kind: 'mail' } } };
-  assert.throws(() => CATALOG['connector.call'].run({ store, graph, registry: DEFAULT, step: { connector: 'm', op: 'x', input: {} }, resolve: (x) => x }), /connector\.call: "m" is mail, which has no descriptor/);
+  await assert.rejects(() => CATALOG['connector.call'].run({ store, graph, registry: DEFAULT, step: { connector: 'm', op: 'x', input: {} }, resolve: (x) => x }), /connector\.call: "m" is mail, which has no descriptor/);
 });
 
 // --- the outbox table ------------------------------------------------------------------------
