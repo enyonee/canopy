@@ -52,7 +52,7 @@ export class Snapshot {
   }
   hasScalar(key, id) { return Boolean(this.scalars.get(key)?.has(String(id))); }
 
-  ctx(entity, row, stack) { return new SnapCtx(this, entity, row, stack); }
+  ctx(entity, row, stack, allowSecret = false) { return new SnapCtx(this, entity, row, stack, allowSecret); }
 
   // The derived field `f` of `row`, evaluated over this snapshot.
   derived(entity, row, f, stack = []) {
@@ -63,8 +63,8 @@ export class Snapshot {
 }
 
 class SnapCtx extends RowCtx {
-  constructor(snap, entity, row, stack) {
-    super(snap.store, entity, row, stack, false, null, snap.clock);
+  constructor(snap, entity, row, stack, allowSecret) {
+    super(snap.store, entity, row, stack, allowSecret, null, snap.clock);
     this.snap = snap;
   }
 

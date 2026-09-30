@@ -10,7 +10,7 @@
 // Attached to Store.prototype by store.mjs (`this` is the Store). The old lazy path (lazy.mjs)
 // stays behind the test-only switch `store.lazyEval`; rules and step values still use it.
 import { compileAgg, runAggOne, runAggBatch, aggKey } from './aggsql.mjs';
-import { planFor, planFallback } from './plan.mjs';
+import { planFor, planExpr, planFallback } from './plan.mjs';
 import { Snapshot, refKey } from './snapshot.mjs';
 
 // The values of a compiled aggregate for `ids`: one grouped query, or — for a lone row (a detail
@@ -67,6 +67,20 @@ export function loadSnapshot(entity, rows, fields = null, clock = new Date()) {
   snap.putRows(entity, rows, rows.map((r) => String(r.id)));
   loadNode(this, snap, planFor(this, entity, fields), rows);
   return snap;
+}
+
+// The evaluation context of `row` (of `entity`) for expressions `asts` — a rule's check, a step's
+// value (S3b). The expressions are planned and everything they read is loaded NOW, in the caller's
+// transaction; evaluating over the context then performs no driver call. `key` names the
+// expressions for the plan cache. `row` need not be stored (a rule's probe has id 0 and values
+// that are not saved yet), so it is not put in the snapshot: a hop back to its entity loads the
+// stored row, as a lazy read of it always did. `allowSecret` is a rule's (ctx.mjs).
+// On the test-only lazy switch this is the old RowCtx, which queries while it evaluates.
+export function evalCtx(entity, row, key, asts, allowSecret = false) {
+  if (this.lazyEval) return this.ctx(entity, row, [], { allowSecret });
+  const snap = new Snapshot(this, new Date());
+  loadNode(this, snap, planExpr(this, entity, key, asts), row ? [row] : []);
+  return snap.ctx(entity, row, [], allowSecret);
 }
 
 // The compiled form of an aggregate node read in `entity` — or null. A method so a test can
