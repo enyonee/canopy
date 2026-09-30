@@ -443,7 +443,7 @@ test('descriptor: retry, breaker and idempotency are checked, and everything els
   assert.deepEqual(bad({ idempotency: {} }), ['/idempotency/header: "header" names the request header that carries the key']);
   assert.deepEqual(bad({ idempotency: { header: 'bad name' } }), ['/idempotency/header: "header" names the request header that carries the key']);
   assert.deepEqual(bad({ idempotency: { header: 'X-Key', body: 1 } }), ['/idempotency/body: unknown key "body"']);
-  assert.deepEqual(bad({ inbound: {} }), ['/inbound: unknown key "inbound"']);
+  assert.deepEqual(bad({ auth: {} }), ['/auth: unknown key "auth"']);
 });
 
 test('the engine: the key goes into the descriptor\'s header only, Retry-After is read from failures only, and a thrown request says why', async () => {

@@ -23,6 +23,7 @@ import * as system from './routes/system.mjs';
 import * as entity from './routes/entity.mjs';
 import * as widgets from './routes/widgets.mjs';
 import * as schedule from './routes/schedule.mjs';
+import * as hooks from './routes/hooks.mjs';
 import { everyMs } from './schedule.mjs';
 import { flush } from './outbox.mjs';
 import { systemClock } from './clock.mjs';
@@ -40,6 +41,7 @@ function invalidGraphServer(graph, errors, port, host) {
 
 async function dispatch(ctx) {
   if (widgets.handle(ctx)) return;
+  if (await hooks.handle(ctx)) return; // a provider's webhook: signed, never a session — before the gate below
   if (await session.handle(ctx)) return;
   if (ctx.perms.enabled && !ctx.role) { ctx.deny('Please sign in.'); return; }
   if (await views.handle(ctx)) return;
@@ -69,10 +71,13 @@ function startTimers(graph, interp, trace, server, noTimers) {
 // The background flusher: retries come due on their own, not only when someone next causes a flush. It flushes every
 // `intervalMs`, and a one-shot timer wakes it at the earliest `nextAttemptAt` still ahead. Both run on the injected
 // clock, are unref'd, stop when the server closes, and are absent under `noTimers` — so `flusher` is null and only a request
-// or the /outbox retry delivers. A flush that throws is traced; the next tick tries again.
+// or the /outbox retry delivers. A flush that throws is traced; the next tick tries again. The same tick forgets
+// the webhooks' dedup rows older than INBOUND_RETENTION_MS (longer than any provider retries), at most once an hour.
+export const INBOUND_RETENTION_MS = 30 * 24 * 3600 * 1000;
+const PRUNE_EVERY_MS = 3600 * 1000;
 export function startFlusher({ store, graph, server, trace, noTimers, clock = systemClock, intervalMs = 5000, ...flushOpts }) {
   if (noTimers) return null;
-  let every = null, shot = null, stopped = false, busy = false;
+  let every = null, shot = null, stopped = false, busy = false, prunedAt = -Infinity;
   const arm = () => {
     clock.clear(shot);
     const at = store.outboxNextDue(clock.now());
@@ -81,7 +86,10 @@ export function startFlusher({ store, graph, server, trace, noTimers, clock = sy
   const tick = async () => {
     if (busy || stopped) return;
     busy = true;
-    try { await flush(store, graph, { ...flushOpts, trace, clock }); }
+    try {
+      await flush(store, graph, { ...flushOpts, trace, clock });
+      if (clock.now() - prunedAt >= PRUNE_EVERY_MS) { prunedAt = clock.now(); store.inboundPrune(prunedAt - INBOUND_RETENTION_MS); }
+    }
     catch (e) { trace({ kind: 'error', message: String(e && e.message) }); }
     finally { busy = false; }
     if (!stopped) arm();
@@ -129,7 +137,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
-    const ctx = createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl });
+    const ctx = createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env });
     try {
       await dispatch(ctx);
     } catch (e) {

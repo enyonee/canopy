@@ -69,6 +69,7 @@ export class Store {
       this.migrateIndexes(entity);
     }
     this.migrateOutbox();
+    this.migrateInbound();
     // Sessions: the cookie names a row here, so signing out really ends the session.
     this.drv.createTable('_session', [['id', 'TEXT PRIMARY KEY'], ['user', 'INTEGER'], ['at', 'TEXT']], { ifNotExists: true, serial: false });
   }

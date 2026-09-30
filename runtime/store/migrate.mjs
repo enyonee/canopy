@@ -79,3 +79,10 @@ export function migrateOutbox() {
   this.drv.createTable('_breaker', [['key', 'TEXT PRIMARY KEY'], ['connector', 'TEXT'], ['mode', 'TEXT'], ['state', 'TEXT'], ['failures', 'INTEGER DEFAULT 0'],
     ['openUntil', 'INTEGER DEFAULT 0'], ['cooldownMs', 'INTEGER DEFAULT 0'], ['probeClaimedAt', 'INTEGER DEFAULT 0']], { ifNotExists: true, serial: false });
 }
+
+// `_inbound` is the dedup ledger of inbound webhooks: one row per (connector, provider event id) already taken,
+// keyed by both so a second delivery of the same event cannot be inserted. "receivedAt" is epoch ms; the flusher
+// prunes rows older than the retention (runtime/server.mjs).
+export function migrateInbound() {
+  this.drv.createTable('_inbound', [['key', 'TEXT PRIMARY KEY'], ['connector', 'TEXT'], ['eventId', 'TEXT'], ['receivedAt', 'INTEGER']], { ifNotExists: true, serial: false });
+}

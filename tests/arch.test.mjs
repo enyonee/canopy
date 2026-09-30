@@ -197,7 +197,7 @@ test('function size budget: no function/method body exceeds ' + MAX_FUNCTION_LIN
 // `node:` built-ins, and a cycle check over the same edges.
 // ---------------------------------------------------------------------------
 const ALLOWED = {
-  'runtime/admin.mjs': ['runtime/secrets.mjs', 'runtime/deploy.mjs', 'runtime/connectors/engine.mjs'],
+  'runtime/admin.mjs': ['runtime/secrets.mjs', 'runtime/deploy.mjs', 'runtime/connectors/engine.mjs', 'runtime/connectors/signature.mjs', 'runtime/connectors/inbound.mjs', 'runtime/clock.mjs'],
   'runtime/auth.mjs': [],
   'runtime/blocks.mjs': ['runtime/fields.mjs', 'runtime/connectors/engine.mjs', 'runtime/check/calls.mjs'],
   'runtime/boot.mjs': [],
@@ -226,11 +226,13 @@ const ALLOWED = {
   'runtime/clock.mjs': [],
   'runtime/connectors/backoff.mjs': [],
   'runtime/connectors/builtin.mjs': [],
-  'runtime/connectors/descriptor.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/backoff.mjs', 'runtime/connectors/sandbox.mjs'],
+  'runtime/connectors/descriptor.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/backoff.mjs', 'runtime/connectors/sandbox.mjs', 'runtime/connectors/inbound.mjs'],
+  'runtime/connectors/inbound.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/signature.mjs'],
   'runtime/connectors/engine.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/descriptor.mjs', 'runtime/connectors/backoff.mjs', 'runtime/connectors/sandbox.mjs', 'runtime/clock.mjs'],
   'runtime/connectors/redact.mjs': [],
   'runtime/connectors/sandbox.mjs': ['runtime/connectors/template.mjs'],
   'runtime/connectors/schema.mjs': [],
+  'runtime/connectors/signature.mjs': [],
   'runtime/connectors/template.mjs': [],
   'runtime/deploy.mjs': ['runtime/secrets.mjs'],
   'runtime/expr.mjs': ['runtime/functions.mjs'],
@@ -251,6 +253,7 @@ const ALLOWED = {
   'runtime/render/pages.mjs': ['runtime/render.mjs', 'runtime/render/form.mjs'],
   'runtime/render/search.mjs': ['runtime/render.mjs'],
   'runtime/routes/context.mjs': ['runtime/render.mjs'],
+  'runtime/routes/hooks.mjs': ['runtime/routes/context.mjs', 'runtime/connectors/engine.mjs', 'runtime/connectors/signature.mjs', 'runtime/connectors/inbound.mjs'],
   'runtime/routes/entity.mjs': ['runtime/render.mjs', 'runtime/render/list.mjs', 'runtime/render/form.mjs', 'runtime/render/detail.mjs', 'runtime/routes/rows.mjs'],
   'runtime/routes/rows.mjs': ['runtime/render.mjs', 'runtime/render/detail.mjs'],
   'runtime/routes/schedule.mjs': ['runtime/render.mjs'],
@@ -265,7 +268,7 @@ const ALLOWED = {
   'runtime/schedule.mjs': [],
   'runtime/server.mjs': ['runtime/validate.mjs', 'runtime/store.mjs', 'runtime/registry.mjs', 'runtime/auth.mjs', 'runtime/interp.mjs',
     'runtime/boot.mjs', 'runtime/render.mjs', 'runtime/routes/context.mjs', 'runtime/routes/session.mjs', 'runtime/routes/views.mjs',
-    'runtime/routes/system.mjs', 'runtime/routes/entity.mjs', 'runtime/routes/widgets.mjs', 'runtime/routes/schedule.mjs', 'runtime/schedule.mjs',
+    'runtime/routes/system.mjs', 'runtime/routes/entity.mjs', 'runtime/routes/widgets.mjs', 'runtime/routes/schedule.mjs', 'runtime/routes/hooks.mjs', 'runtime/schedule.mjs',
     'runtime/outbox.mjs', 'runtime/clock.mjs', 'runtime/deploy.mjs'],
   'runtime/spec.mjs': ['runtime/expr.mjs', 'runtime/fields.mjs'],
   'runtime/store.mjs': ['runtime/spec.mjs', 'runtime/expr.mjs', 'runtime/auth.mjs', 'runtime/registry.mjs', 'runtime/driver.mjs', 'runtime/store/query.mjs', 'runtime/store/hydrate.mjs', 'runtime/store/lazy.mjs', 'runtime/store/state.mjs', 'runtime/store/rules.mjs', 'runtime/store/migrate.mjs', 'runtime/store/ctx.mjs'],
@@ -289,7 +292,9 @@ const ALLOWED = {
 };
 
 const NODE_BUILTINS = {
+  'runtime/admin.mjs': ['node:fs', 'node:crypto'],
   'runtime/connectors/backoff.mjs': ['node:crypto'],
+  'runtime/connectors/signature.mjs': ['node:crypto'],
   'runtime/auth.mjs': ['node:crypto', 'node:fs'],
   'runtime/deploy.mjs': ['node:fs', 'node:path'],
   'runtime/secrets.mjs': ['node:crypto', 'node:fs', 'node:path'],

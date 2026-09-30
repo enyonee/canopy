@@ -167,6 +167,16 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     }
   };
 
+  // The steps of every event an inbound webhook triggers (`inbound: "<connector>.<type>"`), inside the caller's
+  // transaction. The payload's values are the steps' `@values.<name>`; there is no row and no user.
+  const fireInbound = (connector, type, values) => {
+    for (const ev of graph.events || []) {
+      if (ev.inbound !== `${connector}.${type}`) continue;
+      trace({ kind: 'event', inbound: ev.inbound });
+      runSteps(ev.do, { rowEntity: null, id: null, values, user: null });
+    }
+  };
+
   // --- validation: types, rules, uniqueness ------------------------------------------------------
   const validateValues = (entity, values, { partial = false, existing = null } = {}) => {
     const problems = [];
@@ -236,7 +246,7 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   };
 
   return {
-    resolve, interpolate, afterPath, attempt, runSteps, fireEvents, flushNow, modes,
+    resolve, interpolate, afterPath, attempt, runSteps, fireEvents, fireInbound, flushNow, modes,
     validateValues, writable, onlyWritable, checkboxes, dropEmptyUploads,
   };
 }

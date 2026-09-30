@@ -32,8 +32,9 @@ function requestUrl(op, scopes) {
   return url;
 }
 
-/** The slots (`{secret.<slot>}`) the live requests of a descriptor read. */
-export const secretSlots = (d) => [...new Set(Object.values(d.operations).flatMap((op) => refs(op.request)).filter((r) => r.scope === 'secret').map((r) => r.path[0]))];
+/** The slots a descriptor reads from the secret store: `{secret.<slot>}` in live requests, and the inbound signature's. */
+export const secretSlots = (d) => [...new Set([...Object.values(d.operations).flatMap((op) => refs(op.request)).filter((r) => r.scope === 'secret').map((r) => r.path[0]),
+  ...(d.inbound ? [d.inbound.secret] : [])])];
 
 /** The name in the secret store that a slot is: the connector's `secrets` map says, else the slot itself. */
 export const secretName = (connector, slot) => connector?.secrets?.[slot] ?? slot;

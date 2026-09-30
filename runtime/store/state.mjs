@@ -116,3 +116,20 @@ export function sessionEnd(sid) {
   const { quote: q, ph } = this.drv.dialect;
   this.drv.run(`DELETE FROM ${q('_session')} WHERE id=${ph(1)}`, [String(sid)]);
 }
+
+// The dedup ledger of inbound webhooks. `inboundSeen` and `inboundAdd` run inside the transaction of the event's own
+// steps, so the row exists exactly when the steps committed; a duplicate that slips past the read on another instance
+// fails the PRIMARY KEY insert, answers 500 and is settled as a duplicate on the provider's next retry.
+const inboundKey = (connector, eventId) => `${connector}|${eventId}`;
+export function inboundSeen(connector, eventId) {
+  const { quote: q, ph } = this.drv.dialect;
+  return Boolean(this.drv.get(`SELECT ${q('key')} FROM ${q('_inbound')} WHERE ${q('key')}=${ph(1)}`, [inboundKey(connector, eventId)]));
+}
+export function inboundAdd(connector, eventId, receivedAt) {
+  this.drv.run(this.drv.dialect.insert('_inbound', ['key', 'connector', 'eventId', 'receivedAt']), [inboundKey(connector, eventId), connector, eventId, receivedAt]);
+}
+// Forget what was received before `before` (epoch ms); returns how many rows went.
+export function inboundPrune(before) {
+  const { quote: q, ph } = this.drv.dialect;
+  return this.drv.run(`DELETE FROM ${q('_inbound')} WHERE ${q('receivedAt')}<${ph(1)}`, [before]).changes;
+}
