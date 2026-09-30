@@ -6,6 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -16,6 +17,7 @@ import { createRegistry, registerDescriptor } from '../runtime/registry.mjs';
 import { validate } from '../runtime/validate.mjs';
 import { openSecrets } from '../runtime/secrets.mjs';
 import { main } from '../runtime/cli.mjs';
+import { rawBody, TooBig } from '../runtime/routes/context.mjs';
 import { INBOUND_RETENTION_MS } from '../runtime/server.mjs';
 import { boot, tmpDir, fakeClock } from './helpers.mjs';
 
@@ -148,14 +150,15 @@ const descOf = (inbound, name = 'psp') => ({ descriptor: 1, name, operations: { 
 test('checkInbound: every rule of the block is an error with a path', () => {
   const bad = (inb) => checkInbound(inb).map(([p, m]) => `${p}: ${m}`);
   assert.deepEqual(checkInbound(INBOUND), []);
-  assert.deepEqual(checkInbound({ ...INBOUND, toleranceS: 60, eventId: { header: 'X-Delivery' }, type: { header: 'x-event' },
+  assert.deepEqual(checkInbound({ ...INBOUND, toleranceS: 60, eventId: '$.delivery.id', type: { header: 'x-event' },
     events: { push: { schema: { type: 'object' }, map: { ref: '$.data.order' } } } }), []);
   assert.match(bad('x')[0], /"inbound" is an object/);
   assert.match(bad({ ...INBOUND, extra: 1 }).join('\n'), /unknown key "extra"/);
   assert.match(bad({ ...INBOUND, signature: { scheme: 'nope' } })[0], /"scheme"/);
   for (const secret of [undefined, 5, '1bad', 'a b']) assert.match(bad({ ...INBOUND, secret }).join('\n'), /names the "secret" slot/, String(secret));
   for (const toleranceS of [0, 1.5, 86401, '300']) assert.match(bad({ ...INBOUND, toleranceS }).join('\n'), /toleranceS/, String(toleranceS));
-  for (const eventId of [undefined, 5, 'id', '$.a[', { header: 'a b' }, { header: 'x', more: 1 }, ['$.id']]) assert.match(bad({ ...INBOUND, eventId }).join('\n'), /eventId/, JSON.stringify(eventId));
+  for (const eventId of [undefined, 5, 'id', '$.a[', ['$.id']]) assert.match(bad({ ...INBOUND, eventId }).join('\n'), /eventId/, JSON.stringify(eventId));
+  for (const eventId of [{ header: 'X-Delivery' }, { header: 'a b' }, { header: 'x', more: 1 }]) assert.match(bad({ ...INBOUND, eventId }).join('\n'), /header is not covered by the signature/, 'an unsigned header cannot be the dedup key');
   assert.match(bad({ ...INBOUND, type: 'type' }).join('\n'), /inbound\/type/);
   for (const events of [undefined, {}, [], 'x']) assert.match(bad({ ...INBOUND, events }).join('\n'), /"events"/, JSON.stringify(events));
   assert.match(bad({ ...INBOUND, events: { a: 5 } })[0], /an inbound event is an object/);
@@ -178,17 +181,18 @@ test('a descriptor may carry an inbound block; a malformed one is a descriptor e
 });
 
 test('typeOf, eventIdOf, valuesOf and payloadProblems read a payload the way the block says', () => {
-  const inb = { ...INBOUND, type: { header: 'X-Event' }, eventId: { header: 'X-Delivery' } };
-  const headers = { 'x-event': 'push', 'x-delivery': 'd-1' };
+  const inb = { ...INBOUND, type: { header: 'X-Event' } };
+  const headers = { 'x-event': 'push' };
   assert.equal(typeOf(inb, {}, headers), 'push');
   assert.equal(typeOf(inb, {}, {}), undefined);
   assert.equal(typeOf(INBOUND, { type: 'a.b' }, {}), 'a.b');
   for (const type of [undefined, '', 5, null, {}]) assert.equal(typeOf(INBOUND, { type }, {}), undefined, JSON.stringify(type));
-  assert.equal(eventIdOf(inb, {}, headers), 'd-1');
-  assert.equal(eventIdOf(INBOUND, { id: 42 }, {}), '42');
-  assert.equal(eventIdOf(INBOUND, { id: 'evt' }, {}), 'evt');
-  for (const id of [undefined, '', 1.5, 2 ** 60, null, {}, 'x'.repeat(256)]) assert.equal(eventIdOf(INBOUND, { id }, {}), undefined, String(id).slice(0, 10));
-  assert.equal(eventIdOf(INBOUND, { id: 'x'.repeat(255) }, {}).length, 255);
+  assert.equal(eventIdOf(inb, { id: 'd-1' }), 'd-1');
+  assert.equal(eventIdOf(INBOUND, { id: 'body' }, { id: 'header' }), 'body', 'a header is never the id');
+  assert.equal(eventIdOf(INBOUND, { id: 42 }), '42');
+  assert.equal(eventIdOf(INBOUND, { id: 'evt' }), 'evt');
+  for (const id of [undefined, '', 1.5, 2 ** 60, null, {}, 'x'.repeat(256)]) assert.equal(eventIdOf(INBOUND, { id }), undefined, String(id).slice(0, 10));
+  assert.equal(eventIdOf(INBOUND, { id: 'x'.repeat(255) }).length, 255);
   const payload = { id: 'e', data: { object: { order: 7 } }, amount: 5, nested: { a: 1 }, list: [1], gone: null };
   assert.deepEqual(valuesOf({ map: { ref: '$.data.object.order', nope: '$.x.y' } }, payload), { ref: 7, nope: undefined });
   assert.deepEqual(valuesOf({}, payload), { id: 'e', amount: 5, gone: null }, 'without a map: the top-level scalars');
@@ -230,7 +234,7 @@ const DESCRIPTORS = {
     'payment.failed': { schema: money() },
     'refund.created': { schema: money() },
   } }, 'psp'),
-  gh: descOf({ signature: { scheme: 'hmac', header: 'X-Hub-Signature-256', algo: 'sha256', encoding: 'hex', prefix: 'sha256=' }, secret: 'secret', eventId: { header: 'X-Delivery' }, type: { header: 'X-Event' },
+  gh: descOf({ signature: { scheme: 'hmac', header: 'X-Hub-Signature-256', algo: 'sha256', encoding: 'hex', prefix: 'sha256=' }, secret: 'secret', eventId: '$.delivery', type: { header: 'X-Event' },
     events: { push: { schema: { type: 'object' } } } }, 'gh'),
   slk: descOf({ signature: { scheme: 'slack' }, secret: 'signing', eventId: '$.event_id', type: '$.event.type', events: { app_mention: { schema: { type: 'object', required: ['event_id'], properties: { event_id: { type: 'string' } } } } } }, 'slk'),
   pm: descOf({ signature: { scheme: 'basic' }, secret: 'auth', eventId: '$.ID', type: '$.RecordType', events: { Bounce: { schema: { type: 'object', required: ['ID'], properties: { ID: { type: 'integer' } } } } } }, 'pm'),
@@ -305,14 +309,13 @@ test('the route needs no session: it answers while every page asks for a login, 
   assert.equal((await w.app.get('/login')).status, 200);
 });
 
-test('every recipe end to end: stripe, a header-keyed hmac (type and id in headers), slack, basic', async (t) => {
+test('every recipe end to end: stripe, a header-typed hmac, slack, basic', async (t) => {
   const w = await world(t);
-  const gh = Buffer.from('{"ref":"main"}');
-  const r1 = await w.signed('gh', gh.toString(), { raw: gh, headers: { 'x-event': 'push', 'x-delivery': 'd-1' } });
-  assert.deepEqual(r1.body, { ok: true });
-  assert.equal((await w.signed('gh', gh.toString(), { raw: gh, headers: { 'x-event': 'push', 'x-delivery': 'd-1' } })).body.duplicate, true);
-  assert.equal((await w.signed('gh', gh.toString(), { raw: gh, headers: { 'x-event': 'push' } })).body.error, 'invalid_event_id', 'no delivery id, no dedup key');
-  assert.equal((await w.signed('gh', gh.toString(), { raw: gh, headers: { 'x-delivery': 'd-2' } })).body.error, 'missing_type');
+  const push = (delivery, headers = { 'x-event': 'push' }) => { const raw = Buffer.from(JSON.stringify({ ref: 'main', ...(delivery ? { delivery } : {}) })); return w.signed('gh', '', { raw, headers }); };
+  assert.deepEqual((await push('d-1')).body, { ok: true });
+  assert.equal((await push('d-1', { 'x-event': 'push' })).body.duplicate, true);
+  assert.equal((await push(undefined)).body.error, 'invalid_event_id', 'no delivery id in the body, no dedup key');
+  assert.equal((await push('d-2', {})).body.error, 'missing_type');
   assert.equal((await w.signed('slk', { event_id: 'Ev1', event: { type: 'app_mention' } })).status, 200);
   assert.equal((await w.signed('slk', { event_id: 'Ev1', event: { type: 'app_mention' } })).body.duplicate, true);
   assert.equal((await w.signed('pm', { ID: 77, RecordType: 'Bounce' })).status, 200);
@@ -396,6 +399,30 @@ test('a duplicate is 200 {duplicate:true} and the steps run exactly once', async
   assert.equal(w.order(1).count, 2);
   assert.equal(w.ledger().length, 2);
   assert.equal(w.app.trace().filter((e) => e.kind === 'webhook_duplicate').length, 2);
+  // an id is unique per connector: another provider may use the same one
+  assert.deepEqual((await w.signed('slk', { event_id: 'dup', event: { type: 'app_mention' } })).body, { ok: true });
+  assert.deepEqual(w.ledger().map((x) => x.key).sort(), ['chat|dup', 'pay|dup', 'pay|other']);
+});
+
+test('rawBody: bytes as sent, refused the moment the declared length or what arrives passes the cap, nothing kept past it', async () => {
+  const feed = (headers, chunks, { fail = null } = {}) => {
+    const req = new EventEmitter();
+    req.headers = headers;
+    const result = rawBody(req, 10);
+    queueMicrotask(() => { for (const c of chunks) req.emit('data', Buffer.from(c)); if (fail) req.emit('error', fail); else req.emit('end'); });
+    return result;
+  };
+  assert.deepEqual(await feed({}, ['abc', 'de', 'f']), Buffer.from('abcdef'));
+  assert.deepEqual(await feed({}, ['0123456789']), Buffer.from('0123456789'), 'exactly the cap');
+  assert.deepEqual(await feed({ 'content-length': '10' }, []), Buffer.alloc(0));
+  await assert.rejects(feed({}, ['01234', '567890']), TooBig);
+  await assert.rejects(feed({}, ['0123456789a', 'more', 'and more']), TooBig);
+  const never = new EventEmitter();
+  never.headers = { 'content-length': '11' };
+  await assert.rejects(rawBody(never, 10), TooBig, 'the declared length is enough: nothing is read');
+  assert.equal(never.listenerCount('data'), 0);
+  await assert.rejects(feed({}, [], { fail: new Error('socket closed') }), /socket closed/);
+  assert.equal((await feed({ 'content-length': 'nonsense' }, ['abc'])).toString(), 'abc');
 });
 
 test('a crash before commit leaves no dedup row and no effect; the provider\'s retry is processed exactly once', async (t) => {
@@ -600,9 +627,9 @@ test('--connectors simulate signs the payload with the stored secret and posts i
   const again = await run('simulate', 'pay', 'payment.succeeded', '--data', file);
   assert.deepEqual([again.code, again.out], [0, ['200 {"ok":true,"duplicate":true}']], 'the same payload is the same event');
   assert.equal(w.order(1).count, 1);
-  // a header-keyed connector: the id is made from the payload, the type header from EVENT
+  // a header-typed connector: the type header is set from EVENT, the id is the payload's own
   const push = path.join(w.dir, 'push.json');
-  fs.writeFileSync(push, '{"ref":"main"}');
+  fs.writeFileSync(push, '{"ref":"main","delivery":"sim-1"}');
   assert.deepEqual((await run('simulate', 'git', 'push', '--data', push)).out, ['200 {"ok":true}']);
   assert.deepEqual((await run('simulate', 'git', 'push', '--data', push)).out, ['200 {"ok":true,"duplicate":true}']);
   assert.deepEqual((await run('simulate', 'mail', 'Bounce', '--data', (fs.writeFileSync(path.join(w.dir, 'b.json'), '{"ID":9,"RecordType":"Bounce"}'), path.join(w.dir, 'b.json')))).out, ['200 {"ok":true}']);
@@ -619,6 +646,8 @@ test('--connectors simulate signs the payload with the stored secret and posts i
   await refuses(['simulate', 'pay', 'payment.succeeded', '--data', junk], /junk.json is not JSON/);
   w.store.remove('pay_whsec');
   await refuses(['simulate', 'pay', 'payment.succeeded', '--data', file], /the secret "pay_whsec" is not in the store: --secrets set pay_whsec/);
+  const status = await run('status');
+  assert.match(status.out.join('\n'), /pay  psp  live .*secrets: pay_whsec MISSING/, 'the webhook secret is one the connector needs, like a request secret');
   w.store.set('pay_whsec', SECRET);
   const refusing = async () => ({ ok: false, status: 401, text: async () => '{"ok":false,"error":"unauthorized"}' });
   const refused = []; const refusedErr = [];

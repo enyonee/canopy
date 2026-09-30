@@ -5,6 +5,25 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Inbound webhooks (connector library, stage C4).** A connector whose descriptor has an `inbound` block now
+  receives a provider's webhooks at `POST /hook/<connector>`, a route that is exempt from the session gate and
+  authenticated only by the descriptor's signature recipe: `stripe` (`t=…,v1=…`, several `v1`), `slack` (`v0`),
+  a generic `hmac` (header, sha256/sha1, hex/base64, prefix, raw or timestamp-dot-raw) or `basic`. The body is read as
+  bytes (1 MiB cap), the signature is verified before anything is parsed (constant time, `timingSafeEqual` after a
+  length check, against the secret and its `.prev`; a replay window for timestamped schemes, default 300 s), and the
+  answer is JSON only and never echoes the payload (401 for any signature problem, the reason only in the trace).
+  The payload is validated against the descriptor's schema for its type (400, no dedup row); an unknown type is
+  `200 {ignored:true}`. The event's steps and a dedup row `_inbound(connector|eventId)` run in **one transaction**:
+  a duplicate is `200 {duplicate:true}`, a failing step or a crash before commit leaves no row and answers 500, so
+  the provider's retry is processed exactly once. A graph event is `{"inbound": "<connector>.<type>", "do": […]}`
+  (checked against the descriptor) and its steps get the payload as `@values.<name>`. The flusher prunes dedup rows
+  older than 30 days. `--connectors simulate NAME EVENT --data f.json` signs a payload with the stored secret and
+  posts it to the running app; verify seeds the secrets an app's checks export. The `shop` reference app marks a
+  placed order paid on `payment.succeeded` (its change-3 patch now appends to `/events` instead of replacing it).
+  New: `runtime/connectors/signature.mjs`, `runtime/connectors/inbound.mjs`, `runtime/routes/hooks.mjs`. Gates:
+  `tests/inbound.test.mjs` (every recipe, the accept/reject matrix, exactly-once across a crash, the cap, no echo,
+  no session, pruning, `simulate`), 42 `C4:` mutations.
+
 - **Secrets and sandbox/live mode (connector library, stage C2).** `{secret.name}` in a descriptor's headers
   and body is now read from an encrypted **secret store**, `secrets.enc` beside the database: one AES-256-GCM
   blob (even the names are hidden) under a key derived with HKDF from `CANOPY_MASTER_KEY` or a `secrets.key` file

@@ -1,6 +1,6 @@
 // The `inbound` block of a descriptor: how a provider's webhooks are authenticated (`signature`, with the
 // `secret` slot and the `toleranceS` replay window), where in a request its event type and its id sit
-// (`type`, `eventId`: a `$.path` into the JSON body or `{"header": "name"}`), and which event types it may send
+// (`type`: a `$.path` into the JSON body or `{"header": "name"}`; `eventId`: a `$.path` into the signed body only), and which event types it may send
 // (`events`: each with the `schema` its payload must satisfy and an optional `map` that names the values the app's
 // steps receive). Pure; `checkInbound` is fail closed like the rest of the descriptor checker.
 import { checkSchema, validate } from './schema.mjs';
@@ -44,7 +44,11 @@ export function checkInbound(inb) {
   out.push(...checkRecipe(inb.signature, '/inbound/signature'));
   if (typeof inb.secret !== 'string' || !/^[A-Za-z_][\w-]*$/.test(inb.secret)) out.push(['/inbound/secret', 'inbound names the "secret" slot whose store value signs the webhooks', '"secret": "webhookSecret"']);
   if (inb.toleranceS !== undefined && !(Number.isInteger(inb.toleranceS) && inb.toleranceS >= 1 && inb.toleranceS <= 86400)) out.push(['/inbound/toleranceS', '"toleranceS" is a whole number of seconds, 1 to 86400 (default 300)']);
-  out.push(...checkLocator(inb.eventId, '/inbound/eventId', 'eventId'), ...checkLocator(inb.type, '/inbound/type', 'type'));
+  // The id is the dedup key, so it must be something the signature covers: the body. A header is not signed by any recipe,
+  // and whoever replays a captured request could change it and make the same event a new one.
+  if (typeof inb.eventId === 'string') out.push(...checkLocator(inb.eventId, '/inbound/eventId', 'eventId'));
+  else out.push(['/inbound/eventId', '"eventId" is a $.path into the signed JSON body: a header is not covered by the signature, so a replay could change it', '"eventId": "$.id"']);
+  out.push(...checkLocator(inb.type, '/inbound/type', 'type'));
   if (!isObject(inb.events) || !Object.keys(inb.events).length) return [...out, ['/inbound/events', 'inbound lists the "events" it may send, each with a "schema"', '"events": {"payment.succeeded": {"schema": {"type": "object"}}}']];
   for (const [name, ev] of Object.entries(inb.events)) out.push(...checkEvent(ev, `/inbound/events/${name}`));
   return out;
@@ -60,8 +64,8 @@ export function typeOf(inb, payload, headers) {
 }
 
 /** The provider's id of an event as text, or undefined when it is missing or unusable as a key. */
-export function eventIdOf(inb, payload, headers) {
-  const id = locate(inb.eventId, payload, headers);
+export function eventIdOf(inb, payload) {
+  const id = pick(inb.eventId, payload);
   const text = typeof id === 'number' && Number.isSafeInteger(id) ? String(id) : id;
   return typeof text === 'string' && text !== '' && text.length <= MAX_EVENT_ID ? text : undefined;
 }

@@ -10,15 +10,15 @@
 
 | слой | модули | зачем |
 |---|---|---|
-| 0 | `fields.mjs`, `functions.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/dialects.mjs`, `clock.mjs`, `connectors/{schema,template,builtin,backoff}.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
-| 1 | `expr.mjs`, `spec.mjs`, `driver/sqlite.mjs`, `connectors/{descriptor,engine}.mjs`, `transports.mjs` | алгебра выражений и разбор спецификации поля; `driver/sqlite.mjs` — единственный исполнитель SQL, SQL-текст берёт у диалекта |
+| 0 | `fields.mjs`, `functions.mjs`, `widgets.mjs`, `schedule.mjs`, `check/util.mjs`, `client/api.mjs`, `driver/dialects.mjs`, `clock.mjs`, `connectors/{schema,template,builtin,backoff,signature}.mjs` | листья: реестры дескрипторов и форматы, ничего не импортируют изнутри рантайма; `client/api.mjs` — единственный файл, который *исполняется* в браузере, а не сервером (см. «Клиентские виджеты») |
+| 1 | `expr.mjs`, `spec.mjs`, `driver/sqlite.mjs`, `connectors/{descriptor,engine,inbound}.mjs`, `transports.mjs` | алгебра выражений и разбор спецификации поля; `driver/sqlite.mjs` — единственный исполнитель SQL, SQL-текст берёт у диалекта |
 | 2 | `driver.mjs`, `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs`, `check/calls.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
 | 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
 | 4 | `store.mjs`, `outbox.mjs`, `settle.mjs` | хранилище (говорит с базой только через `this.drv`) и исходящий ящик; `settle.mjs` — чистое «во что превратилась доставка» (повтор, `unknown`, событие разрывателю) |
 | 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
 | 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 5); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
 | 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 5) |
-| 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule}.mjs` | маршруты, поверх интерпретатора и рендера |
+| 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule,hooks}.mjs` | маршруты, поверх интерпретатора и рендера |
 | 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний и фоновый `startFlusher` |
 | 10 | `cli.mjs`, `run.mjs` | точка входа |
 
@@ -118,6 +118,18 @@
   `admin.mjs` — команды оператора `--secrets set|list|rm` (значение только из stdin) и `--connectors status|live
   NAME --confirm|sandbox NAME` (live отказывает без `--confirm`, без секрета, который читают его живые запросы, и для
   режима, которого у вида нет); зовёт их `cli.mjs` до запуска сервера. `/outbox` показывает режим каждого коннектора.
+  **C4, входящие вебхуки** (`docs/CONNECTORS.md` §5 и §13). `connectors/signature.mjs` — чистый лист (`node:crypto`):
+  рецепты `stripe`, `slack`, `hmac`, `basic`; `verifySignature` сравнивает каждого кандидата с каждым секретом из списка
+  (`name`, `name.prev`) через `timingSafeEqual` после проверки длины (разная длина — отказ, не исключение), окно
+  повторов проверяется только после самой подписи; `signHeaders` подписывает тем же кодом (для `simulate` и тестов).
+  `connectors/inbound.mjs` — блок `inbound` дескриптора (`checkInbound`, закрыто по неизвестным ключам) и чтение запроса
+  (`typeOf`, `eventIdOf`, `valuesOf`, `payloadProblems`). `routes/hooks.mjs` (`POST /hook/<коннектор>`) диспетчеризуется в
+  `server.mjs#dispatch` до сессионного шлюза и сразу после виджетов: читает тело как байты (`rawBody` в `context.mjs`,
+  потолок 1 МиБ, `TooBig`), проверяет подпись до разбора JSON, отвечает только JSON без эха полезной нагрузки; строка
+  дедупликации `_inbound` (`store/state.mjs`: `inboundSeen/Add/Prune`, ключ `connector|eventId`) и шаги события
+  (`interp.fireInbound`) — в одной транзакции, поэтому падение до COMMIT не оставляет строки. `check/events.mjs`
+  проверяет `inbound: "<коннектор>.<тип>"` по дескриптору. `admin.mjs#simulate` подписывает файл хранимым секретом и
+  шлёт его на локальный `/hook`. `server.mjs#startFlusher` раз в час удаляет строки старше `INBOUND_RETENTION_MS`.
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.

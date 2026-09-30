@@ -58,7 +58,7 @@ async function receive(ctx, name, inbound) {
     return ctx.sendJson(200, { ok: true, ignored: true });
   }
   if (payloadProblems(ev, payload).length) return refuse(ctx, name, 400, 'invalid_payload');
-  const eventId = eventIdOf(inbound, payload, req.headers);
+  const eventId = eventIdOf(inbound, payload);
   if (eventId === undefined) return refuse(ctx, name, 400, 'invalid_event_id');
   if (!take(ctx, name, type, eventId, valuesOf(ev, payload))) {
     trace({ kind: 'webhook_duplicate', connector: name, type, eventId });

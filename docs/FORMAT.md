@@ -26,7 +26,7 @@ never work around the checker.
 | `dashboards` | cards and grouped tables at `/dashboard/<id>` |
 | `pages` | static pages at `/page/<id>`, optionally with live `sections` (below) |
 | `actions` | named step sequences: on a row (`in`) or global |
-| `events` | steps that run on `Entity.created`/`.updated`/`.deleted`, on login, or on view (below) |
+| `events` | steps that run on `Entity.created`/`.updated`/`.deleted`, on login, or on view, or on a provider's webhook (`inbound`) (below) |
 | `states` | status transitions per entity (below) |
 | `schedule` | named timers the server runs on an interval (below) |
 | `connectors` | endpoints the app may send to: `http`, `mail`, and any kind a connector descriptor defines (see Connector descriptors); never holds a secret |
@@ -249,6 +249,13 @@ signed in); `{ "on": "Article.viewed", "do": [...] }` (any entity; row = the row
 together). Both fire best-effort: a failing `login`/`viewed` event is traced, never surfaced — a broken hook
 must not lock anyone out of signing in or of viewing a page.
 
+`{ "inbound": "pay.payment.succeeded", "do": [...] }` — instead of `on`: the webhook a connector receives (the
+connector is up to the first dot, the event type, which may have dots, is the rest; the connector's descriptor must
+declare it in `inbound.events`, see "Inbound webhooks"). The steps run with no row and no user, in the same
+transaction as the webhook's dedup row; the validated payload arrives as `@values.<name>` (`= values.name` in
+expressions): the values the descriptor's `map` names, or else the payload's top-level scalars. A step that throws
+refuses the whole webhook (the provider retries it). `"on"` and `"inbound"` together are an error.
+
 ## States
 
 ```json
@@ -406,6 +413,41 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   operation `send` takes `body`, so `connector.call { connector, op: "send", input: { body } }`
   is `http.send` without a `path` (data may not extend the url). Plugin code (`.mjs`) and descriptors (`.json`) coexist in one `plugins` list.
 
+### Inbound webhooks
+
+A descriptor may carry an `inbound` block: how a provider's webhooks are authenticated and read. The runtime then
+serves `POST /hook/<connector>` for every connector of that kind — no session, no cookie, JSON answers only.
+
+```json
+"inbound": {
+  "signature": { "scheme": "hmac", "header": "x-psp-signature", "algo": "sha256", "encoding": "hex", "prefix": "sha256=",
+                 "signed": "ts.raw", "timestampHeader": "x-psp-timestamp" },
+  "secret": "webhookSecret", "toleranceS": 300,
+  "eventId": "$.id", "type": "$.type",
+  "events": { "payment.succeeded": { "schema": { "type": "object", "required": ["id", "order"], "properties": { "id": { "type": "string" }, "order": { "type": "integer" } } },
+                                      "map": { "order": "$.data.object.order" } } }
+}
+```
+- `signature.scheme`: `stripe` (`t=<unix>,v1=<hex>` over `t.raw`, optional `header`), `slack` (`v0=` HMAC-SHA256 of
+  `v0:<timestamp>:<raw>`), `hmac` (`header`, `algo` sha256|sha1, `encoding` hex|base64, optional `prefix`, `signed`
+  `raw` or `ts.raw` with `timestampHeader`), `basic` (HTTP Basic; the stored value is `user:password`). `secret` is
+  the slot whose store value signs (mapped by the connector's `secrets`, like any slot; `name.prev` also signs, for a
+  rotation). `toleranceS` (default 300) is how far a timestamped signature may be from the server's clock.
+- `type` is a `$.path` into the JSON body or `{"header": "name"}`. `eventId` is a `$.path` into the body and nothing
+  else (a header is not covered by any signature, so it is a descriptor error): the webhook is processed once per
+  (connector, id) for 30 days and a retry is answered `200` with `{"duplicate": true}`.
+- `events` lists the types the descriptor knows; each has a `schema` (type `object`, applied open: extra fields are
+  fine) and an optional `map` (`{ "<value name>": "$.path" }`; without it the steps see the payload's top-level
+  scalars). A type not listed, or listed and subscribed to by no graph event, is answered `200 {"ignored": true}`.
+- Answers: `200 {ok:true}` (processed), `{ok:true,duplicate:true}`, `{ok:true,ignored:true}`; `400` invalid JSON, no type,
+  a payload the schema refuses, an unusable event id; `401 {ok:false,error:"unauthorized"}` for any signature or timestamp
+  problem (the reason is only in the trace: `webhook_rejected`); `404` no such connector or no `inbound`; `405` not POST;
+  `413` over 1 MiB; `500` a failing step or an unreadable secret store (nothing was written; the provider retries).
+  The payload is never echoed, and the trace never holds a body.
+- `node runtime/run.mjs app.json --connectors simulate pay payment.succeeded --data event.json [--port 8901]` signs
+  `event.json` (the complete payload, including the type and id) with the stored secret and posts it to the running
+  app; there is no development secret, so `--secrets set <name>` comes first.
+
 ### Secrets and modes
 
 The secret store is the file `secrets.enc` beside the database (and `secrets.key`, mode 0600, made by the first
@@ -431,6 +473,7 @@ node runtime/run.mjs app.json --secrets rm stripe_key
 node runtime/run.mjs app.json --connectors live pay --confirm   # refused without --confirm, or while a secret
                                                                 # its live requests read is not in the store
 node runtime/run.mjs app.json --connectors sandbox pay
+node runtime/run.mjs app.json --connectors simulate pay payment.succeeded --data event.json   # a signed webhook to the running app
 ```
 
 `/outbox` lists each connector with the mode it runs in and the modes it offers.
@@ -448,7 +491,7 @@ the `/search` page itself.
 
 ## Routes the runtime serves
 
-`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
+`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `POST /hook/<connector>` (a signed webhook, no session) · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
 
 Every successful POST answers 303 to a page with `?ok=<flash>`; validation failures answer 400 with the form and the messages; refusals 403; a transition from the wrong status 409.
 
