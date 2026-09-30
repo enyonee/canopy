@@ -23,9 +23,10 @@ export function checkCycle(stack, key) {
   if (stack.includes(key)) throw new Error(`derived field ${key} depends on itself (${[...stack, key].join(' → ')})`);
 }
 
-// The lazy context: every read that is not in `cache` asks the store now. Used by rules and step
-// values (S3b moves them off it); a snapshot context (runtime/store/snapshot.mjs) extends it and
-// overrides the four places that would query — derivedValue, hop, child, rows/agg.
+// The lazy context: every read that is not in `cache` asks the store now. Used by render/perms/field
+// hooks (S3c moves them off it) and by the test-only `lazyEval` paths; rules and step values (S3b)
+// run on a snapshot context (runtime/store/snapshot.mjs), which extends this class and overrides the
+// four places that would query — derivedValue, hop, child, rows/agg.
 export class RowCtx {
   constructor(store, entity, row, stack, allowSecret, cache, clock) {
     this.store = store; this.entity = entity; this.row = row; this.stack = stack;
