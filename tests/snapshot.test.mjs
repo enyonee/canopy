@@ -317,7 +317,7 @@ test('a rule reads an item this very transaction wrote (the load happens where t
 test('a rule that does not parse still throws out of the write', () => {
   const g = { app: 'bad', data: { T: { n: 'int' } }, rules: { T: [{ check: 'n >', message: 'x' }] }, views: 'auto' };
   const store = new Store(g, ':memory:');
-  assert.throws(() => store.insert('T', { n: 1 }), /./);
+  assert.throws(() => store.insert('T', { n: 1 }), (e) => e.message !== 'x', 'the parse error, not the rule\'s message');
 });
 
 const STEPS_GRAPH = {
@@ -377,25 +377,101 @@ test('no driver call while a step value is evaluated: set, if, interpolated text
   assert.deepEqual(hook, { total: 14, who: 'Ann', twice: 28, me: 7 });
 });
 
-test('interpolate loads before it formats: no driver call inside String#replace', async (t) => {
+test('interpolate loads before it formats: no driver call inside String#replace', (t) => {
   const store = new Store(STEPS_GRAPH, ':memory:');
   const o = seedSteps(store);
   const interp = createInterpreter({ graph: STEPS_GRAPH, store, registry: DEFAULT, perms: {}, meId: 7 });
-  const seen = watch(t, store);
   const replace = String.prototype.replace;
   let inReplace = 0;
   String.prototype.replace = function wrapped(pattern, how) { // eslint-disable-line no-extend-native
     if (typeof how !== 'function') return replace.call(this, pattern, how);
     return replace.call(this, pattern, (...a) => { inReplace++; try { return how(...a); } finally { inReplace--; } });
   };
-  t.after(() => { String.prototype.replace = replace; }); // eslint-disable-line no-extend-native
+  t.after(() => { String.prototype.replace = replace; store.drv.onQuery = null; }); // eslint-disable-line no-extend-native
   const ctx = { rowEntity: 'Order', id: o, row: store.get('Order', o), values: {} };
-  const text = interp.interpolate('{row.customer.name} owes {row.net} ({row.total}) {nobody}', ctx);
-  assert.equal(text, 'Ann owes 1.00 (4.00) ');
-  assert.ok(seen.outside.length >= 2, 'the values were loaded');
-  assert.deepEqual(seen.log.filter(() => inReplace), [], 'a query ran inside String#replace');
-  const inside = [];
-  store.drv.onQuery = (sql) => { if (inReplace) inside.push(sql); };
-  interp.interpolate('{row.customer.name}', ctx);
-  assert.deepEqual(inside, []);
+  const inside = [], outside = [];
+  store.drv.onQuery = (sql) => (inReplace ? inside : outside).push(sql);
+  assert.equal(interp.interpolate('{row.customer.name} owes {row.net} ({row.total}) {nobody}', ctx), 'Ann owes 1.00 (4.00) ');
+  assert.deepEqual(inside, [], 'a query ran inside String#replace');
+  assert.ok(outside.length >= 3, `the values were loaded, before the replace: ${outside.length} queries`);
+});
+
+// A step reads what the steps before it wrote: nothing is loaded once per action and kept.
+test('a step value is loaded when it is resolved: a later step sees an earlier step\'s write', async () => {
+  const g = { ...STEPS_GRAPH, actions: [{ name: 'twice', in: 'Order', do: [
+    { block: 'http.send', connector: 'hook', body: { at: 'before', total: '@row.total', again: '= total', spent: '@row.customer.spent' } },
+    { block: 'db.createRow', entity: 'Item', values: { order: '@row.id', qty: 1, price: 6 } },
+    { block: 'http.send', connector: 'hook', body: { at: 'after', total: '@row.total', again: '= total', spent: '@row.customer.spent' } },
+  ] }] };
+  const store = new Store(g, ':memory:');
+  const o = seedSteps(store);
+  const interp = createInterpreter({ graph: g, store, registry: DEFAULT, perms: {}, meId: 7, fetchImpl: async () => ({ ok: true, status: 200 }) });
+  await interp.attempt(() => interp.runSteps(g.actions[0].do, { rowEntity: 'Order', id: o, values: {}, user: null }));
+  assert.deepEqual(store.outbox().map((r) => r.payload).reverse(), [
+    { at: 'before', total: 4, again: 4, spent: 4 },
+    { at: 'after', total: 10, again: 10, spent: 10 },
+  ]);
+});
+
+// The plan of a path is cached per entity: the same path on two entities is two plans.
+test('one path read on two entities plans each of them', () => {
+  const g = { app: 'two', data: { A: { c: 'ref:C!', x: 'int := count(C)' }, B: { c: 'ref:C!', x: 'int := customer.y', customer: 'ref:C' }, C: { y: 'int=3' } }, views: 'auto' };
+  const store = new Store(g, ':memory:');
+  store.insert('C', {});
+  const a = store.insert('A', { c: 1 }), b = store.insert('B', { c: 1, customer: 1 });
+  const interp = createInterpreter({ graph: g, store, registry: DEFAULT, perms: {}, meId: 1 });
+  const ctx = (entity, id) => ({ rowEntity: entity, id, row: store.get(entity, id), values: {} });
+  assert.equal(interp.resolve(ctx('A', a))('@row.x'), 1);
+  assert.equal(interp.resolve(ctx('B', b))('@row.x'), 3);
+  assert.equal(interp.resolve(ctx('A', a))('= x'), 1);
+  assert.equal(interp.resolve(ctx('B', b))('= x'), 3);
+});
+
+// The store loads once per check, however many rules it has, and not at all when no rule is a check.
+test('checkRules builds one context per write — and none for a write that only meets unique rules', () => {
+  const store = new Store({ ...RULES_GRAPH, rules: { ...RULES_GRAPH.rules, Tag: [{ unique: 'name', message: 'taken' }] }, data: { ...RULES_GRAPH.data, Tag: { name: 'text!' } } }, ':memory:');
+  const c = store.insert('Customer', { name: 'Ann' });
+  let built = 0;
+  const evalCtx = store.evalCtx;
+  store.evalCtx = function counted(...a) { built++; return evalCtx.apply(this, a); };
+  store.insert('Order', { customer: c, qty: 1, due: '2026-10-01' });
+  assert.equal(built, 1, 'seven check rules, one context');
+  store.insert('Tag', { name: 'x' });
+  assert.equal(built, 1, 'a unique rule reads the driver itself, it needs no context');
+});
+
+// `store.lazyEval` is the old path: rules and steps evaluate over the lazy RowCtx there (and its expressions
+// have no compiled aggregates), so the differential of tests/evaldiff.test.mjs compares two different things.
+test('on the lazy switch rules and step values evaluate over the lazy context', async () => {
+  const store = new Store(STEPS_GRAPH, ':memory:');
+  const o = seedSteps(store);
+  const interp = createInterpreter({ graph: STEPS_GRAPH, store, registry: DEFAULT, perms: {}, meId: 7 });
+  const ctx = { rowEntity: 'Order', id: o, row: store.get('Order', o), values: {} };
+  const aggs = [];
+  const aggValue = store.aggValue;
+  store.aggValue = function spied(...a) { aggs.push(a[2].fn); return aggValue.apply(this, a); };
+  assert.equal(interp.resolve(ctx)('= sum(Item: qty * price)'), 4);
+  assert.deepEqual(aggs, [], 'the snapshot path answers a compiled aggregate from its batch');
+  store.lazyEval = true;
+  assert.ok(store.evalCtx('Order', ctx.row, 'k', [], false).constructor.name === 'RowCtx', 'the lazy switch hands out the lazy context');
+  assert.equal(interp.resolve(ctx)('= sum(Item: qty * price)'), 4);
+  assert.deepEqual(aggs, [], 'an expression of the old context walks the child rows, it never asks for a compiled aggregate');
+  assert.equal(interp.resolve(ctx)('@row.customer.spent'), 4);
+});
+
+// today/now of an expression and of the aggregates it binds are one clock: the one its snapshot was loaded with.
+test('a step expression reads the clock its snapshot was loaded with', (t) => {
+  const store = new Store(STEPS_GRAPH, ':memory:');
+  const o = seedSteps(store);
+  const interp = createInterpreter({ graph: STEPS_GRAPH, store, registry: DEFAULT, perms: {}, meId: 7 });
+  const ctx = { rowEntity: 'Order', id: o, row: store.get('Order', o), values: {} };
+  const loaded = [], evalCtx = store.evalCtx;
+  store.evalCtx = function spied(...a) { const c = evalCtx.apply(this, a); loaded.push(c.clock); return c; };
+  const Real = globalThis.Date;
+  let day = 0; // every reading of the clock is a day later than the one before
+  globalThis.Date = class extends Real { constructor(...a) { super(...(a.length ? a : [Real.UTC(2026, 8, 29 + day++)])); } };
+  t.after(() => { globalThis.Date = Real; });
+  const today = interp.resolve(ctx)('= today');
+  assert.equal(loaded.length, 1);
+  assert.equal(today, loaded[0].toISOString().slice(0, 10), 'evaluate() read a clock of its own');
 });
