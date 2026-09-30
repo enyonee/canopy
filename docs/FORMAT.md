@@ -587,6 +587,18 @@ export default {
 };
 ```
 
+**Field-kind hooks are pure over data the page loaded first.** `validate(v, f)` returns a message or `null`;
+it gets no store (a reference's existence is the kernel's check). `format(v, f, ctx)` returns safe HTML for a
+cell with `ctx = { esc, title(name), label(target, id), entity, row, labels, statusField }`: `title("createdAt")`
+is `"Created At"`, `label(target, id)` is the label of the row a reference points at (`''` for none), `labels`
+are the declared captions of a boolean column, `statusField` is the entity's state field or `null`.
+`input(f, v, ctx)` returns the form control (or `null` for a kind that never appears on forms) with
+`ctx = { esc, options(target), entity, row }`: `options(target)` is every row of a target entity as
+`[{ id, label }]`, loaded before the form renders for each field that declares a `target`. The routes load labels
+and options before any hook runs, so a hook never queries; asking `ctx` for anything else, or for a label or an
+option nobody loaded, throws. (Until S3c `ctx` carried `store` and `label` was the title helper; no plugin
+kind used either.)
+
 A name already taken by a built-in or another plugin is a load error; a plugin that cannot be
 imported makes the graph invalid. `connector.send { connector, body }` queues to any connector,
 so a plugin transport needs no block of its own. The checker knows about a plugin only what it

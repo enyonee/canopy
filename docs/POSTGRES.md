@@ -1,6 +1,6 @@
 # R10 design: async Driver seam and PostgreSQL (README roadmap step 1)
 
-**Status: design accepted (option C4); S1, S2, S3a and S3b done in 0.2.x.** Status per stage:
+**Status: design accepted (option C4); S1, S2, S3a, S3b and S3c done in 0.2.x.** Status per stage:
 
 | stage | what | status |
 |---|---|---|
@@ -8,13 +8,13 @@
 | S2 | portable SQL and dialect hooks (`runtime/driver/dialects.mjs`) | **done** (0.2.x) |
 | S3a | snapshot evaluation of derived fields (`store/plan.mjs`, `snapshot.mjs`, `hydrate.mjs`) | **done** (0.2.x) |
 | S3b | rules and step values on the snapshot (`store/plan.mjs` `planExpr`, `hydrate.mjs` `evalCtx`, `rules.mjs`, `interp.mjs`) | **done** (0.2.x) |
-| S3c | render/perms/field hooks on prefetched data | not started |
+| S3c | render/perms/field hooks on prefetched data (`routes/load.mjs`, `auth.mjs` `prime`, `store/hydrate.mjs` `labelsFor`/`optionsFor`) | **done** (0.2.x) |
 | S4a-d | await-first conversion | not started |
 | S5 | flip to an async driver | not started |
 | S6 | `runtime/driver/postgres.mjs` | not started |
 | S7 | benchmark before/after, load test | not started |
 
-What S3a and S3b delivered and what stays lazy. **Snapshot-based** (zero driver calls while `evaluate`
+What S3a, S3b and S3c delivered and what stays lazy. **Snapshot-based** (zero driver calls while `evaluate`
 runs, gated by `tests/snapshot.test.mjs`): `Store#hydrate`, `get`, `list`, `listPage`, `count` and
 `aggregate` over derived fields, `labelOf` (`deriveOne`), CSV and dashboards, i.e. everything that
 reaches `hydratePage` (S3a); **S3b:** `checkRules` (`rules.mjs`: the read-set of every check of the
@@ -23,18 +23,32 @@ new values over it) and the step values of `interp.mjs` (`refValue`, `exprCtx`, 
 and loaded per resolve, inside the transaction the step runs in, so a step sees its own earlier
 writes; `interpolate` is collect, load, format, nothing is loaded inside `String#replace`). The one
 entry point is `Store#evalCtx(entity, row, key, asts, allowSecret)`. A miss throws
-`not loaded: <Entity.field>`. **Still on the lazy `RowCtx`** (`store/ctx.mjs`, queries while
-evaluating): nothing in rules or `interp.mjs`; only render, perms and field hooks (S3c), which call
-`labelOf` and `store.raw` per cell as before. The old lazy paths (`store/lazy.mjs`, and `evalCtx`
-returning a `RowCtx`) stay one release behind the test-only switch `store.lazyEval = true`;
-`tests/snapshot.test.mjs` hydrates every row of every app through both, and
-`tests/evaldiff.test.mjs` runs generated writes against every app's rules and every step value the
-apps declare through both and requires identical outcomes, error texts and stored rows. Deliberate
+`not loaded: <Entity.field>`. The old lazy paths (`store/lazy.mjs`, and `evalCtx` returning a `RowCtx`) stay one
+release behind the test-only switch `store.lazyEval = true`; `tests/snapshot.test.mjs` hydrates every row of every
+app through both, and `tests/evaldiff.test.mjs` runs generated writes against every app's rules and every step
+value the apps declare through both and requires identical outcomes, error texts and stored rows. Deliberate
 differences from the design text: the read-set is over-approximate (both branches of `if`, both
 sides of `and`/`or` are loaded), a derived-field cycle is cut where evaluation cuts it (error text
 unchanged), and a step expression now answers a compilable aggregate from the SQL batch like a
 derived field does (the old context always walked the child rows). A rule whose load fails is
 refused like a rule whose evaluation fails (fail closed, traced).
+
+**S3c delivered.** After S3c nothing that renders, judges permissions or formats a field asks the store per cell:
+every page is a **load phase** (routes, `runtime/routes/load.mjs`) followed by pure formatting (`runtime/render/*`).
+`Store#labelsFor(pairs)` loads the labels of every reference cell of a page in ONE query per target entity (plus
+the batched snapshot of a derived label field) and answers through `Labels#get`, which returns `''` for a row that
+is gone and THROWS `not loaded: label <Entity>#<id>` for one nobody asked for; `Store#optionsFor(targets)` loads the
+rows of every reference select. `perms.prime(user, entity, rows)` batch-loads the parents that a one-hop `own`
+path (`profile.user`) reads, one query per path, keyed by the row object; `can`/`ownOk` on a row nobody primed
+throw `not primed: <Entity>.<field>`. `ownWhere` (the row set an own-scoped read is narrowed to) is the explicit
+loader of the two: routes call it while loading and hand the result to the read it scopes. The views no longer
+read the store: a detail page's related rows (`pre.kids`), a static page's embedded lists (`pre.sections`) and a
+dashboard's aggregates (`pre.dash`) arrive loaded, like the labels and options. Gates: `tests/snapshot.test.mjs`
+renders a list, a detail, a form, a page, a search, a dashboard, a CSV cell and permission checks over owned rows
+with the driver throwing on any call; `tests/perf.test.mjs` requires the same number of queries at 6 and at 60
+owned rows; `tests/renderdiff.test.mjs` compares every app's HTML, JSON and CSV (and the permission matrix) with
+digests made before S3c. The lazy `RowCtx` is kept one more release: after S3c only the `lazyEval` test switch
+reaches it (`Snapshot`'s context extends it and stays).
 
 Sections below are the design as accepted; line numbers in section 1 cite v0.1.2 and
 predate S1 and S2.
@@ -150,6 +164,17 @@ Design (both drivers, same interface):
 
 ## 4. Plugin contract change
 
+**As built in S3c (field-kind hooks; the block/`store.*` part lands with S4c).** `validate(v, f)` takes no store: a
+reference's existence is checked by the kernel (`Store#checkValue`), never by the kind. `format(v, f, ctx)` is pure
+over data loaded before the page renders: `ctx = { esc, title(name), label(target, id), entity, row, labels,
+statusField }` (`label` is the prefetched label of the row a reference points at, `''` for none, a throw for a
+row that was not loaded; `title` is what `ctx.label` used to be, the "createdAt" → "Created At" helper).
+`input(f, v, ctx)` gets `ctx = { esc, options(target), entity, row }`, `options` being every row of a target as
+`[{ id, label }]`, loaded by the form route for each field that declares a `target`. `ctx.store` is gone from
+both. No field kind in `plugins/` or `apps/*/plugins/` read the store, so the only plugin kind that exists
+(`apps/shop/plugins/loyalty.mjs`, `percent`) needed no change; the contract test (`tests/arch.test.mjs`) calls
+every kind's hooks, built-in and plugin, with a context that throws on anything outside the contract.
+
 New contract (documented in FORMAT.md "Plugins" and BlockType in types.d.ts:117): inside `run(ctx)`, `ctx.store.*`, `ctx.resolve(...)`, `ctx.text(...)` may return promises and must be awaited; `run` may be `async`. A plugin declares nothing new for functions/transports/widgets (pure or already async). Field-kind hooks: `validate(v, f)` drops the `store` argument (ref existence checked by the kernel), `format(v, f, ctx)` gets `ctx.label(target, id)` from a prefetched map, `input(f, v, ctx)` gets `ctx.options(target)` prefetched by the form route; no plugin field kind uses the store today, so zero plugin impact there.
 
 Per plugin (mechanical: add `await`, mark helper functions `async`):
@@ -207,7 +232,7 @@ As built (where it differs from the plan above):
 - New `store/plan.mjs` (pure, layer with query/aggsql), new `store/snapshot.mjs`; `hydrate.mjs` becomes the loader (level-batched: hops, aggregates, derived closure); `store.mjs` `ctx/derived/hydrate` (:231-289) read from the snapshot; `labelOf`, `count` use it.
 - Gate: "no driver call while `evaluate` runs" (uses S1's `onQuery`), N+1 gates in perf.test.mjs extended to ref hops. Mutations: hydrate (5), store.mjs:247 (money minor units), snapshot-miss throws.
 **S3b - Rules and step values on the snapshot.** ~+150/-80: `rules.mjs:180-208` (plan on probe), `interp.mjs` `refValue/exprCtx/resolve/interpolate` (load per resolve; `interpolate` split into collect + format so no async work sits in `String#replace`).
-**S3c - Render, perms and field hooks on prefetched data.** ~+250/-120: `fields.mjs:150-152` (`validate` drops `store`; `format/input` use `ctx.label/options`), `auth.mjs:81,89-95` (`perms.prime(rows)` batch-loads own one-hop parents; `ownWhere` becomes an explicit async loader), `render.mjs:106-172`, `render/{list,detail,dashboard,pages}.mjs`, routes preload labels with one `labelsFor(pairs)` query per page. Registry contract test updated for the new hook shapes.
+**S3c - Render, perms and field hooks on prefetched data (done).** ~+250/-120: `fields.mjs:150-152` (`validate` drops `store`; `format/input` use `ctx.label/options`), `auth.mjs:81,89-95` (`perms.prime(rows)` batch-loads own one-hop parents; `ownWhere` becomes an explicit async loader), `render.mjs:106-172`, `render/{list,detail,dashboard,pages}.mjs`, routes preload labels with one `labelsFor(pairs)` query per page. Registry contract test updated for the new hook shapes.
 
 **S4 - Await-first conversion (behaviour no-op; sync store still returns values).**
 - S4a routes + server + boot + auth session: `await store.*`; `interp.attempt(fn)` gives `fn` the tx view (initially `store` itself); ~150 changed lines in ~10 files.

@@ -498,7 +498,7 @@ test('S3c: a detail page renders without a driver call: related rows, transition
   const { html } = twoPhase(store, () => detailPre(ctx, 'Post', fields, row), (pre) => detailView(graph, store, 'Post', fields, row, '', vc, pre));
   assert.match(html, /<h3>Comments<\/h3>/);
   assert.match(html, /<td>comment 0<\/td><td><a href="\/Tag\/1">a!<\/a><\/td>/, 'the related table shows loaded labels');
-  assert.match(html, /<select id="f_tag" name="tag"><option value="">—<\/option><option value="3">c!<\/option>.*<option value="2" selected>b!<\/option>/, "the transition form offers the loaded options");
+  assert.match(html, /<label for="f_profile">Profile \*<\/label><select id="f_profile" name="profile"><option value="">—<\/option><option value="2">nick 3<\/option><option value="1" selected>nick 2<\/option>/, "the transition form offers the options of its own field (no other form on the page has a Profile select)");
   assert.match(html, /\/go\/finish/);
 });
 
@@ -585,4 +585,13 @@ test('S3c: optionsFor reads each target once, in the order the page lists it, an
   const pre = prefetched({ get: () => '' }, options);
   assert.equal(pre.options('Tag').length, 3);
   assert.throws(() => pre.options('Comment'), /not loaded: options Comment/);
+});
+
+test('S3c: a reference must point at a row: the kernel checks it on insert and update, the field kind no longer does', () => {
+  const { store } = pagesWorld(1);
+  assert.throws(() => store.insert('Post', { profile: 99, title: 'x' }), /profile: there is no Profile #99/);
+  const id = store.insert('Post', { profile: 1, title: 'x' });
+  assert.throws(() => store.update('Post', id, { tag: 77 }), /tag: there is no Tag #77/);
+  assert.doesNotThrow(() => store.update('Post', id, { tag: '' }), 'an empty reference points at nothing, and that is allowed');
+  assert.equal(store.fields.Post.find((f) => f.name === 'profile').type.validate(99, { name: 'profile', target: 'Profile' }), null, 'the kind itself has no store to ask');
 });
