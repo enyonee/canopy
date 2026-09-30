@@ -48,7 +48,9 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   (`ctx.store` is gone, and `ctx.label` is now the prefetched reference label; the title helper it used to be is
   `ctx.title`). No plugin field kind used the store, and none needed a change. Pages are byte-identical: a
   list page with reference columns and owned-parent permissions costs the same number of queries at 6 and at 60
-  rows (`tests/perf.test.mjs`); `tests/renderdiff.test.mjs` compares the HTML, JSON and CSV of every app's pages
+  rows (`tests/perf.test.mjs`); the HTML, JSON and CSV of the benchmark routes of both benchmark graphs are
+  byte-identical to before, and `npm run bench` is unchanged except `/Order.csv` (p50 20 ms -> 11 ms: one label
+  query per page instead of one per cell); `tests/renderdiff.test.mjs` compares the HTML, JSON and CSV of every app's pages
   and its permission matrix with digests made before the stage. The lazy `RowCtx` path stays one more release
   behind the test-only `store.lazyEval`. Gates: `tests/snapshot.test.mjs` (a list, detail, form, page, search,
   dashboard, CSV cell and permission checks with the driver throwing on any call), `tests/auth.test.mjs`,
