@@ -76,6 +76,8 @@ test('Where: a step where key that resolved to nothing matches no rows and is tr
   assert.deepEqual(events, [{ kind: 'where_unresolved', block: 'db.each', key: 'customer' }]);
   assert.deepEqual(each({ customer: { ne: undefined } }), { count: 0 }, 'an undefined comparison value is unresolved too');
   assert.equal(events[1].key, 'customer.ne');
+  assert.deepEqual(each({ status: 'placed', customer: '' }), { count: 0 }, "'' (an empty form field) is a missing value, not a dropped filter");
+  assert.equal(events.pop().key, 'customer');
   assert.deepEqual(each({ customer: { in: ['ann', undefined] } }), { count: 0 });
   assert.equal(events[2].key, 'customer.in.1');
   const blank = store.insert('Product', { name: 'Blank' });
@@ -88,13 +90,14 @@ test('Where: a step where key that resolved to nothing matches no rows and is tr
   assert.deepEqual(each({ customer: 'ann' }), { count: 1 });
   assert.equal(seen.at(-1), paid);
   const before = store.count('Order');
-  for (const where of [{ customer: undefined }, { status: 'placed', customer: undefined }]) {
+  for (const where of [{ customer: '' }, { customer: undefined }, { status: 'placed', customer: undefined }]) {
     assert.throws(() => CATALOG['db.ensure'].run(ctx(store, { trace, step: { entity: 'Order', where } })), /db\.ensure: "where" key "customer" resolved to nothing/);
   }
   assert.equal(store.count('Order'), before, 'a refused ensure creates nothing');
   assert.deepEqual(events.at(-1), { kind: 'where_unresolved', block: 'db.ensure', key: 'customer' });
   assert.equal(CATALOG['db.ensure'].run(ctx(store, { trace, step: { entity: 'Product', where: { stock: null } } })).found.id, blank, 'null finds the row without a stock');
   assert.equal(store.list('Order', { where: { customer: undefined, status: 'placed' } }).length, 2, 'the store (list filters from ?field=) keeps absent = no filter');
+  assert.equal(store.list('Order', { where: { customer: '' } }).length, 2, "and '' too");
 });
 
 test('http.send and mail.send only queue; the outbox row carries connector, target and payload', () => {

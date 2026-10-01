@@ -13,13 +13,13 @@ import { toMinor } from './fields.mjs';
 import { prepare } from './connectors/engine.mjs';
 import { checkCall } from './check/calls.mjs';
 
-// A step's "where" is the author's own filter, so a key that resolved to undefined ("@values.order"
+// A step's "where" is the author's own filter, so a key that resolved to undefined or '' (an empty form field) ("@values.order"
 // with no order submitted, "@me" with nobody signed in) must never fall out of it: the store reads an
 // absent filter as "no filter" (right for a list's ?field= query, wrong here). Returns the path of the
 // first unresolved key ("order", "n.gte", "status.in.1"), or null. null itself stays IS NULL.
 function unresolvedKey(where, prefix = '') {
   for (const [k, v] of Object.entries(where)) {
-    if (v === undefined) return prefix + k;
+    if (v === undefined || v === '') return prefix + k;
     if (v && typeof v === 'object') { const deep = unresolvedKey(v, `${prefix}${k}.`); if (deep) return deep; }
   }
   return null;
