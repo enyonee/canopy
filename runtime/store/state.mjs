@@ -72,14 +72,28 @@ export function outboxFinish(id, claimedAt, patch) {
 // The circuit breaker of one connector in one mode (see runtime/connectors/backoff.mjs breakerStep). One row per
 // (connector, mode), keyed by both; a connector that never failed has none, which reads as closed.
 const BREAKER_COLS = ['state', 'failures', 'openUntil', 'cooldownMs', 'probeClaimedAt'];
+const breakerOf = (connector, mode, r) => (r ? { connector, mode, state: String(r.state), ...Object.fromEntries(BREAKER_COLS.slice(1).map((k) => [k, Number(r[k])])) } : { connector, mode, ...CLOSED });
 export function breakerGet(connector, mode) {
   const { quote: q, ph } = this.drv.dialect;
-  const r = this.drv.get(`SELECT * FROM ${q('_breaker')} WHERE ${q('key')}=${ph(1)}`, [`${connector}|${mode}`]);
-  return r ? { connector, mode, state: String(r.state), ...Object.fromEntries(BREAKER_COLS.slice(1).map((k) => [k, Number(r[k])])) } : { connector, mode, ...CLOSED };
+  return breakerOf(connector, mode, this.drv.get(`SELECT * FROM ${q('_breaker')} WHERE ${q('key')}=${ph(1)}`, [`${connector}|${mode}`]));
 }
+// Every breaker that has ever left its resting state, in ONE query (the settings screen lists every connector).
 export function breakers() {
   const { quote: q } = this.drv.dialect;
-  return this.drv.all(`SELECT ${q('connector')}, ${q('mode')} FROM ${q('_breaker')} ORDER BY ${q('connector')}, ${q('mode')}`).map((r) => this.breakerGet(String(r.connector), String(r.mode)));
+  return this.drv.all(`SELECT * FROM ${q('_breaker')} ORDER BY ${q('connector')}, ${q('mode')}`).map((r) => breakerOf(String(r.connector), String(r.mode), r));
+}
+// What the outbox did since `sinceIso` (rows last touched at or after it), per connector, in ONE grouped query:
+// { <connector>: { sent, failed, unknown, drift } }. `drift` counts rows whose answer did not fit its schema.
+export function outboxStats(sinceIso) {
+  const { quote: q, ph } = this.drv.dialect;
+  const out = {};
+  for (const r of this.drv.all(`SELECT ${q('connector')}, ${q('status')}, COUNT(*) AS n, SUM(CASE WHEN ${q('drift')}=1 THEN 1 ELSE 0 END) AS drift
+    FROM ${q('_outbox')} WHERE ${q('updatedAt')}>=${ph(1)} GROUP BY ${q('connector')}, ${q('status')}`, [sinceIso])) {
+    const c = (out[String(r.connector)] ??= { sent: 0, failed: 0, unknown: 0, drift: 0 });
+    if (String(r.status) in c) c[String(r.status)] += Number(r.n);
+    c.drift += Number(r.drift || 0);
+  }
+  return out;
 }
 // Apply an event to the breaker and store the result. Returns the state before and after.
 export function breakerRecord(connector, mode, event, now, cfg) {

@@ -46,10 +46,10 @@ export async function boot(graphFile = 'tests/fixtures/kitchen.json', opts = {})
   let cookie = '';
   const keep = (r) => { const c = r.headers.get('set-cookie'); if (c) cookie = c.split(';')[0]; };
   const headers = () => (cookie ? { cookie } : {});
-  const get = async (p) => { const r = await fetch(base + p, { redirect: 'manual', headers: headers() }); keep(r); return { status: r.status, location: r.headers.get('location') || '', html: await r.text(), headers: r.headers }; };
-  const post = async (p, body = {}) => {
+  const get = async (p, extra = {}) => { const r = await fetch(base + p, { redirect: 'manual', headers: { ...headers(), ...extra } }); keep(r); return { status: r.status, location: r.headers.get('location') || '', html: await r.text(), headers: r.headers }; };
+  const post = async (p, body = {}, extra = {}) => {
     const r = await fetch(base + p, { method: 'POST', redirect: 'manual',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers() },
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers(), ...extra },
       body: new URLSearchParams(body).toString() });
     keep(r);
     return { status: r.status, location: r.headers.get('location') || '', html: await r.text() };

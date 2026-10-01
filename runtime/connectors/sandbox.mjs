@@ -4,6 +4,7 @@
 // `eq ne gt gte lt lte in present`. `body` is a template over `input`, `config` and `{key}` (the
 // idempotency key: the same fake id on every retry). Pure: no network, no clock, no randomness.
 import { refs, expand } from './template.mjs';
+import { validate, withDefaults, checkSchema } from './schema.mjs';
 
 const OPS = {
   eq: (a, b) => JSON.stringify(a) === JSON.stringify(b),
@@ -64,13 +65,22 @@ function checkRule(rule, path, ctx) {
   return out;
 }
 
+// `sandbox.test`: the call the settings screen's "send test" makes, {"op", "input"}: a real operation whose input is valid.
+function checkTest(t, d) {
+  if (!isObject(t) || Object.keys(t).some((k) => !['op', 'input'].includes(k))) return [['/sandbox/test', '"test" is {"op": "<operation>", "input": {…}}']];
+  const op = typeof t.op === 'string' && Object.hasOwn(d.operations || {}, t.op) ? d.operations[t.op] : null;
+  if (!op) return [['/sandbox/test/op', '"op" names an operation of this descriptor']];
+  if (t.input !== undefined && !isObject(t.input)) return [['/sandbox/test/input', '"input" is an object']];
+  return checkSchema(op.input, '').length ? [] : validate(op.input, withDefaults(op.input, t.input || {}), '/sandbox/test/input'); // a broken schema is reported where it is declared
+}
+
 /** What is wrong with a descriptor's `sandbox` block, given the descriptor: [[path, message, hint?]]. */
 export function checkSandbox(sb, d) {
   const has = Array.isArray(d.modes) && d.modes.includes('sandbox');
   if (sb === undefined) return has ? [['/sandbox', 'a descriptor with the "sandbox" mode needs a "sandbox" block', '"sandbox": {"operations": {"<op>": [{"status": 200, "body": {}}]}}']] : [];
   if (!has) return [['/sandbox', 'sandbox rules need "sandbox" in "modes"', '"modes": ["sandbox", "live"]']];
-  if (!isObject(sb) || Object.keys(sb).some((k) => k !== 'operations') || !isObject(sb.operations)) return [['/sandbox', '"sandbox" is {"operations": {"<op>": [rules]}}']];
-  const out = [];
+  if (!isObject(sb) || Object.keys(sb).some((k) => !['operations', 'test'].includes(k)) || !isObject(sb.operations)) return [['/sandbox', '"sandbox" is {"operations": {"<op>": [rules]}, "test"?: {"op": "<op>", "input": {}}}']];
+  const out = sb.test === undefined ? [] : checkTest(sb.test, d);
   for (const [name, rules] of Object.entries(sb.operations)) {
     const op = d.operations?.[name], path = `/sandbox/operations/${name}`;
     if (!op) out.push([path, `"${name}" is not an operation of this descriptor`]);

@@ -91,7 +91,7 @@ function createListHelpers(url, store, sendCsv, vc) {
   return { paged, sortOf, exportRows };
 }
 
-export function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env }) {
+export function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
   const parts = url.pathname.split('/').filter(Boolean);
   const wantsCsv = parts.length > 0 && parts[parts.length - 1].endsWith('.csv');
   if (wantsCsv) parts[parts.length - 1] = parts[parts.length - 1].slice(0, -4);
@@ -121,6 +121,7 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
     ownOk: (e, row, op) => perms.ownOk(user, e, row, op),
     prime: (e, rows) => perms.prime(user, e, rows),
     outbox: !perms.enabled || perms.isAdmin(user),
+    settings: !perms.enabled || perms.isAdmin(user),
   };
   const deny = (message) => {
     trace({ kind: 'denied', path: url.pathname, who: user?.id ?? null, role });
@@ -136,7 +137,7 @@ export function createContext({ req, res, url, graph, store, perms, sess, interp
 
   return {
     req, res, url, parts, flash, wantsCsv, wantsJSON, headers,
-    graph, store, perms, sess, registry, interp, trace, filesDir, fetchImpl, clock, env,
+    graph, store, perms, sess, registry, interp, trace, filesDir, fetchImpl, clock, env, graphFile,
     user, role, vc, ownWhere, deny,
     send, redirect, ok, sendCsv, exportRows, sendJson, answer,
     body, rawBody: () => rawBody(req), resolveTop, paged, sortOf, safeNext,

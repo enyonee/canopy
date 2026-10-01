@@ -205,6 +205,7 @@
     }
   },
   "sandbox": {
+    "test": { "op": "createPaymentIntent", "input": { "amount": 100, "currency": "usd", "description": "settings screen test" } },
     "operations": {
       "createPaymentIntent": [
         { "when": { "input.paymentMethod": "pm_card_chargeDeclined" }, "status": 402, "body": { "error": { "type": "card_error", "code": "card_declined", "decline_code": "generic_decline", "message": "Your card was declined." } } },
