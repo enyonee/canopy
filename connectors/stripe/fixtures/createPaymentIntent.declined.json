@@ -1,0 +1,33 @@
+{
+  "op": "createPaymentIntent",
+  "case": "declined",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/testing (the card that is always declined) and the errors reference",
+  "idemKey": "idem_fixture_1",
+  "input": { "amount": 900, "currency": "usd", "paymentMethod": "pm_card_chargeDeclined", "confirm": true },
+  "request": {
+    "method": "POST",
+    "url": "https://api.stripe.com/v1/payment_intents",
+    "headers": {
+      "authorization": "«redacted»",
+      "stripe-version": "2024-06-20",
+      "idempotency-key": "idem_fixture_1",
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "amount=900&currency=usd&payment_method=pm_card_chargeDeclined&confirm=true&automatic_payment_methods[enabled]=true&automatic_payment_methods[allow_redirects]=never"
+  },
+  "response": {
+    "status": 402,
+    "headers": { "content-type": "application/json", "request-id": "req_fixture_3" },
+    "body": {
+      "error": {
+        "code": "card_declined",
+        "decline_code": "generic_decline",
+        "message": "Your card was declined.",
+        "type": "card_error"
+      }
+    }
+  }
+}

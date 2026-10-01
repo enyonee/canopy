@@ -165,7 +165,7 @@ test('descriptor: the request — url, method, headers, body and the references 
   const op = (d) => d.operations.charge;
   only((d) => { delete op(d).request; }, /needs a "request" object/);
   only((d) => { op(d).request = []; }, /needs a "request" object/);
-  only((d) => { op(d).request.encoding = 'form'; }, /unknown key "encoding"/, '/operations/charge/request/encoding');
+  only((d) => { op(d).request.retries = 'form'; }, /unknown key "retries"/, '/operations/charge/request/retries');
   only((d) => { delete op(d).request.url; }, /"url" as a template string/);
   only((d) => { op(d).request.url = 5; }, /"url" as a template string/);
   only((d) => { op(d).request.url = '{base}/x?k={secret.apiKey}'; }, /\{secret\.\*\} may not appear here: the value would be shown in the outbox/, '/operations/charge/request/url');

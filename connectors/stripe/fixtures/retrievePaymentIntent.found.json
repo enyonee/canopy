@@ -1,0 +1,32 @@
+{
+  "op": "retrievePaymentIntent",
+  "case": "found",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/payment_intents/retrieve",
+  "idemKey": "idem_fixture_1",
+  "input": { "id": "pi_3Fixture0001" },
+  "request": {
+    "method": "GET",
+    "url": "https://api.stripe.com/v1/payment_intents/pi_3Fixture0001",
+    "headers": {
+      "authorization": "«redacted»",
+      "stripe-version": "2024-06-20",
+      "idempotency-key": "idem_fixture_1"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "application/json", "request-id": "req_fixture_4" },
+    "body": {
+      "id": "pi_3Fixture0001",
+      "object": "payment_intent",
+      "amount": 2500,
+      "currency": "usd",
+      "livemode": false,
+      "metadata": { "order": "7" },
+      "status": "succeeded"
+    }
+  }
+}

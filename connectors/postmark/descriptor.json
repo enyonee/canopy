@@ -1,0 +1,87 @@
+{
+  "descriptor": 1,
+  "name": "postmark",
+  "title": "Postmark: transactional email, bounce and unsubscribe webhooks",
+  "version": "2026-10",
+  "modes": ["sandbox", "live"],
+  "base": "https://api.postmarkapp.com",
+  "config": {
+    "type": "object",
+    "required": ["from"],
+    "properties": {
+      "from": { "type": "string", "format": "email", "message": "\"from\" is a confirmed Postmark sender signature, an address" },
+      "stream": { "type": "string", "default": "outbound" }
+    }
+  },
+  "timeoutMs": 10000,
+  "operations": {
+    "sendEmail": {
+      "summary": "send one email from the connector's \"from\" (give \"text\", \"html\" or both: Postmark refuses a letter with neither)",
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "required": ["to", "subject"],
+        "properties": {
+          "to": { "type": "string", "format": "email", "maxLength": 254 },
+          "subject": { "type": "string", "minLength": 1, "maxLength": 998 },
+          "text": { "type": "string", "maxLength": 500000 },
+          "html": { "type": "string", "maxLength": 500000 },
+          "tag": { "type": "string", "maxLength": 1000 },
+          "metadata": { "type": "object" }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/email",
+        "headers": { "accept": "application/json", "content-type": "application/json", "x-postmark-server-token": "{secret.serverToken}" },
+        "body": {
+          "From": { "$": "config.from" },
+          "To": { "$": "input.to" },
+          "Subject": { "$": "input.subject" },
+          "TextBody": { "$": "input.text" },
+          "HtmlBody": { "$": "input.html" },
+          "Tag": { "$": "input.tag" },
+          "Metadata": { "$": "input.metadata" },
+          "MessageStream": { "$": "config.stream" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": ["MessageID", "ErrorCode"],
+        "properties": {
+          "To": { "type": "string" },
+          "SubmittedAt": { "type": "string" },
+          "MessageID": { "type": "string" },
+          "ErrorCode": { "type": "integer" },
+          "Message": { "type": "string" }
+        }
+      },
+      "result": { "messageId": "$.MessageID", "to": "$.To" }
+    }
+  },
+  "inbound": {
+    "signature": { "scheme": "basic" },
+    "secret": "webhookAuth",
+    "eventId": "$.ID",
+    "type": "$.RecordType",
+    "events": {
+      "Bounce": {
+        "schema": { "type": "object", "required": ["ID", "Email"], "properties": { "ID": { "type": "integer" }, "Type": { "type": "string" }, "Email": { "type": "string" }, "MessageID": { "type": "string" } } },
+        "map": { "email": "$.Email", "kind": "$.Type", "messageId": "$.MessageID", "inactive": "$.Inactive" }
+      },
+      "SubscriptionChange": {
+        "schema": { "type": "object", "required": ["MessageID", "Recipient", "ChangedAt", "SuppressSending"], "properties": { "MessageID": { "type": "string" }, "Recipient": { "type": "string" }, "ChangedAt": { "type": "string" }, "SuppressSending": { "type": "boolean" } } },
+        "eventId": ["$.MessageID", "$.Recipient", "$.ChangedAt"],
+        "map": { "email": "$.Recipient", "suppress": "$.SuppressSending", "reason": "$.SuppressionReason", "messageId": "$.MessageID" }
+      }
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "sendEmail": [
+        { "when": { "input.to": "inactive@example.test" }, "status": 422, "body": { "ErrorCode": 406, "Message": "You tried to send to a recipient that has been marked as inactive." } },
+        { "body": { "To": { "$": "input.to" }, "SubmittedAt": "2000-01-01T00:00:00.0000000Z", "MessageID": "sbx-{key}", "ErrorCode": 0, "Message": "OK" } }
+      ]
+    }
+  }
+}
