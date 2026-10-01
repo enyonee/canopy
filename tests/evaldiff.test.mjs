@@ -85,7 +85,8 @@ const plain = (store, entity) => {
 function stepGroups(graph) {
   const groups = [];
   for (const a of graph.actions || []) groups.push({ entity: a.in, steps: [a.do, a.confirm] });
-  for (const ev of graph.events || []) groups.push({ entity: ev.on.split('.')[0], steps: [ev.do] });
+  // An inbound event (C4) has no row of its own: its steps run on the provider's payload, not on an entity.
+  for (const ev of graph.events || []) if (ev.on) groups.push({ entity: ev.on.split('.')[0], steps: [ev.do] });
   for (const [entity, st] of Object.entries(graph.states || {})) for (const tr of st.transitions || []) groups.push({ entity, steps: [tr.do, tr.confirm] });
   return groups;
 }
