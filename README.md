@@ -276,10 +276,12 @@ Every connector follows one contract, so each new one is cheap and safe:
   answer stops matching its schema.
 
 **Status:** the design is accepted and staged in [docs/CONNECTORS.md](docs/CONNECTORS.md); stages C1,
-C3, C2 and C4 have landed (the descriptor format, its checker and engine, the `connector.call` block, `http`
+C3, C2, C4 and C5 have landed (the descriptor format, its checker and engine, the `connector.call` block, `http`
 as a built-in descriptor, `drift` detection; retries and the circuit breaker; an encrypted secret store
 and sandbox/live mode switched only by the command line; signed, deduplicated inbound webhooks at
-`POST /hook/<connector>`). Next: the first providers (C5).
+`POST /hook/<connector>`; the first providers, Stripe, Postmark and Slack, as descriptors under `connectors/` that
+run in a sandbox by default and are tested against hand-written fixtures, with the `apps/checkout` reference app).
+Next: OpenAPI import (C6) and the settings screen (C7).
 
 Import from an OpenAPI spec should cover the long tail. A settings screen for connectors and
 secrets means a non-programmer can connect an app to real services.

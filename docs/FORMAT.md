@@ -407,6 +407,22 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   `{input.x}`, `{config.x}` and `{key}` (the row's idempotency key: the same fake id on every retry). The answer
   goes through the same mapping as a real one (`output`, `result`, `drift`, retry classification). No rule
   matching is a failed delivery. Nothing is sent and no secret is read in sandbox mode.
+- **Request encoding.** `"request": {"encoding": "form", "body": {…}}` sends the body as
+  `application/x-www-form-urlencoded` instead of JSON: the object is flattened with brackets
+  (`{"metadata": {"order": "7"}}` is `metadata[order]=7`, a list is `a[0]=x`, `null` and absent values are left out,
+  booleans are `true`/`false`); the content type is set unless `headers` sets one. `"json"` is the default.
+- **An answer that is HTTP 200 and still a failure.** `"failure": {"path": "$.ok", "equals": false, "error": "$.error",
+  "code": 400, "codes": {"ratelimited": 429, "internal_error": 503}}` on an operation: when the 2xx answer's `path`
+  holds `equals`, the delivery is `failed` with the status `codes[<the error text>]` (else `code`, else 400; 400 to
+  599) and `error: "rejected: <text>"` (cut to 100 characters, cleaned), so retries, `Retry-After` and the breaker treat
+  it as that HTTP status. An answer that is not JSON counts as a 502 failure. Read in sandbox mode too.
+- **Shipped descriptors** (`connectors/<name>/descriptor.json`, sandbox by default): `stripe` (`createPaymentIntent`,
+  `retrievePaymentIntent`, `confirmPaymentIntent`, `createRefund`; form bodies; the `Idempotency-Key` header; slots
+  `apiKey`, `webhookSecret`; events `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`),
+  `postmark` (`sendEmail`; config `from`, `stream`; slots `serverToken`, `webhookAuth`; events `Bounce`,
+  `SubscriptionChange`) and `slack` (`postMessage` with the `failure` rule above; slots `botToken`, `signingSecret`;
+  events `app_mention`, `reaction_added`, and the `url_verification` challenge). Their fixtures are written from the
+  providers' documentation (`"source": "docs"`), not recorded. `apps/checkout` uses all three.
 - The outbox row of a call has `op`, the completed input as `payload`, and after delivery `response` (the
   answer text, up to 16 KB), `result` and `drift`. An answer that does not fit `output` sets `drift` to 1 and
   writes `contract_drift` to the trace; the row stays `sent` because the effect happened.
@@ -437,7 +453,17 @@ serves `POST /hook/<connector>` for every connector of that kind — no session,
   rotation). `toleranceS` (default 300) is how far a timestamped signature may be from the server's clock.
 - `type` is a `$.path` into the JSON body or `{"header": "name"}`. `eventId` is a `$.path` into the body and nothing
   else (a header is not covered by any signature, so it is a descriptor error): the webhook is processed once per
-  (connector, id) for 30 days and a retry is answered `200` with `{"duplicate": true}`.
+  (connector, id) for 30 days and a retry is answered `200` with `{"duplicate": true}`. It may also be a list of up to
+  four paths that together make the id (a provider whose event has no id field), and an event may have an `eventId` of
+  its own that wins over the block's (`"SubscriptionChange": {…, "eventId": ["$.MessageID", "$.Recipient", "$.ChangedAt"]}`).
+- `"require": ["order"]` on an event lists names of its `map` the payload must carry. Without one the event is not for
+  this app and is answered `200 {"ok": true, "ignored": true}` before anything is stored or run (a step that selects
+  rows by `@values.order` would otherwise select all of them: an absent value is dropped from a `where`).
+- `"challenge": {"type": "$.type", "equals": "url_verification", "echo": "$.challenge"}` (Slack): the provider asks
+  whether the endpoint is yours. A **signed** request whose `type` path holds `equals` is answered `200
+  {"challenge": <the echo path's value>}`; the value must be a token (`[A-Za-z0-9._~-]`, 1 to 128 characters, else `400
+  invalid_challenge`). The one deliberate echo of the route: only for a descriptor that declares it, only after the
+  signature, no dedup row, no steps, and never in the trace.
 - `events` lists the types the descriptor knows; each has a `schema` (type `object`, applied open: extra fields are
   fine) and an optional `map` (`{ "<value name>": "$.path" }`; without it the steps see the payload's top-level
   scalars). A type not listed, or listed and subscribed to by no graph event, is answered `200 {"ignored": true}`.

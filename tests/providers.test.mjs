@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildRequest, deliverRow } from '../runtime/connectors/engine.mjs';
+import { buildRequest, deliverRow, mapResponse } from '../runtime/connectors/engine.mjs';
 import { sandboxAnswer } from '../runtime/connectors/sandbox.mjs';
 import { withDefaults, validate } from '../runtime/connectors/schema.mjs';
 import { checkDescriptor } from '../runtime/connectors/descriptor.mjs';
@@ -461,4 +461,12 @@ test('through the server in sandbox mode: a call is queued, answered by the desc
   assert.match(page.html, /rejected: channel_not_found/);
   assert.match(page.html, /sandbox/);
   assert.equal(JSON.stringify(w.app.trace()).includes(TEST_SECRET), false);
+});
+
+test('Slack\'s ok:false reasons count as the statuses the descriptor says: transient ones retryable, auth ones 401/403, the rest 400', async () => {
+  const op = DESC.slack.operations.postMessage;
+  const codeOf = async (error) => (await mapResponse(op, { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ ok: false, error }) })).patch.code;
+  const want = { ratelimited: 429, internal_error: 503, fatal_error: 503, service_unavailable: 503, request_timeout: 503, not_authed: 401, invalid_auth: 401,
+    token_revoked: 401, account_inactive: 401, missing_scope: 403, channel_not_found: 400, is_archived: 400, msg_too_long: 400 };
+  for (const [error, code] of Object.entries(want)) assert.equal(await codeOf(error), code, error);
 });
