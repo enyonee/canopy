@@ -25,7 +25,7 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   no session, pruning, `simulate`), 42 `C4:` mutations.
 
 - **Fixes: a step's `where` failed open on a key that resolved to nothing.** In `db.each` and `db.ensure`,
-  a `where` key whose value was `undefined` (`"@values.order"` with no `order` submitted, `"@me"` with nobody
+  a `where` key whose value was `undefined` or `''` (`"@values.order"` with no `order` submitted, `"@me"` with nobody
   signed in) was silently dropped by the store, which reads an absent filter as "no filter", so the block acted
   on every row the rest of the filter matched (an ensure created a row with the key missing). Now `db.each`
   matches no rows and `db.ensure` refuses (the action fails and rolls back, nothing is created); both trace
