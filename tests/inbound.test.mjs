@@ -277,7 +277,7 @@ async function world(t, { secrets = { pay_whsec: SECRET, gh_secret: SECRET, slac
     const res = await send(name, raw, { ...signHeaders(recipe(DESCRIPTORS[name].name), { raw, secret, now }), ...headers });
     return { status: res.status, body: await res.json(), type: res.headers.get('content-type') };
   };
-  const order = (id) => app.app.store.get('Order', id);
+  const order = async (id) => await app.app.store.get('Order', id);
   const ledger = () => app.app.store.drv.all('SELECT * FROM "_inbound"');
   return { app, clock, store, send, signed, order, ledger, dir: app.dir };
 }
@@ -287,9 +287,9 @@ test('accept: a signed payment.succeeded runs the event\'s steps with the mapped
   const w = await world(t);
   const r = await w.signed('psp', succeeded());
   assert.deepEqual(r, { status: 200, body: { ok: true }, type: 'application/json; charset=utf-8' });
-  assert.equal(w.order(1).status, 'paid');
-  assert.equal(w.order(1).count, 1);
-  assert.equal(w.order(2).status, 'open');
+  assert.equal((await w.order(1)).status, 'paid');
+  assert.equal((await w.order(1)).count, 1);
+  assert.equal((await w.order(2)).status, 'open');
   assert.deepEqual(w.ledger().map((x) => [x.key, x.connector, x.eventId, x.receivedAt]), [['pay|evt_1', 'pay', 'evt_1', T0]]);
   const trace = w.app.trace();
   assert.ok(trace.some((e) => e.kind === 'webhook' && e.connector === 'pay' && e.type === 'payment.succeeded' && e.eventId === 'evt_1'));
@@ -321,7 +321,7 @@ test('every recipe end to end: stripe, a header-typed hmac, slack, basic', async
   assert.equal((await w.signed('slk', { event_id: 'Ev1', event: { type: 'app_mention' } })).body.duplicate, true);
   assert.equal((await w.signed('pm', { ID: 77, RecordType: 'Bounce' })).status, 200);
   assert.equal((await w.signed('pm', { ID: 77, RecordType: 'Bounce' })).body.duplicate, true, 'a numeric id is text in the ledger');
-  assert.equal(w.order(1).count, 3, 'one push, one mention, one bounce');
+  assert.equal((await w.order(1)).count, 3, 'one push, one mention, one bounce');
   assert.deepEqual(w.ledger().map((x) => x.key).sort(), ['chat|Ev1', 'git|d-1', 'mail|77']);
 });
 
@@ -343,7 +343,7 @@ test('bad signature: 401 with one fixed word whatever the reason, the reason onl
   }
   const tampered = await w.send('psp', JSON.stringify({ ...body, order: 2 }), good);
   assert.equal(tampered.status, 401, 'a changed body under a signature of the original');
-  assert.equal(w.order(1).count, 0);
+  assert.equal((await w.order(1)).count, 0);
   assert.deepEqual(w.ledger(), []);
   const traceText = fs.readFileSync(path.join(w.dir, 'trace.jsonl'), 'utf8');
   assert.ok(!traceText.includes('PAYLOAD_MARKER_4711'), 'the body never reaches the trace');
@@ -383,9 +383,9 @@ test('rotation: name.prev still signs, a third secret does not, no secret at all
   assert.equal((await w.signed('psp', succeeded('r1'), { secret: SECRET })).status, 200, 'the previous secret');
   assert.equal((await w.signed('psp', succeeded('r2'), { secret: 'whsec_NEW' })).status, 200, 'the current secret');
   assert.equal((await w.signed('psp', succeeded('r3'), { secret: 'whsec_OTHER' })).status, 401);
-  w.store.remove('pay_whsec.prev');
+  await w.store.remove('pay_whsec.prev');
   assert.equal((await w.signed('psp', succeeded('r4'), { secret: SECRET })).status, 401, 'once the old one is removed it stops');
-  w.store.remove('pay_whsec');
+  await w.store.remove('pay_whsec');
   assert.equal((await w.signed('psp', succeeded('r5'), { secret: 'whsec_NEW' })).status, 401);
   assert.ok(w.app.trace().some((e) => e.kind === 'webhook_rejected' && e.reason === 'secret_not_set'));
 });
@@ -395,9 +395,9 @@ test('a duplicate is 200 {duplicate:true} and the steps run exactly once', async
   assert.deepEqual((await w.signed('psp', succeeded('dup'))).body, { ok: true });
   assert.deepEqual((await w.signed('psp', succeeded('dup'))).body, { ok: true, duplicate: true });
   assert.deepEqual((await w.signed('psp', succeeded('dup'))).body, { ok: true, duplicate: true });
-  assert.equal(w.order(1).count, 1);
+  assert.equal((await w.order(1)).count, 1);
   assert.equal((await w.signed('psp', succeeded('other'))).status, 200, 'another event id is another event');
-  assert.equal(w.order(1).count, 2);
+  assert.equal((await w.order(1)).count, 2);
   assert.equal(w.ledger().length, 2);
   assert.equal(w.app.trace().filter((e) => e.kind === 'webhook_duplicate').length, 2);
   // an id is unique per connector: another provider may use the same one
@@ -434,13 +434,13 @@ test('a crash before commit leaves no dedup row and no effect; the provider\'s r
   drv.exec = (sql) => { if (sql === 'COMMIT' && crash) { crash = false; throw new Error('the process died before COMMIT'); } return exec.call(drv, sql); };
   const first = await w.signed('psp', succeeded('crashy'));
   assert.deepEqual([first.status, first.body], [500, { ok: false, error: 'failed' }]);
-  assert.equal(w.order(1).count, 0, 'the steps were rolled back with the dedup row');
-  assert.equal(w.order(1).status, 'open');
+  assert.equal((await w.order(1)).count, 0, 'the steps were rolled back with the dedup row');
+  assert.equal((await w.order(1)).status, 'open');
   assert.deepEqual(w.ledger(), []);
   assert.deepEqual((await w.signed('psp', succeeded('crashy'))).body, { ok: true }, 'the retry is processed');
-  assert.equal(w.order(1).count, 1);
+  assert.equal((await w.order(1)).count, 1);
   assert.deepEqual((await w.signed('psp', succeeded('crashy'))).body, { ok: true, duplicate: true });
-  assert.equal(w.order(1).count, 1, 'exactly once');
+  assert.equal((await w.order(1)).count, 1, 'exactly once');
 });
 
 test('the dedup row is written in the same transaction as the steps: a failing step takes it back', async (t) => {
@@ -451,11 +451,11 @@ test('the dedup row is written in the same transaction as the steps: a failing s
   assert.deepEqual(w.ledger(), [], 'no dedup row survives a failing step');
   const trace = w.app.trace();
   assert.ok(trace.some((e) => e.kind === 'webhook_failed' && /out of stock/.test(e.message)));
-  w.app.app.store.update('Order', 1, { stock: 1 });
+  await w.app.app.store.update('Order', 1, { stock: 1 });
   assert.deepEqual((await w.signed('psp', failing)).body, { ok: true }, 'the retry after the cause is gone');
-  assert.equal(w.order(1).stock, 0);
+  assert.equal((await w.order(1)).stock, 0);
   assert.deepEqual((await w.signed('psp', failing)).body, { ok: true, duplicate: true });
-  assert.equal(w.order(1).stock, 0, 'not taken twice');
+  assert.equal((await w.order(1)).stock, 0, 'not taken twice');
 });
 
 test('an unknown event type is 200 {ignored:true}, traced, with no dedup row; so is a declared type no event subscribes to', async (t) => {
@@ -485,7 +485,7 @@ test('invalid JSON, a missing type, a payload the schema refuses, an unusable ev
   assert.equal((await w.signed('psp', { id: 'x'.repeat(256), type: 'payment.failed' })).body.error, 'invalid_event_id');
   assert.equal((await w.signed('psp', 'not json', raw('not json'))).status, 400);
   assert.deepEqual(w.ledger(), []);
-  assert.equal(w.order(1).count, 0);
+  assert.equal((await w.order(1)).count, 0);
   const reasons = w.app.trace().filter((e) => e.kind === 'webhook_rejected').map((e) => e.reason);
   assert.deepEqual([...new Set(reasons)].sort(), ['invalid_event_id', 'invalid_json', 'invalid_payload', 'missing_type']);
 });
@@ -576,9 +576,9 @@ test('secrets that cannot be read are a 500 (the provider retries), not a pass',
 test('effects a webhook\'s steps queue are delivered after its commit, like any other event', async (t) => {
   const w = await world(t);
   const store = w.app.app.store;
-  const before = store.outbox().length;
-  store.enqueue({ kind: 'http', connector: 'web', target: 'http://127.0.0.1:1/x', payload: { a: 1 } });
-  assert.equal(store.outbox().length, before + 1);
+  const before = (await store.outbox()).length;
+  await store.enqueue({ kind: 'http', connector: 'web', target: 'http://127.0.0.1:1/x', payload: { a: 1 } });
+  assert.equal((await store.outbox()).length, before + 1);
   assert.equal((await w.signed('psp', succeeded('eff'))).status, 200, 'a flush that finds an undeliverable row does not fail the webhook');
 });
 
@@ -591,16 +591,16 @@ test('the flusher prunes dedup rows older than 30 days, at most once an hour, on
   t.after(() => app.close());
   const store = app.app.store;
   const old = T0 - INBOUND_RETENTION_MS - 1000;
-  store.inboundAdd('c', 'old', old);
-  store.inboundAdd('c', 'fresh', T0 - INBOUND_RETENTION_MS + 60_000);
+  await store.inboundAdd('c', 'old', old);
+  await store.inboundAdd('c', 'fresh', T0 - INBOUND_RETENTION_MS + 60_000);
   await clock.advance(5000);
   assert.deepEqual(store.drv.all('SELECT "eventId" FROM "_inbound"').map((r) => r.eventId), ['fresh'], 'the first tick prunes');
-  store.inboundAdd('c', 'old2', clock.now() - INBOUND_RETENTION_MS - 1000);
+  await store.inboundAdd('c', 'old2', clock.now() - INBOUND_RETENTION_MS - 1000);
   await clock.advance(5000 * 10);
-  assert.ok(store.inboundSeen('c', 'old2'), 'not again within the hour');
+  assert.ok(await store.inboundSeen('c', 'old2'), 'not again within the hour');
   await clock.advance(3_600_000);
-  assert.ok(!store.inboundSeen('c', 'old2'), 'pruned at the next tick after an hour');
-  assert.equal(store.inboundPrune(0), 0);
+  assert.ok(!await store.inboundSeen('c', 'old2'), 'pruned at the next tick after an hour');
+  assert.equal(await store.inboundPrune(0), 0);
   assert.ok(app.app.flusher);
 });
 
@@ -611,13 +611,13 @@ test('the dedup ledger is an ordinary table: the key is the pair, a second inser
   const app = await boot(file, { noTimers: true });
   t.after(() => app.close());
   const store = app.app.store;
-  assert.equal(store.inboundSeen('a', '1'), false);
-  store.inboundAdd('a', '1', 5);
-  assert.equal(store.inboundSeen('a', '1'), true);
-  assert.equal(store.inboundSeen('b', '1'), false);
-  assert.equal(store.inboundSeen('a', '2'), false);
-  assert.throws(() => store.inboundAdd('a', '1', 6), /UNIQUE|PRIMARY/i);
-  assert.equal(store.inboundPrune(6), 1);
+  assert.equal(await store.inboundSeen('a', '1'), false);
+  await store.inboundAdd('a', '1', 5);
+  assert.equal(await store.inboundSeen('a', '1'), true);
+  assert.equal(await store.inboundSeen('b', '1'), false);
+  assert.equal(await store.inboundSeen('a', '2'), false);
+  await assert.rejects(async () => await store.inboundAdd('a', '1', 6), /UNIQUE|PRIMARY/i);
+  assert.equal(await store.inboundPrune(6), 1);
 });
 
 // --- --connectors simulate ----------------------------------------------------------------------
@@ -636,10 +636,10 @@ test('--connectors simulate signs the payload with the stored secret and posts i
   };
   const first = await run('simulate', 'pay', 'payment.succeeded', '--data', file);
   assert.deepEqual([first.code, first.out, first.errs], [0, ['200 {"ok":true}'], []]);
-  assert.equal(w.order(1).status, 'paid');
+  assert.equal((await w.order(1)).status, 'paid');
   const again = await run('simulate', 'pay', 'payment.succeeded', '--data', file);
   assert.deepEqual([again.code, again.out], [0, ['200 {"ok":true,"duplicate":true}']], 'the same payload is the same event');
-  assert.equal(w.order(1).count, 1);
+  assert.equal((await w.order(1)).count, 1);
   // a header-typed connector: the type header is set from EVENT, the id is the payload's own
   const push = path.join(w.dir, 'push.json');
   fs.writeFileSync(push, '{"ref":"main","delivery":"sim-1"}');
@@ -657,7 +657,7 @@ test('--connectors simulate signs the payload with the stored secret and posts i
   const junk = path.join(w.dir, 'junk.json');
   fs.writeFileSync(junk, 'not json');
   await refuses(['simulate', 'pay', 'payment.succeeded', '--data', junk], /junk.json is not JSON/);
-  w.store.remove('pay_whsec');
+  await w.store.remove('pay_whsec');
   await refuses(['simulate', 'pay', 'payment.succeeded', '--data', file], /the secret "pay_whsec" is not in the store: --secrets set pay_whsec/);
   const status = await run('status');
   assert.match(status.out.join('\n'), /pay  psp  live .*secrets: pay_whsec MISSING/, 'the webhook secret is one the connector needs, like a request secret');

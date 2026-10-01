@@ -25,11 +25,11 @@ test('db.adjust adds to the current row or a named one, in money when the field 
   assert.equal((await store.get('Product', p)).stock, 7, 'a string "by" is a number');
   await CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: p, step: { field: 'price', by: 2.5 } }));
   assert.equal((await store.get('Product', p)).price, 1250, 'money moves in major units');
-  await assert.rejects(() => CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: p, step: { field: 'stock', by: -100, min: 0 } })), /Product\.stock cannot go below 0/);
-  await assert.rejects(() => CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: p, step: { field: 'stock', by: -100, min: 0, message: 'Sold out' } })), /Sold out/);
+  await assert.rejects(async () => await CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: p, step: { field: 'stock', by: -100, min: 0 } })), /Product\.stock cannot go below 0/);
+  await assert.rejects(async () => await CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: p, step: { field: 'stock', by: -100, min: 0, message: 'Sold out' } })), /Sold out/);
   assert.equal((await store.get('Product', p)).stock, 7, 'a refused adjustment leaves the row alone');
-  await assert.rejects(() => CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: 42, step: { field: 'stock', by: 1 } })), /db\.adjust: no Product #42/);
-  await assert.rejects(() => CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: p, step: { field: 'stock', by: 'lots' } })), /"by" is not a number/);
+  await assert.rejects(async () => await CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: 42, step: { field: 'stock', by: 1 } })), /db\.adjust: no Product #42/);
+  await assert.rejects(async () => await CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: p, step: { field: 'stock', by: 'lots' } })), /"by" is not a number/);
   const nullable = await store.insert('Product', { name: 'Blank' });
   await store.update('Product', nullable, { stock: null });
   await CATALOG['db.adjust'].run(ctx(store, { entity: 'Product', id: nullable, step: { field: 'stock', by: 1 } }));
@@ -71,23 +71,23 @@ test('Where: a step where key that resolved to nothing matches no rows and is tr
   const events = [];
   const trace = (e) => events.push(e);
   const seen = [];
-  const each = (where) => CATALOG['db.each'].run(ctx(store, { trace, step: { from: 'Order', where, do: [] }, run: (_s, x) => seen.push(x.each.id) }));
-  assert.deepEqual(each({ status: 'placed', customer: undefined }), { count: 0 }, 'undefined must not widen the filter');
+  const each = async (where) => await CATALOG['db.each'].run(ctx(store, { trace, step: { from: 'Order', where, do: [] }, run: (_s, x) => seen.push(x.each.id) }));
+  assert.deepEqual(await each({ status: 'placed', customer: undefined }), { count: 0 }, 'undefined must not widen the filter');
   assert.deepEqual(events, [{ kind: 'where_unresolved', block: 'db.each', key: 'customer' }]);
-  assert.deepEqual(each({ customer: { ne: undefined } }), { count: 0 }, 'an undefined comparison value is unresolved too');
+  assert.deepEqual(await each({ customer: { ne: undefined } }), { count: 0 }, 'an undefined comparison value is unresolved too');
   assert.equal(events[1].key, 'customer.ne');
-  assert.deepEqual(each({ status: 'placed', customer: '' }), { count: 0 }, "'' (an empty form field) is a missing value, not a dropped filter");
+  assert.deepEqual(await each({ status: 'placed', customer: '' }), { count: 0 }, "'' (an empty form field) is a missing value, not a dropped filter");
   assert.equal(events.pop().key, 'customer');
-  assert.deepEqual(each({ customer: { in: ['ann', undefined] } }), { count: 0 });
+  assert.deepEqual(await each({ customer: { in: ['ann', undefined] } }), { count: 0 });
   assert.equal(events[2].key, 'customer.in.1');
   const blank = await store.insert('Product', { name: 'Blank' });
   await store.update('Product', blank, { stock: null });
   await store.insert('Product', { name: 'Stocked', stock: 4 });
-  const nulls = CATALOG['db.each'].run(ctx(store, { trace, step: { from: 'Product', where: { stock: null }, do: [] }, run: (_s, x) => seen.push(x.each.id) }));
+  const nulls = await CATALOG['db.each'].run(ctx(store, { trace, step: { from: 'Product', where: { stock: null }, do: [] }, run: (_s, x) => seen.push(x.each.id) }));
   assert.deepEqual(nulls, { count: 1 }, 'null still means IS NULL, not unresolved');
   assert.equal(seen.at(-1), blank);
   assert.equal(events.length, 3, 'a resolved where traces nothing');
-  assert.deepEqual(each({ customer: 'ann' }), { count: 1 });
+  assert.deepEqual(await each({ customer: 'ann' }), { count: 1 });
   assert.equal(seen.at(-1), paid);
   const before = await store.count('Order');
   for (const where of [{ customer: '' }, { customer: undefined }, { status: 'placed', customer: undefined }]) {
@@ -95,7 +95,7 @@ test('Where: a step where key that resolved to nothing matches no rows and is tr
   }
   assert.equal(await store.count('Order'), before, 'a refused ensure creates nothing');
   assert.deepEqual(events.at(-1), { kind: 'where_unresolved', block: 'db.ensure', key: 'customer' });
-  assert.equal(CATALOG['db.ensure'].run(ctx(store, { trace, step: { entity: 'Product', where: { stock: null } } })).found.id, blank, 'null finds the row without a stock');
+  assert.equal((await CATALOG['db.ensure'].run(ctx(store, { trace, step: { entity: 'Product', where: { stock: null } } }))).found.id, blank, 'null finds the row without a stock');
   assert.equal((await store.list('Order', { where: { customer: undefined, status: 'placed' } })).length, 2, 'the store (list filters from ?field=) keeps absent = no filter');
   assert.equal((await store.list('Order', { where: { customer: '' } })).length, 2, "and '' too");
 });

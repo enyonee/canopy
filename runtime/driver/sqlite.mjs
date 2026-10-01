@@ -47,14 +47,15 @@ export function openSqlite(file) {
       if (drv.onQuery) drv.onQuery(sql);
       db.exec(sql);
     },
-    // `fn` gets the transaction handle (this driver: itself). A sync `fn` answers its value after COMMIT; one that
-    // returns a promise is awaited before COMMIT (or ROLLBACK), and the answer is a promise.
+    // `fn` gets the handle (here: itself). A sync `fn` answers its value after COMMIT; a promise is awaited first.
     transaction(fn) {
       drv.exec('BEGIN');
       let out;
-      try { out = fn(drv); } catch (e) { drv.exec('ROLLBACK'); throw e; }
-      if (typeof out?.then !== 'function') { drv.exec('COMMIT'); return out; }
-      return out.then((v) => { drv.exec('COMMIT'); return v; }, (e) => { drv.exec('ROLLBACK'); throw e; });
+      try {
+        out = fn(drv);
+        if (typeof out?.then !== 'function') { drv.exec('COMMIT'); return out; }
+      } catch (e) { drv.exec('ROLLBACK'); throw e; }
+      return out.then((v) => { drv.exec('COMMIT'); return v; }).catch((e) => { drv.exec('ROLLBACK'); throw e; });
     },
     close() { db.close(); },
 

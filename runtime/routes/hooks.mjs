@@ -28,13 +28,13 @@ function refuse(ctx, connector, code, reason, error = reason) {
 }
 
 // The event's steps and its dedup row, in one transaction; true when it ran, false for a duplicate.
-function take(ctx, connector, type, eventId, values) {
+async function take(ctx, connector, type, eventId, values) {
   const { store, clock, interp } = ctx;
   try {
-    store.transaction(() => {
-      if (store.inboundSeen(connector, eventId)) throw new Duplicate();
-      store.inboundAdd(connector, eventId, clock.now());
-      interp.fireInbound(connector, type, values);
+    await store.transaction(async (tx) => {
+      if (await tx.inboundSeen(connector, eventId)) throw new Duplicate();
+      await tx.inboundAdd(connector, eventId, clock.now());
+      await interp.fireInbound(connector, type, values, tx);
     });
     return true;
   } catch (e) {
@@ -79,7 +79,7 @@ async function receive(ctx, name, inbound) {
     trace({ kind: 'webhook_ignored', connector: name, type, known: true, missing });
     return ctx.sendJson(200, { ok: true, ignored: true });
   }
-  if (!take(ctx, name, type, eventId, values)) {
+  if (!await take(ctx, name, type, eventId, values)) {
     trace({ kind: 'webhook_duplicate', connector: name, type, eventId });
     return ctx.sendJson(200, { ok: true, duplicate: true });
   }
