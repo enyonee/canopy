@@ -9,7 +9,7 @@ import { pathSteps, pick } from './template.mjs';
 import { checkRecipe } from './signature.mjs';
 
 const KEYS = ['signature', 'secret', 'toleranceS', 'eventId', 'type', 'challenge', 'events'];
-const EVENT_KEYS = ['schema', 'map', 'eventId'];
+const EVENT_KEYS = ['schema', 'map', 'eventId', 'require'];
 const CHALLENGE_KEYS = ['type', 'equals', 'echo'];
 // What a challenge may be echoed as: a token, never markup or a sentence — and never longer than this.
 const CHALLENGE_VALUE = /^[A-Za-z0-9._~-]{1,128}$/;
@@ -40,6 +40,9 @@ function checkEvent(ev, path) {
   out.push(...checkSchema(ev.schema, `${path}/schema`));
   if (ev.eventId !== undefined) out.push(...checkEventId(ev.eventId, `${path}/eventId`));
   if (ev.schema.type !== 'object') out.push([`${path}/schema/type`, 'a payload is an object: "type" must be "object"']);
+  if (ev.require !== undefined && !(Array.isArray(ev.require) && ev.require.length && ev.require.every((k) => isObject(ev.map) && Object.hasOwn(ev.map, k)))) {
+    out.push([`${path}/require`, '"require" lists names of the "map" whose value the payload must carry: without one, the event is not for this app and is answered and ignored', '"require": ["order"]']);
+  }
   if (ev.map === undefined) return out;
   if (!isObject(ev.map)) return [...out, [`${path}/map`, '"map" maps a value name to a $.path in the payload']];
   for (const [name, p] of Object.entries(ev.map)) {
@@ -115,6 +118,9 @@ export function challengeOf(inb, payload) {
 
 /** Problems of a payload against its event's schema (open: a provider may send more than the schema names). */
 export const payloadProblems = (ev, payload) => validate(ev.schema, payload, '', { extra: true });
+
+/** The first name of the event's `require` the values lack (absent or null), or undefined: an event with a value missing is not for this app. */
+export const missingOf = (ev, values) => (ev.require || []).find((k) => values[k] === undefined || values[k] === null);
 
 /** The values an app's steps receive: the `map` picks, else the payload's top-level scalars. */
 export function valuesOf(ev, payload) {
