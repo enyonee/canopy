@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { parseShard, inShard } from './shard.mjs';
 
 const MUTATIONS = [
   // The four defects the apps actually found — the suite must catch each of them again.
@@ -1160,20 +1161,32 @@ const run = () => new Promise((resolve) => {
   child.on('error', () => finish(false));
 });
 
+// MUTATE_SHARD=i/n (1-based) runs only every n-th mutation; validated before anything is touched.
+let shard = null;
+if (process.env.MUTATE_SHARD !== undefined) {
+  try { shard = parseShard(process.env.MUTATE_SHARD); } catch (e) { console.error(e.message); process.exit(2); }
+}
+
 if (!(await run())) { console.error('the suite is red before any mutation — fix that first'); process.exit(2); }
 
 // An optional argument narrows the run to mutations whose name contains it.
 const only = process.argv[2] || '';
 let killed = 0;
 const survivors = [];
-const chosen = MUTATIONS.filter((m) => m.name.includes(only));
-for (const m of chosen) {
+const named = MUTATIONS.map((m, index) => ({ m, index })).filter(({ m }) => m.name.includes(only));
+const chosen = named.filter(({ index }) => inShard(index, shard));
+// Applicability is a cheap string search, so every shard checks all named mutations: a stale one fails
+// every shard and is never missed. Only the mutations of this shard's share are actually run.
+const stale = new Set();
+for (const { m } of named) {
+  if (fs.readFileSync(m.file, 'utf8').includes(m.find)) continue;
+  console.log(`? ${m.name}\n    the mutation no longer applies to ${m.file} — update it`);
+  survivors.push(m.name);
+  stale.add(m);
+}
+for (const { m } of chosen) {
+  if (stale.has(m)) continue;
   const original = fs.readFileSync(m.file, 'utf8');
-  if (!original.includes(m.find)) {
-    console.log(`? ${m.name}\n    the mutation no longer applies to ${m.file} — update it`);
-    survivors.push(m.name);
-    continue;
-  }
   // An interrupted run must not leave the mutation in the source tree.
   const restore = () => { fs.writeFileSync(m.file, original); process.exit(130); };
   process.once('SIGINT', restore).once('SIGTERM', restore);
@@ -1190,7 +1203,7 @@ for (const m of chosen) {
   else { killed++; console.log(`✓ killed    ${m.name}${slow}`); }
 }
 
-console.log(`\n${killed}/${chosen.length} мутаций убито`);
+console.log(`\n${killed}/${chosen.length} мутаций убито${shard ? ` (шард ${shard.i}/${shard.n})` : ''}`);
 if (survivors.length) {
   console.log('\nвыжили (значит, эти утверждения ничем не проверены):');
   for (const s of survivors) console.log(`  • ${s}`);
