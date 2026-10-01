@@ -39,6 +39,7 @@ npm install                                   # dev-only dependency: typescript
 node runtime/run.mjs apps/<name>/app.json --check        # validate a graph
 node runtime/run.mjs apps/<name>/app.json --port 8901    # serve it
 npm test                                      # runtime tests + architecture gates
+npm run test:async                            # the same suite with every external store call answering a Promise (S4)
 npm run coverage                              # 100 % lines per runtime module
 npm run types                                 # tsc --checkJs
 npm run mutate                                # mutation gate (hours; rewrites runtime files while it runs)
@@ -73,6 +74,11 @@ The gates in `tests/arch.test.mjs` are part of `npm test`. Fix the code, never t
   for each new decision branch that matters. When you move code, re-point the mutations;
   never delete one to make the gate pass.
 - **Types**: JSDoc plus `runtime/types.d.ts`; `npx tsc -p .` stays clean.
+- **Await the store**: every call of a store method (`store.x(`, `tx.x(`, `ctx.store.x(`), of a loader (`perms.prime`, `ownWhere`,
+  `interp.*`, …) and, in blocks and plugins, of `resolve`/`text`/`run`/`fireCreated` is `await`ed, even though SQLite still answers plain
+  values: the pure schema lookups (`field`, `fieldAt`, `label`, `labelField`, `childVia`) and `within` are the only exceptions. A plugin
+  with blocks exports `async: true`. Never hand an async function to `filter/some/every/find/sort/forEach`. `tests/arch.test.mjs` fails on
+  both, `npm run test:async` finds what a regex cannot.
 - The runtime has **zero runtime dependencies**. Adding one needs a discussion first (see
   CONTRIBUTING).
 - **Performance** is measured, not assumed. Anything touching queries reports numbers before

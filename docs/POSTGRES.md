@@ -1,6 +1,6 @@
 # R10 design: async Driver seam and PostgreSQL (README roadmap step 1)
 
-**Status: design accepted (option C4); S1, S2, S3a, S3b and S3c done in 0.2.x.** Status per stage:
+**Status: design accepted (option C4); S1, S2, S3a, S3b, S3c and S4a-d done in 0.2.x.** Status per stage:
 
 | stage | what | status |
 |---|---|---|
@@ -9,7 +9,7 @@
 | S3a | snapshot evaluation of derived fields (`store/plan.mjs`, `snapshot.mjs`, `hydrate.mjs`) | **done** (0.2.x) |
 | S3b | rules and step values on the snapshot (`store/plan.mjs` `planExpr`, `hydrate.mjs` `evalCtx`, `rules.mjs`, `interp.mjs`) | **done** (0.2.x) |
 | S3c | render/perms/field hooks on prefetched data (`routes/load.mjs`, `auth.mjs` `prime`, `store/hydrate.mjs` `labelsFor`/`optionsFor`) | **done** (0.2.x) |
-| S4a-d | await-first conversion | not started |
+| S4a-d | await-first conversion (callers await the still-synchronous store; transaction view; plugin marker; `Store.open`, `serve()` `{ server, ready }`) | **done** (0.2.x) |
 | S5 | flip to an async driver | not started |
 | S6 | `runtime/driver/postgres.mjs` | not started |
 | S7 | benchmark before/after, load test | not started |
@@ -49,6 +49,46 @@ with the driver throwing on any call; `tests/perf.test.mjs` requires the same nu
 owned rows; `tests/renderdiff.test.mjs` compares every app's HTML, JSON and CSV (and the permission matrix) with
 digests made before S3c. The lazy `RowCtx` is kept one more release: after S3c only the `lazyEval` test switch
 reaches it (`Snapshot`'s context extends it and stays).
+
+**S4 delivered.** After S4 every caller of the store, in `runtime/`, in `plugins/` and in `apps/*/plugins/`, awaits it, while the
+SQLite driver and the `Store` still answer plain values (`await` on a plain value is a no-op, so the behaviour did not change and S5 can
+flip the driver without touching a caller). *Transactions:* `interp.attempt(fn)` hands `fn` the transaction view of the store
+(`Store#transaction` calls `fn(store.within(tx))`; `within` is where S5 binds `drv = tx`, today it answers the store itself), route
+closures write through it (`attempt(async (tx) => await tx.insert(...))`), and the steps run in it (`runSteps`/`fireEvents` take it as
+`ctx.tx`/`tx` and hand blocks `ctx.store = tx`). `Driver#transaction(fn)` passes the handle and, when `fn` answers a promise, waits for it
+before COMMIT/ROLLBACK (a synchronous `fn` still answers its value). *Callers:* routes, `server.mjs`, `boot.mjs`, `auth.mjs`
+(`sessions().start/read/end`, `perms.prime`, `perms.ownWhere` are async loaders), every `routes/load.mjs` loader (`listPre`, `detailPre`, …),
+`interp.mjs` (`runSteps`, `fireEvents`, `resolve(ctx)(v)`, `interpolate`, `afterPath`, `validateValues`, `attempt`), `blocks.mjs`,
+`outbox.mjs`. *`evaluate()` stays synchronous*, so what an expression reads outside its own row (`me`, `values`, `each`, `found`, `picked`,
+`created`, `delivery`, or `row.<name>` from an aggregate body) is loaded before it runs (`stepPaths`/`exprCtx` in `interp.mjs`; an
+unloaded name throws `not loaded: <path>`), exactly as S3b did for the row's own fields. Nothing is awaited inside `String#replace`
+(`afterPath` reads its row once, before the replace: one query instead of one per placeholder), and a list or object is resolved element
+by element, in order, never through `Array#map`. *Boot:* `Store.open(graph, file, registry, driver)` is the async factory (the constructor
+takes `{ migrate: false }` for it; `new Store(...)` stays the synchronous convenience), and `serve()` answers at once with
+`{ server, ready, store, perms, flusher, invalid, graph }`: it opens the store, migrates, seeds and only then calls `server.listen`; a
+seed or `deploy.json` error is served as the invalid-graph page on the same server (`app.invalid`), and `ready` resolves to the app.
+The background flusher's `arm()` is async too (it reads `outboxNextDue`, then swaps the timer). *Plugins:* all twelve with blocks
+(`plugins/{payment,messaging}.mjs`, `apps/{baseball,chess,diagrams,game2048,poker,recycling,shop,strategy,tictactoe,vocab}/plugins/*.mjs`)
+await `store.*`, `resolve`, `text` and export `async: true`; the conversion landed with S4b rather than S4c, because `ctx.resolve` and
+`ctx.text` answer promises from then on and an unconverted block would have read `.v` off one. `register()` records a plugin with blocks and
+no marker (`async: true` or `api: 2`) in `registry.legacy`; `validate(graph, registry, { asyncDriver })` turns each of them into a checker
+error (`/plugins/<i>`) when the configured driver is asynchronous (`Driver#async`; SQLite says `false`, so the rule never fires today, and
+`tests/await.test.mjs` switches the flag on by hand). *Proof:* `tests/arch.test.mjs` has a gate that, on masked source, finds a call
+`store.<m>(`, `tx.<m>(` or `ctx.store.<m>(` without `await` in all of `runtime/` (except `runtime/store.mjs`, `runtime/store/**` and
+`runtime/driver*`, which are the callee: they call themselves synchronously through `this`), `plugins/` and `apps/*/plugins/`. The only
+allow-list is the lookups that read the parsed graph and that S5 does not make async: `field`, `fieldAt`, `label`, `labelField`,
+`childVia`, plus `within`, a factory. It also covers the loaders (`perms.prime`, `ownWhere`, `sess.*`, `interp.*`, `runSteps`, `flush`, …)
+and, in blocks and plugins, `resolve`/`text`/`run`/`fireCreated`; a second gate refuses an async function passed to
+`filter/some/every/find/findIndex/sort/forEach`. `npm run test:async` runs the whole suite with every external call of a store method
+answering a Promise (`tests/asyncstore.mjs`): a caller that forgot its `await` fails there like it would on PostgreSQL, in the tests and in
+everything they run; `NODE_OPTIONS="--import ./tests/asyncstore.mjs"` does the same to the servers `verify/run.mjs` starts. Gates held:
+`npm test`, `npm run test:async`, coverage, types, `verify` 699/699, the HTML/JSON/CSV golden of `tests/renderdiff.test.mjs` unchanged, the
+benchmark routes byte-identical (the HTML, JSON and CSV digests of the benchmark routes of both benchmark graphs (36 route and format pairs) equal before and after;
+`npm run bench`, five alternating runs each, best p50 before → after: boot 9.1 → 9.4 ms, `/Order` 1.4 → 1.3, `/Order?sort=total` 9.0 → 8.9,
+`/Order.csv` 10.0 → 10.1, `/Customer` 1.2 → 1.3, `/dashboard/sales` 16.7 → 16.5, detail 0.5 → 0.5, create 0.7 → 0.7, `/Order/<wide>` 2.1 → 2.1,
+`/Customer/<wide, 5000 orders>` 7.6 → 7.6, `/Customer.csv` 13.9 → 13.7 ms. No route moved by more than 8 % (and only the 1 to 2 ms ones
+by more than 4 %, one timer tick of 0.1 ms): an `await` on a plain value is a microtask, which a request that makes a few dozen of
+them does not notice).
 
 Sections below are the design as accepted; line numbers in section 1 cite v0.1.2 and
 predate S1 and S2.
@@ -164,7 +204,7 @@ Design (both drivers, same interface):
 
 ## 4. Plugin contract change
 
-**As built in S3c (field-kind hooks; the block/`store.*` part lands with S4c).** `validate(v, f)` takes no store: a
+**As built in S3c (field-kind hooks) and S4 (blocks, `store.*`, the marker; see "S4 delivered" above).** `validate(v, f)` takes no store: a
 reference's existence is checked by the kernel (`Store#checkValue`), never by the kind. `format(v, f, ctx)` is pure
 over data loaded before the page renders: `ctx = { esc, title(name), label(target, id), entity, row, labels,
 statusField }` (`label` is the prefetched label of the row a reference points at, `''` for none, a throw for a
@@ -240,6 +280,13 @@ As built (where it differs from the plan above):
 - S4c plugins (12 files, ~130 lines), FORMAT.md "Plugins" contract, types.d.ts, `check/plugins.mjs` marker rule; the plugin fixtures in tests/registry.test.mjs.
 - S4d tests: `await` at ~370 sites (mechanical, regex-assisted), `Store.open`.
 - New arch gate (lands in S4a, tightened per PR): masked-source regex "no store call (`store.<method>(`) without `await`" over runtime/ and plugins, so conversion cannot regress.
+
+As built: S4a also made `serve()` return `{ server, ready }` (boot became async with the seed) and threaded the transaction view through `ctx.tx`;
+S4b included the plugin conversion (see above) and the loading of `me`/`values`/`each` names before an expression runs; S4c is the marker, the checker rule,
+`FORMAT.md` "Plugins" and `types.d.ts`; S4d is `Store.open`, `serve()` opening its store through it, the test sweep (about 1,250 awaits, then read) and
+`tests/asyncstore.mjs`. The sweep found and fixed what a regex cannot: `assert.throws` over a store call became `await assert.rejects(async () => …)`, a
+helper that wraps a callback (`withQueryCount`, `lazily`, `compilerOff`, `twoPhase`) became async, `Array.from({ length }, async …)` and `.map` with a
+store call became loops, and the tests that counted on `flush()` reaching its first real wait in one microtask now wait a `tick()`.
 
 **S5 - Flip to an async Driver.** ~+300/-80, ~8 files. Driver methods return Promises; SQLite driver wraps the sync handle with the FIFO mutex (section 3); `Store` methods are `async`; `Store.open`; `serve()` `{ ready }`; outbox claim (state.mjs). Tests: concurrency suite (two `attempt`s with an `await` inside a block must not interleave; failed tx invisible to a concurrent reader; deadlock-guard), mutations: mutex removed, COMMIT on error, claim removed.
 

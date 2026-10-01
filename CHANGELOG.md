@@ -59,6 +59,28 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   Gates: contract tests (sandbox against `output`, recording against sandbox shape, request against recording),
   45 `C5:` mutations. No network anywhere in tests or CI.
 
+- **Await-first conversion (PostgreSQL roadmap, stage S4).** Every caller of the store, in `runtime/`, `plugins/` and
+  `apps/*/plugins/`, now `await`s it, while the SQLite driver and the `Store` still answer plain values: the behaviour,
+  the order of writes, trace lines and outbox rows, and every page and JSON answer are unchanged, and the next stage can make
+  the driver asynchronous without touching a caller. **Transactions:** `interp.attempt(fn)` hands `fn` the transaction view of the
+  store (`store.within(tx)`; today the store itself) and route closures write through it (`attempt(async (tx) => await tx.insert(…))`);
+  `Driver#transaction(fn)` hands over its handle and waits for a callback that returns a promise before COMMIT (or ROLLBACK).
+  **Plugin contract (blocks):** `ctx.store.*`, `ctx.resolve(…)`, `ctx.text(…)`, `ctx.run(…)` and `ctx.fireCreated(…)` are awaited, a
+  block's `run` is `async`, and a plugin with blocks exports `async: true` (or `api: 2`); all twelve plugins in the repository are
+  converted. `validate(graph, registry, { asyncDriver })` refuses an unmarked plugin as a checker error (`/plugins/<i>`) when the
+  driver is asynchronous (`Driver#async`; SQLite is not, so today nothing changes for an app with an unmarked plugin). **Boot:**
+  `Store.open(graph, file, registry, driver)` is the async factory (`new Store(…)` stays the synchronous convenience) and
+  `serve()` returns `{ server, ready, … }` at once and starts listening only after `ready` (store opened, migrated, seeded); a seed or
+  `deploy.json` error is still served as the invalid-graph page, now on the same server. `perms.prime`, `perms.ownWhere`, the
+  session helpers, the page loaders in `routes/load.mjs`, `interp.runSteps/fireEvents/resolve/interpolate/afterPath/validateValues`
+  and the outbox are async; what an expression reads outside its own row (`me`, `values`, `each`, …) is loaded before `evaluate()`
+  runs, nothing is awaited inside `String#replace` (`afterPath` reads its row once, before it: one query instead of one per
+  placeholder), and no list is resolved through `Array#map`. Gates: a new architecture gate fails on a store call, a loader or a
+  block's `resolve`/`text` without `await` (allow-list: the pure schema lookups `field`, `fieldAt`, `label`, `labelField`,
+  `childVia`, and `within`) and on an async function handed to `filter/some/every/find/sort/forEach`; `npm run test:async` runs the
+  whole suite with every external store call answering a Promise (`tests/asyncstore.mjs`, part of `npm run gate`); `S4:`
+  mutations. Measured: the benchmark routes' HTML, JSON and CSV are byte-identical to before, and `npm run bench` (five alternating runs, best p50) did not move by more than 8 % anywhere (`/Order` 1.4 → 1.3 ms, `/Order.csv` 10.0 → 10.1, `/dashboard/sales` 16.7 → 16.5, detail 0.5 → 0.5, create 0.7 → 0.7, `/Customer/<5000 orders>` 7.6 → 7.6): an `await` on a plain value costs a microtask.
+
 - **Inbound webhooks (connector library, stage C4).** A connector whose descriptor has an `inbound` block now
   receives a provider's webhooks at `POST /hook/<connector>`, a route that is exempt from the session gate and
   authenticated only by the descriptor's signature recipe: `stripe` (`t=…,v1=…`, several `v1`), `slack` (`v0`),
