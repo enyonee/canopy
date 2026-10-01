@@ -1,0 +1,78 @@
+{
+  "openapi": "3.0.1",
+  "info": { "title": "Edges" },
+  "security": [{ "oauth": ["read"] }, { "bearer": [] }],
+  "paths": {
+    "/a/{x}": {
+      "parameters": [{ "name": "x", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "head": { "responses": { "200": { "description": "ok" } } },
+      "get": {
+        "operationId": "getA",
+        "parameters": [
+          { "name": "x", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "sid", "in": "cookie", "schema": { "type": "string" } },
+          { "name": "ids", "in": "query", "schema": { "type": "array", "items": { "type": "integer" } } },
+          { "name": "key", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "page.size", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "page size", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "accept", "in": "header", "schema": { "type": "string" } },
+          { "name": "X-Mode", "in": "header", "required": true, "schema": { "type": "string", "enum": ["a", "b"] } },
+          { "name": "q", "in": "query", "required": true, "allowReserved": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/b": {
+      "servers": [{ "url": "https://x.test" }],
+      "post": {
+        "parameters": [{ "name": "need", "in": "cookie", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "ok" } }
+      },
+      "put": {
+        "requestBody": { "required": true, "content": { "application/xml": { "schema": { "type": "string" } } } },
+        "responses": { "200": { "description": "ok" } }
+      },
+      "patch": {
+        "requestBody": { "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } } },
+        "security": [{ "oauth": [] }],
+        "responses": { "200": { "description": "ok" } }
+      },
+      "delete": {
+        "parameters": [{ "$ref": "#/components/parameters/nowhere" }, { "$ref": "https://example.com/p.json" }, { "name": 3 }],
+        "security": [{ "ghost": [] }, { "keyq": [] }, { "keyc": [] }, { "digest": [] }, { "bearer": [], "keyh": [] }],
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/c": {
+      "get": {
+        "operationId": "getA",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["x", "y"], "properties": { "x": { "type": "string" }, "bad name": { "type": "integer" } }, "additionalProperties": { "type": "string" } } } } },
+        "responses": { "200": { "description": "ok" } }
+      },
+      "post": {
+        "operationId": "getA",
+        "security": [{ "oauth": [] }, { "both": [] }],
+        "parameters": [{ "name": "body", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "body": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/d/{id}/{missing}": { "get": { "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "ok" } } } },
+    "/e/{a": { "get": { "responses": { "200": { "description": "ok" } } } },
+    "no-slash": { "get": { "responses": { "200": { "description": "ok" } } } },
+    "/f": { "$ref": "#/paths/~1missing" },
+    "/g": 5,
+    "x-note": {}
+  },
+  "components": {
+    "securitySchemes": {
+      "oauth": { "type": "oauth2", "flows": {} },
+      "bearer": { "type": "http", "scheme": "bearer" },
+      "keyq": { "type": "apiKey", "in": "query", "name": "k" },
+      "keyc": { "type": "apiKey", "in": "cookie", "name": "k" },
+      "digest": { "type": "http", "scheme": "digest" },
+      "keyh": { "type": "apiKey", "in": "header", "name": "authorization" },
+      "both": { "type": "apiKey", "in": "header", "name": "X-A" }
+    }
+  }
+}

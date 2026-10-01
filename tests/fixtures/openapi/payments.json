@@ -1,0 +1,58 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Payments", "version": "2026-01" },
+  "servers": [{ "url": "https://api.payments.test" }],
+  "security": [{ "basic": [] }],
+  "paths": {
+    "/v1/charges": {
+      "post": {
+        "operationId": "createCharge",
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string" } },
+          { "name": "Content-Type", "in": "header", "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["amount", "currency"],
+                "properties": {
+                  "amount": { "type": "integer", "minimum": 1 },
+                  "currency": { "type": "string", "pattern": "^[a-z]{3}$" },
+                  "metadata[order]": { "type": "string" },
+                  "capture": { "type": ["boolean", "null"], "default": true },
+                  "kind": { "const": "card" }
+                }
+              }
+            },
+            "multipart/form-data": { "schema": { "type": "object", "properties": { "receipt": { "type": "string", "format": "binary" } } } }
+          }
+        },
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" }, "status": { "type": "string" } } } } } } }
+      }
+    },
+    "/v1/charges/{id}/refunds": {
+      "post": {
+        "operationId": "refund",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "idempotency_key", "in": "header", "schema": { "type": "string" } },
+          { "name": "Idempotency-Key", "in": "header", "schema": { "type": "string" } }
+        ],
+        "requestBody": { "content": { "application/x-www-form-urlencoded": { "schema": { "type": "object", "properties": { "amount": { "type": "integer" } } } } } },
+        "responses": { "200": { "description": "ok", "content": { "application/vnd.api+json": { "schema": { "type": "object", "properties": { "id": { "type": "string" } } } } } } }
+      }
+    },
+    "/v1/charges/{id}": {
+      "get": {
+        "operationId": "getCharge",
+        "security": [],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "ok", "content": { "text/plain": { "schema": { "type": "string" } } } }, "202": { "description": "later", "content": { "application/json": {} } } }
+      }
+    }
+  },
+  "components": { "securitySchemes": { "basic": { "type": "http", "scheme": "basic" } } }
+}

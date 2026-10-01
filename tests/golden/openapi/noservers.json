@@ -1,0 +1,55 @@
+{
+  "descriptor": {
+    "descriptor": 1,
+    "name": "x",
+    "title": "Relative",
+    "version": "1",
+    "modes": [
+      "live"
+    ],
+    "base": "{config.baseUrl}",
+    "config": {
+      "type": "object",
+      "required": [
+        "baseUrl"
+      ],
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "the base url of the API, https://host[/prefix]"
+        }
+      }
+    },
+    "operations": {
+      "ping": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {}
+        },
+        "request": {
+          "method": "GET",
+          "url": "{base}/ping",
+          "headers": {
+            "accept": "application/json"
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  },
+  "unsupported": [
+    {
+      "path": "#/servers",
+      "message": "the first server \"/api\" is not an absolute http(s) url: the base url is the connector's configuration, config.baseUrl"
+    }
+  ]
+}

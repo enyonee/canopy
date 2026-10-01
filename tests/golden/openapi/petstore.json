@@ -1,0 +1,382 @@
+{
+  "descriptor": {
+    "descriptor": 1,
+    "name": "x",
+    "title": "Petstore",
+    "version": "1.0.0",
+    "modes": [
+      "live"
+    ],
+    "base": "https://eu.petstore.test/v1",
+    "operations": {
+      "listPets": {
+        "summary": "List pets",
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "X-Trace-Id": {
+              "type": "string",
+              "description": "correlates the call in the provider's logs"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "available",
+                "sold"
+              ],
+              "default": "available"
+            }
+          },
+          "required": [
+            "limit"
+          ]
+        },
+        "request": {
+          "method": "GET",
+          "url": "{base}/pets?limit={input.limit}&status={input.status}",
+          "headers": {
+            "accept": "application/json",
+            "x-trace-id": {
+              "$": "input.X-Trace-Id"
+            },
+            "x-api-key": "{secret.apiKey}"
+          }
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "tag": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              },
+              "born": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "id"
+            ]
+          }
+        }
+      },
+      "create_pet_": {
+        "summary": "Add a pet to the store",
+        "idempotent": false,
+        "input": {
+          "type": "object",
+          "properties": {
+            "X-Trace-Id": {
+              "type": "string",
+              "description": "correlates the call in the provider's logs"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "tag": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                }
+              },
+              "additionalProperties": true
+            },
+            "born": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        "request": {
+          "method": "POST",
+          "url": "{base}/pets",
+          "headers": {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "x-trace-id": {
+              "$": "input.X-Trace-Id"
+            },
+            "x-api-key": "{secret.apiKey}"
+          },
+          "body": {
+            "name": {
+              "$": "input.name"
+            },
+            "tag": {
+              "$": "input.tag"
+            },
+            "owner": {
+              "$": "input.owner"
+            },
+            "born": {
+              "$": "input.born"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "tag": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                }
+              }
+            },
+            "born": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "id"
+          ]
+        }
+      },
+      "get_pets_petId": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "petId": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          "required": [
+            "petId"
+          ]
+        },
+        "request": {
+          "method": "GET",
+          "url": "{base}/pets/{input.petId}",
+          "headers": {
+            "accept": "application/json",
+            "x-api-key": "{secret.apiKey}"
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "tag": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                }
+              }
+            },
+            "born": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "id"
+          ]
+        }
+      },
+      "updatePet": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "petId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "tag": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                }
+              },
+              "additionalProperties": true
+            },
+            "born": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "petId",
+            "name"
+          ]
+        },
+        "request": {
+          "method": "PUT",
+          "url": "{base}/pets/{input.petId}",
+          "headers": {
+            "content-type": "application/json",
+            "x-api-key": "{secret.apiKey}"
+          },
+          "body": {
+            "name": {
+              "$": "input.name"
+            },
+            "tag": {
+              "$": "input.tag"
+            },
+            "owner": {
+              "$": "input.owner"
+            },
+            "born": {
+              "$": "input.born"
+            }
+          }
+        }
+      },
+      "renamePet": {
+        "idempotent": false,
+        "input": {
+          "type": "object",
+          "properties": {
+            "petId": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "petId",
+            "body"
+          ]
+        },
+        "request": {
+          "method": "PATCH",
+          "url": "{base}/pets/{input.petId}",
+          "headers": {
+            "content-type": "application/json",
+            "x-api-key": "{secret.apiKey}"
+          },
+          "body": {
+            "$": "input.body"
+          }
+        }
+      },
+      "deletePet": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "petId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "petId"
+          ]
+        },
+        "request": {
+          "method": "DELETE",
+          "url": "{base}/pets/{input.petId}",
+          "headers": {
+            "x-api-key": "{secret.apiKey}"
+          }
+        }
+      }
+    }
+  },
+  "unsupported": [
+    {
+      "path": "#/paths/~1pets/get/parameters/2",
+      "message": "parameter \"tag\" is optional and a url template cannot leave a query parameter out when it is absent: add it by hand"
+    },
+    {
+      "path": "#/paths/~1pets/get/responses/200/content/application~1json/schema/items/allOf/0/properties/tag/nullable",
+      "message": "nullable dropped: null is no longer accepted"
+    },
+    {
+      "path": "#/paths/~1pets/post/requestBody/content/application~1json/schema/properties/tag/nullable",
+      "message": "nullable dropped: null is no longer accepted"
+    },
+    {
+      "path": "#/paths/~1pets/post/responses/201/content/application~1json/schema/allOf/0/properties/tag/nullable",
+      "message": "nullable dropped: null is no longer accepted"
+    },
+    {
+      "path": "#/paths/~1pets~1{petId}/get/responses/200/content/application~1json/schema/allOf/0/properties/tag/nullable",
+      "message": "nullable dropped: null is no longer accepted"
+    },
+    {
+      "path": "#/paths/~1pets~1{petId}/put/requestBody/content/application~1json/schema/properties/tag/nullable",
+      "message": "nullable dropped: null is no longer accepted"
+    },
+    {
+      "path": "#/servers/0/variables",
+      "message": "the server variable \"region\" is fixed to its default"
+    },
+    {
+      "path": "#/servers",
+      "message": "only the first server is used"
+    }
+  ]
+}
