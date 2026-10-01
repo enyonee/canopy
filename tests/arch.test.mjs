@@ -641,13 +641,13 @@ const SYNC_STORE = new Set([
 // Helpers that load (they ask the store) and therefore answer with a Promise once it does.
 const LOADERS = [
   'perms.prime', 'vc.prime', 'perms.ownWhere', 'vc.ownWhere', 'ctx.ownWhere', 'sess.start', 'sess.read', 'sess.end',
-  'interp.attempt', 'interp.runSteps', 'interp.fireEvents', 'interp.interpolate', 'interp.validateValues', 'interp.afterPath', 'interp.flushNow',
+  'interp.attempt', 'interp.runSteps', 'interp.fireEvents', 'interp.interpolate', 'interp.validateValues', 'interp.afterPath', 'interp.flushNow', 'interp.fireInbound',
   'block.run',
 ];
 const LOADER_FNS = ['ownWhere', 'resolveTop', 'exportRows', 'paged', 'renderForm', 'renderDetail', 'listPre', 'formPre', 'detailPre', 'pagePre',
   'searchPre', 'registerPre', 'dashboardPre', 'bootstrapIdentity', 'bootstrapSeed', 'createContext',
   // the interpreter's own steps (runtime/interp.mjs) and the outbox (runtime/outbox.mjs)
-  'runSteps', 'fireEvents', 'interpolate', 'refValue', 'readFrom', 'exprCtx', 'afterPath', 'flushNow', 'withEffects', 'admit', 'deliver', 'flush'];
+  'runSteps', 'fireEvents', 'fireInbound', 'take', 'interpolate', 'refValue', 'readFrom', 'exprCtx', 'afterPath', 'flushNow', 'withEffects', 'admit', 'deliver', 'flush'];
 // What a block's `run(ctx)` is handed: each answers a Promise (resolve/text load, run and fireCreated run steps). Checked in
 // blocks.mjs and in every plugin, where they are plain names destructured from the ctx.
 const BLOCK_FNS = ['resolve', 'text', 'run', 'fireCreated'];
