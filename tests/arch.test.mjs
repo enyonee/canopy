@@ -263,8 +263,6 @@ const ALLOWED = {
   'runtime/routes/load.mjs': ['runtime/render.mjs', 'runtime/render/list.mjs', 'runtime/render/form.mjs', 'runtime/render/detail.mjs', 'runtime/render/pages.mjs'],
   'runtime/routes/rows.mjs': ['runtime/render.mjs', 'runtime/routes/load.mjs'],
   'runtime/routes/settings.mjs': ['runtime/render.mjs', 'runtime/render/settings.mjs', 'runtime/connectors/engine.mjs', 'runtime/connectors/redact.mjs', 'runtime/connectors/backoff.mjs'],
-  'runtime/routes/entity.mjs': ['runtime/render.mjs', 'runtime/render/list.mjs', 'runtime/render/form.mjs', 'runtime/render/detail.mjs', 'runtime/routes/rows.mjs'],
-  'runtime/routes/rows.mjs': ['runtime/render.mjs', 'runtime/render/detail.mjs'],
   'runtime/routes/schedule.mjs': ['runtime/render.mjs'],
   'runtime/routes/session.mjs': ['runtime/auth.mjs', 'runtime/render/pages.mjs', 'runtime/routes/load.mjs'],
   'runtime/routes/system.mjs': ['runtime/render.mjs', 'runtime/render/pages.mjs'],
