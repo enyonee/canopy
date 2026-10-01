@@ -431,6 +431,24 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   operation `send` takes `body`, so `connector.call { connector, op: "send", input: { body } }`
   is `http.send` without a `path` (data may not extend the url). Plugin code (`.mjs`) and descriptors (`.json`) coexist in one `plugins` list.
 
+### Importing a descriptor from OpenAPI
+
+```bash
+node runtime/run.mjs --import-openapi spec.json --name acme [--out connectors/acme/descriptor.json]
+```
+
+An OpenAPI 3.0 or 3.1 document **in JSON** (YAML is not read: the runtime has no dependencies; convert it first) becomes a
+descriptor: `operationId` is the operation, parameters and the request body its `input` and request template (a JSON body, or
+`"encoding": "form"`), the first 2xx JSON answer its `output`, `servers[0].url` the `base`, an `apiKey` header, `http` `bearer`
+or `basic` scheme a header with a secret slot (`{secret.<scheme name>}`); `idempotent` is true for GET, PUT and DELETE and false
+for POST and PATCH, unless the operation has an `Idempotency-Key` header parameter, which becomes the descriptor's
+`"idempotency": {"header": …}` bound to the row's key. The result is `"modes": ["live"]` with no `sandbox`, no `retry` and no
+`result`: **a draft for a human to review and commit.** Every construct that was not mapped (`oneOf` with several
+alternatives, callbacks, webhooks, `oauth2`, an API key in the query, cookies, multipart, optional query parameters, `nullable`,
+a `$ref` cycle, an external `$ref`, …) is printed on stderr as `not mapped: <pointer>: <why>`; nothing is guessed. The exit
+status is 1 if the document is not OpenAPI 3 JSON or the result would not pass the descriptor checker. The rules, one by one:
+`docs/CONNECTORS.md` section 15.
+
 ### Inbound webhooks
 
 A descriptor may carry an `inbound` block: how a provider's webhooks are authenticated and read. The runtime then

@@ -1,11 +1,12 @@
 # Canopy connector library: design (v0.2.0 baseline)
 
-**Status: design accepted (maintainer decisions, section 9). Stages C1, C3, C2, C4 and C5 are done** (C1: descriptor,
+**Status: design accepted (maintainer decisions, section 9). Stages C1, C3, C2, C4, C5 and C6 are done** (C1: descriptor,
 checker, engine, `connector.call`, `http` on it; C3: retries with backoff, `unknown`, timeouts, circuit
 breaker, background flusher, injectable clock; C2: encrypted secret store, sandbox and live mode; C4: inbound
 webhooks, signed and deduplicated; C5: the first real providers, Stripe, Postmark and Slack, as descriptors with
-hand-written fixtures; see "C1 as built", "C3 as built", "C2 as built", "C4 as built" and "C5 as built" at the end).
-C6 and C7 are next, in the order of section 9.
+hand-written fixtures; C6: the OpenAPI import, a draft descriptor from a JSON spec with everything it could not map
+listed; see "C1 as built", "C3 as built", "C2 as built", "C4 as built", "C5 as built" and "C6 as built" at the end).
+C7 is next, in the order of section 9.
 
 The study below was read-only. All line numbers refer to /home/vyacheslav/code/canopy at main, before C1.
 
@@ -546,3 +547,94 @@ Where the code differs from, or narrows, sections 2.1, 5, 6 and 7 (C5):
   and the staff notice are sent from that event's steps.
 - **Not built.** `--connectors record` and `drift`; Twilio and SES; a Stripe Checkout/Elements flow (the app
   uses the test payment method `pm_card_visa` in the transition, so it is a test-mode demo, not a payment page).
+
+## 15. C6 as built
+
+Where the code differs from, or narrows, section 7 (C6):
+- **Modules.** `runtime/connectors/openapi.mjs` (`importOpenapi(spec, {name})` → `{ descriptor, unsupported }`, pure, layer 0:
+  naming, security, servers, the 2xx answer, and the last word of the descriptor checker), `oas_schema.mjs` (a schema of the
+  document as the schema subset, `$ref`, cycles, `allOf`) and `oas_request.mjs` (parameters and body → `input` and the
+  request template). The command is `admin.mjs#importCommand`, called by `cli.mjs` before the graph is read:
+  `node runtime/run.mjs --import-openapi spec.json --name x [--out connectors/x/descriptor.json]`. Without `--out` the
+  descriptor goes to stdout (pretty, two spaces; the key order is fixed by the importer, so the same document gives the
+  same bytes); with it the file is written (its directory made). Exit 2 for a missing file name or `--name`, exit 1 for a
+  document that is not JSON (**YAML is out of scope**: the runtime has no dependencies, convert it first), that is not
+  OpenAPI 3.0/3.1 (Swagger 2.0 is named as such), or whose result would not pass `descriptor.mjs` (nothing is written; it
+  always should pass, so that is a bug, except for a document with no operation at all). The list of what was not mapped
+  goes to stderr (`not mapped: <json pointer>: <why>`) with a closing line that the result **is a draft for a human to
+  review and commit**, and the secret slots it reads.
+- **`unsupported` is `[{ path, message }]`**, `path` a JSON pointer into the document (`#/paths/~1pets/get/parameters/1`),
+  without duplicates. The rule is the brief's: nothing is guessed, anything not mapped is listed. Only pure annotations
+  (`example`, `readOnly`, `deprecated`, `x-…`) and a `format` the subset lacks (`int64`, `uuid`, `date`) go quietly:
+  they do not change what a value may be.
+- **What a descriptor can say, and so what is mapped.** `modes` is `["live"]` and there is **no `sandbox`** (descriptor.mjs
+  accepts that: a live-only descriptor needs no rules; the author adds them and the mode). No `retry`, `breaker`,
+  `timeoutMs`, `result`, `failure` or `inbound`: those are decisions of the author.
+- **Names.** `operationId` sanitised to `[A-Za-z_][\w-]*` (anything else becomes `_`, a leading digit gets a `_`), else
+  `<method>_<path>` (`get_pets_petId`); a name already taken becomes `name_2`, `name_3`, in document order (paths and then
+  GET, POST, PUT, PATCH, DELETE), so the same document always gives the same names.
+- **Parameters.** Path, query and header parameters of a path item and of its operation (the operation's win by name and
+  place; `$ref` into `#/components/parameters` followed) become properties of `input`, named as a template can name them
+  (`page.size` is `page_size`); path parameters go into the url as `{input.x}`, **required** query parameters (and
+  optional ones that have a `default`, which the engine fills in) as `?name={input.x}`, headers as `{"$": "input.x"}`
+  (an absent optional header is simply not sent). A url template cannot leave a query parameter out when it is absent,
+  so **an optional query parameter without a default is listed, not mapped**. Not mapped either: cookie parameters, any
+  parameter that is not a string, number, integer or boolean (arrays, objects, no schema), a path `style` other than
+  `simple`, the headers `Accept`, `Content-Type` and `Authorization` (OpenAPI says to ignore them). **A required thing that
+  cannot be mapped (a required parameter, a required body, a path placeholder with no path parameter) leaves its whole
+  operation out**, listed; an optional one only itself.
+- **Body.** `application/json` (or any `+json`) becomes a JSON body (the importer adds `content-type: application/json`: the
+  engine sets a content type only for a form), `application/x-www-form-urlencoded` an `encoding: "form"` body; JSON is
+  preferred when both are given. An object with properties a template can name (and none clashing with a parameter) is
+  **flattened**: each property is an input and the body is `{"name": {"$": "input.name"}}`; the properties the body
+  `required` are required inputs whatever `requestBody.required` says (the importer always sends a body). Any other body
+  (a list, a string, a property name like `metadata[order]`, a clash) is the one input `body` and `{"$": "input.body"}`.
+  Multipart, XML, octet-stream and the like are listed. An object schema of a request is **open** unless the spec says
+  `additionalProperties: false` (the OpenAPI default; the subset's own default is closed), written `true` where it
+  matters; the flattened top level is the exception, and its explicit `additionalProperties` is listed.
+- **Answer.** The first 2xx (ascending, `2XX` included) with a JSON body gives `output` (its schema; a schema that came out
+  as `{}` gives none), and `accept: application/json` is sent. A 2xx that has a body of another type is listed. `result`
+  is for the author. `default` and 4xx answers are not read.
+- **Auth.** There is no `auth` key in a descriptor as built (section 10): authentication is a header with a secret slot,
+  named after the security scheme, `{secret.<scheme>}`. `apiKey` in a header becomes that header, `http` `bearer`
+  `authorization: Bearer {secret.<scheme>}`, `http` `basic` `authorization: Basic {secret.<scheme>}`, **and the list says the
+  slot must hold `base64(user:password)`** (a template cannot encode). The security requirement of the operation, else
+  the document's, is read as alternatives: the first one every scheme of which can be mapped is used (an empty one means none).
+  Listed and not mapped: `apiKey` in the **query** (the secret would be in the url, which the outbox shows) or a cookie,
+  `oauth2`, `openIdConnect`, `mutualTLS`, other `http` schemes, an undefined scheme; if no alternative can be mapped the
+  operation is imported without authentication and the list says so.
+- **Idempotency.** `idempotent` is true for GET, PUT and DELETE and false for POST and PATCH; HEAD, OPTIONS and TRACE are
+  listed (`descriptor.mjs` has no such method). A header parameter whose name matches `/idempotency[-_]?key/i` is not an
+  input: the descriptor gets the top-level `"idempotency": {"header": <that name>}` (the row's key goes there, as in
+  section 11) and the operation is `idempotent: true`, as Stripe's are. One header serves the whole descriptor, so the
+  first name wins; a spelling the descriptor cannot send (`Idempotency_Key`: letters, digits and `-` only) or a second name
+  stays an ordinary input header, listed, and its operation is not idempotent. The engine sends the header on every
+  operation, as for Stripe.
+- **Base.** `servers[0].url` with its variables fixed to their defaults (listed), without a trailing `/`. Other servers, the
+  servers of a path or an operation are listed. A document with no server, a relative one, or one that is not an http(s)
+  url gets `"base": "{config.baseUrl}"` and a required `config.baseUrl` (a uri), listed.
+- **`$ref`** is followed only into the document (`#/…`), also in a chain; an external, missing or malformed one is `{}` (a
+  parameter, body or response: absent) and listed. A cycle is cut where it comes back: **that schema is `{}`** and the note
+  names the path where it was cut and the schema. The work is bounded (48 levels, 20000 nodes: a document whose references
+  fan out cannot blow up), and what is beyond is `{}`, listed once.
+- **Composition.** `allOf` of plain objects is merged (properties, `required`, titles; members that describe a property
+  differently, or are not plain objects, or disagree about `additionalProperties`, are **omitted whole**: `{}` or the key
+  dropped, listed). `oneOf`/`anyOf` with one element is unwrapped; with more they are omitted, listed (the rest of the
+  schema is kept). `not` is omitted, listed.
+- **The subset.** `nullable: true` and `null` in a type list are dropped, **listed** (null is no longer accepted); a type
+  list of several types drops `type`; `const` is a one-value `enum`; keywords the subset lacks (`exclusiveMinimum`,
+  `multipleOf`, `minItems`, …), a schema-valued `additionalProperties` and a tuple `items` are dropped, listed; a `default`,
+  `pattern` or length the subset's own checker refuses is dropped, listed. `required` names without a property are dropped,
+  listed. Callbacks, webhooks, cookies and multipart are listed.
+- **The checker has the last word.** The result is run through `checkDescriptor`; an operation it refuses (its path in the
+  message) is left out and listed, until it passes. So the result passes, or has no operation and the list says so.
+- **Proof.** `tests/connectors_openapi.test.mjs`: golden imports (`tests/golden/openapi/*.json` hold the descriptor *and*
+  the list, so a construct dropped without a note changes the bytes; `UPDATE_GOLDEN=1` rewrites them) of five specs written
+  for the tests in `tests/fixtures/openapi` (a CRUD, a form + basic + idempotency header, `$ref` cycles with
+  oneOf/callbacks/webhooks, a pile of edge cases, a relative server), every imported operation built by the engine, and a
+  round trip: a spec of Postmark's send operation gives the same request as the hand-written descriptor.
+  `tests/connectors_openapi_fuzz.test.mjs`: 600 generated specs and 1250 damaged fixtures never throw, and always give a
+  passing descriptor or a list that says why not. 15 `C6:` mutations.
+- **Not built.** YAML; external `$ref`; `oauth2`; multipart; optional query parameters; arrays in parameters; response codes
+  other than the first JSON 2xx; `failure`, `result` and `inbound` from a spec (the first two are the author's decisions, the
+  third OpenAPI 3.1 `webhooks` describe the provider's calls to you in a way no descriptor reads yet).
