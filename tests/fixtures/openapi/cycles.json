@@ -1,0 +1,42 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Trees", "version": "1" },
+  "paths": {
+    "/nodes": {
+      "post": {
+        "operationId": "addNode",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Node" } } } },
+        "callbacks": { "done": { "{$request.body#/callback}": { "post": { "responses": { "200": { "description": "ok" } } } } } },
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Node" } } } } }
+      },
+      "get": {
+        "operationId": "findNode",
+        "parameters": [{ "name": "q", "in": "query", "required": true, "schema": { "oneOf": [{ "type": "string" }, { "type": "integer" }] } }],
+        "responses": {
+          "200": { "description": "ok", "content": { "application/json": { "schema": { "anyOf": [{ "$ref": "#/components/schemas/Leaf" }, { "$ref": "#/components/schemas/Node" }] } } } }
+        }
+      }
+    },
+    "/loop": {
+      "put": {
+        "operationId": "loop",
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/A" } } } },
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/Leaf" }], "description": "just a leaf" } } } } }
+      },
+      "delete": {
+        "operationId": "mixed",
+        "requestBody": { "content": { "application/json": { "schema": { "allOf": [{ "type": "string" }, { "minLength": 2 }] } } } },
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Leaf" }, { "type": "object", "properties": { "label": { "type": "integer" } } }] } } } } }
+      }
+    }
+  },
+  "webhooks": { "nodeAdded": { "post": { "responses": { "200": { "description": "ok" } } } } },
+  "components": {
+    "schemas": {
+      "Node": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "children": { "type": "array", "items": { "$ref": "#/components/schemas/Node" } }, "parent": { "$ref": "#/components/schemas/Node" } } },
+      "Leaf": { "type": "object", "properties": { "label": { "type": "string" }, "not": { "not": { "type": "null" } } } },
+      "A": { "type": "object", "properties": { "b": { "$ref": "#/components/schemas/B" } } },
+      "B": { "type": "object", "properties": { "a": { "$ref": "#/components/schemas/A" }, "n": { "type": "integer" } } }
+    }
+  }
+}

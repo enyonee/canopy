@@ -64,8 +64,10 @@ function operationOf(ctx, pathKey, method, item, op, at) {
   const b = mapParams(ctx, pathKey, lists, at);
   if (b === null || !mapBody(ctx, op.requestBody, `${at}/requestBody`, b)) return null;
   const auth = authOf(ctx, op.security ?? ctx.spec.security, `${at}/security`);
-  for (const k of Object.keys(auth)) if (k in b.headers) ctx.note(at, `the header "${k}" is a parameter and the authentication: the authentication wins`);
-  const headers = { ...b.headers, ...auth };
+  for (const k of Object.keys(auth)) if (Object.hasOwn(b.headers, k)) ctx.note(at, `the header "${k}" is a parameter and the authentication: the authentication wins`);
+  const output = outputOf(ctx, op.responses, `${at}/responses`);
+  // The engine sets a content type only for a form: a JSON body says so itself, and a JSON answer is asked for.
+  const headers = { ...(output && { accept: 'application/json' }), ...(b.body !== undefined && !b.encoding && { 'content-type': 'application/json' }), ...b.headers, ...auth };
   const input = { type: 'object', properties: Object.fromEntries(b.props) };
   if (b.required.length) input.required = [...new Set(b.required)];
   const request = { method, url: `{base}${b.url}` };
@@ -75,7 +77,6 @@ function operationOf(ctx, pathKey, method, item, op, at) {
   const summary = [op.summary, op.description].find((s) => typeof s === 'string' && s !== '');
   /** @type {any} */
   const out = { ...(summary && { summary }), idempotent: b.idem || IDEMPOTENT.includes(method), input, request };
-  const output = outputOf(ctx, op.responses, `${at}/responses`);
   if (output) out.output = output;
   return out;
 }

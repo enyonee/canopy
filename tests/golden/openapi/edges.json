@@ -1,0 +1,270 @@
+{
+  "descriptor": {
+    "descriptor": 1,
+    "name": "x",
+    "title": "Edges",
+    "modes": [
+      "live"
+    ],
+    "base": "{config.baseUrl}",
+    "config": {
+      "type": "object",
+      "required": [
+        "baseUrl"
+      ],
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "the base url of the API, https://host[/prefix]"
+        }
+      }
+    },
+    "operations": {
+      "getA": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer"
+            },
+            "key": {
+              "type": "string"
+            },
+            "page_size": {
+              "type": "integer"
+            },
+            "page_size_2": {
+              "type": "integer"
+            },
+            "X-Mode": {
+              "type": "string",
+              "enum": [
+                "a",
+                "b"
+              ]
+            },
+            "q": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "x",
+            "key",
+            "page_size",
+            "page_size_2",
+            "X-Mode",
+            "q"
+          ]
+        },
+        "request": {
+          "method": "GET",
+          "url": "{base}/a/{input.x}?key={input.key}&page.size={input.page_size}&page%20size={input.page_size_2}&q={input.q}",
+          "headers": {
+            "x-mode": {
+              "$": "input.X-Mode"
+            },
+            "authorization": "Bearer {secret.bearer}"
+          }
+        }
+      },
+      "patch_b": {
+        "idempotent": false,
+        "input": {
+          "type": "object",
+          "properties": {}
+        },
+        "request": {
+          "method": "PATCH",
+          "url": "{base}/b"
+        }
+      },
+      "delete_b": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {}
+        },
+        "request": {
+          "method": "DELETE",
+          "url": "{base}/b"
+        }
+      },
+      "getA_2": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                },
+                "bad name": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "request": {
+          "method": "GET",
+          "url": "{base}/c",
+          "headers": {
+            "content-type": "application/json",
+            "authorization": "Bearer {secret.bearer}"
+          },
+          "body": {
+            "$": "input.body"
+          }
+        }
+      },
+      "getA_3": {
+        "idempotent": false,
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string"
+            },
+            "body_2": {
+              "type": "object",
+              "properties": {
+                "body": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "body"
+          ]
+        },
+        "request": {
+          "method": "POST",
+          "url": "{base}/c?body={input.body}",
+          "headers": {
+            "content-type": "application/json",
+            "x-a": "{secret.both}"
+          },
+          "body": {
+            "$": "input.body_2"
+          }
+        }
+      }
+    }
+  },
+  "unsupported": [
+    {
+      "path": "#/paths/~1a~1{x}/head",
+      "message": "HEAD is not a method a descriptor can send: left out"
+    },
+    {
+      "path": "#/paths/~1a~1{x}/get/parameters/1",
+      "message": "parameter \"sid\" is a cookie: a descriptor sets no cookies"
+    },
+    {
+      "path": "#/paths/~1a~1{x}/get/parameters/2",
+      "message": "parameter \"ids\" is not a string, number, integer or boolean: it cannot be written into a url or a header"
+    },
+    {
+      "path": "#/paths/~1a~1{x}/get/parameters/6",
+      "message": "parameter \"accept\" is a header that OpenAPI ignores or a header name that cannot be sent"
+    },
+    {
+      "path": "#/paths/~1a~1{x}/get/parameters/8",
+      "message": "parameter \"q\": allowReserved is ignored, the value is always percent-encoded"
+    },
+    {
+      "path": "#/paths/~1b/servers",
+      "message": "servers of a path are not mapped: the base is the first server of the document"
+    },
+    {
+      "path": "#/paths/~1b/post/parameters/0",
+      "message": "parameter \"need\" is a cookie: a descriptor sets no cookies"
+    },
+    {
+      "path": "#/paths/~1b/post",
+      "message": "the operation is left out"
+    },
+    {
+      "path": "#/paths/~1b/put/requestBody/content",
+      "message": "no media type is mapped (application/xml): application/json and application/x-www-form-urlencoded are"
+    },
+    {
+      "path": "#/paths/~1b/put",
+      "message": "the operation is left out"
+    },
+    {
+      "path": "#/paths/~1b/patch/requestBody/content",
+      "message": "no media type is mapped (application/octet-stream): application/json and application/x-www-form-urlencoded are"
+    },
+    {
+      "path": "#/paths/~1b/patch/security",
+      "message": "no security alternative can be mapped (\"oauth\" (oauth2) is not mapped: apiKey in a header, http bearer and http basic are): the operation has no authentication"
+    },
+    {
+      "path": "#/paths/~1b/delete/parameters/0",
+      "message": "$ref \"#/components/parameters/nowhere\" is not followed: only references into this document (#/components/...) are"
+    },
+    {
+      "path": "#/paths/~1b/delete/parameters/1",
+      "message": "$ref \"https://example.com/p.json\" is not followed: only references into this document (#/components/...) are"
+    },
+    {
+      "path": "#/paths/~1b/delete/parameters/2",
+      "message": "a parameter without a name and a place is left out"
+    },
+    {
+      "path": "#/paths/~1b/delete/security",
+      "message": "no security alternative can be mapped (\"ghost\" is not a defined security scheme; \"keyq\" is an API key in query: the secret would be in the url, which the outbox shows; \"keyc\" is an API key in cookie: a descriptor sets no cookies; \"digest\" (http digest) is not mapped: apiKey in a header, http bearer and http basic are; two schemes write the same header): the operation has no authentication"
+    },
+    {
+      "path": "#/paths/~1c/get/requestBody/content/application~1json/schema/required",
+      "message": "names without a declared property are dropped from \"required\""
+    },
+    {
+      "path": "#/paths/~1c/get/requestBody/content/application~1json/schema/additionalProperties",
+      "message": "a schema for the other properties cannot be said: they are not checked"
+    },
+    {
+      "path": "#/paths/~1d~1{id}~1{missing}/get",
+      "message": "the path /d/{id}/{missing} names a parameter that is not declared as a path parameter: the operation is left out"
+    },
+    {
+      "path": "#/paths/~1d~1{id}~1{missing}/get",
+      "message": "the operation is left out"
+    },
+    {
+      "path": "#/paths/~1e~1{a/get",
+      "message": "the path /e/{a names a parameter that is not declared as a path parameter: the operation is left out"
+    },
+    {
+      "path": "#/paths/~1e~1{a/get",
+      "message": "the operation is left out"
+    },
+    {
+      "path": "#/paths/no-slash",
+      "message": "a path starts with \"/\": left out"
+    },
+    {
+      "path": "#/paths/~1f",
+      "message": "$ref \"#/paths/~1missing\" is not followed: only references into this document (#/components/...) are"
+    },
+    {
+      "path": "#/paths/~1g",
+      "message": "a path item is an object: left out"
+    },
+    {
+      "path": "#/servers",
+      "message": "the document has no servers: the base url is the connector's configuration, config.baseUrl"
+    }
+  ]
+}

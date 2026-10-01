@@ -1,0 +1,173 @@
+{
+  "descriptor": {
+    "descriptor": 1,
+    "name": "x",
+    "title": "Payments",
+    "version": "2026-01",
+    "modes": [
+      "live"
+    ],
+    "base": "https://api.payments.test",
+    "idempotency": {
+      "header": "Idempotency-Key"
+    },
+    "operations": {
+      "createCharge": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[a-z]{3}$"
+                },
+                "metadata[order]": {
+                  "type": "string"
+                },
+                "capture": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "kind": {
+                  "enum": [
+                    "card"
+                  ]
+                }
+              },
+              "required": [
+                "amount",
+                "currency"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "body"
+          ]
+        },
+        "request": {
+          "method": "POST",
+          "url": "{base}/v1/charges",
+          "headers": {
+            "accept": "application/json",
+            "authorization": "Basic {secret.basic}"
+          },
+          "body": {
+            "$": "input.body"
+          },
+          "encoding": "form"
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "refund": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "idempotency_key": {
+              "type": "string"
+            },
+            "amount": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "request": {
+          "method": "POST",
+          "url": "{base}/v1/charges/{input.id}/refunds",
+          "headers": {
+            "accept": "application/json",
+            "idempotency_key": {
+              "$": "input.idempotency_key"
+            },
+            "authorization": "Basic {secret.basic}"
+          },
+          "body": {
+            "amount": {
+              "$": "input.amount"
+            }
+          },
+          "encoding": "form"
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "getCharge": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "request": {
+          "method": "GET",
+          "url": "{base}/v1/charges/{input.id}"
+        }
+      }
+    }
+  },
+  "unsupported": [
+    {
+      "path": "#/paths/~1v1~1charges/post/parameters/1",
+      "message": "parameter \"Content-Type\" is a header that OpenAPI ignores or a header name that cannot be sent"
+    },
+    {
+      "path": "#/paths/~1v1~1charges/post/requestBody/content",
+      "message": "multipart/form-data not mapped: the body is sent as application/x-www-form-urlencoded"
+    },
+    {
+      "path": "#/paths/~1v1~1charges/post/requestBody/content/application~1x-www-form-urlencoded/schema/properties/capture/type",
+      "message": "null is no longer accepted: the subset has one type per schema"
+    },
+    {
+      "path": "#/components/securitySchemes/basic",
+      "message": "basic authentication: a template cannot encode user:password, so the secret \"basic\" must hold base64(user:password) already"
+    },
+    {
+      "path": "#/paths/~1v1~1charges~1{id}~1refunds/post/parameters/1",
+      "message": "parameter \"idempotency_key\" cannot be the idempotency header (one name, letters, digits and \"-\", for the whole descriptor): it stays an input"
+    },
+    {
+      "path": "#/paths/~1v1~1charges~1{id}/get/responses/200/content",
+      "message": "the answer is text/plain, not JSON: not mapped"
+    }
+  ]
+}
