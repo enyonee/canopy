@@ -70,6 +70,7 @@
     }
   },
   "sandbox": {
+    "test": { "op": "postMessage", "input": { "channel": "#test", "text": "Settings screen test" } },
     "operations": {
       "postMessage": [
         { "when": { "input.channel": "#nowhere" }, "body": { "ok": false, "error": "channel_not_found" } },

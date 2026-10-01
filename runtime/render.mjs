@@ -112,6 +112,7 @@ function navLinks(graph, vc) {
   for (const l of graph.lists || []) if (!l.hidden && vc.canSee(l)) out.push(`<a href="/list/${l.id}">${esc(l.title)}</a>`);
   for (const d of graph.dashboards || []) if (vc.canSee(d)) out.push(`<a href="/dashboard/${d.id}">${esc(d.title)}</a>`);
   if (graph.connectors && vc.outbox) out.push('<a href="/outbox">Outbox</a>');
+  if (graph.connectors && vc.settings) out.push('<a href="/settings">Settings</a>');
   return out.join('');
 }
 

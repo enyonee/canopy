@@ -284,6 +284,7 @@ export interface ViewContext {
   prime: (entity: string, rows: any[]) => void;
   isAdmin?: boolean;
   outbox?: boolean;
+  settings?: boolean;
   enabled?: boolean;
 }
 
@@ -378,6 +379,7 @@ declare module './store.mjs' {
     outboxDefer(id: any, at: number): void;
     outboxMark(id: any, from: string, patch: Record<string, any>): boolean;
     breakerGet(connector: string, mode: string): BreakerState & { connector: string; mode: string };
+    outboxStats(sinceIso: string): Record<string, { sent: number; failed: number; unknown: number; drift: number }>;
     breakers(): Array<BreakerState & { connector: string; mode: string }>;
     breakerRecord(connector: string, mode: string, event: 'failure' | 'success', now: number, cfg?: Partial<BreakerPolicy>): { before: BreakerState; after: BreakerState };
     breakerClaim(connector: string, mode: string, now: number, cfg?: Partial<BreakerPolicy>): boolean;

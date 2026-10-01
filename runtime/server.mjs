@@ -24,6 +24,7 @@ import * as entity from './routes/entity.mjs';
 import * as widgets from './routes/widgets.mjs';
 import * as schedule from './routes/schedule.mjs';
 import * as hooks from './routes/hooks.mjs';
+import * as settings from './routes/settings.mjs';
 import { everyMs } from './schedule.mjs';
 import { flush } from './outbox.mjs';
 import { systemClock } from './clock.mjs';
@@ -45,6 +46,7 @@ async function dispatch(ctx) {
   if (await session.handle(ctx)) return;
   if (ctx.perms.enabled && !ctx.role) { ctx.deny('Please sign in.'); return; }
   if (await views.handle(ctx)) return;
+  if (await settings.handle(ctx)) return;
   if (await system.handle(ctx)) return;
   if (await schedule.handle(ctx)) return;
   await entity.handle(ctx); // terminal: answers even when nothing else matches
@@ -137,7 +139,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
-    const ctx = createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env });
+    const ctx = createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile });
     try {
       await dispatch(ctx);
     } catch (e) {
