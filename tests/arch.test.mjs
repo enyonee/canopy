@@ -197,7 +197,7 @@ test('function size budget: no function/method body exceeds ' + MAX_FUNCTION_LIN
 // `node:` built-ins, and a cycle check over the same edges.
 // ---------------------------------------------------------------------------
 const ALLOWED = {
-  'runtime/admin.mjs': ['runtime/secrets.mjs', 'runtime/deploy.mjs', 'runtime/connectors/engine.mjs', 'runtime/connectors/signature.mjs', 'runtime/connectors/inbound.mjs', 'runtime/clock.mjs'],
+  'runtime/admin.mjs': ['runtime/secrets.mjs', 'runtime/deploy.mjs', 'runtime/connectors/engine.mjs', 'runtime/connectors/signature.mjs', 'runtime/connectors/inbound.mjs', 'runtime/connectors/descriptor.mjs', 'runtime/connectors/openapi.mjs', 'runtime/clock.mjs'],
   'runtime/auth.mjs': [],
   'runtime/blocks.mjs': ['runtime/fields.mjs', 'runtime/connectors/engine.mjs', 'runtime/check/calls.mjs'],
   'runtime/boot.mjs': [],
@@ -230,6 +230,9 @@ const ALLOWED = {
   'runtime/connectors/form.mjs': [],
   'runtime/connectors/inbound.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/signature.mjs'],
   'runtime/connectors/engine.mjs': ['runtime/connectors/form.mjs', 'runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/descriptor.mjs', 'runtime/connectors/backoff.mjs', 'runtime/connectors/sandbox.mjs', 'runtime/clock.mjs'],
+  'runtime/connectors/oas_request.mjs': ['runtime/connectors/oas_schema.mjs'],
+  'runtime/connectors/oas_schema.mjs': ['runtime/connectors/schema.mjs'],
+  'runtime/connectors/openapi.mjs': ['runtime/connectors/descriptor.mjs', 'runtime/connectors/oas_schema.mjs', 'runtime/connectors/oas_request.mjs'],
   'runtime/connectors/redact.mjs': [],
   'runtime/connectors/sandbox.mjs': ['runtime/connectors/template.mjs'],
   'runtime/connectors/schema.mjs': [],
@@ -293,7 +296,7 @@ const ALLOWED = {
 };
 
 const NODE_BUILTINS = {
-  'runtime/admin.mjs': ['node:fs', 'node:crypto'],
+  'runtime/admin.mjs': ['node:fs', 'node:path', 'node:crypto'],
   'runtime/connectors/backoff.mjs': ['node:crypto'],
   'runtime/connectors/signature.mjs': ['node:crypto'],
   'runtime/auth.mjs': ['node:crypto', 'node:fs'],

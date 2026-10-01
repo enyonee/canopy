@@ -2,12 +2,16 @@
 //   --connectors status | live NAME --confirm | sandbox NAME     (the mode of each connector: deploy.json)
 //   --connectors simulate NAME EVENT --data f.json [--port N]    (POST a signed webhook to the running app)
 //   --secrets set NAME | list | rm NAME                          (the secret store: secrets.enc)
+//   --import-openapi spec.json --name x [--out FILE]             (a draft descriptor from an OpenAPI 3 document: JSON only)
 // A secret's value is read from stdin, never from an argument (the shell would keep it in its history),
 // and nothing here prints one. Every refusal says what to do and changes nothing.
 import fs from 'node:fs';
+import path from 'node:path';
 import { openSecrets } from './secrets.mjs';
 import { readDeploy, writeMode, connectorModes, MODES } from './deploy.mjs';
 import { secretSlots, secretName } from './connectors/engine.mjs';
+import { checkDescriptor } from './connectors/descriptor.mjs';
+import { importOpenapi } from './connectors/openapi.mjs';
 import { signHeaders } from './connectors/signature.mjs';
 import { typeOf } from './connectors/inbound.mjs';
 import { systemClock } from './clock.mjs';
@@ -107,6 +111,36 @@ export async function admin(argv, { graph, registry, dir, log, err, stdin, fetch
     return 0;
   } catch (e) {
     err(e.message);
+    return 1;
+  }
+}
+
+/**
+ * `--import-openapi spec.json --name x [--out FILE]`: the descriptor an OpenAPI 3 document (JSON) describes, printed or
+ * written, and what could not be mapped, on stderr. A draft for a human to review and commit. Null when `argv` is not
+ * this command; the exit code otherwise (2 usage, 1 a spec that is not OpenAPI or a result the checker refuses).
+ * @param {string[]} argv
+ * @param {{ log: (m: string) => void, err: (m: string) => void }} io
+ */
+export function importCommand(argv, { log, err }) {
+  const option = (n) => { const i = argv.indexOf(`--${n}`); return i === -1 ? undefined : argv[i + 1]; };
+  if (!argv.includes('--import-openapi')) return null;
+  const file = option('import-openapi');
+  const name = option('name');
+  if (!file || file.startsWith('--') || !name || name.startsWith('--')) { err('usage: run.mjs --import-openapi spec.json --name NAME [--out FILE]'); return 2; }
+  try {
+    const { descriptor, unsupported } = importOpenapi(JSON.parse(fs.readFileSync(file, 'utf8')), { name });
+    const bad = checkDescriptor(descriptor);
+    for (const { path: at, message } of unsupported) err(`not mapped: ${at}: ${message}`);
+    if (bad.length) { err(`the import would not pass the descriptor checker:\n${bad.map(([p, m]) => `  ${p}: ${m}`).join('\n')}`); return 1; }
+    const text = `${JSON.stringify(descriptor, null, 2)}\n`;
+    const out = option('out');
+    if (out) { fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true }); fs.writeFileSync(out, text); log(`wrote ${out}`); } else log(text.trimEnd());
+    const slots = secretSlots(descriptor);
+    err(`${unsupported.length} things not mapped. This is a DRAFT for a human to review and commit: live only, no sandbox rules, no retry policy.${slots.length ? ` Secret slots: ${slots.join(', ')} (--secrets set NAME, then "secrets" in the graph).` : ''}`);
+    return 0;
+  } catch (e) {
+    err(e instanceof SyntaxError ? `${file} is not JSON: ${e.message} (YAML is not supported, the runtime has no dependencies: convert the document to JSON first)` : e.message);
     return 1;
   }
 }
