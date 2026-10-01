@@ -6,9 +6,11 @@ import fs from 'node:fs';
 import { serve } from './server.mjs';
 import { validate, formatErrors } from './validate.mjs';
 import { loadPlugins } from './registry.mjs';
-import { admin } from './admin.mjs';
+import { admin, importCommand } from './admin.mjs';
 
 export async function main(argv, { log = console.log, err = console.error, stdin = async () => '', fetchImpl = undefined, clock = undefined } = {}) {
+  const imported = importCommand(argv, { log, err });
+  if (imported !== null) return { code: imported };
   const graphFile = argv.find((a) => !a.startsWith('--'));
   const flag = (name, def) => {
     const i = argv.indexOf(`--${name}`);
