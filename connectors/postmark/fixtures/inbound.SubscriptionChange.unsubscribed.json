@@ -1,0 +1,25 @@
+{
+  "inbound": "SubscriptionChange",
+  "case": "unsubscribed",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://postmarkapp.com/developer/webhooks/subscription-change-webhook",
+  "request": {
+    "headers": { "content-type": "application/json" },
+    "body": {
+      "RecordType": "SubscriptionChange",
+      "MessageID": "00000000-0000-4000-8000-000000000001",
+      "ServerID": 23,
+      "MessageStream": "outbound",
+      "ChangedAt": "2023-11-14T22:13:20.0000000Z",
+      "Recipient": "ann@example.test",
+      "Origin": "Recipient",
+      "SuppressSending": true,
+      "SuppressionReason": "ManualSuppression",
+      "Tag": "receipt",
+      "Metadata": { "order": "7" }
+    }
+  },
+  "values": { "email": "ann@example.test", "suppress": true, "reason": "ManualSuppression", "messageId": "00000000-0000-4000-8000-000000000001" }
+}

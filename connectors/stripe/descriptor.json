@@ -1,0 +1,224 @@
+{
+  "descriptor": 1,
+  "name": "stripe",
+  "title": "Stripe: PaymentIntents (create, retrieve, confirm), refunds and signed webhooks",
+  "version": "2024-06-20",
+  "modes": ["sandbox", "live"],
+  "base": "https://api.stripe.com",
+  "timeoutMs": 10000,
+  "idempotency": { "header": "Idempotency-Key" },
+  "retry": { "max": 5, "baseMs": 1000, "capMs": 60000 },
+  "operations": {
+    "createPaymentIntent": {
+      "summary": "create a PaymentIntent (amount in the currency's smallest unit, currency in lower case); with confirm and a paymentMethod it is charged at once",
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": ["amount", "currency"],
+        "properties": {
+          "amount": { "type": "integer", "minimum": 1, "maximum": 99999999 },
+          "currency": { "type": "string", "pattern": "^[a-z]{3}$", "message": "a currency is three lower case letters, like usd" },
+          "description": { "type": "string", "maxLength": 1000 },
+          "paymentMethod": { "type": "string", "pattern": "^pm_[A-Za-z0-9_]+$", "message": "a payment method is a Stripe id, pm_..." },
+          "confirm": { "type": "boolean" },
+          "metadata": { "type": "object" }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v1/payment_intents",
+        "encoding": "form",
+        "headers": { "authorization": "Bearer {secret.apiKey}", "stripe-version": "2024-06-20" },
+        "body": {
+          "amount": { "$": "input.amount" },
+          "currency": { "$": "input.currency" },
+          "description": { "$": "input.description" },
+          "payment_method": { "$": "input.paymentMethod" },
+          "confirm": { "$": "input.confirm" },
+          "metadata": { "$": "input.metadata" },
+          "automatic_payment_methods": { "enabled": true, "allow_redirects": "never" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "object": { "type": "string" },
+          "status": { "type": "string" },
+          "amount": { "type": "integer" },
+          "currency": { "type": "string" },
+          "client_secret": { "type": "string" },
+          "livemode": { "type": "boolean" },
+          "metadata": { "type": "object" }
+        }
+      },
+      "result": { "id": "$.id", "status": "$.status" }
+    },
+    "retrievePaymentIntent": {
+      "summary": "read a PaymentIntent by its id",
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "string", "pattern": "^pi_[A-Za-z0-9_]+$", "message": "a PaymentIntent is a Stripe id, pi_..." } }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/payment_intents/{input.id}",
+        "headers": { "authorization": "Bearer {secret.apiKey}", "stripe-version": "2024-06-20" }
+      },
+      "output": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "object": { "type": "string" },
+          "status": { "type": "string" },
+          "amount": { "type": "integer" },
+          "currency": { "type": "string" },
+          "livemode": { "type": "boolean" },
+          "metadata": { "type": "object" }
+        }
+      },
+      "result": { "id": "$.id", "status": "$.status" }
+    },
+    "confirmPaymentIntent": {
+      "summary": "confirm a PaymentIntent, optionally with the payment method to charge",
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^pi_[A-Za-z0-9_]+$", "message": "a PaymentIntent is a Stripe id, pi_..." },
+          "paymentMethod": { "type": "string", "pattern": "^pm_[A-Za-z0-9_]+$", "message": "a payment method is a Stripe id, pm_..." }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v1/payment_intents/{input.id}/confirm",
+        "encoding": "form",
+        "headers": { "authorization": "Bearer {secret.apiKey}", "stripe-version": "2024-06-20" },
+        "body": { "payment_method": { "$": "input.paymentMethod" } }
+      },
+      "output": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "object": { "type": "string" },
+          "status": { "type": "string" },
+          "amount": { "type": "integer" },
+          "currency": { "type": "string" },
+          "livemode": { "type": "boolean" },
+          "metadata": { "type": "object" }
+        }
+      },
+      "result": { "id": "$.id", "status": "$.status" }
+    },
+    "createRefund": {
+      "summary": "refund a PaymentIntent, all of it or an amount",
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": ["paymentIntent"],
+        "properties": {
+          "paymentIntent": { "type": "string", "pattern": "^pi_[A-Za-z0-9_]+$", "message": "a PaymentIntent is a Stripe id, pi_..." },
+          "amount": { "type": "integer", "minimum": 1, "maximum": 99999999 },
+          "reason": { "type": "string", "enum": ["duplicate", "fraudulent", "requested_by_customer"] },
+          "metadata": { "type": "object" }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v1/refunds",
+        "encoding": "form",
+        "headers": { "authorization": "Bearer {secret.apiKey}", "stripe-version": "2024-06-20" },
+        "body": {
+          "payment_intent": { "$": "input.paymentIntent" },
+          "amount": { "$": "input.amount" },
+          "reason": { "$": "input.reason" },
+          "metadata": { "$": "input.metadata" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "object": { "type": "string" },
+          "status": { "type": "string" },
+          "amount": { "type": "integer" },
+          "currency": { "type": "string" },
+          "payment_intent": { "type": "string" }
+        }
+      },
+      "result": { "id": "$.id", "status": "$.status" }
+    }
+  },
+  "inbound": {
+    "signature": { "scheme": "stripe" },
+    "secret": "webhookSecret",
+    "toleranceS": 300,
+    "eventId": "$.id",
+    "type": "$.type",
+    "events": {
+      "payment_intent.succeeded": {
+        "schema": {
+          "type": "object",
+          "required": ["id", "type", "data"],
+          "properties": {
+            "id": { "type": "string" },
+            "type": { "type": "string" },
+            "data": { "type": "object", "required": ["object"], "properties": { "object": { "type": "object", "required": ["id", "amount"], "properties": { "id": { "type": "string" }, "amount": { "type": "integer" } } } } }
+          }
+        },
+        "map": { "intent": "$.data.object.id", "amount": "$.data.object.amount", "currency": "$.data.object.currency", "order": "$.data.object.metadata.order" }
+      },
+      "payment_intent.payment_failed": {
+        "schema": {
+          "type": "object",
+          "required": ["id", "type", "data"],
+          "properties": {
+            "id": { "type": "string" },
+            "type": { "type": "string" },
+            "data": { "type": "object", "required": ["object"], "properties": { "object": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } } }
+          }
+        },
+        "map": { "intent": "$.data.object.id", "order": "$.data.object.metadata.order", "reason": "$.data.object.last_payment_error.code" }
+      },
+      "charge.refunded": {
+        "schema": {
+          "type": "object",
+          "required": ["id", "type", "data"],
+          "properties": {
+            "id": { "type": "string" },
+            "type": { "type": "string" },
+            "data": { "type": "object", "required": ["object"], "properties": { "object": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } } }
+          }
+        },
+        "map": { "charge": "$.data.object.id", "intent": "$.data.object.payment_intent", "refunded": "$.data.object.amount_refunded", "order": "$.data.object.metadata.order" }
+      }
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createPaymentIntent": [
+        { "when": { "input.paymentMethod": "pm_card_chargeDeclined" }, "status": 402, "body": { "error": { "type": "card_error", "code": "card_declined", "decline_code": "generic_decline", "message": "Your card was declined." } } },
+        { "when": { "input.confirm": true }, "body": { "id": "pi_sbx_{key}", "object": "payment_intent", "status": "succeeded", "amount": { "$": "input.amount" }, "currency": { "$": "input.currency" }, "client_secret": "pi_sbx_{key}_secret_sandbox", "livemode": false, "metadata": { "$": "input.metadata" } } },
+        { "when": { "input.paymentMethod": { "present": true } }, "body": { "id": "pi_sbx_{key}", "object": "payment_intent", "status": "requires_confirmation", "amount": { "$": "input.amount" }, "currency": { "$": "input.currency" }, "client_secret": "pi_sbx_{key}_secret_sandbox", "livemode": false, "metadata": { "$": "input.metadata" } } },
+        { "body": { "id": "pi_sbx_{key}", "object": "payment_intent", "status": "requires_payment_method", "amount": { "$": "input.amount" }, "currency": { "$": "input.currency" }, "client_secret": "pi_sbx_{key}_secret_sandbox", "livemode": false, "metadata": { "$": "input.metadata" } } }
+      ],
+      "retrievePaymentIntent": [
+        { "body": { "id": { "$": "input.id" }, "object": "payment_intent", "status": "succeeded", "livemode": false } }
+      ],
+      "confirmPaymentIntent": [
+        { "when": { "input.paymentMethod": "pm_card_chargeDeclined" }, "status": 402, "body": { "error": { "type": "card_error", "code": "card_declined", "decline_code": "generic_decline", "message": "Your card was declined." } } },
+        { "body": { "id": { "$": "input.id" }, "object": "payment_intent", "status": "succeeded", "livemode": false } }
+      ],
+      "createRefund": [
+        { "body": { "id": "re_sbx_{key}", "object": "refund", "status": "succeeded", "amount": { "$": "input.amount" }, "payment_intent": { "$": "input.paymentIntent" } } }
+      ]
+    }
+  }
+}

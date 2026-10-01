@@ -14,8 +14,11 @@ import { checkInbound } from './inbound.mjs';
 export const MAX_TIMEOUT_MS = 30000;
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'modes', 'sandbox', 'inbound', 'operations'];
-const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result'];
-const REQUEST = ['method', 'url', 'headers', 'body'];
+const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result', 'failure'];
+const REQUEST = ['method', 'url', 'headers', 'body', 'encoding'];
+const ENCODINGS = ['json', 'form'];
+const FAILURE = ['path', 'equals', 'error', 'code', 'codes'];
+const isStatus = (n) => Number.isInteger(n) && n >= 400 && n <= 599;
 const NAME = /^[A-Za-z_][\w-]*$/;
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -55,6 +58,22 @@ function checkRequest(req, path, ctx) {
   }
   if (req.headers !== undefined) out.push(...(isObject(req.headers) ? checkRefs(req.headers, `${path}/headers`, ctx) : [[`${path}/headers`, '"headers" is an object']]));
   if (req.body !== undefined) out.push(...checkRefs(req.body, `${path}/body`, ctx));
+  if (req.encoding !== undefined && !ENCODINGS.includes(req.encoding)) out.push([`${path}/encoding`, `"encoding" is one of: ${ENCODINGS.join(', ')} (json is the default)`, '"encoding": "form" nests an object as a[b]=1']);
+  else if (req.encoding === 'form' && req.body !== undefined && !isObject(req.body)) out.push([`${path}/body`, 'a form body is an object of names and values']);
+  return out;
+}
+
+// A success status whose body says it failed (`failure`): the flag to look at, the reason, and the status it counts as.
+function checkFailure(f, path) {
+  if (!isObject(f)) return [[path, '"failure" is an object', '{"path": "$.ok", "equals": false, "error": "$.error", "code": 400}']];
+  const out = unknownKeys(f, FAILURE, path);
+  for (const k of ['path', 'error']) {
+    if (k === 'error' && f.error === undefined) continue;
+    try { pathSteps(f[k]); } catch (e) { out.push([`${path}/${k}`, e.message]); }
+  }
+  if (!['string', 'number', 'boolean'].includes(typeof f.equals)) out.push([`${path}/equals`, '"equals" is the text, number or true/false the flag has when the call failed']);
+  if (f.code !== undefined && !isStatus(f.code)) out.push([`${path}/code`, '"code" is the HTTP status (400 to 599) a failure counts as; default 400']);
+  if (f.codes !== undefined && !(isObject(f.codes) && Object.values(f.codes).every(isStatus))) out.push([`${path}/codes`, '"codes" maps a reason to the HTTP status (400 to 599) it counts as', '{"ratelimited": 429, "internal_error": 503}']);
   return out;
 }
 
@@ -83,6 +102,7 @@ function checkOperation(op, path, top) {
   out.push(...checkInput(op, `${path}/input`));
   out.push(...checkRequest(op.request, `${path}/request`, { input: op.input?.properties, config: top.config?.properties, base: top.base }));
   if (op.output !== undefined) out.push(...checkSchema(op.output, `${path}/output`));
+  if (op.failure !== undefined) out.push(...checkFailure(op.failure, `${path}/failure`));
   return out.concat(checkResult(op, `${path}/result`));
 }
 

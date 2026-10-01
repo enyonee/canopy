@@ -1,0 +1,21 @@
+{
+  "inbound": "payment_intent.succeeded",
+  "case": "paid",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/events/types#event_types-payment_intent.succeeded",
+  "request": {
+    "headers": { "content-type": "application/json" },
+    "body": {
+      "id": "evt_1Fixture0001",
+      "object": "event",
+      "api_version": "2024-06-20",
+      "created": 1700000000,
+      "livemode": false,
+      "type": "payment_intent.succeeded",
+      "data": { "object": { "id": "pi_3Fixture0001", "object": "payment_intent", "amount": 2500, "currency": "usd", "metadata": { "order": "7" }, "status": "succeeded" } }
+    }
+  },
+  "values": { "intent": "pi_3Fixture0001", "amount": 2500, "currency": "usd", "order": "7" }
+}

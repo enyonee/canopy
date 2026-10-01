@@ -1,0 +1,21 @@
+{
+  "inbound": "app_mention",
+  "case": "basic",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://api.slack.com/events/app_mention and the event_callback envelope",
+  "request": {
+    "headers": { "content-type": "application/json" },
+    "body": {
+      "token": "fixture-verification-token",
+      "team_id": "T0000FIXT",
+      "api_app_id": "A0000FIXT",
+      "type": "event_callback",
+      "event_id": "Ev0000FIXT1",
+      "event_time": 1700000000,
+      "event": { "type": "app_mention", "user": "U0000FIXT", "text": "<@U0000BOT> status of order 7?", "ts": "1700000000.000200", "channel": "C0000FIXT1", "event_ts": "1700000000.000200" }
+    }
+  },
+  "values": { "channel": "C0000FIXT1", "user": "U0000FIXT", "text": "<@U0000BOT> status of order 7?", "ts": "1700000000.000200" }
+}

@@ -1,0 +1,21 @@
+{
+  "inbound": "charge.refunded",
+  "case": "partial",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/events/types#event_types-charge.refunded",
+  "request": {
+    "headers": { "content-type": "application/json" },
+    "body": {
+      "id": "evt_1Fixture0003",
+      "object": "event",
+      "api_version": "2024-06-20",
+      "created": 1700000300,
+      "livemode": false,
+      "type": "charge.refunded",
+      "data": { "object": { "id": "ch_3Fixture0001", "object": "charge", "amount": 2500, "amount_refunded": 500, "currency": "usd", "payment_intent": "pi_3Fixture0001", "metadata": { "order": "7" }, "refunded": false } }
+    }
+  },
+  "values": { "charge": "ch_3Fixture0001", "intent": "pi_3Fixture0001", "refunded": 500, "order": "7" }
+}

@@ -1,0 +1,25 @@
+{
+  "op": "postMessage",
+  "case": "ratelimited",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://api.slack.com/apis/rate-limits: HTTP 429 with Retry-After",
+  "idemKey": "idem_fixture_1",
+  "input": { "channel": "#orders", "text": "burst", "threadTs": "1700000000.000100" },
+  "request": {
+    "method": "POST",
+    "url": "https://slack.com/api/chat.postMessage",
+    "headers": {
+      "authorization": "«redacted»",
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": { "channel": "#orders", "text": "burst", "thread_ts": "1700000000.000100" }
+  },
+  "response": {
+    "status": 429,
+    "headers": { "content-type": "application/json; charset=utf-8", "retry-after": "30" },
+    "body": { "ok": false, "error": "ratelimited" }
+  },
+  "outcome": { "status": "failed", "code": 429, "error": "HTTP 429" }
+}

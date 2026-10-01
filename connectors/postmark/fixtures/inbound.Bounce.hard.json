@@ -1,0 +1,32 @@
+{
+  "inbound": "Bounce",
+  "case": "hard",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://postmarkapp.com/developer/webhooks/bounce-webhook",
+  "request": {
+    "headers": { "content-type": "application/json" },
+    "body": {
+      "RecordType": "Bounce",
+      "ID": 692560173,
+      "Type": "HardBounce",
+      "TypeCode": 1,
+      "Tag": "receipt",
+      "MessageID": "00000000-0000-4000-8000-000000000001",
+      "Details": "Test bounce details",
+      "Email": "ann@example.test",
+      "From": "shop@example.test",
+      "BouncedAt": "2023-11-14T22:13:20.0000000Z",
+      "Inactive": true,
+      "DumpAvailable": true,
+      "CanActivate": true,
+      "Subject": "Receipt for order 7",
+      "ServerID": 23,
+      "MessageStream": "outbound",
+      "Name": "Hard bounce",
+      "Description": "The server was unable to deliver your message"
+    }
+  },
+  "values": { "email": "ann@example.test", "kind": "HardBounce", "messageId": "00000000-0000-4000-8000-000000000001", "inactive": true }
+}

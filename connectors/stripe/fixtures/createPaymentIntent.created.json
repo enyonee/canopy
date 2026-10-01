@@ -1,0 +1,43 @@
+{
+  "op": "createPaymentIntent",
+  "case": "created",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/payment_intents/create; not recorded against the live API",
+  "idemKey": "idem_fixture_1",
+  "input": { "amount": 2500, "currency": "usd", "description": "Order 7", "metadata": { "order": "7" } },
+  "request": {
+    "method": "POST",
+    "url": "https://api.stripe.com/v1/payment_intents",
+    "headers": {
+      "authorization": "«redacted»",
+      "stripe-version": "2024-06-20",
+      "idempotency-key": "idem_fixture_1",
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "amount=2500&currency=usd&description=Order%207&metadata[order]=7&automatic_payment_methods[enabled]=true&automatic_payment_methods[allow_redirects]=never"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "application/json", "request-id": "req_fixture_1" },
+    "body": {
+      "id": "pi_3Fixture0001",
+      "object": "payment_intent",
+      "amount": 2500,
+      "amount_capturable": 0,
+      "amount_received": 0,
+      "automatic_payment_methods": { "allow_redirects": "never", "enabled": true },
+      "capture_method": "automatic",
+      "client_secret": "pi_3Fixture0001_secret_f01",
+      "confirmation_method": "automatic",
+      "created": 1700000000,
+      "currency": "usd",
+      "description": "Order 7",
+      "livemode": false,
+      "metadata": { "order": "7" },
+      "payment_method": null,
+      "status": "requires_payment_method"
+    }
+  }
+}

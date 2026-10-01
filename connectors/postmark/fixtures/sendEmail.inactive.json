@@ -1,0 +1,35 @@
+{
+  "op": "sendEmail",
+  "case": "inactive",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://postmarkapp.com/developer/api/overview#error-codes (406: inactive recipient)",
+  "idemKey": "idem_fixture_1",
+  "config": { "from": "shop@example.test" },
+  "input": { "to": "inactive@example.test", "subject": "Hello", "html": "<p>Hello</p>" },
+  "request": {
+    "method": "POST",
+    "url": "https://api.postmarkapp.com/email",
+    "headers": {
+      "accept": "application/json",
+      "content-type": "application/json",
+      "x-postmark-server-token": "«redacted»"
+    },
+    "body": {
+      "From": "shop@example.test",
+      "To": "inactive@example.test",
+      "Subject": "Hello",
+      "HtmlBody": "<p>Hello</p>",
+      "MessageStream": "outbound"
+    }
+  },
+  "response": {
+    "status": 422,
+    "headers": { "content-type": "application/json; charset=utf-8" },
+    "body": {
+      "ErrorCode": 406,
+      "Message": "You tried to send to a recipient that has been marked as inactive."
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "op": "createRefund",
+  "case": "partial",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/refunds/create (amount, reason and metadata)",
+  "idemKey": "idem_fixture_1",
+  "input": { "paymentIntent": "pi_3Fixture0001", "amount": 500, "reason": "requested_by_customer", "metadata": { "order": "7" } },
+  "request": {
+    "method": "POST",
+    "url": "https://api.stripe.com/v1/refunds",
+    "headers": {
+      "authorization": "«redacted»",
+      "stripe-version": "2024-06-20",
+      "idempotency-key": "idem_fixture_1",
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "payment_intent=pi_3Fixture0001&amount=500&reason=requested_by_customer&metadata[order]=7"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "application/json", "request-id": "req_fixture_7" },
+    "body": {
+      "id": "re_3Fixture0002",
+      "object": "refund",
+      "amount": 500,
+      "created": 1700000300,
+      "currency": "usd",
+      "metadata": { "order": "7" },
+      "payment_intent": "pi_3Fixture0001",
+      "reason": "requested_by_customer",
+      "status": "succeeded"
+    }
+  }
+}
