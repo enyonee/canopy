@@ -647,7 +647,7 @@ const LOADERS = [
 const LOADER_FNS = ['ownWhere', 'resolveTop', 'exportRows', 'paged', 'renderForm', 'renderDetail', 'listPre', 'formPre', 'detailPre', 'pagePre',
   'searchPre', 'registerPre', 'dashboardPre', 'bootstrapIdentity', 'bootstrapSeed', 'createContext',
   // the interpreter's own steps (runtime/interp.mjs) and the outbox (runtime/outbox.mjs)
-  'runSteps', 'fireEvents', 'fireInbound', 'take', 'interpolate', 'refValue', 'readFrom', 'exprCtx', 'afterPath', 'flushNow', 'withEffects', 'admit', 'deliver', 'flush'];
+  'runSteps', 'fireEvents', 'fireInbound', 'take', 'itemsOf', 'interpolate', 'refValue', 'readFrom', 'exprCtx', 'afterPath', 'flushNow', 'withEffects', 'admit', 'deliver', 'flush'];
 // What a block's `run(ctx)` is handed: each answers a Promise (resolve/text load, run and fireCreated run steps). Checked in
 // blocks.mjs and in every plugin, where they are plain names destructured from the ctx.
 const BLOCK_FNS = ['resolve', 'text', 'run', 'fireCreated'];

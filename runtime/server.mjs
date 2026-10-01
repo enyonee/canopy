@@ -114,7 +114,7 @@ export function startFlusher({ store, graph, server, trace, noTimers, clock = sy
 }
 
 // The request handler of a booted app: one request context per request, the route modules in order.
-function requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env }) {
+function requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
   return async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const ctx = await createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile });
@@ -168,7 +168,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     // The deploy file (each connector's mode) must be sound before anything is delivered.
     const env = connectorEnv(dir, graph.app);
     try { env.deploy(); } catch (e) { return refuse([{ path: '/deploy.json', message: e.message }]); }
-    const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl, clock, env, graphFile });
+    const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl, clock, env });
     handle = requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile });
     startTimers(graph, interp, trace, server, noTimers);
     app.flusher = startFlusher({ store, graph, server, trace, noTimers, clock, registry, fetchImpl, env });

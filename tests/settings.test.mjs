@@ -58,15 +58,15 @@ test('the counts: the last 24 hours of the outbox per connector in one grouped q
   t.after(app.close);
   await asAdmin(app);
   const { store } = app.app;
-  const mk = (connector, status, drift = 0, old = false) => {
-    const id = store.enqueue({ kind: 'slack', connector, target: 'x', payload: {}, op: 'postMessage' });
+  const mk = async (connector, status, drift = 0, old = false) => {
+    const id = await store.enqueue({ kind: 'slack', connector, target: 'x', payload: {}, op: 'postMessage' });
     store.drv.run('UPDATE "_outbox" SET "status"=?, "drift"=?, "updatedAt"=? WHERE id=?', [status, drift, old ? '2000-01-01T00:00:00.000Z' : new Date().toISOString(), id]);
   };
-  mk('staff', 'sent'); mk('staff', 'sent', 1); mk('staff', 'failed'); mk('staff', 'unknown'); mk('staff', 'sent', 0, true); mk('mail', 'failed');
+  await mk('staff', 'sent'); await mk('staff', 'sent', 1); await mk('staff', 'failed'); await mk('staff', 'unknown'); await mk('staff', 'sent', 0, true); await mk('mail', 'failed');
   const html = (await app.get('/settings')).html;
   assert.match(html, /<h3>staff[\s\S]*?Last 24 hours: sent 2, failed 1, unknown 1, drift 1/);
   assert.match(html, /<h3>mail[\s\S]*?Last 24 hours: sent 0, failed 1, unknown 0, drift 0/);
-  store.breakerRecord('staff', 'sandbox', 'failure', Date.now(), { threshold: 1, cooldownMs: 60000 });
+  await store.breakerRecord('staff', 'sandbox', 'failure', Date.now(), { threshold: 1, cooldownMs: 60000 });
   assert.match((await app.get('/settings')).html, /sandbox: <span class="status">open<\/span> 1 failure\(s\) until /);
 });
 
@@ -241,8 +241,8 @@ test('N connectors cost the same number of queries: GET /settings never asks the
     t.after(app.close);
     await asAdmin(app);
     for (let i = 0; i < n; i++) {
-      app.app.store.enqueue({ kind: 'slack', connector: `c${i}`, target: 'x', payload: {}, op: 'postMessage' });
-      app.app.store.breakerRecord(`c${i}`, 'sandbox', 'failure', Date.now(), { threshold: 1 });
+      await app.app.store.enqueue({ kind: 'slack', connector: `c${i}`, target: 'x', payload: {}, op: 'postMessage' });
+      await app.app.store.breakerRecord(`c${i}`, 'sandbox', 'failure', Date.now(), { threshold: 1 });
     }
     let queries = 0;
     app.app.store.drv.onQuery = (_sql, opts) => { if (opts?.cache !== false) queries++; };
@@ -303,9 +303,9 @@ test('send test, sandbox: runs one operation through the sandbox rules and shows
   assert.match((await test('m')).html, /has no sandbox operation to test/);
   assert.equal((await test('h')).status, 400, 'the http kind is live only');
   assert.equal((await test('nobody')).status, 404);
-  assert.equal(app.app.store.outbox().length, 0, 'nothing was queued');
+  assert.equal((await app.app.store.outbox()).length, 0, 'nothing was queued');
   assert.equal(app.net.calls.length, 0, 'nothing was sent');
-  assert.deepEqual(app.app.store.breakers(), [], 'the breaker was not touched');
+  assert.deepEqual(await app.app.store.breakers(), [], 'the breaker was not touched');
   assert.ok(app.trace().some((e) => e.kind === 'settings_test' && e.connector === 'pay' && e.status === 'sent'));
   const page = (await app.get('/settings')).html;
   assert.match(page, /<form class="inline" method="post" action="\/settings\/test"><input type="hidden" name="connector" value="pay">/);
@@ -322,7 +322,7 @@ test('send test is refused when the connector is live (deploy.json), and nothing
   assert.equal(r.status, 400);
   assert.match(r.html, /pay runs live: a test is never sent from this screen/);
   assert.equal(app.net.calls.length, 0);
-  assert.equal(app.app.store.outbox().length, 0);
+  assert.equal((await app.app.store.outbox()).length, 0);
   const page = (await app.get('/settings')).html;
   assert.match(page, /<h3>pay <span[^>]*>stripe<\/span> <span class="status">live<\/span>/);
   assert.match(page, /Send test runs in sandbox mode only; this connector is live\./);

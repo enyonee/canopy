@@ -41,11 +41,11 @@ function testOf(d) {
   return op ? { op, input: d.sandbox.test?.input ?? {} } : null;
 }
 
-function itemsOf(ctx) {
+async function itemsOf(ctx) {
   const { graph, registry, store, env, clock, interp } = ctx;
   const names = storeNames(env.secrets);
-  const stats = store.outboxStats(new Date(clock.now() - DAY_MS).toISOString());
-  const breakers = new Map(store.breakers().map((b) => [`${b.connector}|${b.mode}`, b]));
+  const stats = await store.outboxStats(new Date(clock.now() - DAY_MS).toISOString());
+  const breakers = new Map((await store.breakers()).map((b) => [`${b.connector}|${b.mode}`, b]));
   const items = interp.modes().map((m) => {
     const d = registry.descriptors[m.kind];
     const c = graph.connectors[m.connector];
@@ -61,9 +61,9 @@ function itemsOf(ctx) {
 const plainItem = (it) => ({ connector: it.connector, kind: it.kind, mode: it.mode, modes: it.modes, breakers: it.breakers, counts: it.counts,
   slots: it.slots.map((s) => ({ slot: s.slot, name: s.name, set: s.set })), webhook: it.hook, test: it.test });
 
-function show(ctx, extra = {}) {
+async function show(ctx, extra = {}) {
   const { graph, vc, flash } = ctx;
-  const model = { ...itemsOf(ctx), ...extra };
+  const model = { ...await itemsOf(ctx), ...extra };
   ctx.headers['cache-control'] = 'no-store';
   ctx.answer(200, settingsView(graph, vc, flash, model), { ok: true, connectors: model.items.map(plainItem), test: extra.test ?? null });
 }
@@ -134,7 +134,7 @@ async function sendTest(ctx) {
   const shape = raw === undefined ? null : shapeOfText(raw);
   const test = { connector: name, op: t.op, status: patch.status, code: patch.code ?? null, error: patch.error ? redact(patch.error, held(env.secrets)) : null, shape };
   trace({ kind: 'settings_test', connector: name, op: t.op, status: test.status, code: test.code });
-  return show(ctx, { test });
+  return await show(ctx, { test });
 }
 
 const POSTS = { 'secret': setSecret, 'secret/remove': removeSecret, 'test': sendTest };
@@ -152,7 +152,7 @@ export async function handle(ctx) {
   if (!vc.settings) { forbid(ctx); return true; }
   const rest = parts.slice(1).join('/');
   if (!graph.connectors || (rest !== '' && !Object.hasOwn(POSTS, rest))) { ctx.send(404, errorPage(graph, 'no such page')); return true; }
-  if (rest === '') { if (req.method === 'GET') show(ctx); else { ctx.headers.allow = 'GET'; refuse(ctx, 405, 'Use GET.'); } return true; }
+  if (rest === '') { if (req.method === 'GET') await show(ctx); else { ctx.headers.allow = 'GET'; refuse(ctx, 405, 'Use GET.'); } return true; }
   if (req.method !== 'POST') { ctx.headers.allow = 'POST'; refuse(ctx, 405, 'Use POST.'); return true; }
   if (!sameOrigin(req)) { forbid(ctx, 'This request did not come from this site.'); return true; }
   await POSTS[rest](ctx);
