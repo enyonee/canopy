@@ -254,8 +254,6 @@ const ALLOWED = {
   'runtime/render/search.mjs': ['runtime/render.mjs'],
   'runtime/routes/context.mjs': ['runtime/render.mjs'],
   'runtime/routes/hooks.mjs': ['runtime/routes/context.mjs', 'runtime/connectors/engine.mjs', 'runtime/connectors/signature.mjs', 'runtime/connectors/inbound.mjs'],
-  'runtime/routes/entity.mjs': ['runtime/render.mjs', 'runtime/render/list.mjs', 'runtime/render/form.mjs', 'runtime/render/detail.mjs', 'runtime/routes/rows.mjs'],
-  'runtime/routes/rows.mjs': ['runtime/render.mjs', 'runtime/render/detail.mjs'],
   'runtime/routes/entity.mjs': ['runtime/render.mjs', 'runtime/render/list.mjs', 'runtime/render/form.mjs', 'runtime/routes/rows.mjs', 'runtime/routes/load.mjs'],
   'runtime/routes/load.mjs': ['runtime/render.mjs', 'runtime/render/list.mjs', 'runtime/render/form.mjs', 'runtime/render/detail.mjs', 'runtime/render/pages.mjs'],
   'runtime/routes/rows.mjs': ['runtime/render.mjs', 'runtime/routes/load.mjs'],
