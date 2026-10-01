@@ -21,12 +21,12 @@ const BENCH_GRAPH = {
 };
 
 // Fills the bench graph with `n` customers, ~4 orders each, ~2 items each.
-function seed(store, customers) {
+async function seed(store, customers) {
   for (let c = 1; c <= customers; c++) {
-    const cid = store.insert('Customer', { name: `Customer ${c}` });
+    const cid = await store.insert('Customer', { name: `Customer ${c}` });
     for (let o = 0; o < 4; o++) {
-      const oid = store.insert('Order', { customer: cid, status: o % 2 ? 'paid' : 'new' });
-      for (let i = 0; i < 2; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + i, price: 10 + i });
+      const oid = await store.insert('Order', { customer: cid, status: o % 2 ? 'paid' : 'new' });
+      for (let i = 0; i < 2; i++) await store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + i, price: 10 + i });
     }
   }
 }
@@ -36,26 +36,26 @@ function seed(store, customers) {
 // operation made". Chunked IN-lists (`{ cache: false }`: one statement per
 // IN_CHUNK ids, so ceil(ids / chunk), never one per row) are what the count has
 // always left out, and still does.
-function withQueryCount(store, fn) {
+async function withQueryCount(store, fn) {
   let n = 0;
   store.drv.onQuery = (sql, opts) => { if (opts?.cache !== false) n++; };
-  try { fn(); } finally { store.drv.onQuery = null; }
+  try { await fn(); } finally { store.drv.onQuery = null; }
   return n;
 }
 
-test('a list page issues the same number of queries at 100 rows and at 2000', () => {
+test('a list page issues the same number of queries at 100 rows and at 2000', async () => {
   const small = new Store(BENCH_GRAPH, ':memory:');
-  seed(small, 25); // 25 customers * 4 orders = 100 orders
+  await seed(small, 25); // 25 customers * 4 orders = 100 orders
   const big = new Store(BENCH_GRAPH, ':memory:');
-  seed(big, 500); // 500 * 4 = 2000 orders
+  await seed(big, 500); // 500 * 4 = 2000 orders
 
-  const pageOf = (store) => withQueryCount(store, () => store.listPage('Order', {}, { page: 1, pageSize: 50 }));
-  const n100 = pageOf(small), n2000 = pageOf(big);
+  const pageOf = async (store) => await withQueryCount(store, async () => await store.listPage('Order', {}, { page: 1, pageSize: 50 }));
+  const n100 = await pageOf(small), n2000 = await pageOf(big);
   assert.equal(n100, n2000, `Order list issued ${n100} queries at 100 rows but ${n2000} at 2000 — not O(1)`);
   assert.ok(n100 <= 5, `Order list issued ${n100} queries for one page — expected a small constant`);
 
-  const customerPage = (store) => withQueryCount(store, () => store.listPage('Customer', {}, { page: 1, pageSize: 50 }));
-  const c100 = customerPage(small), c2000 = customerPage(big);
+  const customerPage = async (store) => await withQueryCount(store, async () => await store.listPage('Customer', {}, { page: 1, pageSize: 50 }));
+  const c100 = await customerPage(small), c2000 = await customerPage(big);
   assert.equal(c100, c2000, `Customer list issued ${c100} queries at 100 rows but ${c2000} at 2000 — not O(1)`);
   // Customer.spent is a *nested* aggregate (sum(Order: total), and total is
   // itself sum(Item: qty*price)) — a small constant here means the second hop
@@ -66,66 +66,66 @@ test('a list page issues the same number of queries at 100 rows and at 2000', ()
 // Customer.spent compiles to SQL now (runtime/store/aggsql.mjs), so it no longer needs the prefetch
 // below. `half` divides — never compiled — and still batches raw Orders, then must recurse into
 // Order so that Order.total (a compiled aggregate of its own) is answered per page, not per order.
-test('a non-compilable aggregate over a derived aggregate still batches every level, in O(1) queries', () => {
+test('a non-compilable aggregate over a derived aggregate still batches every level, in O(1) queries', async () => {
   const graph = { ...BENCH_GRAPH, data: { ...BENCH_GRAPH.data, Customer: { name: 'text!', half: 'money := sum(Order: total / 2)' } } };
   const small = new Store(graph, ':memory:');
-  seed(small, 25);
+  await seed(small, 25);
   const big = new Store(graph, ':memory:');
-  seed(big, 500);
-  const page = (store) => withQueryCount(store, () => store.listPage('Customer', {}, { page: 1, pageSize: 50 }));
-  const c100 = page(small), c2000 = page(big);
+  await seed(big, 500);
+  const page = async (store) => await withQueryCount(store, async () => await store.listPage('Customer', {}, { page: 1, pageSize: 50 }));
+  const c100 = await page(small), c2000 = await page(big);
   assert.equal(c100, c2000, `Customer list issued ${c100} queries at 100 rows but ${c2000} at 2000 — not O(1)`);
   assert.ok(c100 <= 6, `expected a small constant through the nested aggregate, got ${c100}`);
 });
 
-test('CSV export (hydrates every matching row) still issues O(1) queries, not one per row', () => {
+test('CSV export (hydrates every matching row) still issues O(1) queries, not one per row', async () => {
   const small = new Store(BENCH_GRAPH, ':memory:');
-  seed(small, 25);
+  await seed(small, 25);
   const big = new Store(BENCH_GRAPH, ':memory:');
-  seed(big, 500);
-  const all = (store) => withQueryCount(store, () => store.list('Order', {}));
-  const n100 = all(small), n2000 = all(big);
+  await seed(big, 500);
+  const all = async (store) => await withQueryCount(store, async () => await store.list('Order', {}));
+  const n100 = await all(small), n2000 = await all(big);
   assert.equal(n100, n2000, `store.list issued ${n100} queries at 100 rows but ${n2000} at 2000 — not O(1)`);
 });
 
-test('a dashboard aggregate over a derived field batches instead of hydrating row by row', () => {
+test('a dashboard aggregate over a derived field batches instead of hydrating row by row', async () => {
   const small = new Store(BENCH_GRAPH, ':memory:');
-  seed(small, 25);
+  await seed(small, 25);
   const big = new Store(BENCH_GRAPH, ':memory:');
-  seed(big, 500);
+  await seed(big, 500);
   // Order.total is derived, so this forces store.aggregateInMemory — the exact
   // path the orchestrator's /dashboard measurement found hydrating every row.
-  const grouped = (store) => withQueryCount(store, () => store.aggregate('Order', { groupBy: 'status', metrics: [{ fn: 'sum', field: 'total', as: 'v' }] }));
-  const n100 = grouped(small), n2000 = grouped(big);
+  const grouped = async (store) => await withQueryCount(store, async () => await store.aggregate('Order', { groupBy: 'status', metrics: [{ fn: 'sum', field: 'total', as: 'v' }] }));
+  const n100 = await grouped(small), n2000 = await grouped(big);
   assert.equal(n100, n2000, `dashboard aggregate issued ${n100} queries at 100 rows but ${n2000} at 2000 — not O(1)`);
 });
 
-test('a detail page issues the same number of queries whether the row has 2 children or 2000', () => {
+test('a detail page issues the same number of queries whether the row has 2 children or 2000', async () => {
   const store = new Store(BENCH_GRAPH, ':memory:');
-  const c = store.insert('Customer', { name: 'Solo' });
-  const few = store.insert('Order', { customer: c, status: 'new' });
-  store.insert('Item', { order: few, title: 'a', qty: 1, price: 1 });
-  store.insert('Item', { order: few, title: 'b', qty: 1, price: 1 });
-  const many = store.insert('Order', { customer: c, status: 'new' });
-  for (let i = 0; i < 2000; i++) store.insert('Item', { order: many, title: `i${i}`, qty: 1, price: 1 });
+  const c = await store.insert('Customer', { name: 'Solo' });
+  const few = await store.insert('Order', { customer: c, status: 'new' });
+  await store.insert('Item', { order: few, title: 'a', qty: 1, price: 1 });
+  await store.insert('Item', { order: few, title: 'b', qty: 1, price: 1 });
+  const many = await store.insert('Order', { customer: c, status: 'new' });
+  for (let i = 0; i < 2000; i++) await store.insert('Item', { order: many, title: `i${i}`, qty: 1, price: 1 });
 
-  const nFew = withQueryCount(store, () => store.get('Order', few));
-  const nMany = withQueryCount(store, () => store.get('Order', many));
+  const nFew = await withQueryCount(store, async () => await store.get('Order', few));
+  const nMany = await withQueryCount(store, async () => await store.get('Order', many));
   assert.equal(nFew, nMany, `detail read issued ${nFew} queries for 2 children but ${nMany} for 2000`);
 });
 
-test('a child lookup by its ref column uses the index item 1 adds', () => {
+test('a child lookup by its ref column uses the index item 1 adds', async () => {
   const store = new Store(BENCH_GRAPH, ':memory:');
-  const c = store.insert('Customer', { name: 'Ann' });
-  const o = store.insert('Order', { customer: c, status: 'new' });
-  store.insert('Item', { order: o, title: 'x', qty: 1, price: 1 });
+  const c = await store.insert('Customer', { name: 'Ann' });
+  const o = await store.insert('Order', { customer: c, status: 'new' });
+  await store.insert('Item', { order: o, title: 'x', qty: 1, price: 1 });
   const plan = store.drv.all(`EXPLAIN QUERY PLAN SELECT * FROM "item" WHERE "order" IN (?)`, [String(o)]);
   assert.ok(plan.some((r) => /USING INDEX idx_item_order/.test(r.detail)), `expected idx_item_order in the plan, got: ${JSON.stringify(plan)}`);
   const planOrder = store.drv.all(`EXPLAIN QUERY PLAN SELECT * FROM "order" WHERE "customer" IN (?)`, [String(c)]);
   assert.ok(planOrder.some((r) => /USING INDEX idx_order_customer/.test(r.detail)), `expected idx_order_customer in the plan, got: ${JSON.stringify(planOrder)}`);
 });
 
-test('batched hydration matches per-row hydration exactly, on random data (property test)', () => {
+test('batched hydration matches per-row hydration exactly, on random data (property test)', async () => {
   // A tiny seeded PRNG (mulberry32) — deterministic, so a failure is reproducible.
   let seed32 = 0x2026_0928;
   const rand = () => { seed32 |= 0; seed32 = (seed32 + 0x6D2B79F5) | 0; let t = Math.imul(seed32 ^ (seed32 >>> 15), 1 | seed32); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -137,31 +137,32 @@ test('batched hydration matches per-row hydration exactly, on random data (prope
   const price = () => (rand() < 0.4 ? TRICKY[Math.floor(rand() * TRICKY.length)] : Number((1 + rand() * 99).toFixed(2)));
   const store = new Store(BENCH_GRAPH, ':memory:');
   const customers = [];
-  for (let c = 0; c < 40; c++) customers.push(store.insert('Customer', { name: `C${c}` }));
+  for (let c = 0; c < 40; c++) customers.push(await store.insert('Customer', { name: `C${c}` }));
   const orders = [];
   for (let o = 0; o < 150; o++) {
-    const oid = store.insert('Order', { customer: customers[Math.floor(rand() * customers.length)], status: rand() < 0.5 ? 'new' : 'paid' });
+    const oid = await store.insert('Order', { customer: customers[Math.floor(rand() * customers.length)], status: rand() < 0.5 ? 'new' : 'paid' });
     orders.push(oid);
   }
   for (let i = 0; i < 4000; i++) {
-    store.insert('Item', { order: orders[Math.floor(rand() * orders.length)], title: `I${i}`, qty: 1 + Math.floor(rand() * 5), price: price() });
+    await store.insert('Item', { order: orders[Math.floor(rand() * orders.length)], title: `I${i}`, qty: 1 + Math.floor(rand() * 5), price: price() });
   }
 
   for (const entity of ['Order', 'Customer']) {
-    const raw = store.listRaw(entity, {});
-    const perRow = raw.map((r) => store.hydrate(entity, r));
-    const batched = store.hydratePage(entity, raw);
+    const raw = await store.listRaw(entity, {});
+    const perRow = [];
+    for (const r of raw) perRow.push(await store.hydrate(entity, r));
+    const batched = await store.hydratePage(entity, raw);
     assert.deepEqual(batched, perRow, `${entity}: batched hydration differs from per-row hydration`);
   }
 });
 
 // --- item A: a ref label must never hydrate the whole target row -----------
-test('a ref label reads only the label field, never the target row\'s other derived fields (item A)', () => {
+test('a ref label reads only the label field, never the target row\'s other derived fields (item A)', async () => {
   const store = new Store(BENCH_GRAPH, ':memory:');
-  const c = store.insert('Customer', { name: 'Solo' });
+  const c = await store.insert('Customer', { name: 'Solo' });
   for (let i = 0; i < 50; i++) {
-    const o = store.insert('Order', { customer: c, status: 'new' });
-    store.insert('Item', { order: o, title: 'x', qty: 1, price: 1 });
+    const o = await store.insert('Order', { customer: c, status: 'new' });
+    await store.insert('Item', { order: o, title: 'x', qty: 1, price: 1 });
   }
   let derivedCalls = 0;
   const orig = store.derived;
@@ -169,7 +170,7 @@ test('a ref label reads only the label field, never the target row\'s other deri
   const snap = Snapshot.prototype.derived; // the snapshot path evaluates through this one
   Snapshot.prototype.derived = function counted(...args) { derivedCalls++; return snap.apply(this, args); };
   let label;
-  try { label = store.labelOf('Customer', c); } finally { store.derived = orig; Snapshot.prototype.derived = snap; }
+  try { label = await store.labelOf('Customer', c); } finally { store.derived = orig; Snapshot.prototype.derived = snap; }
   assert.equal(label, 'Solo');
   // Customer.orders/spent are both derived and both expensive (they aggregate
   // every one of this customer's orders) — labelOf must touch neither, only
@@ -178,37 +179,37 @@ test('a ref label reads only the label field, never the target row\'s other deri
 });
 
 // --- item B: an IN-list past SQLite's bound-parameter limit must not fail --
-test('listRawIn chunks the IN-list instead of binding every id in one query (item B)', () => {
+test('listRawIn chunks the IN-list instead of binding every id in one query (item B)', async () => {
   const store = new Store(BENCH_GRAPH, ':memory:');
   let prepares = 0;
   store.drv.onQuery = () => { prepares++; };
   const ids = Array.from({ length: 12000 }, (_, i) => i + 1); // synthetic — no matching rows needed
   let rows;
-  try { rows = store.listRawIn('Item', 'order', ids); } finally { store.drv.onQuery = null; }
+  try { rows = await store.listRawIn('Item', 'order', ids); } finally { store.drv.onQuery = null; }
   assert.deepEqual(rows, []);
   assert.equal(prepares, 3, `expected ceil(12000/5000)=3 chunked queries, got ${prepares}`);
 });
 
-test('a page of more than 32766 parent ids does not fail (item B, bulk insert)', () => {
+test('a page of more than 32766 parent ids does not fail (item B, bulk insert)', async () => {
   const store = new Store({ app: 'big', data: {
     Parent: { name: 'text!', n: 'int := count(Child)' }, Child: { parent: 'ref:Parent!' },
   }, views: 'auto' }, ':memory:');
   const N = 35000;
-  store.transaction(() => { for (let i = 0; i < N; i++) store.insert('Parent', { name: `p${i}` }); });
-  const rows = store.list('Parent', {}); // one hydratePage() call, ids.length === N
+  await store.transaction(async () => { for (let i = 0; i < N; i++) await store.insert('Parent', { name: `p${i}` }); });
+  const rows = await store.list('Parent', {}); // one hydratePage() call, ids.length === N
   assert.equal(rows.length, N);
   assert.ok(rows.every((r) => r.n === 0), 'no Child rows exist — every count must still come back 0, not throw');
 });
 
 // --- item C: batched children must follow the unbatched path's own order ---
-test('batched children are grouped in the same order the unbatched path reads them (item C)', () => {
+test('batched children are grouped in the same order the unbatched path reads them (item C)', async () => {
   // `half` divides, so it is never compiled to SQL (runtime/store/aggsql.mjs) and still batches raw children.
   const store = new Store({ ...BENCH_GRAPH, data: { ...BENCH_GRAPH.data, Customer: { ...BENCH_GRAPH.data.Customer, half: 'money := sum(Order: total / 2)' } } }, ':memory:');
-  const c = store.insert('Customer', { name: 'Ann' });
-  for (let i = 0; i < 30; i++) store.insert('Order', { customer: c, status: 'new' });
+  const c = await store.insert('Customer', { name: 'Ann' });
+  for (let i = 0; i < 30; i++) await store.insert('Order', { customer: c, status: 'new' });
   const cache = store.buildAggCache('Customer', [c]);
   const grouped = cache.groups.get('Order|customer').get(String(c)).map((r) => r.id);
-  const unbatched = store.listRaw('Order', { where: { customer: c } }).map((r) => r.id);
+  const unbatched = (await store.listRaw('Order', { where: { customer: c } })).map((r) => r.id);
   assert.ok(grouped.length === 30 && unbatched.length === 30);
   assert.deepEqual(grouped, unbatched, 'batched grouping must preserve the unbatched (ORDER BY id DESC) order');
 });
@@ -228,65 +229,65 @@ const HOP_GRAPH = {
 
 // Every statement, the chunked IN-lists included (withQueryCount leaves those out): a hop level
 // that fetched one row per statement would not show in the count above.
-function everyQuery(store, fn) {
+async function everyQuery(store, fn) {
   let n = 0;
   store.drv.onQuery = () => { n++; };
-  try { fn(); } finally { store.drv.onQuery = null; }
+  try { await fn(); } finally { store.drv.onQuery = null; }
   return n;
 }
 
-function seedHops(store, customers) {
+async function seedHops(store, customers) {
   for (let c = 1; c <= customers; c++) {
-    const cid = store.insert('Customer', { name: `Customer ${c}`, discount: c % 5 });
+    const cid = await store.insert('Customer', { name: `Customer ${c}`, discount: c % 5 });
     for (let o = 0; o < 4; o++) {
-      const oid = store.insert('Order', { customer: cid });
-      for (let i = 0; i < 2; i++) store.insert('Item', { order: oid, qty: 1 + i, price: 10 + i });
+      const oid = await store.insert('Order', { customer: cid });
+      for (let i = 0; i < 2; i++) await store.insert('Item', { order: oid, qty: 1 + i, price: 10 + i });
     }
   }
 }
 
-test('a list page whose derived fields hop through references issues O(1) queries in the number of rows', () => {
+test('a list page whose derived fields hop through references issues O(1) queries in the number of rows', async () => {
   const small = new Store(HOP_GRAPH, ':memory:');
-  seedHops(small, 25);
+  await seedHops(small, 25);
   const big = new Store(HOP_GRAPH, ':memory:');
-  seedHops(big, 500);
+  await seedHops(big, 500);
   for (const entity of ['Order', 'Item']) {
-    const page = (store) => everyQuery(store, () => store.listPage(entity, {}, { page: 1, pageSize: 50 }));
-    const n100 = page(small), n2000 = page(big);
+    const page = async (store) => await everyQuery(store, async () => await store.listPage(entity, {}, { page: 1, pageSize: 50 }));
+    const n100 = await page(small), n2000 = await page(big);
     assert.equal(n100, n2000, `${entity} list issued ${n100} queries at ~100 rows but ${n2000} at ~2000 — the hops are not batched`);
     assert.ok(n100 <= 8, `${entity} list issued ${n100} queries for one page — expected a small constant (page, count, one per hop level)`);
   }
   // A full hydrate (CSV) is O(1) within a chunk of HYDRATE_CHUNK rows.
   const mid = new Store(HOP_GRAPH, ':memory:');
-  seedHops(mid, 100); // 400 orders: still one chunk
-  const all = (store) => everyQuery(store, () => store.list('Order', {}));
-  assert.equal(all(small), all(mid), 'Order full hydrate (CSV) is not O(1) within a chunk');
+  await seedHops(mid, 100); // 400 orders: still one chunk
+  const all = async (store) => await everyQuery(store, async () => await store.list('Order', {}));
+  assert.equal(await all(small), await all(mid), 'Order full hydrate (CSV) is not O(1) within a chunk');
   // Each hop level is one query more: the size of the plan, not the number of rows.
-  const items = everyQuery(big, () => big.listPage('Item', {}, { page: 1, pageSize: 50 }));
-  const orders = everyQuery(big, () => big.listPage('Order', {}, { page: 1, pageSize: 50 }));
+  const items = await everyQuery(big, async () => await big.listPage('Item', {}, { page: 1, pageSize: 50 }));
+  const orders = await everyQuery(big, async () => await big.listPage('Order', {}, { page: 1, pageSize: 50 }));
   assert.ok(items >= orders, `Item reaches Order then Customer (${items}), Order only Customer (${orders})`);
 });
 
-test('the lazy path (the old context) pays one query per hop per row — the snapshot is what removed that', () => {
+test('the lazy path (the old context) pays one query per hop per row — the snapshot is what removed that', async () => {
   const store = new Store(HOP_GRAPH, ':memory:');
-  seedHops(store, 25);
-  const snapshot = everyQuery(store, () => store.list('Order', {}));
+  await seedHops(store, 25);
+  const snapshot = await everyQuery(store, async () => await store.list('Order', {}));
   store.lazyEval = true;
-  const lazy = everyQuery(store, () => store.list('Order', {}));
+  const lazy = await everyQuery(store, async () => await store.list('Order', {}));
   assert.ok(lazy > snapshot * 10, `expected the lazy path to be far more expensive: ${lazy} vs ${snapshot}`);
 });
 
 // The lazy path is still shipped for one release (`store.lazyEval`, S3a): its own batching — one cache
 // per page, prefetched level by level through nested aggregates — keeps its gates.
-test('the lazy path still batches a page: a non-compilable aggregate over a derived aggregate is O(1) queries', () => {
+test('the lazy path still batches a page: a non-compilable aggregate over a derived aggregate is O(1) queries', async () => {
   const graph = { ...BENCH_GRAPH, data: { ...BENCH_GRAPH.data, Customer: { name: 'text!', half: 'money := sum(Order: total / 2)' } } };
   const small = new Store(graph, ':memory:');
-  seed(small, 25);
+  await seed(small, 25);
   const big = new Store(graph, ':memory:');
-  seed(big, 500);
+  await seed(big, 500);
   small.lazyEval = true; big.lazyEval = true;
-  const page = (store) => withQueryCount(store, () => store.listPage('Customer', {}, { page: 1, pageSize: 50 }));
-  const c100 = page(small), c2000 = page(big);
+  const page = async (store) => await withQueryCount(store, async () => await store.listPage('Customer', {}, { page: 1, pageSize: 50 }));
+  const c100 = await page(small), c2000 = await page(big);
   assert.equal(c100, c2000, `lazy Customer list issued ${c100} queries at 100 rows but ${c2000} at 2000 — not O(1)`);
   assert.ok(c100 <= 6, `expected a small constant through the nested aggregate, got ${c100}`);
 });
@@ -301,9 +302,9 @@ test('a page of owned rows, reference columns and per-row permissions costs the 
   for (const posts of [12, 120]) {
     const s = await boot(tmpGraph(PAGES_GRAPH));
     try {
-      seedPages(s.app.store, posts, 2);
+      await seedPages(s.app.store, posts, 2);
       assert.equal((await s.login('m2', 'pw')).status, 303);
-      const one = s.app.store.list('Post', { where: { owner: 2 } })[0].id;
+      const one = (await s.app.store.list('Post', { where: { owner: 2 } }))[0].id;
       const n = {};
       for (const path of ['/Post', '/Post.csv', `/Post/${one}`, `/Post/${one}/edit`, '/Post/new', '/dashboard/d', '/dashboard/d.csv', '/page/home', '/list/posts', '/search?q=post']) {
         const queries = [];

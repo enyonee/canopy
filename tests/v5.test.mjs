@@ -78,7 +78,7 @@ after(() => s.close());
 let memberId = null, member2Id = null;
 
 test('item 11: a seeded file/image is copied into files/ at boot', async () => {
-  const photo = s.app.store.get('Photo', 1);
+  const photo = await s.app.store.get('Photo', 1);
   assert.match(photo.image, /seed-photo\.txt$/);
   await s.login('admin@v5', 'pw');
   const f = await s.get('/file/Photo/1/image');
@@ -88,7 +88,7 @@ test('item 11: a seeded file/image is copied into files/ at boot', async () => {
 
 test('item 1: own with "all" — view is unscoped, create/edit stay owned', async () => {
   await s.post('/register', { email: 'alice@v5', password: 'pw', name: 'a' });
-  memberId = s.app.store.list('User', { where: { email: 'alice@v5' } })[0].id;
+  memberId = (await s.app.store.list('User', { where: { email: 'alice@v5' } }))[0].id;
   const order = await s.post('/Order', { amount: '10', note: 'alice order' });
   assert.equal(order.status, 303, order.html);
   const formA = await s.get('/Order/new');
@@ -96,7 +96,7 @@ test('item 1: own with "all" — view is unscoped, create/edit stay owned', asyn
 
   s.asGuest();
   await s.post('/register', { email: 'bob@v5', password: 'pw', name: 'b' });
-  member2Id = s.app.store.list('User', { where: { email: 'bob@v5' } })[0].id;
+  member2Id = (await s.app.store.list('User', { where: { email: 'bob@v5' } }))[0].id;
   // "view" is in "all": bob sees alice's order (and the whole list) despite not owning it.
   assert.equal((await s.get('/Order/1')).status, 200, 'view is unscoped by "all"');
   assert.equal(rows((await s.get('/Order')).html).length, 1, 'the list shows every order too — "all" is not narrowed');
@@ -126,7 +126,7 @@ test('item 10: byRole replaces the default field list, for rendering and writabi
   assert.match(form.html, /name="customer"/, 'admin\'s byRole adds "customer"');
   const created = await s.post('/Order', { amount: '5', note: 'admin-made', customer: String(memberId) });
   assert.equal(created.status, 303, created.html);
-  const row = s.app.store.raw('Order', s.app.store.list('Order', { sort: { field: 'id', dir: 'desc' } })[0].id);
+  const row = await s.app.store.raw('Order', (await s.app.store.list('Order', { sort: { field: 'id', dir: 'desc' } }))[0].id);
   assert.equal(String(row.customer), String(memberId), 'admin could set an arbitrary customer through byRole\'s field list');
   s.asGuest(); await s.login('alice@v5', 'pw');
   const memberForm = await s.get('/Order/new');
@@ -135,10 +135,10 @@ test('item 10: byRole replaces the default field list, for rendering and writabi
 
 test('item 3: a related fill reads the parent row (@row.*)', async () => {
   s.asGuest(); await s.login('alice@v5', 'pw');
-  const profileId = s.app.store.insert('Profile', { user: memberId, bio: 'parent bio value', viewedNotes: 0 });
+  const profileId = await s.app.store.insert('Profile', { user: memberId, bio: 'parent bio value', viewedNotes: 0 });
   const added = await s.post(`/Profile/${profileId}/add/Note`, {});
   assert.equal(added.status, 303, added.html);
-  const notes = s.app.store.list('Note', { where: { profile: profileId } });
+  const notes = await s.app.store.list('Note', { where: { profile: profileId } });
   assert.equal(notes.length, 1);
   assert.equal(notes[0].body, 'parent bio value', '"@row.bio" resolved against the parent Profile row, not nothing');
 });
@@ -152,7 +152,7 @@ test('item 4: a compound unique rule falls back to the existing row for an untou
   const dupe = await s.post('/Follow', { category: 'sports' });
   assert.equal(dupe.status, 400);
   assert.match(dupe.html, /Already following this category/);
-  const b2 = s.app.store.list('Follow', { where: { category: 'tech' } })[0].id;
+  const b2 = (await s.app.store.list('Follow', { where: { category: 'tech' } }))[0].id;
   // Editing only "category" (the form never shows "follower") still collides on the pair,
   // using the existing row's own follower — this is the fallback interp.mjs's "probe" gives.
   const editDupe = await s.post(`/Follow/${b2}`, { category: 'sports' });
@@ -161,20 +161,20 @@ test('item 4: a compound unique rule falls back to the existing row for an untou
 });
 
 test('item 5/8: db.set + a "viewed" event write inside the GET, best-effort, still shows the page', async () => {
-  const profileId = s.app.store.insert('Profile', { user: memberId, bio: '', viewedNotes: 0 });
-  const noteId = s.app.store.insert('Note', { profile: profileId, body: 'a secret note', views: 0 });
+  const profileId = await s.app.store.insert('Profile', { user: memberId, bio: '', viewedNotes: 0 });
+  const noteId = await s.app.store.insert('Note', { profile: profileId, body: 'a secret note', views: 0 });
   s.asGuest(); await s.login('alice@v5', 'pw');
   const first = await s.get(`/Note/${noteId}`);
   assert.equal(first.status, 200);
   assert.match(first.html, /<th>Views<\/th><td>1<\/td>/, 'the viewed event ran before the page rendered');
   await s.get(`/Note/${noteId}`);
-  assert.equal(s.app.store.get('Note', noteId).views, 2, 'a second view counts again');
-  assert.equal(s.app.store.get('Profile', profileId).bio, 'a secret note', 'db.set wrote an arbitrary row (Profile) from @row.*');
+  assert.equal((await s.app.store.get('Note', noteId)).views, 2, 'a second view counts again');
+  assert.equal((await s.app.store.get('Profile', profileId)).bio, 'a secret note', 'db.set wrote an arbitrary row (Profile) from @row.*');
 });
 
 test('item 1 (one-hop own): a different member cannot reach a note through someone else\'s profile', async () => {
-  const profileId = s.app.store.insert('Profile', { user: memberId, bio: 'x', viewedNotes: 0 });
-  const noteId = s.app.store.insert('Note', { profile: profileId, body: 'still secret', views: 0 });
+  const profileId = await s.app.store.insert('Profile', { user: memberId, bio: 'x', viewedNotes: 0 });
+  const noteId = await s.app.store.insert('Note', { profile: profileId, body: 'still secret', views: 0 });
   s.asGuest(); await s.login('bob@v5', 'pw');
   assert.equal((await s.get(`/Note/${noteId}`)).status, 403);
   assert.equal(rows((await s.get('/list/myNotes')).html).length, 0, 'a one-hop own list shows none of it either');
@@ -237,14 +237,14 @@ test('item 7: /search finds rows by each entity\'s own search fields, scoped by 
 
 test('item 8: a login event runs inside its own row (row = the signed-in user)', async () => {
   s.asGuest();
-  const before = s.app.store.list('User', { where: { email: 'alice@v5' } })[0].loginCount;
+  const before = (await s.app.store.list('User', { where: { email: 'alice@v5' } }))[0].loginCount;
   await s.login('alice@v5', 'pw');
-  const after1 = s.app.store.list('User', { where: { email: 'alice@v5' } })[0].loginCount;
+  const after1 = (await s.app.store.list('User', { where: { email: 'alice@v5' } }))[0].loginCount;
   assert.equal(after1, before + 1);
 });
 
 test('item 9: hours()/minutes() over a full timestamp', async () => {
-  const id = s.app.store.insert('Shift', { start: '2026-01-01T10:00:00.000Z', end: '2026-01-01T13:00:00.000Z' });
+  const id = await s.app.store.insert('Shift', { start: '2026-01-01T10:00:00.000Z', end: '2026-01-01T13:00:00.000Z' });
   s.asGuest(); await s.login('admin@v5', 'pw');
   const d = await s.get(`/Shift/${id}`);
   assert.match(d.html, /<th>Duration Hours<\/th><td>3<\/td>/);
@@ -252,7 +252,7 @@ test('item 9: hours()/minutes() over a full timestamp', async () => {
 });
 
 test('item 12: an expression may read "id"', async () => {
-  const row = s.app.store.get('Order', 1);
+  const row = await s.app.store.get('Order', 1);
   assert.equal(row.code, 'ORD-1');
 });
 
@@ -263,7 +263,7 @@ test('item 13: a required file with an empty upload is a validation error, on cr
   assert.match(empty.html, /attachment is required/);
   const real = await s.upload('/Doc', { title: 'has file' }, { field: 'attachment', content: 'bytes', name: 'a.txt' });
   assert.equal(real.status, 303, real.html);
-  const docId = s.app.store.list('Doc', { sort: { field: 'id', dir: 'desc' } })[0].id;
+  const docId = (await s.app.store.list('Doc', { sort: { field: 'id', dir: 'desc' } }))[0].id;
   // A real browser always submits the <input type=file>'s part, empty or not
   // (an unselected file is still a zero-byte part, not a missing key) — mimic
   // that here rather than simply omitting "attachment".
@@ -274,10 +274,10 @@ test('item 13: a required file with an empty upload is a validation error, on cr
 
 test('item 13: an optional upload left blank on edit keeps the old value', async () => {
   s.asGuest(); await s.login('admin@v5', 'pw');
-  const before = s.app.store.get('Photo', 1).image;
+  const before = (await s.app.store.get('Photo', 1)).image;
   const edited = await s.upload('/Photo/1', { caption: 'still cover' });
   assert.equal(edited.status, 303, edited.html);
-  assert.equal(s.app.store.get('Photo', 1).image, before);
+  assert.equal((await s.app.store.get('Photo', 1)).image, before);
 });
 
 // ---------------------------------------------------------------------------
@@ -406,8 +406,8 @@ test('item 14: a created event fires for a row a block makes (db.createRow, on a
   try {
     const r = await s2.post('/Order', { n: '1' });
     assert.equal(r.status, 303, r.html);
-    assert.equal(s2.app.store.count('Log'), 1, 'db.createRow\'s own created event fired too');
-    assert.equal(s2.app.store.get('Log', 1).note, 'an order was made!', 'Log.created ran (its own "current row" set, not Order\'s)');
+    assert.equal(await s2.app.store.count('Log'), 1, 'db.createRow\'s own created event fired too');
+    assert.equal((await s2.app.store.get('Log', 1)).note, 'an order was made!', 'Log.created ran (its own "current row" set, not Order\'s)');
   } finally { s2.close(); }
 });
 
@@ -422,7 +422,7 @@ test('item 14 (direct): fireEvents refuses past the nesting limit instead of rec
     const r = await s2.post('/Foo', { n: '1' });
     assert.equal(r.status, 400, 'the cycle is refused, not left to recurse forever');
     assert.match(r.html, /too many nested &quot;created&quot; events/);
-    assert.equal(s2.app.store.count('Foo'), 0, 'the whole action rolled back, including every nested create');
+    assert.equal(await s2.app.store.count('Foo'), 0, 'the whole action rolled back, including every nested create');
   } finally { s2.close(); }
 });
 
@@ -436,10 +436,10 @@ test('item 14 (settles): a "created" event that db.ensures a fixed default row s
   try {
     const r = await s2.post('/Foo', { category: 'special' });
     assert.equal(r.status, 303, r.html);
-    assert.equal(s2.app.store.count('Foo'), 2, 'the original row plus exactly one default row');
+    assert.equal(await s2.app.store.count('Foo'), 2, 'the original row plus exactly one default row');
     const again = await s2.post('/Foo', { category: 'special-2' });
     assert.equal(again.status, 303);
-    assert.equal(s2.app.store.count('Foo'), 3, 'the default row is found, not remade, from then on');
+    assert.equal(await s2.app.store.count('Foo'), 3, 'the default row is found, not remade, from then on');
   } finally { s2.close(); }
 });
 
@@ -493,8 +493,8 @@ test('item 17: a private field is redacted from everyone but the user it names (
   const s2 = await boot(tmpGraph(graph1719));
   try {
     await s2.post('/register', { email: 'alice@r1719', password: 'pw' });
-    const aliceId = s2.app.store.list('User', { where: { email: 'alice@r1719' } })[0].id;
-    const handId = s2.app.store.insert('Hand', { code: 'H1', player: aliceId, holeCards: 'AsKs' });
+    const aliceId = (await s2.app.store.list('User', { where: { email: 'alice@r1719' } }))[0].id;
+    const handId = await s2.app.store.insert('Hand', { code: 'H1', player: aliceId, holeCards: 'AsKs' });
     const asAlice = await s2.get(`/Hand/${handId}`);
     assert.match(asAlice.html, /<th>Hole Cards<\/th><td>AsKs<\/td>/, 'the owner sees their own hole cards');
     assert.match(asAlice.html, /data-widget="cards"[^>]*data-props='[^']*AsKs/, 'the widget prop resolved "@row.holeCards" for the owner');
@@ -515,8 +515,8 @@ test('item 19: row and global actions render a real input form for declared "fie
   const s2 = await boot(tmpGraph(graph1719));
   try {
     await s2.post('/register', { email: 'carol@r1719', password: 'pw' });
-    const carolId = s2.app.store.list('User', { where: { email: 'carol@r1719' } })[0].id;
-    const handId = s2.app.store.insert('Hand', { code: 'H2', player: carolId, holeCards: '2h2c' });
+    const carolId = (await s2.app.store.list('User', { where: { email: 'carol@r1719' } }))[0].id;
+    const handId = await s2.app.store.insert('Hand', { code: 'H2', player: carolId, holeCards: '2h2c' });
     const detail = await s2.get(`/Hand/${handId}`);
     assert.match(detail.html, new RegExp(`<form class="card inline-block" method="post" action="/Hand/${handId}/action/annotate">[\\s\\S]*name="note"`), 'the row action gets a real field, not a bare button');
     const missing = await s2.post(`/Hand/${handId}/action/annotate`, {});
@@ -524,15 +524,15 @@ test('item 19: row and global actions render a real input form for declared "fie
     assert.match(missing.html, /note is required/);
     const ok = await s2.post(`/Hand/${handId}/action/annotate`, { note: 'strong hand' });
     assert.equal(ok.status, 303);
-    assert.equal(s2.app.store.get('Hand', handId).note, 'strong hand');
+    assert.equal((await s2.app.store.get('Hand', handId)).note, 'strong hand');
     const home = await s2.get('/page/home');
     assert.match(home.html, /<form class="card" method="post" action="\/action\/sendFeedback">[\s\S]*name="message"/, 'the global action gets a real field too');
     const noMsg = await s2.post('/action/sendFeedback', {});
     assert.equal(noMsg.status, 400);
     const sent = await s2.post('/action/sendFeedback', { message: 'great app' });
     assert.equal(sent.status, 303);
-    assert.equal(s2.app.store.list('Feedback', {}).length, 1);
-    assert.equal(s2.app.store.list('Feedback', {})[0].message, 'great app');
+    assert.equal((await s2.app.store.list('Feedback', {})).length, 1);
+    assert.equal((await s2.app.store.list('Feedback', {}))[0].message, 'great app');
   } finally { s2.close(); }
 });
 
@@ -540,9 +540,9 @@ test('item 16 + item 19 (list): "ne: null" filters a saved list, admin sees only
   const s2 = await boot(tmpGraph(graph1719));
   try {
     await s2.post('/register', { email: 'dana@r1719', password: 'pw' });
-    const danaId = s2.app.store.list('User', { where: { email: 'dana@r1719' } })[0].id;
-    s2.app.store.insert('Hand', { code: 'H3', player: danaId }); // holeCards omitted: a real NULL, not the text "null"
-    s2.app.store.insert('Hand', { code: 'H4', player: danaId, holeCards: 'JhJd' });
+    const danaId = (await s2.app.store.list('User', { where: { email: 'dana@r1719' } }))[0].id;
+    await s2.app.store.insert('Hand', { code: 'H3', player: danaId }); // holeCards omitted: a real NULL, not the text "null"
+    await s2.app.store.insert('Hand', { code: 'H4', player: danaId, holeCards: 'JhJd' });
     const dealt = await s2.get('/list/dealt');
     assert.equal(rows(dealt.html).length, 1, 'only the hand with real hole cards is "dealt"');
   } finally { s2.close(); }

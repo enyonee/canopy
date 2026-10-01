@@ -9,7 +9,8 @@
     "types": "tsc -p .",
     "verify": "node verify/run.mjs",
     "bench": "node --no-warnings --expose-gc bench/run.mjs",
-    "gate": "npm run test && npm run coverage && npm run types && npm run mutate"
+    "gate": "npm run test && npm run test:async && npm run coverage && npm run types && npm run mutate",
+    "test:async": "node --no-warnings --import ./tests/asyncstore.mjs --test tests/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

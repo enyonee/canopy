@@ -21,8 +21,8 @@ test('an entity with no fields still gets a table, and unknown entities answer e
 
 test('random.pick survives weights that sum to zero', async () => {
   const store = new Store({ app: 'x', data: { P: { name: 'text!', w: 'int=0' } } }, ':memory:');
-  store.insert('P', { name: 'a', w: 0 });
-  store.insert('P', { name: 'b', w: 0 });
+  await store.insert('P', { name: 'a', w: 0 });
+  await store.insert('P', { name: 'b', w: 0 });
   const seen = new Set();
   for (let i = 0; i < 40; i++) seen.add((await CATALOG['random.pick'].run({ store, step: { from: 'P', weight: 'w' } })).picked.name);
   assert.equal(seen.size, 2, 'all-zero weights must not make the wheel unpickable');
@@ -44,23 +44,23 @@ test('the checker keeps its footing on entities that do not exist', () => {
     .some((x) => x.path === '/dashboards/0/tables/0/metrics/0/fn'), 'a metric without a function is reported');
 });
 
-test('a list renders a column that is not a field, and a table without actions', () => {
+test('a list renders a column that is not a field, and a table without actions', async () => {
   const graph = { app: 'x', data: { A: { name: 'text!' } },
     override: { 'A.list': { columns: ['name', 'ghost'], rowActions: [], create: false } } };
   const store = new Store(graph, ':memory:');
-  store.insert('A', { name: 'one' });
-  const html = listView(graph, store, 'A', store.fields.A, store.list('A', {}), { q: '', where: {} });
+  await store.insert('A', { name: 'one' });
+  const html = listView(graph, store, 'A', store.fields.A, await store.list('A', {}), { q: '', where: {} });
   assert.match(html, /<th><a href="[^"]*sort=ghost[^"]*">Ghost<\/a><\/th>/, 'column headers sort');
   assert.ok(!/Actions/.test(html));
   assert.ok(!/Add A/.test(html));
 });
 
-test('a filter falls back to its declared name, and an unknown row action to its own label', () => {
+test('a filter falls back to its declared name, and an unknown row action to its own label', async () => {
   const graph = { app: 'x', data: { A: { name: 'text!', k: 'enum[a,b]=a' } },
     override: { 'A.list': { filters: [{ field: 'k' }], rowActions: ['ghost'] } } };
   const store = new Store(graph, ':memory:');
-  store.insert('A', { name: 'one' });
-  const html = listView(graph, store, 'A', store.fields.A, store.list('A', {}), { q: '', where: {} });
+  await store.insert('A', { name: 'one' });
+  const html = listView(graph, store, 'A', store.fields.A, await store.list('A', {}), { q: '', where: {} });
   assert.match(html, /<strong>K<\/strong>/, 'a filter with no name is titled by its field');
   assert.match(html, />Ghost</, 'a row action with no declaration still renders its name');
 });
@@ -70,12 +70,12 @@ test('an intro, a required number and a related section with all columns', async
     override: { 'P.form': { intro: 'fill it in' },
                 'P.detail': { related: [{ entity: 'C', via: 'p', form: true }] } } };
   const store = new Store(graph, ':memory:');
-  const id = store.insert('P', { name: 'parent', n: 1 });
-  store.insert('C', { p: id, note: 'child' });
+  const id = await store.insert('P', { name: 'parent', n: 1 });
+  await store.insert('C', { p: id, note: 'child' });
   const form = await viewer(graph, store).form('P', {}, 'new');
   assert.match(form, /fill it in/);
   assert.match(form, /type="number"[^>]*required/);
-  const detail = await viewer(graph, store).detail('P', store.get('P', id));
+  const detail = await viewer(graph, store).detail('P', await store.get('P', id));
   assert.match(detail, /<th>Note<\/th>/, 'a related section with no declared columns shows every child field but the link');
   assert.ok(!/<th>P<\/th>/.test(detail.split('<h3>')[1]), 'the link column is not repeated');
   assert.match(detail, /method="post"/, 'form: true means the full child form');
@@ -84,7 +84,7 @@ test('an intro, a required number and a related section with all columns', async
 test('a dashboard card without a function counts, and a missing metric reads zero', async () => {
   const graph = { app: 'x', data: { A: { name: 'text!' } } };
   const store = new Store(graph, ':memory:');
-  store.insert('A', { name: 'one' });
+  await store.insert('A', { name: 'one' });
   const html = await viewer(graph, store).dashboard({ id: 'd', title: 'D',
     cards: [{ title: 'Rows', entity: 'A' }],
     tables: [{ title: 'T', entity: 'A', groupBy: 'name', metrics: [{ fn: 'count', as: 'n' }, { fn: 'count', as: 'missing' }] }] });
@@ -101,15 +101,15 @@ test('seed and identity happen once, not on every boot', async () => {
     return app;
   };
   const first = await open();
-  const topics = first.store.count('Topic');
-  const profiles = first.store.count('Profile');
+  const topics = await first.store.count('Topic');
+  const profiles = await first.store.count('Profile');
   first.server.close();
   const second = await open();
   // finally: a failing assertion must not leave the second server listening — that
   // hangs the whole file (the event loop never drains), not just this one test.
   try {
-    assert.equal(second.store.count('Topic'), topics, 'seed rows are not duplicated');
-    assert.equal(second.store.count('Profile'), profiles, 'the identity row is reused');
+    assert.equal(await second.store.count('Topic'), topics, 'seed rows are not duplicated');
+    assert.equal(await second.store.count('Profile'), profiles, 'the identity row is reused');
   } finally { second.server.close(); }
 });
 
@@ -130,8 +130,8 @@ test('seed order: identity before seed, and a self-reference patched once every 
   // finally: a failing assertion must not leave the server listening — that hangs
   // the whole file (the event loop never drains), not just this one test.
   try {
-    assert.equal(app.store.count('Order'), 1, 'the order referencing the identity customer was seeded');
-    const users = app.store.list('User', { sort: { field: 'id', dir: 'asc' } });
+    assert.equal(await app.store.count('Order'), 1, 'the order referencing the identity customer was seeded');
+    const users = await app.store.list('User', { sort: { field: 'id', dir: 'asc' } });
     assert.deepEqual(users.map((u) => u.manager), ['2', '1'], 'Ada and Bo each manage the other, patched in after both rows exist');
   } finally { app.server.close(); }
 });
@@ -171,8 +171,8 @@ test('the last defensive paths: no options, no metrics, no actions, missing valu
   const graph = { app: 'x', data: { A: { name: 'text!', k: 'enum[a,b]=a' } },
     override: { 'A.list': { filters: [{ field: 'k', options: [] }], rowActions: [] } } };
   const store = new Store(graph, ':memory:');
-  store.insert('A', { name: 'one' });
-  const html = listView(graph, store, 'A', store.fields.A, store.list('A', {}), { q: '', where: {} });
+  await store.insert('A', { name: 'one' });
+  const html = listView(graph, store, 'A', store.fields.A, await store.list('A', {}), { q: '', where: {} });
   assert.match(html, /<strong>K<\/strong><div><\/div>/, 'a filter with an empty option list renders no links');
   assert.ok(!/<td><\/td>/.test(html));
 
@@ -182,7 +182,7 @@ test('the last defensive paths: no options, no metrics, no actions, missing valu
     tables: [{ title: 'T', entity: 'B', groupBy: 'n' }] });
   assert.match(dash, /<b>0<\/b>Sum of nothing/, 'an aggregate over no rows reads zero, not blank');
   assert.match(dash, /<h3>T<\/h3>/, 'a table with no metrics still renders its heading');
-  empty.insert('B', { n: 1 });
+  await empty.insert('B', { n: 1 });
   const dashRows = await viewer({ app: 'x', data: { B: { n: 'int' } } }, empty).dashboard(
     { id: 'd', title: 'D', tables: [{ title: 'T', entity: 'B', groupBy: 'n' }] });
   assert.match(dashRows, /<tr><td>1<\/td><\/tr>/, 'a grouped table with no metrics lists its groups and nothing else');
@@ -218,9 +218,9 @@ test('resolution of @now, of a path that leads nowhere, and of a plain value', a
 test('the strikethrough row, a page whose graph declares no actions, an identity without defaults', async () => {
   const graph = { app: 'x', data: { T: { title: 'text!', done: 'bool=false' } } };
   const store = new Store(graph, ':memory:');
-  store.insert('T', { title: 'finished', done: 'true' });
-  store.insert('T', { title: 'open' });
-  const html = listView(graph, store, 'T', store.fields.T, store.list('T', {}), { q: '', where: {} });
+  await store.insert('T', { title: 'finished', done: 'true' });
+  await store.insert('T', { title: 'open' });
+  const html = listView(graph, store, 'T', store.fields.T, await store.list('T', {}), { q: '', where: {} });
   assert.equal((html.match(/<tr class="done">/g) || []).length, 1, 'exactly the finished row is struck through');
   assert.equal((html.match(/<tr class="">/g) || []).length, 1);
 
@@ -234,7 +234,7 @@ test('the strikethrough row, a page whose graph declares no actions, an identity
   fs.writeFileSync(file, JSON.stringify({ app: 'id', data: { Me: { name: 'text' } }, identity: { entity: 'Me' } }));
   const s = await boot(file);
   try {
-    assert.equal(s.app.store.count('Me'), 1, 'an identity without defaults still gets its row');
+    assert.equal(await s.app.store.count('Me'), 1, 'an identity without defaults still gets its row');
   } finally { s.close(); }
 });
 
@@ -258,7 +258,7 @@ test('a row action on a graph without actions, and an action that declares no ta
   fs.writeFileSync(file, JSON.stringify({ app: 'noact', data: { A: { name: 'text!', done: 'bool=false' } } }));
   const s = await boot(file);
   try {
-    const id = s.app.store.insert('A', { name: 'x' });
+    const id = await s.app.store.insert('A', { name: 'x' });
     assert.equal((await s.post(`/A/${id}/action/anything`, {})).status, 404,
       'a graph with no actions answers 404, it does not crash');
   } finally { s.close(); }
@@ -269,17 +269,17 @@ test('a row action on a graph without actions, and an action that declares no ta
     override: { 'A.list': { rowActions: ['finish'] } } }));
   const s2 = await boot(file2);
   try {
-    const id = s2.app.store.insert('A', { name: 'y' });
+    const id = await s2.app.store.insert('A', { name: 'y' });
     const r = await s2.post(`/A/${id}/action/finish`, {});
     assert.equal(r.location, '/A', 'without "after" the action returns to the list');
     assert.ok(!r.location.includes('ok='), 'without "confirm" it says nothing');
-    assert.equal(s2.app.store.get('A', id).done, 1);
+    assert.equal((await s2.app.store.get('A', id)).done, 1);
   } finally { s2.close(); }
 });
 
 test('a wheel whose arithmetic runs off the end still returns a prize', async (t) => {
   const store = new Store({ app: 'x', data: { P: { name: 'text!', w: 'int=1' } } }, ':memory:');
-  store.insert('P', { name: 'only', w: 1 });
+  await store.insert('P', { name: 'only', w: 1 });
   const real = Math.random;
   Math.random = () => 1;                       // the value Math.random never returns
   try {
@@ -314,7 +314,7 @@ test('an unchecked box means false, even when the declared default says true', a
     assert.match(child, /<td>No<\/td>/, 'the same rule applies to a related form');
 
     // A block writing directly still gets the declared default: only forms mean "unchecked".
-    const direct = s.app.store.insert('Job', { title: 'written by a block' });
-    assert.equal(s.app.store.get('Job', direct).active, 1);
+    const direct = await s.app.store.insert('Job', { title: 'written by a block' });
+    assert.equal((await s.app.store.get('Job', direct)).active, 1);
   } finally { s.close(); }
 });

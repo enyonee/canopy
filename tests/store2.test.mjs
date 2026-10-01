@@ -12,39 +12,39 @@ const shop = () => new Store(G({
   Item: { order: 'ref:Order!', qty: 'int=1', price: 'money', line: 'money := qty * price' },
 }), ':memory:');
 
-test('derived fields are computed on read, in money and through references, and never stored', () => {
+test('derived fields are computed on read, in money and through references, and never stored', async () => {
   const store = shop();
   assert.ok(!store.drv.columns('order').some((c) => c.name === 'total'), 'no column for a derived field');
-  const c = store.insert('Customer', { name: 'Ann', tier: 'gold', discount: 10 });
-  const o = store.insert('Order', { customer: c, status: 'cart' });
-  store.insert('Item', { order: o, qty: 2, price: 12.5 });
-  store.insert('Item', { order: o, qty: 1, price: '100' });
-  const row = store.get('Order', o);
+  const c = await store.insert('Customer', { name: 'Ann', tier: 'gold', discount: 10 });
+  const o = await store.insert('Order', { customer: c, status: 'cart' });
+  await store.insert('Item', { order: o, qty: 2, price: 12.5 });
+  await store.insert('Item', { order: o, qty: 1, price: '100' });
+  const row = await store.get('Order', o);
   assert.equal(row.items, 2);
   assert.equal(row.total, 12500, 'money is stored in minor units, derived included');
   assert.equal(row.net, 11250, 'a hop through the reference reads the discount');
   assert.equal(row.big, 1, 'a derived bool is 1/0');
   assert.equal(row.name, '#cart');
-  assert.equal(store.get('Item', 1).line, 2500);
-  store.update('Order', o, { total: 1, items: 9 });
-  assert.equal(store.get('Order', o).total, 12500, 'writing a derived field is ignored');
-  assert.equal(store.list('Order', {})[0].total, 12500, 'list hydrates too');
-  const orphan = store.insert('Order', {});
-  assert.equal(store.get('Order', orphan).net, null, 'a null reference reads as null');
-  assert.equal(store.get('Order', orphan).total, 0);
-  assert.equal(store.get('Order', orphan).items, 0);
-  assert.equal(store.hydrate('Order', undefined), undefined);
-  assert.equal(store.hydrate('Order', null), null);
+  assert.equal((await store.get('Item', 1)).line, 2500);
+  await store.update('Order', o, { total: 1, items: 9 });
+  assert.equal((await store.get('Order', o)).total, 12500, 'writing a derived field is ignored');
+  assert.equal((await store.list('Order', {}))[0].total, 12500, 'list hydrates too');
+  const orphan = await store.insert('Order', {});
+  assert.equal((await store.get('Order', orphan)).net, null, 'a null reference reads as null');
+  assert.equal((await store.get('Order', orphan)).total, 0);
+  assert.equal((await store.get('Order', orphan)).items, 0);
+  assert.equal(await store.hydrate('Order', undefined), undefined);
+  assert.equal(await store.hydrate('Order', null), null);
 });
 
-test('reverse references are found, named, or refused with a hint', () => {
+test('reverse references are found, named, or refused with a hint', async () => {
   const store = new Store(G({
     A: { n: 'text', kids: 'int := count(B)', ambiguous: 'int := count(C)', named: 'int := count(C.second)', none: 'int := count(D)' },
     B: { a: 'ref:A' }, C: { first: 'ref:A', second: 'ref:A' }, D: { n: 'text' },
   }), ':memory:');
-  const a = store.insert('A', { n: 'x' });
-  store.insert('B', { a }); store.insert('C', { first: a, second: null }); store.insert('C', { first: null, second: a }); store.insert('D', { n: 'z' });
-  const row = store.raw('A', a);
+  const a = await store.insert('A', { n: 'x' });
+  await store.insert('B', { a }); await store.insert('C', { first: a, second: null }); await store.insert('C', { first: null, second: a }); await store.insert('D', { n: 'z' });
+  const row = await store.raw('A', a);
   assert.equal(store.ctx('A', row).get(['kids']), 1);
   assert.equal(store.ctx('A', row).get(['named']), 1);
   assert.throws(() => store.ctx('A', row).get(['ambiguous']), /C references A through first and second; name one: C\.first/);
@@ -60,19 +60,19 @@ test('reverse references are found, named, or refused with a hint', () => {
   assert.equal(store.fieldAt('A', ['n', 'deeper']), null, 'a text field has no fields');
 });
 
-test('item 12: expressions may read "id", read-only, on any entity', () => {
+test('item 12: expressions may read "id", read-only, on any entity', async () => {
   const store = new Store(G({ A: { n: 'text', code: "text := concat('A-', id)" } }), ':memory:');
-  const id = store.insert('A', { n: 'x' });
-  const row = store.raw('A', id);
+  const id = await store.insert('A', { n: 'x' });
+  const row = await store.raw('A', id);
   assert.equal(store.ctx('A', row).get(['id']), id);
   assert.throws(() => store.ctx('A', row).get(['id', 'nope']), /A\.id is a number, cannot read \.nope of it/);
-  assert.equal(store.get('A', id).code, `A-${id}`, 'a derived field may use it too');
+  assert.equal((await store.get('A', id)).code, `A-${id}`, 'a derived field may use it too');
 });
 
-test('a secret field is unreadable in expressions, except a rule checking the row\'s own not-yet-hashed value', () => {
+test('a secret field is unreadable in expressions, except a rule checking the row\'s own not-yet-hashed value', async () => {
   const store = new Store(G({ User: { email: 'text!', password: 'password!' } }), ':memory:');
-  const id = store.insert('User', { email: 'ann@x.test', password: 'secret1' });
-  const row = store.raw('User', id);
+  const id = await store.insert('User', { email: 'ann@x.test', password: 'secret1' });
+  const row = await store.raw('User', id);
   assert.throws(() => store.ctx('User', row).get(['password']), /User\.password is secret; expressions cannot read it/);
   // A rule on the candidate row (not yet hashed) may read it...
   const probe = { ...row, password: 'abc' };
@@ -80,144 +80,145 @@ test('a secret field is unreadable in expressions, except a rule checking the ro
   // ...but the exemption never follows a hop to another row's real, hashed field.
   const withRef = new Store(G({ User: { email: 'text!', password: 'password!' },
     Post: { author: 'ref:User' } }), ':memory:');
-  const u = withRef.insert('User', { email: 'ann@x.test', password: 'secret1' });
-  const p = withRef.insert('Post', { author: u });
-  assert.throws(() => withRef.ctx('Post', withRef.raw('Post', p), [], { allowSecret: true }).get(['author', 'password']),
+  const u = await withRef.insert('User', { email: 'ann@x.test', password: 'secret1' });
+  const p = await withRef.insert('Post', { author: u });
+  const rawPost = await withRef.raw('Post', p);
+  assert.throws(() => withRef.ctx('Post', rawPost, [], { allowSecret: true }).get(['author', 'password']),
     /User\.password is secret; expressions cannot read it/);
 });
 
-test('a derived field that depends on itself is refused at read time', () => {
+test('a derived field that depends on itself is refused at read time', async () => {
   const store = new Store(G({ A: { x: 'int := y + 1', y: 'int := x + 1' } }), ':memory:');
-  const a = store.insert('A', {});
-  assert.throws(() => store.get('A', a), /derived field A\.x depends on itself \(A\.x → A\.y → A\.x\)/);
+  const a = await store.insert('A', {});
+  await assert.rejects(async () => await store.get('A', a), /derived field A\.x depends on itself \(A\.x → A\.y → A\.x\)/);
 });
 
-test('where clauses: ranges, sets, likes, null, and the same on derived fields in memory', () => {
+test('where clauses: ranges, sets, likes, null, and the same on derived fields in memory', async () => {
   const store = shop();
-  const c = store.insert('Customer', { name: 'Ann' });
-  const cheap = store.insert('Order', { customer: c, status: 'cart', due: '2026-01-05', createdAt: '2026-01-05T10:00:00Z' });
-  const dear = store.insert('Order', { customer: c, status: 'paid', due: '2026-02-05', createdAt: '2026-02-05T10:00:00Z' });
-  const bare = store.insert('Order', { status: 'cart' });
-  store.insert('Item', { order: cheap, qty: 1, price: 10 });
-  store.insert('Item', { order: dear, qty: 3, price: 100 });
-  const ids = (opts) => store.list('Order', opts).map((r) => r.id).sort();
-  assert.deepEqual(ids({ where: { due: { gte: '2026-02-01' } } }), [dear]);
-  assert.deepEqual(ids({ where: { due: { gte: '2026-02-05' } } }), [dear], 'gte includes the bound');
-  assert.deepEqual(ids({ where: { due: { lte: '2026-01-05' } } }), [cheap], 'lte includes the bound');
-  assert.deepEqual(ids({ where: { due: { lt: '2026-02-01' } } }), [cheap]);
-  assert.deepEqual(ids({ where: { due: { gt: '2026-01-05', lte: '2026-02-05' } } }), [dear]);
-  assert.deepEqual(ids({ where: { status: { in: ['paid'] } } }), [dear]);
-  assert.deepEqual(ids({ where: { status: { in: 'paid' } } }), [dear], 'a scalar "in" is a one-element set');
-  assert.deepEqual(ids({ where: { status: { ne: 'paid' } } }), [cheap, bare].sort());
-  assert.deepEqual(ids({ where: { due: { like: '2026-01' } } }), [cheap]);
-  assert.deepEqual(ids({ where: { customer: null } }), [bare]);
-  assert.deepEqual(ids({ where: { customer: { ne: null } } }), [cheap, dear].sort(), 'item 16: "ne: null" is IS NOT NULL, not silently dropped');
-  assert.deepEqual(ids({ where: { net: { ne: null } } }), [cheap, dear].sort(), 'the same on a derived field, in memory');
-  assert.deepEqual(ids({ where: { customer: undefined, status: '' } }), [cheap, dear, bare].sort(), 'empty comparisons are dropped');
-  assert.deepEqual(ids({ where: { due: { gte: '', lte: null } } }), [cheap, dear, bare].sort());
-  assert.throws(() => store.list('Order', { where: { due: { between: 1 } } }), /unknown comparison "between" on Order\.due; known: gte, lte, gt, lt, ne, in, like/);
+  const c = await store.insert('Customer', { name: 'Ann' });
+  const cheap = await store.insert('Order', { customer: c, status: 'cart', due: '2026-01-05', createdAt: '2026-01-05T10:00:00Z' });
+  const dear = await store.insert('Order', { customer: c, status: 'paid', due: '2026-02-05', createdAt: '2026-02-05T10:00:00Z' });
+  const bare = await store.insert('Order', { status: 'cart' });
+  await store.insert('Item', { order: cheap, qty: 1, price: 10 });
+  await store.insert('Item', { order: dear, qty: 3, price: 100 });
+  const ids = async (opts) => (await store.list('Order', opts)).map((r) => r.id).sort();
+  assert.deepEqual(await ids({ where: { due: { gte: '2026-02-01' } } }), [dear]);
+  assert.deepEqual(await ids({ where: { due: { gte: '2026-02-05' } } }), [dear], 'gte includes the bound');
+  assert.deepEqual(await ids({ where: { due: { lte: '2026-01-05' } } }), [cheap], 'lte includes the bound');
+  assert.deepEqual(await ids({ where: { due: { lt: '2026-02-01' } } }), [cheap]);
+  assert.deepEqual(await ids({ where: { due: { gt: '2026-01-05', lte: '2026-02-05' } } }), [dear]);
+  assert.deepEqual(await ids({ where: { status: { in: ['paid'] } } }), [dear]);
+  assert.deepEqual(await ids({ where: { status: { in: 'paid' } } }), [dear], 'a scalar "in" is a one-element set');
+  assert.deepEqual(await ids({ where: { status: { ne: 'paid' } } }), [cheap, bare].sort());
+  assert.deepEqual(await ids({ where: { due: { like: '2026-01' } } }), [cheap]);
+  assert.deepEqual(await ids({ where: { customer: null } }), [bare]);
+  assert.deepEqual(await ids({ where: { customer: { ne: null } } }), [cheap, dear].sort(), 'item 16: "ne: null" is IS NOT NULL, not silently dropped');
+  assert.deepEqual(await ids({ where: { net: { ne: null } } }), [cheap, dear].sort(), 'the same on a derived field, in memory');
+  assert.deepEqual(await ids({ where: { customer: undefined, status: '' } }), [cheap, dear, bare].sort(), 'empty comparisons are dropped');
+  assert.deepEqual(await ids({ where: { due: { gte: '', lte: null } } }), [cheap, dear, bare].sort());
+  await assert.rejects(async () => await store.list('Order', { where: { due: { between: 1 } } }), /unknown comparison "between" on Order\.due; known: gte, lte, gt, lt, ne, in, like/);
   // derived fields cannot go to SQL: they are filtered and sorted after hydration
-  assert.deepEqual(ids({ where: { big: 1 } }), [dear]);
-  assert.deepEqual(ids({ where: { total: { gte: 100 } } }), [dear]);
-  assert.deepEqual(ids({ where: { total: { gt: 5, lt: 100 } } }), [cheap], 'derived money compares in major units like stored money');
-  assert.deepEqual(ids({ where: { total: { lte: 10 } } }), [cheap, bare].sort());
-  assert.deepEqual(ids({ where: { total: 300 } }), [dear]);
-  assert.deepEqual(ids({ where: { total: { in: [10, 300] } } }), [cheap, dear].sort());
-  assert.deepEqual(ids({ where: { items: { in: [1, 2] } } }), [cheap, dear].sort());
-  assert.deepEqual(ids({ where: { name: { like: 'CART' } } }), [cheap, bare].sort());
-  assert.deepEqual(ids({ where: { items: { ne: 0 } } }), [cheap, dear].sort());
-  assert.deepEqual(ids({ where: { net: null } }), [bare]);
-  assert.deepEqual(ids({ where: { total: { gte: '' } } }), [cheap, dear, bare].sort(), 'an empty bound is no bound');
-  assert.deepEqual(store.list('Order', { sort: { field: 'total', dir: 'desc' } }).map((r) => r.id), [dear, cheap, bare]);
-  assert.deepEqual(store.list('Order', { sort: { field: 'total', dir: 'asc' } }).map((r) => r.id), [bare, cheap, dear]);
-  assert.equal(store.count('Order', { big: 1 }), 1);
+  assert.deepEqual(await ids({ where: { big: 1 } }), [dear]);
+  assert.deepEqual(await ids({ where: { total: { gte: 100 } } }), [dear]);
+  assert.deepEqual(await ids({ where: { total: { gt: 5, lt: 100 } } }), [cheap], 'derived money compares in major units like stored money');
+  assert.deepEqual(await ids({ where: { total: { lte: 10 } } }), [cheap, bare].sort());
+  assert.deepEqual(await ids({ where: { total: 300 } }), [dear]);
+  assert.deepEqual(await ids({ where: { total: { in: [10, 300] } } }), [cheap, dear].sort());
+  assert.deepEqual(await ids({ where: { items: { in: [1, 2] } } }), [cheap, dear].sort());
+  assert.deepEqual(await ids({ where: { name: { like: 'CART' } } }), [cheap, bare].sort());
+  assert.deepEqual(await ids({ where: { items: { ne: 0 } } }), [cheap, dear].sort());
+  assert.deepEqual(await ids({ where: { net: null } }), [bare]);
+  assert.deepEqual(await ids({ where: { total: { gte: '' } } }), [cheap, dear, bare].sort(), 'an empty bound is no bound');
+  assert.deepEqual((await store.list('Order', { sort: { field: 'total', dir: 'desc' } })).map((r) => r.id), [dear, cheap, bare]);
+  assert.deepEqual((await store.list('Order', { sort: { field: 'total', dir: 'asc' } })).map((r) => r.id), [bare, cheap, dear]);
+  assert.equal(await store.count('Order', { big: 1 }), 1);
   // the same unknown-op refusal on a derived field: filtered in memory, not SQL
-  assert.throws(() => ids({ where: { total: { between: 5 } } }), /unknown comparison "between"; known: gte, lte, gt, lt, ne, in, like/);
+  await assert.rejects(async () => await ids({ where: { total: { between: 5 } } }), /unknown comparison "between"; known: gte, lte, gt, lt, ne, in, like/);
 });
 
-test('aggregation: month buckets in SQL, derived metrics in memory, sort and limit in both', () => {
+test('aggregation: month buckets in SQL, derived metrics in memory, sort and limit in both', async () => {
   const store = shop();
-  const c = store.insert('Customer', { name: 'Ann' });
-  const jan = store.insert('Order', { customer: c, status: 'paid', createdAt: '2026-01-05T10:00:00Z', due: '2026-01-05' });
-  const feb = store.insert('Order', { customer: c, status: 'paid', createdAt: '2026-02-05T10:00:00Z', due: '2026-02-05' });
-  const feb2 = store.insert('Order', { customer: c, status: 'cart', createdAt: '2026-02-09T10:00:00Z', due: '2026-02-09' });
-  store.insert('Item', { order: jan, qty: 1, price: 10 });
-  store.insert('Item', { order: feb, qty: 2, price: 10 });
-  store.insert('Item', { order: feb2, qty: 4, price: 10 });
-  assert.deepEqual(store.aggregate('Order', { groupBy: 'createdAt', groupUnit: 'month', metrics: [{ fn: 'count', as: 'n' }], sort: { field: 'grp', dir: 'asc' } }),
+  const c = await store.insert('Customer', { name: 'Ann' });
+  const jan = await store.insert('Order', { customer: c, status: 'paid', createdAt: '2026-01-05T10:00:00Z', due: '2026-01-05' });
+  const feb = await store.insert('Order', { customer: c, status: 'paid', createdAt: '2026-02-05T10:00:00Z', due: '2026-02-05' });
+  const feb2 = await store.insert('Order', { customer: c, status: 'cart', createdAt: '2026-02-09T10:00:00Z', due: '2026-02-09' });
+  await store.insert('Item', { order: jan, qty: 1, price: 10 });
+  await store.insert('Item', { order: feb, qty: 2, price: 10 });
+  await store.insert('Item', { order: feb2, qty: 4, price: 10 });
+  assert.deepEqual(await store.aggregate('Order', { groupBy: 'createdAt', groupUnit: 'month', metrics: [{ fn: 'count', as: 'n' }], sort: { field: 'grp', dir: 'asc' } }),
     [{ grp: '2026-01', n: 1 }, { grp: '2026-02', n: 2 }]);
-  assert.deepEqual(store.aggregate('Order', { groupBy: 'due', groupUnit: 'year', metrics: [{ fn: 'count', as: 'n' }] }), [{ grp: '2026', n: 3 }]);
-  assert.deepEqual(store.aggregate('Order', { groupBy: 'due', groupUnit: 'day', metrics: [{ fn: 'count', as: 'n' }], limit: 1, sort: { field: 'grp', dir: 'desc' } }), [{ grp: '2026-02-09', n: 1 }]);
+  assert.deepEqual(await store.aggregate('Order', { groupBy: 'due', groupUnit: 'year', metrics: [{ fn: 'count', as: 'n' }] }), [{ grp: '2026', n: 3 }]);
+  assert.deepEqual(await store.aggregate('Order', { groupBy: 'due', groupUnit: 'day', metrics: [{ fn: 'count', as: 'n' }], limit: 1, sort: { field: 'grp', dir: 'desc' } }), [{ grp: '2026-02-09', n: 1 }]);
   // derived metric → in memory
-  const byStatus = store.aggregate('Order', { groupBy: 'status', metrics: [{ fn: 'sum', field: 'total', as: 's' }, { fn: 'avg', field: 'total', as: 'a' }, { fn: 'min', field: 'total', as: 'mn' }, { fn: 'max', field: 'total', as: 'mx' }, { fn: 'count', as: 'n' }], sort: { field: 's', dir: 'desc' } });
+  const byStatus = await store.aggregate('Order', { groupBy: 'status', metrics: [{ fn: 'sum', field: 'total', as: 's' }, { fn: 'avg', field: 'total', as: 'a' }, { fn: 'min', field: 'total', as: 'mn' }, { fn: 'max', field: 'total', as: 'mx' }, { fn: 'count', as: 'n' }], sort: { field: 's', dir: 'desc' } });
   assert.deepEqual(byStatus, [{ grp: 'cart', s: 4000, a: 4000, mn: 4000, mx: 4000, n: 1 }, { grp: 'paid', s: 3000, a: 1500, mn: 1000, mx: 2000, n: 2 }]);
-  assert.deepEqual(store.aggregate('Order', { groupBy: 'createdAt', groupUnit: 'month', metrics: [{ fn: 'sum', field: 'total', as: 's' }], sort: { field: 'grp', dir: 'asc' } }),
+  assert.deepEqual(await store.aggregate('Order', { groupBy: 'createdAt', groupUnit: 'month', metrics: [{ fn: 'sum', field: 'total', as: 's' }], sort: { field: 'grp', dir: 'asc' } }),
     [{ grp: '2026-01', s: 1000 }, { grp: '2026-02', s: 6000 }], 'month buckets work in memory too');
-  assert.deepEqual(store.aggregate('Order', { metrics: [{ fn: 'sum', field: 'total', as: 's' }], where: { status: 'paid' } }), [{ s: 3000 }]);
-  assert.deepEqual(store.aggregate('Order', { groupBy: 'big', metrics: [{ fn: 'count', as: 'n' }], sort: { field: 'n', dir: 'asc' }, limit: 1 }), [{ grp: 0, n: 3 }], 'no order is over 100');
-  assert.deepEqual(store.aggregate('Order', { metrics: [{ fn: 'avg', field: 'net', as: 'a' }], where: { status: 'gone' } }), [], 'no rows, no groups');
-  assert.deepEqual(store.aggregate('Order', { groupBy: 'status', metrics: [{ fn: 'max', field: 'net', as: 'm' }], where: { big: 1 } }), []);
-  assert.deepEqual(store.aggregate('Item', { metrics: [{ fn: 'min', field: 'line', as: 'm' }] }), [{ m: 1000 }]);
+  assert.deepEqual(await store.aggregate('Order', { metrics: [{ fn: 'sum', field: 'total', as: 's' }], where: { status: 'paid' } }), [{ s: 3000 }]);
+  assert.deepEqual(await store.aggregate('Order', { groupBy: 'big', metrics: [{ fn: 'count', as: 'n' }], sort: { field: 'n', dir: 'asc' }, limit: 1 }), [{ grp: 0, n: 3 }], 'no order is over 100');
+  assert.deepEqual(await store.aggregate('Order', { metrics: [{ fn: 'avg', field: 'net', as: 'a' }], where: { status: 'gone' } }), [], 'no rows, no groups');
+  assert.deepEqual(await store.aggregate('Order', { groupBy: 'status', metrics: [{ fn: 'max', field: 'net', as: 'm' }], where: { big: 1 } }), []);
+  assert.deepEqual(await store.aggregate('Item', { metrics: [{ fn: 'min', field: 'line', as: 'm' }] }), [{ m: 1000 }]);
   const withNulls = new Store(G({ A: { v: 'int', d: 'int := v * 2' } }), ':memory:');
-  withNulls.insert('A', { v: 1 }); withNulls.insert('A', {});
-  assert.deepEqual(withNulls.aggregate('A', { metrics: [{ fn: 'sum', field: 'd', as: 's' }, { fn: 'avg', field: 'd', as: 'a' }] }), [{ s: 2, a: 2 }], 'nulls are skipped');
-  assert.deepEqual(withNulls.aggregate('A', { metrics: [{ fn: 'max', field: 'd', as: 'm' }], where: { v: { gt: 5 } } }), [], 'no rows at all');
+  await withNulls.insert('A', { v: 1 }); await withNulls.insert('A', {});
+  assert.deepEqual(await withNulls.aggregate('A', { metrics: [{ fn: 'sum', field: 'd', as: 's' }, { fn: 'avg', field: 'd', as: 'a' }] }), [{ s: 2, a: 2 }], 'nulls are skipped');
+  assert.deepEqual(await withNulls.aggregate('A', { metrics: [{ fn: 'max', field: 'd', as: 'm' }], where: { v: { gt: 5 } } }), [], 'no rows at all');
   const onlyNull = new Store(G({ A: { v: 'int', d: 'int := v * 2' } }), ':memory:');
-  onlyNull.insert('A', {});
-  assert.deepEqual(onlyNull.aggregate('A', { metrics: [{ fn: 'max', field: 'd', as: 'm' }] }), [{ m: null }], 'only nulls is null');
-  assert.deepEqual(store.aggregate('Order', { groupBy: 'total', metrics: [{ fn: 'count', as: 'n' }], sort: { field: 'grp', dir: 'asc' } }).map((r) => r.grp), [1000, 2000, 4000]);
+  await onlyNull.insert('A', {});
+  assert.deepEqual(await onlyNull.aggregate('A', { metrics: [{ fn: 'max', field: 'd', as: 'm' }] }), [{ m: null }], 'only nulls is null');
+  assert.deepEqual((await store.aggregate('Order', { groupBy: 'total', metrics: [{ fn: 'count', as: 'n' }], sort: { field: 'grp', dir: 'asc' } })).map((r) => r.grp), [1000, 2000, 4000]);
 });
 
-test('uniqueness, transactions and passwords', () => {
+test('uniqueness, transactions and passwords', async () => {
   const store = new Store(G({ U: { email: 'text!', password: 'password', n: 'int=0' } }), ':memory:');
-  const a = store.insert('U', { email: 'a@x', password: 'pw' });
-  assert.equal(store.exists('U', 'email', 'a@x'), true);
-  assert.equal(store.exists('U', 'email', 'a@x', a), false, 'the row itself does not collide');
-  assert.equal(store.exists('U', 'email', 'b@x'), false);
-  assert.ok(isHashed(store.raw('U', a).password), 'stored hashed');
-  const hashed = store.raw('U', a).password;
-  store.update('U', a, { password: '' });
-  assert.equal(store.raw('U', a).password, hashed, 'an empty password keeps the old one');
-  store.update('U', a, { password: hashed });
-  assert.equal(store.raw('U', a).password, hashed, 'an already hashed value is stored as is');
-  store.update('U', a, { password: 'new' });
-  assert.notEqual(store.raw('U', a).password, hashed);
-  const b = store.insert('U', { email: 'b@x', password: '' });
-  assert.equal(store.raw('U', b).password, null);
+  const a = await store.insert('U', { email: 'a@x', password: 'pw' });
+  assert.equal(await store.exists('U', 'email', 'a@x'), true);
+  assert.equal(await store.exists('U', 'email', 'a@x', a), false, 'the row itself does not collide');
+  assert.equal(await store.exists('U', 'email', 'b@x'), false);
+  assert.ok(isHashed((await store.raw('U', a)).password), 'stored hashed');
+  const hashed = (await store.raw('U', a)).password;
+  await store.update('U', a, { password: '' });
+  assert.equal((await store.raw('U', a)).password, hashed, 'an empty password keeps the old one');
+  await store.update('U', a, { password: hashed });
+  assert.equal((await store.raw('U', a)).password, hashed, 'an already hashed value is stored as is');
+  await store.update('U', a, { password: 'new' });
+  assert.notEqual((await store.raw('U', a)).password, hashed);
+  const b = await store.insert('U', { email: 'b@x', password: '' });
+  assert.equal((await store.raw('U', b)).password, null);
   assert.equal(Store.prepareValue(store.field('U', 'password'), null), null);
-  assert.throws(() => store.transaction(() => { store.update('U', a, { n: 5 }); throw new Error('stop'); }), /stop/);
-  assert.equal(store.raw('U', a).n, 0, 'rolled back');
-  assert.equal(store.transaction(() => { store.update('U', a, { n: 7 }); return 'done'; }), 'done');
-  assert.equal(store.raw('U', a).n, 7, 'committed');
+  await assert.rejects(store.transaction(async () => { await store.update('U', a, { n: 5 }); throw new Error('stop'); }), /stop/);
+  assert.equal((await store.raw('U', a)).n, 0, 'rolled back');
+  assert.equal(await store.transaction(async () => { await store.update('U', a, { n: 7 }); return 'done'; }), 'done');
+  assert.equal((await store.raw('U', a)).n, 7, 'committed');
 });
 
-test('the outbox is a table with a status, filtered and updated by id', () => {
+test('the outbox is a table with a status, filtered and updated by id', async () => {
   const store = new Store(G({ A: { n: 'text' } }), ':memory:');
-  const id = store.enqueue({ kind: 'http', connector: 'c', target: 't', payload: { x: [1, 2] } });
-  const row = store.outboxGet(id);
+  const id = await store.enqueue({ kind: 'http', connector: 'c', target: 't', payload: { x: [1, 2] } });
+  const row = await store.outboxGet(id);
   assert.equal(row.status, 'queued'); assert.equal(row.attempts, 0); assert.deepEqual(row.payload, { x: [1, 2] });
   assert.match(row.at, /^\d{4}-/); assert.equal(row.at, row.updatedAt);
-  store.outboxUpdate(id, { status: 'sent', code: 200, attempts: 1 });
-  assert.equal(store.outboxGet(id).status, 'sent');
-  assert.deepEqual(store.outbox({ status: 'queued' }), []);
-  assert.equal(store.outbox().length, 1);
-  const two = store.enqueue({ kind: 'mail', connector: 'm', target: 'x' });
-  assert.equal(store.outboxGet(two).payload, null);
-  assert.equal(store.outbox()[0].id, two, 'newest first');
+  await store.outboxUpdate(id, { status: 'sent', code: 200, attempts: 1 });
+  assert.equal((await store.outboxGet(id)).status, 'sent');
+  assert.deepEqual(await store.outbox({ status: 'queued' }), []);
+  assert.equal((await store.outbox()).length, 1);
+  const two = await store.enqueue({ kind: 'mail', connector: 'm', target: 'x' });
+  assert.equal((await store.outboxGet(two)).payload, null);
+  assert.equal((await store.outbox())[0].id, two, 'newest first');
 });
 
-test('money, date and file columns: storage types, defaults and coercion through the store', () => {
+test('money, date and file columns: storage types, defaults and coercion through the store', async () => {
   const store = new Store(G({ P: { price: 'money=9.99', day: 'date=today', on: 'date=2026-01-01', doc: 'file', pin: 'money' } }), ':memory:');
   const cols = Object.fromEntries(store.drv.columns('p').map((c) => [c.name, c.type]));
   assert.equal(cols.price, 'INTEGER'); assert.equal(cols.day, 'TEXT'); assert.equal(cols.doc, 'TEXT');
-  const id = store.insert('P', { doc: '123-x.txt' });
-  const row = store.get('P', id);
+  const id = await store.insert('P', { doc: '123-x.txt' });
+  const row = await store.get('P', id);
   assert.equal(row.price, 999);
   assert.match(row.day, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(row.on, '2026-01-01');
   assert.equal(row.pin, null);
-  store.update('P', id, { price: '12.345', pin: 3 });
-  assert.equal(store.get('P', id).price, 1235, 'rounded to the cent');
-  assert.equal(store.get('P', id).pin, 300);
-  assert.equal(store.exists('P', 'price', '12.35'), true, 'uniqueness compares in storage units');
+  await store.update('P', id, { price: '12.345', pin: 3 });
+  assert.equal((await store.get('P', id)).price, 1235, 'rounded to the cent');
+  assert.equal((await store.get('P', id)).pin, 300);
+  assert.equal(await store.exists('P', 'price', '12.35'), true, 'uniqueness compares in storage units');
 });

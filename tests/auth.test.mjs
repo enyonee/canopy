@@ -131,30 +131,32 @@ const HOP_GRAPH = {
 test('S3c: prime loads the one-hop parents in one query; blank, dangling and non-numeric references own nothing', async () => {
   const { Store } = await import('../runtime/store.mjs');
   const store = new Store(HOP_GRAPH, ':memory:');
-  for (const n of ['a', 'b']) store.insert('User', { login: n, role: 'member' });
-  const p1 = store.insert('Profile', { user: 2 }), p2 = store.insert('Profile', { user: 1 });
+  for (const n of ['a', 'b']) await store.insert('User', { login: n, role: 'member' });
+  const p1 = await store.insert('Profile', { user: 2 }), p2 = await store.insert('Profile', { user: 1 });
   const titles = { n1: { author: 1, profile: p1 }, n2: { author: 2 }, n3: { profile: p2 }, n4: {}, n5: { author: 2, profile: p2 } };
-  for (const [title, v] of Object.entries(titles)) store.insert('Note', { title, ...v });
+  for (const [title, v] of Object.entries(titles)) await store.insert('Note', { title, ...v });
   for (const bad of ['99', 'abc', '']) store.drv.run('INSERT INTO note(title, profile) VALUES (?, ?)', [`bad ${bad}`, bad]);
   const perms = permissions(HOP_GRAPH, store);
-  const expected = (who) => store.listRaw('Note').filter((r) => String(r.author) === String(who)
-    || (r.profile && [p1, p2].includes(Number(r.profile)) && String(store.raw('Profile', r.profile).user) === String(who))).map((r) => r.id).sort();
+  const profileUser = { [p1]: (await store.raw('Profile', p1)).user, [p2]: (await store.raw('Profile', p2)).user };
+  const expected = async (who) => (await store.listRaw('Note')).filter((r) => String(r.author) === String(who)
+    || (r.profile && [p1, p2].includes(Number(r.profile)) && String(profileUser[r.profile]) === String(who))).map((r) => r.id).sort();
   let rows = [];
   for (const who of [1, 2]) {
-    const user = store.get('User', who);
-    rows = store.listRaw('Note'); // fresh row objects: what was primed belongs to the row it was primed for
+    const user = await store.get('User', who);
+    rows = await store.listRaw('Note'); // fresh row objects: what was primed belongs to the row it was primed for
     const queries = [];
     store.drv.onQuery = (sql) => queries.push(sql);
     await perms.prime(user, 'Note', rows);
     await perms.prime(user, 'Note', rows);
     store.drv.onQuery = null;
     assert.equal(queries.length, 1, `user ${who}: every parent in one query, and a primed row is not loaded again`);
-    assert.deepEqual(rows.filter((r) => perms.can(user, 'Note', 'edit', r)).map((r) => r.id).sort(), expected(who), `user ${who} edits exactly the rows they own`);
-    assert.deepEqual(rows.filter((r) => perms.ownOk(user, 'Note', r)).map((r) => r.id).sort(), expected(who));
+    assert.deepEqual(rows.filter((r) => perms.can(user, 'Note', 'edit', r)).map((r) => r.id).sort(), await expected(who), `user ${who} edits exactly the rows they own`);
+    assert.deepEqual(rows.filter((r) => perms.ownOk(user, 'Note', r)).map((r) => r.id).sort(), await expected(who));
     assert.equal(rows.every((r) => perms.can(user, 'Note', 'go:x', r)), true, 'an "all" operation is not scoped, so it reads no parent');
-    assert.deepEqual((await perms.ownWhere(user, 'Note')).id.in.map(Number).sort(), expected(who), 'the loader answers with the same rows, by every path of the grant');
+    assert.deepEqual((await perms.ownWhere(user, 'Note')).id.in.map(Number).sort(), await expected(who), 'the loader answers with the same rows, by every path of the grant');
   }
-  assert.throws(() => perms.can(store.get('User', 1), 'Note', 'edit', { ...rows[0] }), /not primed: Note\.profile/);
-  assert.equal(permissions(HOP_GRAPH).can(store.get('User', 1), 'Note', 'edit', rows[0]), false, 'without a store a one-hop grant owns nothing');
-  assert.equal(await permissions(HOP_GRAPH).prime(store.get('User', 1), 'Note', rows), undefined);
+  const one = await store.get('User', 1);
+  assert.throws(() => perms.can(one, 'Note', 'edit', { ...rows[0] }), /not primed: Note\.profile/);
+  assert.equal(permissions(HOP_GRAPH).can(await store.get('User', 1), 'Note', 'edit', rows[0]), false, 'without a store a one-hop grant owns nothing');
+  assert.equal(await permissions(HOP_GRAPH).prime(await store.get('User', 1), 'Note', rows), undefined);
 });

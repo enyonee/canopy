@@ -71,19 +71,19 @@ test('widgetBlock renders the declared markup; a page has no row, a detail widge
   assert.match(withRow, /data-row='\{&quot;id&quot;:3,&quot;name&quot;:&quot;x&quot;\}'/);
 });
 
-test('rowJSON drops secret fields, includes derived fields, and reads money in major units', () => {
+test('rowJSON drops secret fields, includes derived fields, and reads money in major units', async () => {
   const g = { app: 'w', data: { U: { name: 'text!', password: 'password!', tip: 'money=0', ok: 'bool=false', net: 'money := tip * 2' } } };
   const s = new Store(g, ':memory:');
-  const id = s.insert('U', { name: 'x', password: 'secret', tip: 5, ok: true });
-  const json = rowJSON(s, 'U', s.fields.U, s.get('U', id));
+  const id = await s.insert('U', { name: 'x', password: 'secret', tip: 5, ok: true });
+  const json = rowJSON(s, 'U', s.fields.U, await s.get('U', id));
   assert.deepEqual(json, { id, name: 'x', tip: 5, ok: true, net: 10 });
 });
 
 test('a page widget and a detail widget render through staticPage/detailView', async () => {
   const g = { app: 'w', data: { Match: { name: 'text!' } }, override: { 'Match.detail': { widget: { use: 'chess', fen: 'abc' } } } };
   const s = new Store(g, ':memory:');
-  const id = s.insert('Match', { name: 'final' });
-  const detail = await viewer(g, s).detail('Match', s.get('Match', id));
+  const id = await s.insert('Match', { name: 'final' });
+  const detail = await viewer(g, s).detail('Match', await s.get('Match', id));
   assert.match(detail, /data-widget="chess"/);
   assert.match(detail, /data-row=/);
   const staticHtml = staticPage(g, { id: 'p', title: 'P', widget: { use: 'chess', fen: 'abc' } });
@@ -314,23 +314,23 @@ test('checker: chart type, groupBy/groupUnit, metric, where, limit, sort — sam
   assert.match(at({ ...base, title: undefined })[0].message, /chart needs a title/);
 });
 
-test('chartBlock: bar and line share axes/labels, pie shares a total; every mark is paired with a direct text label', () => {
+test('chartBlock: bar and line share axes/labels, pie shares a total; every mark is paired with a direct text label', async () => {
   const s = new Store(salesGraph, ':memory:');
-  s.insert('Sale', { region: 'north', amount: 15 });
-  s.insert('Sale', { region: 'south', amount: 20 });
+  await s.insert('Sale', { region: 'north', amount: 15 });
+  await s.insert('Sale', { region: 'south', amount: 20 });
   const chart = (type) => ({ title: 'By region', entity: 'Sale', type, groupBy: 'region', metric: { fn: 'sum', field: 'amount' } });
-  const rowsOf = (c) => s.aggregate(c.entity, { groupBy: c.groupBy, metrics: [{ fn: c.metric.fn, field: c.metric.field, as: 'v' }], where: {} });
-  const bar = chartBlock(s, chart('bar'), 'teal', rowsOf(chart('bar')), noPre);
+  const rowsOf = async (c) => await s.aggregate(c.entity, { groupBy: c.groupBy, metrics: [{ fn: c.metric.fn, field: c.metric.field, as: 'v' }], where: {} });
+  const bar = chartBlock(s, chart('bar'), 'teal', await rowsOf(chart('bar')), noPre);
   assert.match(bar, /<svg role="img" aria-label="By region"/);
   assert.match(bar, /<title>By region<\/title>/);
   assert.match(bar, /<rect[^>]*fill="teal"[^>]*><title>North: 15\.00<\/title><\/rect>/);
   assert.match(bar, /<text[^>]*>20\.00<\/text>/, 'the y axis top label is money-formatted, not raw minor units');
   assert.match(bar, /<table class="chart-data">/);
   assert.match(bar, /<td>North<\/td><td>15\.00<\/td>/);
-  const line = chartBlock(s, chart('line'), 'teal', rowsOf(chart('line')), noPre);
+  const line = chartBlock(s, chart('line'), 'teal', await rowsOf(chart('line')), noPre);
   assert.match(line, /<polyline fill="none" stroke="teal"/);
   assert.match(line, /<circle[^>]*fill="teal"[^>]*><title>South: 20\.00<\/title>/);
-  const pie = chartBlock(s, chart('pie'), 'teal', rowsOf(chart('pie')), noPre);
+  const pie = chartBlock(s, chart('pie'), 'teal', await rowsOf(chart('pie')), noPre);
   assert.match(pie, /<path d="M/);
   assert.match(pie, /<title>North: 15\.00<\/title>/);
   assert.match(pie, /<td>South<\/td><td>20\.00<\/td>/, 'the same numbers follow the SVG as a table, whatever the chart type');
@@ -424,7 +424,7 @@ test('POST /schedule/<name>/run executes the steps inside a transaction, traced,
     const first = await s.post('/schedule/tick/run', {});
     assert.equal(first.status, 303);
     assert.match(first.location, /^\/\?ok=Ran%20%22tick%22$/);
-    assert.equal(s.app.store.get('Counter', 1).n, 1);
+    assert.equal((await s.app.store.get('Counter', 1)).n, 1);
     assert.equal((await s.post('/schedule/ghost/run', {})).status, 404);
     assert.ok(s.trace().some((e) => e.kind === 'schedule' && e.name === 'tick' && e.manual === true));
   } finally { s.close(); }
@@ -438,7 +438,7 @@ test('a role-less app lets anyone run a schedule by hand, and a JSON request get
     const r = await fetch(`${s.base}/schedule/tick/run`, { method: 'POST', headers: { accept: 'application/json' } });
     assert.equal(r.status, 200);
     assert.deepEqual(await r.json(), { ok: true, flash: 'Ran "tick"' });
-    assert.equal(s.app.store.get('Counter', 1).n, 1);
+    assert.equal((await s.app.store.get('Counter', 1)).n, 1);
   } finally { s.close(); }
 });
 
@@ -447,9 +447,9 @@ test('a declared timer really fires on its own, unref\'d, and stops when the ser
     schedule: [{ name: 'tick', every: '1s', do: [{ block: 'db.adjust', entity: 'Counter', id: 1, field: 'n', by: 1 }] }] };
   const s = await boot(tmpGraph(g)); // noTimers defaults to false: this is the one test that waits on a real timer
   try {
-    assert.equal(s.app.store.get('Counter', 1).n, 0);
+    assert.equal((await s.app.store.get('Counter', 1)).n, 0);
     await new Promise((r) => setTimeout(r, 1100));
-    assert.ok(s.app.store.get('Counter', 1).n >= 1, 'the timer fired without any request');
+    assert.ok((await s.app.store.get('Counter', 1)).n >= 1, 'the timer fired without any request');
     assert.ok(s.trace().some((e) => e.kind === 'schedule' && e.manual === false));
   } finally { s.close(); }
 });
@@ -480,11 +480,11 @@ test('checker: sms.send needs a declared connector of the right kind', async () 
 
 test('sms.send validates "to" and "text" at run time, and interpolates {row.field}', async () => {
   const store = new Store(msgGraph, ':memory:');
-  const lead = store.insert('Lead', { phone: '+15559876543' });
+  const lead = await store.insert('Lead', { phone: '+15559876543' });
   const text = async (t) => t.replace('{row.phone}', '+15559876543');
   const ok = await messaging.blocks['sms.send'].run(msgCtx(store, { entity: 'Lead', id: lead,
     step: { connector: 'alert', to: '@row.phone', text: 'Hi {row.phone}' }, resolve: async () => ({ v: '+15559876543' }), text }));
-  const row = store.outboxGet(ok.delivery);
+  const row = await store.outboxGet(ok.delivery);
   assert.equal(row.kind, 'sms'); assert.equal(row.target, '+15559876543');
   assert.deepEqual(row.payload, { from: '+15551234567', to: '+15559876543', text: 'Hi +15559876543' });
   await assert.rejects(() => messaging.blocks['sms.send'].run(msgCtx(store, { step: { connector: 'alert', to: 'notaphone', text: 'hi' }, resolve: async () => ({ v: 'notaphone' }), text: async () => 'hi' })),
@@ -502,7 +502,7 @@ test('an app can queue sms/whatsapp alerts end to end, visible in /outbox', asyn
     assert.equal(id, 1);
     const r = await s.follow('/Lead/1/action/alert', {});
     assert.match(r.html, /sent/);
-    const [delivery] = s.app.store.outbox({ kind: 'sms' });
+    const [delivery] = await s.app.store.outbox({ kind: 'sms' });
     assert.equal(delivery.status, 'sent');
     assert.equal(delivery.payload.text, 'Hi +15559876543');
   } finally { s.close(); }

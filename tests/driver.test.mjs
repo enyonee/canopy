@@ -98,13 +98,13 @@ test('schema helpers: tables, columns, indexes (with a literal prefix), DDL', ()
   assert.throws(() => drv.get('SELECT 1'), /not open/);
 });
 
-test('open(): a path opens SQLite, a driver object is used as it is; a Store runs on either', () => {
+test('open(): a path opens SQLite, a driver object is used as it is; a Store runs on either', async () => {
   const drv = open(':memory:');
   assert.equal(open(drv), drv);
   const graph = { app: 'd', data: { Note: { body: 'text!' } } };
   const store = new Store(graph, 'ignored when a driver is given', undefined, drv);
   assert.equal(store.drv, drv);
-  const id = store.insert('Note', { body: 'hi' });
+  const id = await store.insert('Note', { body: 'hi' });
   assert.equal(drv.get('SELECT body FROM note WHERE id=?', [id]).body, 'hi');
   assert.deepEqual(drv.columns('note').map((c) => c.name), ['id', 'body']);
   assert.ok(drv.tables().includes('_outbox') && drv.tables().includes('_session'));

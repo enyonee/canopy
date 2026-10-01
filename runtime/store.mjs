@@ -15,7 +15,12 @@ import * as migrate from './store/migrate.mjs';
 import { RowCtx, checkCycle } from './store/ctx.mjs';
 
 export class Store {
-  constructor(graph, file, registry = DEFAULT, driver = null) {
+  /**
+   * The synchronous convenience: builds the store and migrates the database before it returns. With the SQLite driver that is
+   * all there is to it; `Store.open` is the form that does not assume so.
+   * @param {any} graph @param {string} file @param {any} [registry] @param {any} [driver] @param {{ migrate?: boolean }} [opts]
+   */
+  constructor(graph, file, registry = DEFAULT, driver = null, { migrate: runMigrations = true } = {}) {
     this.graph = graph;
     this.registry = registry;
     this.drv = open(driver ?? file);
@@ -35,7 +40,17 @@ export class Store {
     this.lazyEval = false;
     // Read-sets of derived fields (runtime/store/plan.mjs), by entity and field list: pure in the graph.
     this.plans = new Map();
-    this.migrate();
+    if (runMigrations) this.migrate();
+  }
+
+  /**
+   * The async factory: the store, migrated. A driver that is asynchronous (S5) can only be migrated by awaiting it, so callers
+   * that can wait (serve()) open the store through here and `new Store(...)` stays for the tests and scripts that cannot.
+   */
+  static async open(graph, file, registry = DEFAULT, driver = null) {
+    const store = new Store(graph, file, registry, driver, { migrate: false });
+    await store.migrate();
+    return store;
   }
 
   migrate() {

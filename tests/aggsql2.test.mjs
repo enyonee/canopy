@@ -13,10 +13,10 @@ import { freezeClock, compilerOff } from './helpers.mjs';
 const yes = (store, entity, src) => assert.ok(compileAgg(store, entity, parse(src)), `expected "${src}" to compile`);
 const no = (store, entity, src) => assert.equal(compileAgg(store, entity, parse(src)), null, `expected "${src}" NOT to compile`);
 const jsOnly = compilerOff;
-const same = (store, entity) => {
-  const sql = JSON.stringify(store.list(entity, {})), js = JSON.stringify(jsOnly(store, () => store.list(entity, {})));
+const same = async (store, entity) => {
+  const sql = JSON.stringify(await store.list(entity, {})), js = JSON.stringify(await jsOnly(store, async () => await store.list(entity, {})));
   assert.equal(sql, js);
-  for (const r of store.listRaw(entity, {})) assert.equal(JSON.stringify(store.get(entity, r.id)), JSON.stringify(jsOnly(store, () => store.get(entity, r.id))));
+  for (const r of await store.listRaw(entity, {})) assert.equal(JSON.stringify(await store.get(entity, r.id)), JSON.stringify(await jsOnly(store, async () => await store.get(entity, r.id))));
 };
 
 // Customer → Order → Item, the shape of bench/app.json plus a derived scalar, a derived
@@ -53,49 +53,49 @@ const REJECT = {
   scaleOverflowPlus: 'money := sum(Order: sum(Item: price * price * price * price + 1))', division: 'money := sum(Order: total / 2)',
 };
 
-function seed(store) {
+async function seed(store) {
   const days = ['2025-12-31', '2026-01-05', '2026-09-29', '2026-10-01', '2099-01-01'];
   const stamps = ['2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00Z', '2026-01-05 10:00:00', '2026-09-29T12:00:00.000Z', '2030-01-01T00:00:00.000Z'];
-  store.insert('Customer', { name: 'Empty' });
-  const c = store.insert('Customer', { name: 'Full' });
-  store.insert('Order', { customer: c, placed: days[0] }); // no items
+  await store.insert('Customer', { name: 'Empty' });
+  const c = await store.insert('Customer', { name: 'Full' });
+  await store.insert('Order', { customer: c, placed: days[0] }); // no items
   for (let o = 0; o < 7; o++) {
-    const oid = store.insert('Order', { customer: c, placed: o === 6 ? '' : days[o % days.length] });
-    for (let i = 0; i < o % 4; i++) store.insert('Item', { order: oid, qty: i + o - 2, price: [0.1, 2.5, 7, 0.07][i % 4], disc: i === 1 ? '' : 1, shipped: i === 2 ? '' : days[(o + i) % days.length], at: stamps[(o * 3 + i) % stamps.length] });
+    const oid = await store.insert('Order', { customer: c, placed: o === 6 ? '' : days[o % days.length] });
+    for (let i = 0; i < o % 4; i++) await store.insert('Item', { order: oid, qty: i + o - 2, price: [0.1, 2.5, 7, 0.07][i % 4], disc: i === 1 ? '' : 1, shipped: i === 2 ? '' : days[(o + i) % days.length], at: stamps[(o * 3 + i) % stamps.length] });
   }
-  const d = store.insert('Customer', { name: 'Two' });
-  const oid = store.insert('Order', { customer: d, placed: days[1] });
-  store.insert('Item', { order: oid, qty: 3, price: 4, shipped: days[1], at: stamps[0] });
+  const d = await store.insert('Customer', { name: 'Two' });
+  const oid = await store.insert('Order', { customer: d, placed: days[1] });
+  await store.insert('Item', { order: oid, qty: 3, price: 4, shipped: days[1], at: stamps[0] });
 }
 
-test('every new shape compiles, and answers exactly what the JS path answers (page and single row)', (t) => {
+test('every new shape compiles, and answers exactly what the JS path answers (page and single row)', async (t) => {
   t.after(freezeClock());
   const store = new Store({ ...GRAPH, data: { ...GRAPH.data, Customer: { name: 'text!', ...ACCEPT } } }, ':memory:');
-  seed(store);
+  await seed(store);
   for (const [name, spec] of Object.entries(ACCEPT)) {
     const node = store.field('Customer', name).derive;
     assert.ok(compileAgg(store, 'Customer', node), `${name} [${spec}] should compile`);
   }
-  same(store, 'Customer');
-  const full = store.list('Customer', {}).find((r) => r.name === 'Full');
+  await same(store, 'Customer');
+  const full = (await store.list('Customer', {})).find((r) => r.name === 'Full');
   assert.equal(full.n, 5); // a value that is not 0/null, so the comparison above means something
   assert.ok(full.big > 0 && full.late > 0 && full.recent > 0, JSON.stringify(full));
 });
 
-test('an aggregate over a derived aggregate of the derived field is still one query, no child row in JS', (t) => {
+test('an aggregate over a derived aggregate of the derived field is still one query, no child row in JS', async (t) => {
   t.after(freezeClock());
   const store = new Store({ ...GRAPH, data: { ...GRAPH.data, Customer: { name: 'text!', ...ACCEPT } } }, ':memory:');
-  seed(store);
+  await seed(store);
   const fetched = [];
   for (const m of ['listRaw', 'listRawIn']) { const orig = store[m]; store[m] = function spy(...a) { if (a[0] !== 'Customer') fetched.push(a[0]); return orig.apply(this, a); }; }
-  store.list('Customer', {});
-  store.get('Customer', 2);
+  await store.list('Customer', {});
+  await store.get('Customer', 2);
   assert.deepEqual(fetched, [], 'nothing below Customer may be fetched into JS');
 });
 
-test('the subquery is joined through the ref index, not a scan per order', () => {
+test('the subquery is joined through the ref index, not a scan per order', async () => {
   const store = new Store({ ...GRAPH, data: { ...GRAPH.data, Customer: { name: 'text!', spent: ACCEPT.spent } } }, ':memory:');
-  seed(store);
+  await seed(store);
   const seen = [];
   store.drv.onQuery = (sql) => seen.push(sql);
   runAggBatch(store, compileAgg(store, 'Customer', store.field('Customer', 'spent').derive), [1, 2]);
@@ -115,7 +115,7 @@ test('the accept/reject boundary of the new shapes', () => {
   for (const src of ['sum(Item: sq)', 'sum(Item: qi)', 'sum(Item: half)', 'sum(Item: price * price * price * price + 1)']) no(store, 'Order', src);
 });
 
-test('a derived cycle or an over-deep chain is not compiled, and never loops the compiler', () => {
+test('a derived cycle or an over-deep chain is not compiled, and never loops the compiler', async () => {
   const chain = {};
   for (let i = 0; i < 12; i++) chain[`d${i}`] = `int := ${i === 11 ? 'qty' : `d${i + 1}`} + 1`;
   const store = new Store({ app: 'cyc', data: {
@@ -126,9 +126,9 @@ test('a derived cycle or an over-deep chain is not compiled, and never loops the
   no(store, 'Order', 'sum(Item: d0)'); // 12 derived fields inside one another: past MAX_STACK
   no(store, 'Order', 'sum(Item: x6)'); // 5^6 copies of one field: past MAX_EXPANSIONS
   yes(store, 'Order', 'sum(Item: x2)');
-  const o = store.insert('Order', {});
-  store.insert('Item', { order: o, qty: 1 });
-  assert.throws(() => store.get('Order', o), /depends on itself/);
+  const o = await store.insert('Order', {});
+  await store.insert('Item', { order: o, qty: 1 });
+  await assert.rejects(async () => await store.get('Order', o), /depends on itself/);
 });
 
 test('subqueries nest only so deep', () => {
@@ -141,26 +141,26 @@ test('subqueries nest only so deep', () => {
   no(store, 'E0', nest(0, 6));
 });
 
-test('a date/time column is compared exactly as JS compares the strings, whatever ISO shape it was stored in', () => {
+test('a date/time column is compared exactly as JS compares the strings, whatever ISO shape it was stored in', async () => {
   const store = new Store({ app: 'ts', data: { P: { early: "int := count(C: at < '2026-01-05T10:00:00Z')", same: "int := count(C: at = '2026-01-05T10:00:00Z')", after: "int := count(C: at > '2026-01-05')", last: 'time := max(C: at)', first: 'time := min(C: at)' }, C: { p: 'ref:P!', at: 'time' } }, views: 'auto' }, ':memory:');
-  const p = store.insert('P', {});
-  for (const at of ['2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00Z', '2026-01-05 10:00:00', '2026-01-05T09:00:00.000+00:00', '2025-01-01T00:00:00Z']) store.insert('C', { p, at });
-  store.insert('C', { p });
-  same(store, 'P');
-  const row = store.get('P', p);
+  const p = await store.insert('P', {});
+  for (const at of ['2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00Z', '2026-01-05 10:00:00', '2026-01-05T09:00:00.000+00:00', '2025-01-01T00:00:00Z']) await store.insert('C', { p, at });
+  await store.insert('C', { p });
+  await same(store, 'P');
+  const row = await store.get('P', p);
   // `.000Z` sorts before `Z` although they are the same instant: strings, as evaluate() has always compared them.
   assert.deepEqual([row.early, row.same, row.after, row.last, row.first], [4, 1, 4, '2026-01-05T10:00:00Z', '2025-01-01T00:00:00Z']);
 });
 
-test('today and now are the one clock of the evaluation, bound into the SQL — not SQLite\'s own', (t) => {
+test('today and now are the one clock of the evaluation, bound into the SQL — not SQLite\'s own', async (t) => {
   const store = new Store({ app: 'clk', data: { P: { past: 'int := count(C: d < today)', todayN: 'int := count(C: d = today)', ahead: 'int := count(C: at > now)', firstDay: 'date := min(C: if(d < today, d, today))' }, C: { p: 'ref:P!', d: 'date', at: 'time' } }, views: 'auto' }, ':memory:');
-  const p = store.insert('P', {});
-  for (const [d, at] of [['2026-09-28', '2026-09-29T11:59:59.999Z'], ['2026-09-29', '2026-09-29T12:00:00.000Z'], ['2026-09-30', '2026-09-29T12:00:00.001Z']]) store.insert('C', { p, d, at });
-  const at = (iso) => { const restore = freezeClock(iso); try { return { one: store.get('P', p), page: store.list('P', {})[0], js: jsOnly(store, () => store.get('P', p)) }; } finally { restore(); } };
-  const a = at('2026-09-29T12:00:00.000Z');
+  const p = await store.insert('P', {});
+  for (const [d, at] of [['2026-09-28', '2026-09-29T11:59:59.999Z'], ['2026-09-29', '2026-09-29T12:00:00.000Z'], ['2026-09-30', '2026-09-29T12:00:00.001Z']]) await store.insert('C', { p, d, at });
+  const at = async (iso) => { const restore = freezeClock(iso); try { return { one: await store.get('P', p), page: (await store.list('P', {}))[0], js: await jsOnly(store, async () => await store.get('P', p)) }; } finally { restore(); } };
+  const a = await at('2026-09-29T12:00:00.000Z');
   assert.deepEqual([a.one.past, a.one.todayN, a.one.ahead], [1, 1, 1]);
   assert.deepEqual(a.one, a.js); assert.deepEqual(a.page, a.js);
-  const b = at('2027-03-01T00:00:00.000Z');
+  const b = await at('2027-03-01T00:00:00.000Z');
   assert.deepEqual([b.one.past, b.one.todayN, b.one.ahead], [3, 0, 0]);
   assert.deepEqual(b.one, b.js); assert.deepEqual(b.page, b.js);
   assert.equal(a.one.firstDay, '2026-09-28');
@@ -172,21 +172,21 @@ test('today and now are the one clock of the evaluation, bound into the SQL — 
   assert.equal(runAggOne(store, compiled, p, new Date('2030-01-01T00:00:00.000Z')), 0);
   assert.equal(runAggBatch(store, compiled, [p], new Date('2030-01-01T00:00:00.000Z')).get(String(p)), 0);
   const cache = store.buildAggCache('P', [p]);
-  const row = store.raw('P', p);
+  const row = await store.raw('P', p);
   const node = store.field('P', 'ahead').derive;
   assert.equal(store.aggValue('P', row, node, cache, cache.clock), 1);
   assert.equal(store.aggValue('P', row, node, cache, new Date('2030-01-01T00:00:00.000Z')), 0, 'a different clock must not read the cached batch');
 });
 
-test('integers past 2^53 or SQLite\'s SUM range decline to the JS path at run time instead of throwing', () => {
+test('integers past 2^53 or SQLite\'s SUM range decline to the JS path at run time instead of throwing', async () => {
   const store = new Store({ app: 'big', data: { P: { sq: 'int := sum(C: qty * qty)', top: 'int := max(C: qty * qty)' }, C: { p: 'ref:P!', qty: 'int' } }, views: 'auto' }, ':memory:');
-  const small = store.insert('P', {}); store.insert('C', { p: small, qty: 3 });
-  const huge = store.insert('P', {}); store.insert('C', { p: huge, qty: 100_000_000 }); // 1e16 > 2^53: node:sqlite refuses to read it
-  const over = store.insert('P', {}); store.insert('C', { p: over, qty: 3_000_000_000 }); store.insert('C', { p: over, qty: 3_000_000_000 }); // SUM() -> integer overflow
-  same(store, 'P');
-  assert.equal(store.get('P', small).sq, 9);
-  assert.equal(store.get('P', huge).sq, 1e16);
-  assert.equal(store.get('P', over).sq, 1.8e19);
+  const small = await store.insert('P', {}); await store.insert('C', { p: small, qty: 3 });
+  const huge = await store.insert('P', {}); await store.insert('C', { p: huge, qty: 100_000_000 }); // 1e16 > 2^53: node:sqlite refuses to read it
+  const over = await store.insert('P', {}); await store.insert('C', { p: over, qty: 3_000_000_000 }); await store.insert('C', { p: over, qty: 3_000_000_000 }); // SUM() -> integer overflow
+  await same(store, 'P');
+  assert.equal((await store.get('P', small)).sq, 9);
+  assert.equal((await store.get('P', huge)).sq, 1e16);
+  assert.equal((await store.get('P', over)).sq, 1.8e19);
   const compiled = compileAgg(store, 'P', store.field('P', 'sq').derive);
   assert.equal(runAggOne(store, compiled, huge), undefined);
   assert.equal(runAggBatch(store, compiled, [small, huge]), undefined);
@@ -197,57 +197,57 @@ test('integers past 2^53 or SQLite\'s SUM range decline to the JS path at run ti
 // through exact() (like `+`, `-` and sums), so 3 * 0.1 is 0.3 in JS, as it is in the compiler's
 // exact integers and in decimal arithmetic. JS == SQL == exact decimal, including the nested
 // min/max over a raw money product, which compiles because it is proven equal.
-test('a comparison of a raw money product against an exactly equal value: JS == SQL == exact decimal', () => {
+test('a comparison of a raw money product against an exactly equal value: JS == SQL == exact decimal', async () => {
   const store = new Store({ app: 'dust', data: { P: { gt: 'int := count(C: qty * price > disc)', ge: 'int := count(C: qty * price >= disc)', eq: 'int := count(C: qty * price = disc)', mn: 'money := sum(D: min(E: qty * price))', mx: 'money := sum(D: max(E: qty * price))' }, C: { p: 'ref:P!', qty: 'int', price: 'money', disc: 'money' }, D: { p: 'ref:P!' }, E: { d: 'ref:D!', qty: 'int', price: 'money' } }, views: 'auto' }, ':memory:');
-  const p = store.insert('P', {});
+  const p = await store.insert('P', {});
   const cases = [[3, 0.1, 0.3], [100, 0.07, 7], [3, 0.7, 2.1], [7, 1.1, 7.7], [3, 0.2, 0.6], [1, 0.1, 0.3], [3, 0.11, 0.3]];
-  const d = store.insert('D', { p });
-  for (const [qty, price, disc] of cases) { store.insert('C', { p, qty, price, disc }); store.insert('E', { d, qty, price }); }
+  const d = await store.insert('D', { p });
+  for (const [qty, price, disc] of cases) { await store.insert('C', { p, qty, price, disc }); await store.insert('E', { d, qty, price }); }
   const cents = (x) => BigInt(Math.round(x * 100));
   const truth = (fn) => cases.filter(([q, pr, di]) => fn(BigInt(q) * cents(pr), cents(di) * 1n)).length;
   const want = { gt: truth((x, y) => x > y), ge: truth((x, y) => x >= y), eq: truth((x, y) => x === y) };
   assert.deepEqual(want, { gt: 1, ge: 6, eq: 5 });
-  const sql = store.get('P', p), js = jsOnly(store, () => store.get('P', p));
+  const sql = await store.get('P', p), js = await jsOnly(store, async () => await store.get('P', p));
   for (const k of ['gt', 'ge', 'eq']) { assert.equal(sql[k], want[k], `SQL ${k}`); assert.equal(js[k], want[k], `JS ${k}`); }
   assert.equal(sql.mn, 10, 'min of the exact products, in minor units'); assert.equal(js.mn, 10);
   assert.equal(sql.mx, 770); assert.equal(js.mx, 770);
   yes(store, 'P', 'sum(D: min(E: qty * price))');
-  same(store, 'P');
+  await same(store, 'P');
 });
 
 // A product with more decimals than exact() keeps (money * money * money * money) is not compiled:
 // JS rounds it at 6 decimals, the compiler would stay exact at 8 — the two must not round apart.
-test('a product beyond exact()\'s 6 decimals is left to the JS path', () => {
+test('a product beyond exact()\'s 6 decimals is left to the JS path', async () => {
   const store = new Store({ app: 'wide', data: { P: { a: 'money := sum(C: price * price * price)', b: 'money := sum(C: price * price * price * price)' }, C: { p: 'ref:P!', price: 'money' } }, views: 'auto' }, ':memory:');
-  const p = store.insert('P', {});
-  store.insert('C', { p, price: 1.11 });
+  const p = await store.insert('P', {});
+  await store.insert('C', { p, price: 1.11 });
   yes(store, 'P', 'sum(C: price * price * price)');
   no(store, 'P', 'sum(C: price * price * price * price)');
-  same(store, 'P');
+  await same(store, 'P');
 });
 
 // A clock that moves on every `new Date()`: an evaluation that read it once per derived field
 // would see `late` and `at > now` on different instants. One evaluation, one clock — in the JS
 // path (handed down through every derived field, hop and row) and in the compiled one.
-test('a derived field inside an aggregate reads the same `now` as the aggregate around it', (t) => {
+test('a derived field inside an aggregate reads the same `now` as the aggregate around it', async (t) => {
   const store = new Store({ app: 'tick', data: { O: { diff: 'int := count(I: late) - count(I: at > now)', dd: 'int := sum(I: if(late, 1, 0)) - sum(I: if(at > now, 1, 0))' }, I: { o: 'ref:O!', at: 'time', late: 'bool := at > now' } }, views: 'auto' }, ':memory:');
-  const o = store.insert('O', {});
+  const o = await store.insert('O', {});
   const base = Date.UTC(2026, 8, 29, 12);
-  for (let j = 0; j < 30; j++) store.insert('I', { o, at: new Date(base + j).toISOString() });
+  for (let j = 0; j < 30; j++) await store.insert('I', { o, at: new Date(base + j).toISOString() });
   const Real = globalThis.Date;
   let k = 0;
   globalThis.Date = class extends Real { constructor(...a) { super(...(a.length ? a : [base + (k++ % 30)])); } };
   t.after(() => { globalThis.Date = Real; });
   for (let i = 0; i < 60; i++) {
-    assert.deepEqual([store.get('O', o).diff, store.get('O', o).dd], [0, 0]);
-    assert.deepEqual([jsOnly(store, () => store.get('O', o)).diff, jsOnly(store, () => store.get('O', o)).dd], [0, 0]);
+    assert.deepEqual([(await store.get('O', o)).diff, (await store.get('O', o)).dd], [0, 0]);
+    assert.deepEqual([(await jsOnly(store, async () => await store.get('O', o))).diff, (await jsOnly(store, async () => await store.get('O', o))).dd], [0, 0]);
   }
   assert.ok(k > 100, 'the clock really did move');
   // The old lazy context (`store.lazyEval`, kept one release) hands the clock down the same way — with
   // no page cache, as a lone `Store#get` read before S3a, each derived field would otherwise take its own.
-  const lazyGet = () => store.hydrateLazy('O', store.raw('O', o));
+  const lazyGet = async () => store.hydrateLazy('O', await store.raw('O', o));
   for (let i = 0; i < 60; i++) {
-    assert.deepEqual([lazyGet().diff, lazyGet().dd], [0, 0]);
-    assert.deepEqual([jsOnly(store, lazyGet).diff, jsOnly(store, lazyGet).dd], [0, 0]);
+    assert.deepEqual([(await lazyGet()).diff, (await lazyGet()).dd], [0, 0]);
+    assert.deepEqual([(await jsOnly(store, lazyGet)).diff, (await jsOnly(store, lazyGet)).dd], [0, 0]);
   }
 });

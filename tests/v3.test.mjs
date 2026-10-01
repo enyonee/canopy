@@ -122,7 +122,7 @@ test('the payment sandbox authorises inside the transaction and captures through
   assert.equal(paid.status, 303);
   assert.match(decodeURIComponent(paid.location), /Paid 60\.00, reference AUTH-4242-/);
   assert.match((await s.get('/Booking/1')).html, /status">Paid/);
-  const [capture] = s.app.store.outbox({ kind: 'payment' });
+  const [capture] = await s.app.store.outbox({ kind: 'payment' });
   assert.equal(capture.status, 'sent'); assert.equal(capture.target, '**** 4242'); assert.equal(capture.code, 200);
   assert.deepEqual({ amount: capture.payload.amount, currency: capture.payload.currency }, { amount: 60, currency: 'EUR' });
   assert.match(capture.payload.authorization, /^AUTH-4242-/);

@@ -45,7 +45,7 @@ test('registration validates, signs the member in, keeps the flash across the ho
   assert.match(list.html, /Add Project/);
   const dup = await s.post('/register', { email: 'm@v2', password: 'x', name: 'again' });
   assert.equal(dup.status, 400); assert.match(dup.html, /email is already registered/);
-  memberId = s.app.store.list('User', { where: { email: 'm@v2' } })[0].id;
+  memberId = (await s.app.store.list('User', { where: { email: 'm@v2' } }))[0].id;
   assert.equal(s.trace().filter((e) => e.kind === 'register').length, 1);
 });
 
@@ -127,7 +127,7 @@ test('expenses drive derived fields; creation fires an http event; editing lands
 test('updated and deleted events fire with the row; the outbox records the letter and the hook', async () => {
   const r = await s.post('/Project/1', { name: 'Alpha', budget: '100' });
   assert.equal(r.status, 303);
-  const mail = s.app.store.outbox({ kind: 'mail' })[0];
+  const mail = (await s.app.store.outbox({ kind: 'mail' }))[0];
   assert.equal(mail.target, 'm@v2'); assert.equal(mail.payload.subject, 'Updated Alpha'); assert.equal(mail.status, 'sent');
   await s.post('/Project', { name: 'Beta' });
   const del = await s.post('/Project/2/delete', {});
@@ -157,7 +157,7 @@ test('transitions: required fields, confirmation with money, effects, 409 on a s
   assert.equal((await s.post('/Project/1/go/freeze', {})).status, 403, 'and the server agrees');
   const closed = await s.post('/Project/1/go/close', {});
   assert.equal(closed.location, '/Project/1?ok=Project%20is%20now%20closed');
-  const letter = s.app.store.outbox({ kind: 'mail' })[0];
+  const letter = (await s.app.store.outbox({ kind: 'mail' }))[0];
   assert.equal(letter.payload.subject, 'Closed Alpha'); assert.equal(letter.payload.text, 'Spent 50.00 of 200.00'); assert.equal(letter.payload.from, 'v2@test');
   assert.equal((await s.post('/Project/1/go/reopen', {})).status, 303, 'from "*" reopens from anywhere');
   assert.match((await s.get('/Project/1')).html, /status">Draft/);
@@ -216,7 +216,7 @@ test('files: multipart upload, download with the original name, and every 404', 
   assert.equal((await s.get('/file/Project/1/attachment')).status, 200, 'a guest may view, so may download');
   await s.login('n@v2', 'pw');
   assert.equal((await s.get('/file/Project/1/attachment')).status, 403, 'another member owns nothing here');
-  const stored = s.app.store.raw('Project', 1).attachment;
+  const stored = (await s.app.store.raw('Project', 1)).attachment;
   fs.unlinkSync(path.join(s.dir, 'files', stored));
   s.asGuest(); await s.login('m@v2', 'pw');
   assert.equal((await s.get('/file/Project/1/attachment')).status, 404, 'missing on disk');
@@ -349,17 +349,17 @@ test('a block that refuses inside a created/updated/deleted event answers 400 an
   try {
     const big = await g.post('/Sale', { stock: 1, qty: 5 });
     assert.equal(big.status, 400); assert.match(big.html, /Not enough units/); assert.match(big.html, /name="qty"/, 'the form comes back with the message');
-    assert.equal(g.app.store.count('Sale'), 0, 'the sale was rolled back with the refused adjustment');
+    assert.equal(await g.app.store.count('Sale'), 0, 'the sale was rolled back with the refused adjustment');
     const viaRelated = await g.post('/Stock/1/add/Sale', { qty: 5 });
     assert.equal(viaRelated.status, 400); assert.match(viaRelated.html, /Not enough units/);
     assert.equal((await g.post('/Sale', { stock: 1, qty: 1 })).status, 303);
-    assert.equal(g.app.store.get('Stock', 1).units, 0);
+    assert.equal((await g.app.store.get('Stock', 1)).units, 0);
     const edit = await g.post('/Sale/1', { note: 'x' });
     assert.equal(edit.status, 400); assert.match(edit.html, /No edits after stock is gone/);
-    assert.equal(g.app.store.get('Sale', 1).note, null, 'the edit was rolled back');
+    assert.equal((await g.app.store.get('Sale', 1)).note, null, 'the edit was rolled back');
     const del = await g.post('/Sale/1/delete', {});
     assert.equal(del.status, 400); assert.match(del.html, /no Stock #999/);
-    assert.equal(g.app.store.count('Sale'), 1, 'the delete was rolled back');
+    assert.equal(await g.app.store.count('Sale'), 1, 'the delete was rolled back');
   } finally { g.close(); }
 });
 

@@ -148,10 +148,6 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
 
   const dir = path.dirname(dbFile);
   filesDir = filesDir || path.join(dir, 'files');
-  const store = new Store(graph, dbFile, registry);
-  store.migrations.forEach((m) => console.log(`migration: ${m}`));
-  const perms = permissions(graph, store);
-  const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key'), store) : null;
   const trace = (event) => {
     if (!traceFile) return;
     fs.appendFileSync(traceFile, JSON.stringify({ at: new Date().toISOString(), ...event }) + '\n');
@@ -159,10 +155,14 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
 
   let handle = (_, res) => { res.writeHead(503); res.end(); }; // nothing listens before `ready`; the real handler replaces this
   const server = http.createServer((req, res) => handle(req, res));
-  const app = { server, graph, store, perms, flusher: null, invalid: false, ready: null };
+  const app = { server, graph, store: null, perms: null, flusher: null, invalid: false, ready: null };
   const refuse = (list) => { handle = invalidHandler(graph, list); app.invalid = true; server.listen(port, host); return app; };
 
   app.ready = (async () => {
+    const store = app.store = await Store.open(graph, dbFile, registry);
+    store.migrations.forEach((m) => console.log(`migration: ${m}`));
+    const perms = app.perms = permissions(graph, store);
+    const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key'), store) : null;
     let meId;
     try { meId = await bootData(graph, store, graphFile, filesDir); } catch (e) { return refuse([{ path: '/seed', message: e.message }]); }
     // The deploy file (each connector's mode) must be sound before anything is delivered.
