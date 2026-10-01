@@ -552,6 +552,18 @@ test('unknown connector, a connector with no inbound block, other methods, other
   assert.deepEqual(w.ledger(), []);
 });
 
+test('an inherited name is never a connector, even when the prototype chain would answer for it', async (t) => {
+  const w = await world(t);
+  // with `kind` on Object.prototype, graph.connectors.constructor (a function) would have kind "psp": only an own-property test keeps it out
+  Object.prototype.kind = 'psp';
+  try {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      const r = await fetch(`${w.app.base}/hook/${name}`, { method: 'POST', body: '{}' }); // not through send(): its own name table is inherited-prone too
+      assert.deepEqual([r.status, await r.json()], [404, { ok: false, error: 'not_found' }], name);
+    }
+  } finally { delete Object.prototype.kind; }
+});
+
 test('secrets that cannot be read are a 500 (the provider retries), not a pass', async (t) => {
   const w = await world(t);
   fs.writeFileSync(path.join(w.dir, 'secrets.enc'), 'garbage');
