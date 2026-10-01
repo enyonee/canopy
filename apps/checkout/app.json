@@ -1,0 +1,87 @@
+{
+  "app": "checkout",
+  "task": "reference",
+  "note": "Reference app for the first real connector descriptors (Stripe, Postmark, Slack), not a benchmark task. A customer orders a product and pays: the payment goes to Stripe (a PaymentIntent, in the descriptor's sandbox, so nothing leaves the machine), and the order is marked paid only when Stripe's signed payment_intent.succeeded webhook arrives; that event sends the receipt through Postmark and a notice to staff in Slack. The admin reads the outbox.",
+  "theme": { "background": "ghostwhite", "accent": "rebeccapurple" },
+  "home": "/Product",
+  "plugins": ["../../connectors/stripe/descriptor.json", "../../connectors/postmark/descriptor.json", "../../connectors/slack/descriptor.json"],
+
+  "data": {
+    "User":    { "email": "text!", "password": "password!", "name": "text!", "role": "enum[admin,customer]=customer" },
+    "Product": { "name": "text!", "price": "money!", "about": "longtext" },
+    "Order":   { "customer": "ref:User!", "product": "ref:Product!", "qty": "int=1", "status": "enum[placed,paying,paid,failed,refunded]=placed",
+                 "createdAt": "time=now", "total": "money := qty * product.price" }
+  },
+
+  "rules": {
+    "Product": [ { "check": "price > 0", "message": "A price must be above zero" } ],
+    "Order":   [ { "check": "qty > 0", "message": "Quantity must be at least 1" } ]
+  },
+
+  "roles": {
+    "entity": "User", "login": "email", "password": "password", "role": "role",
+    "register": "customer", "anonymous": "guest",
+    "can": {
+      "admin": "*",
+      "customer": { "Product": ["view", "do:order"], "Order": { "own": "customer", "can": ["view", "go:pay"] } },
+      "guest":    { "Product": ["view"] }
+    }
+  },
+
+  "seed": {
+    "User":    [ { "email": "admin@checkout.test", "password": "admin123", "name": "Admin", "role": "admin" } ],
+    "Product": [ { "name": "Blue mug", "price": 12.5, "about": "Ceramic, 300 ml" },
+                 { "name": "Mountain poster", "price": 25, "about": "A2, matte" } ]
+  },
+
+  "actions": [
+    { "name": "order", "in": "Product", "title": "Order", "after": "/Order", "confirm": "{row.name} ordered",
+      "do": [ { "block": "db.createRow", "entity": "Order", "values": { "customer": "@me", "product": "@row.id", "qty": "= coalesce(values.qty, 1)" } } ] }
+  ],
+
+  "states": {
+    "Order": { "field": "status", "transitions": [
+      { "name": "pay", "from": ["placed"], "to": "paying", "title": "Pay by card", "confirm": "Payment started: the order is paid when the provider confirms it",
+        "do": [ { "block": "connector.call", "connector": "pay", "op": "createPaymentIntent",
+                  "input": { "amount": "= round(total * 100)", "currency": "usd", "paymentMethod": "pm_card_visa", "confirm": true,
+                             "description": "= concat('Order #', id)", "metadata": { "order": "@row.id" } } } ] },
+      { "name": "markPaid", "from": ["paying"], "to": "paid", "by": ["admin"], "title": "Mark paid by hand" },
+      { "name": "markFailed", "from": ["paying"], "to": "failed", "by": ["admin"], "title": "Mark failed by hand" },
+      { "name": "markRefunded", "from": ["paid"], "to": "refunded", "by": ["admin"], "title": "Mark refunded by hand" }
+    ] }
+  },
+
+  "connectors": {
+    "pay":   { "kind": "stripe",   "secrets": { "apiKey": "checkout_stripe_key", "webhookSecret": "checkout_stripe_whsec" } },
+    "mail":  { "kind": "postmark", "from": "shop@example.test", "secrets": { "serverToken": "checkout_postmark_token", "webhookAuth": "checkout_postmark_hook" } },
+    "staff": { "kind": "slack",    "secrets": { "botToken": "checkout_slack_token", "signingSecret": "checkout_slack_signing" } }
+  },
+
+  "events": [
+    { "inbound": "pay.payment_intent.succeeded", "do": [
+        { "block": "db.each", "from": "Order", "where": { "id": "@values.order", "status": "paying" },
+          "do": [ { "block": "db.set", "entity": "Order", "id": "@each.id", "set": { "status": "paid" } },
+                  { "block": "connector.call", "connector": "mail", "op": "sendEmail",
+                    "input": { "to": "@each.customer.email", "subject": "= concat('Receipt for order #', each.id)",
+                               "text": "= concat('Thank you, ', each.customer.name, '. We received payment for order #', each.id, '.')" } },
+                  { "block": "connector.call", "connector": "staff", "op": "postMessage",
+                    "input": { "channel": "#orders", "text": "= concat('Order #', each.id, ' was paid')" } } ] } ] },
+    { "inbound": "pay.payment_intent.payment_failed", "do": [
+        { "block": "db.each", "from": "Order", "where": { "id": "@values.order", "status": "paying" },
+          "do": [ { "block": "db.set", "entity": "Order", "id": "@each.id", "set": { "status": "failed" } },
+                  { "block": "connector.call", "connector": "staff", "op": "postMessage",
+                    "input": { "channel": "#orders", "text": "= concat('Payment for order #', each.id, ' failed')" } } ] } ] },
+    { "inbound": "pay.charge.refunded", "do": [
+        { "block": "db.each", "from": "Order", "where": { "id": "@values.order", "status": "paid" },
+          "do": [ { "block": "db.set", "entity": "Order", "id": "@each.id", "set": { "status": "refunded" } } ] } ] }
+  ],
+
+  "views": "auto",
+  "override": {
+    "Product.list":   { "title": "Products", "columns": ["name", "price"], "rowActions": ["view", "order"] },
+    "Product.detail": { "actions": ["order"] },
+    "User.list":      { "title": "Customers", "columns": ["email", "name", "role"] },
+    "Order.list":     { "title": "Orders", "columns": ["id", "customer", "product", "qty", "total", "status"], "filters": [ { "name": "Status", "field": "status" } ], "rowActions": ["view"], "create": false },
+    "Order.detail":   { "fields": ["customer", "product", "qty", "total", "status", "createdAt"] }
+  }
+}

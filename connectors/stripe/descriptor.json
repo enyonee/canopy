@@ -173,6 +173,7 @@
             "data": { "type": "object", "required": ["object"], "properties": { "object": { "type": "object", "required": ["id", "amount"], "properties": { "id": { "type": "string" }, "amount": { "type": "integer" } } } } }
           }
         },
+        "require": ["order"],
         "map": { "intent": "$.data.object.id", "amount": "$.data.object.amount", "currency": "$.data.object.currency", "order": "$.data.object.metadata.order" }
       },
       "payment_intent.payment_failed": {
@@ -185,6 +186,7 @@
             "data": { "type": "object", "required": ["object"], "properties": { "object": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } } }
           }
         },
+        "require": ["order"],
         "map": { "intent": "$.data.object.id", "order": "$.data.object.metadata.order", "reason": "$.data.object.last_payment_error.code" }
       },
       "charge.refunded": {
@@ -197,6 +199,7 @@
             "data": { "type": "object", "required": ["object"], "properties": { "object": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } } }
           }
         },
+        "require": ["order"],
         "map": { "charge": "$.data.object.id", "intent": "$.data.object.payment_intent", "refunded": "$.data.object.amount_refunded", "order": "$.data.object.metadata.order" }
       }
     }

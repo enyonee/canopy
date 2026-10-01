@@ -366,7 +366,15 @@ test('route: Stripe — only its three events, the signature with a window, and 
   const other = await w.hook('stripe', { ...paid, id: 'evt_other', type: 'customer.created' });
   assert.deepEqual(other.body, { ok: true, ignored: true });
   assert.equal(w.logs().length, 1);
-  assert.equal((await w.hook('stripe', { ...paid, id: 'evt_noorder', data: { object: { id: 'pi_x', amount: 5 } } })).status, 200, 'a payment made outside this app has no order and is still answered');
+  // a payment made outside this app has no order: answered (Stripe would retry anything else), never run, never remembered
+  for (const [what, metadata] of [['no metadata', undefined], ['empty metadata', {}], ['a null order', { order: null }]]) {
+    const r = await w.hook('stripe', { ...paid, id: `evt_noorder_${what}`, data: { object: { id: 'pi_x', amount: 5, metadata } } });
+    assert.deepEqual([what, r.status, r.body], [what, 200, { ok: true, ignored: true }]);
+  }
+  assert.equal(w.logs().length, 1, 'no step ran for them');
+  assert.equal(w.ledger().length, 1, 'and no dedup row was written');
+  assert.ok(w.app.trace().some((e) => e.kind === 'webhook_ignored' && e.type === 'payment_intent.succeeded' && e.missing === 'order'));
+  assert.deepEqual((await w.hook('stripe', { ...paid, id: 'evt_noorder_again', data: { object: { id: 'pi_x', amount: 5, metadata: { order: '8' } } } })).body, { ok: true }, 'with an order it runs');
 });
 
 test('route: Postmark — basic credentials, a bounce by its id, an unsubscribe by message, recipient and time', async (t) => {

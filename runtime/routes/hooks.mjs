@@ -10,7 +10,7 @@
 import { TooBig } from './context.mjs';
 import { secretName } from '../connectors/engine.mjs';
 import { verifySignature } from '../connectors/signature.mjs';
-import { typeOf, eventIdOf, payloadProblems, valuesOf, challengeOf } from '../connectors/inbound.mjs';
+import { typeOf, eventIdOf, payloadProblems, valuesOf, challengeOf, missingOf } from '../connectors/inbound.mjs';
 
 class Duplicate extends Error {}
 
@@ -71,7 +71,15 @@ async function receive(ctx, name, inbound) {
   if (payloadProblems(ev, payload).length) return refuse(ctx, name, 400, 'invalid_payload');
   const eventId = eventIdOf(inbound, payload, ev);
   if (eventId === undefined) return refuse(ctx, name, 400, 'invalid_event_id');
-  if (!take(ctx, name, type, eventId, valuesOf(ev, payload))) {
+  // A payment made outside the app carries no order: answered, so the provider does not retry it, and never run, so a
+  // step that selects rows by the missing value cannot select all of them.
+  const values = valuesOf(ev, payload);
+  const missing = missingOf(ev, values);
+  if (missing !== undefined) {
+    trace({ kind: 'webhook_ignored', connector: name, type, known: true, missing });
+    return ctx.sendJson(200, { ok: true, ignored: true });
+  }
+  if (!take(ctx, name, type, eventId, values)) {
     trace({ kind: 'webhook_duplicate', connector: name, type, eventId });
     return ctx.sendJson(200, { ok: true, duplicate: true });
   }
