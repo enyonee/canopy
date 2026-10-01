@@ -1,12 +1,11 @@
 # Canopy connector library: design (v0.2.0 baseline)
 
-**Status: design accepted (maintainer decisions, section 9). Stages C1, C3, C2, C4, C5 and C6 are done** (C1: descriptor,
-checker, engine, `connector.call`, `http` on it; C3: retries with backoff, `unknown`, timeouts, circuit
-breaker, background flusher, injectable clock; C2: encrypted secret store, sandbox and live mode; C4: inbound
-webhooks, signed and deduplicated; C5: the first real providers, Stripe, Postmark and Slack, as descriptors with
+**Status: design accepted (maintainer decisions, section 9), and built: stages C1, C3, C2, C4, C5, C6 and C7 are done. The connector-library
+design is complete.** (C1: descriptor, checker, engine, `connector.call`, `http` on it; C3: retries with backoff, `unknown`,
+timeouts, circuit breaker, background flusher, injectable clock; C2: encrypted secret store, sandbox and live mode; C4:
+inbound webhooks, signed and deduplicated; C5: the first real providers, Stripe, Postmark and Slack, as descriptors with
 hand-written fixtures; C6: the OpenAPI import, a draft descriptor from a JSON spec with everything it could not map
-listed; see "C1 as built", "C3 as built", "C2 as built", "C4 as built", "C5 as built" and "C6 as built" at the end).
-C7 is next, in the order of section 9.
+listed; C7: the settings screen, `/settings`; see "C1 as built" to "C7 as built" at the end.)
 
 The study below was read-only. All line numbers refer to /home/vyacheslav/code/canopy at main, before C1.
 
@@ -638,3 +637,78 @@ Where the code differs from, or narrows, section 7 (C6):
 - **Not built.** YAML; external `$ref`; `oauth2`; multipart; optional query parameters; arrays in parameters; response codes
   other than the first JSON 2xx; `failure`, `result` and `inbound` from a spec (the first two are the author's decisions, the
   third OpenAPI 3.1 `webhooks` describe the provider's calls to you in a way no descriptor reads yet).
+
+## 16. C7 as built
+
+Where the code differs from, or narrows, section 7 (C7). This is the last stage; the connector-library design is complete.
+- **Modules.** `runtime/routes/settings.mjs` (the route and its three POSTs, layer 8), `runtime/render/settings.mjs` (the page),
+  `vc.settings` in `routes/context.mjs` (an admin, like `vc.outbox`: `!perms.enabled || perms.isAdmin(user)`, so an app with no
+  `roles` has the screen open exactly as it has `/outbox` open), the link in `render.mjs` navigation, `outboxStats` and a
+  one-query `breakers` in `store/state.mjs`, `sandbox.test` in `connectors/sandbox.mjs` (the checker), `graphFile` in the
+  request context (for the command the page prints). Routes: `GET /settings`, `POST /settings/secret`,
+  `POST /settings/secret/remove`, `POST /settings/test`. Everything else under `/settings` is 404, a wrong method 405.
+- **Who.** A customer, a guest and (through the session gate) a signed-out request get **403 on GET and on every POST**, HTML or
+  JSON. The route answers its own 403 (not `ctx.deny`, which would send a guest's GET to the login page), and the refusal says
+  nothing of connectors or slots. The nav link is shown to admins only. The check comes before the method, the origin and the
+  body, so none of them is read for a non-admin.
+- **CSRF.** The app has no token mechanism (forms are plain HTML, the session cookie is `SameSite=Lax`, which a same-site
+  attacker or an old browser does not honour). So every POST needs a **same-origin check**: the `Origin` header, else the
+  `Referer`, must parse as a URL whose host equals the request's `Host` header; neither header, `Origin: null` or a
+  foreign host is 403 (`denied` in the trace) and nothing is read or changed. A browser always sends `Origin` on a POST,
+  and the `Host` it sends is the one it connected to, so an attacker's page cannot make them agree.
+- **What a card shows.** The kind, the mode (`deploy.json`; `interp.modes()`), the breaker of each mode the kind offers (one
+  query for all breakers, a connector never seen failing is the resting state), `sent`/`failed`/`unknown`/`drift` counts of the
+  rows last touched in the past 24 hours (**one grouped query** for all connectors: `outboxStats`), each slot of the
+  descriptor (`secretSlots`, including the inbound one) with its store name and **set** or **MISSING** (the names of the store
+  are read once for the whole page; an unreadable store shows `unreadable` and a notice instead of a guess), and the webhook
+  path. `GET /settings` costs the same number of queries for 1, 3 or 12 connectors (a test counts them; a mutation reads per
+  connector).
+- **The webhook URL is a path.** `/hook/<name>`, never `<origin>/hook/<name>`: the server knows neither a configured public
+  origin nor that the `Host` of a request is its own, and a link built from a `Host` header would reflect whatever the
+  client sent. The page says to prefix the public address.
+- **Setting a secret.** A password field per slot (`autocomplete="new-password"`, never pre-filled). The POST names `connector`
+  and `slot`; only a slot of the connector's descriptor is accepted (anything else is 404: the screen cannot create a secret
+  of an arbitrary name), the store name is `connector.secrets[slot]` else the slot, and the value goes to `secrets.set`.
+  An empty value is "no change" (303, no write), a value over 4096 characters 400. The answer is a 303 to
+  `/settings?ok=<name> saved`, or JSON `{ok, message}`; both carry the **name** only. Removing is its own POST and needs
+  `confirm=yes`; a name that is shared by two connectors goes for both (the card shows the store name). A value is never
+  trimmed or changed. The `.prev` of a rotation stays a command-line matter.
+- **Every way the screen could leak a secret, and how each is closed.**
+  1. *The save answer* (redirect, flash, JSON, error page): messages are built from the name and fixed words; an error from the
+     store is passed through `redact` with the posted value and every value the store holds first.
+  2. *The page*: a slot is `set`/`MISSING`, with no length, prefix, hash, count of characters or last-changed time; the password
+     input has no `value`; the JSON mirrors the page.
+  3. *Another route*: `/outbox`, the trace and the pages read nothing from the store, and a secret was never in an outbox row
+     (section 3); the screen adds no new place where a value is held.
+  4. *The trace*: `secret_set` and `secret_removed` keep the connector, the slot, the store name and the user id, never the
+     body; the `denied` line keeps the path only.
+  5. *The database and files*: the value is written only to `secrets.enc` (AES-256-GCM); a test scans every file of the app
+     directory but the store for every window of 4 characters of the values it set.
+  6. *A request body kept in memory or echoed*: it is read once, held in the request's closure and dropped; no handler puts
+     it into a response, a log line or an exception message.
+  7. *Send test*: runs the sandbox, which reads no secret; its output is the **shape** (names and types) of the answer, never
+     a value, and an error is passed through `redact` with every stored value.
+  8. *Caching*: the page is sent with `Cache-Control: no-store`; nothing secret is in it anyway.
+  9. *A forged Host or a foreign page*: no origin is ever built from a header (the webhook is a path), and a POST from another
+     origin is refused before the body is read.
+  10. *A non-admin*: 403 before anything is read; the refusal lists nothing.
+  Not closed by the screen: the browser (a password manager, a screen share, the request in the admin's network log) and a
+  deployment without TLS in front of it, which exposes the value on the wire like any password form.
+- **Send test.** Sandbox mode only (the mode the deploy file gives now); a live connector, a kind that has no descriptor or no
+  sandbox operation is refused (400) and nothing runs. The call is the descriptor's `sandbox.test` (`{"op", "input"}`, new:
+  checked at load, in the three shipped descriptors), else the **first operation with sandbox rules** with an empty input
+  (defaults filled in; if that input is not valid the problems are shown as the failure). It goes through `deliverRow` with
+  `mode: 'sandbox'` and a fixed key: no outbox row, no breaker event, no request, one `settings_test` trace line (connector,
+  operation, status, code). The page shows the status, the code, the error if any and the shape.
+- **Going live is not on the screen** (decision 6). Each card prints the exact command for the other mode,
+  `node runtime/run.mjs <app.json> --connectors live NAME --confirm` (or `--connectors sandbox NAME`), and nothing a browser
+  can post changes `deploy.json`.
+- **Proof.** `tests/settings.test.mjs` (13 tests): the page and its JSON, the counts and the breaker, set/replace/empty/remove with
+  a scan of every response, the redirect, the trace and every file for the values, an unreadable store, 403 for a customer and a
+  guest on GET and all three POSTs (HTML and JSON), eight foreign-origin shapes on all three POSTs, methods and paths, a graph
+  without roles and without connectors, a forged Host, the query count for 1, 3 and 12 connectors, send test (shape, the first-op
+  fallback, an input that cannot be built, a failure status, no descriptor, `http`, nothing queued or sent) and refused in
+  live, and the checker for `sandbox.test`. The acceptance check is the ninth of `apps/checkout`. 18 `C7:` mutations.
+- **Not built.** Switching mode from the screen (by decision); rotation (`.prev`); a secret that is not a slot of a descriptor;
+  an audit log beyond the trace line; rate limiting of the POSTs (the origin check and the admin gate come first); a
+  configured public origin for the webhook URL.

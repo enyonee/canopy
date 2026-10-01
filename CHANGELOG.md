@@ -5,6 +5,21 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
+  `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per
+  connector with its kind, its mode (`deploy.json`), the breaker of each mode, the last 24 hours of its outbox (sent, failed,
+  unknown, drift; one grouped query for all connectors, so the page costs the same number of queries for 1 or 12), each
+  secret slot as **set** or **MISSING** (never a value, a length or a prefix), and the webhook path `/hook/<name>` (a path,
+  never an origin built from the request's `Host`). A password field per slot sets or replaces a secret (an empty value
+  changes nothing; the value goes to the encrypted store only and is not echoed, not in the redirect, not in the trace and
+  masked in any error); removing is its own POST with a confirmation. "Send test" runs one operation through the sandbox
+  (the descriptor's new optional `sandbox.test` `{"op", "input"}`, else its first operation with rules) and shows the
+  status and the shape of the answer; never in live mode. Going live stays the command line, printed on the card. Every POST
+  needs the same origin (`Origin`, else `Referer`, must name the request's `Host`): the app has no CSRF token. Also:
+  `store.breakers()` is one query instead of one per breaker. New: `runtime/routes/settings.mjs`,
+  `runtime/render/settings.mjs`, `store.outboxStats`, `tests/settings.test.mjs`, the ninth check of `apps/checkout`, 18 `C7:`
+  mutations. With this, the connector-library design of `docs/CONNECTORS.md` is complete.
+
 - **OpenAPI import (connector library, stage C6).** `node runtime/run.mjs --import-openapi spec.json --name x [--out
   connectors/x/descriptor.json]` turns an OpenAPI 3.0/3.1 document in JSON (YAML is out of scope: no dependencies) into a
   **draft** descriptor for a human to review and commit: `operationId` is the operation (sanitised, a clash numbered, else

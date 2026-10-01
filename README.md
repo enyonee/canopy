@@ -276,14 +276,14 @@ Every connector follows one contract, so each new one is cheap and safe:
   answer stops matching its schema.
 
 **Status:** the design is accepted and staged in [docs/CONNECTORS.md](docs/CONNECTORS.md); stages C1,
-C3, C2, C4, C5 and C6 have landed (the descriptor format, its checker and engine, the `connector.call` block, `http`
+C3, C2, C4, C5, C6 and C7 have landed, and with them the connector-library design is complete (the descriptor format, its checker and engine, the `connector.call` block, `http`
 as a built-in descriptor, `drift` detection; retries and the circuit breaker; an encrypted secret store
 and sandbox/live mode switched only by the command line; signed, deduplicated inbound webhooks at
 `POST /hook/<connector>`; the first providers, Stripe, Postmark and Slack, as descriptors under `connectors/` that
 run in a sandbox by default and are tested against hand-written fixtures, with the `apps/checkout` reference app; the
 OpenAPI import, `run.mjs --import-openapi spec.json --name x`, writes a draft descriptor from a JSON spec and lists everything it
-could not map).
-Next: the settings screen (C7).
+could not map; the settings screen at `/settings`, for an admin, shows each connector's mode, breaker, 24-hour counts and secret slots as set or MISSING,
+sets, replaces and removes a secret without ever showing it, sends a sandbox test, and prints the command that switches a connector to live).
 
 A settings screen for connectors and secrets means a non-programmer can connect an app to real services.
 
