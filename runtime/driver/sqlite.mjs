@@ -34,6 +34,7 @@ export function openSqlite(file) {
   };
   const drv = {
     dialect,
+    async: false, // synchronous: methods answer plain values (an async driver says true; runtime/check/plugins.mjs)
     cache,
     onQuery: null,
     all: (sql, params = [], opts) => stmt(sql, opts).all(...params),
@@ -46,9 +47,8 @@ export function openSqlite(file) {
       if (drv.onQuery) drv.onQuery(sql);
       db.exec(sql);
     },
-    // `fn` gets the transaction handle (this driver: itself). A synchronous `fn` runs BEGIN..COMMIT
-    // and returns its value; one that returns a promise is awaited before COMMIT (or ROLLBACK), and the
-    // answer is then a promise.
+    // `fn` gets the transaction handle (this driver: itself). A sync `fn` answers its value after COMMIT; one that
+    // returns a promise is awaited before COMMIT (or ROLLBACK), and the answer is a promise.
     transaction(fn) {
       drv.exec('BEGIN');
       let out;

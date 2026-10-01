@@ -156,6 +156,7 @@ export interface BlockType {
   check?: (step: StepSpec, h: any) => void;
   exposes?: (step: StepSpec) => Record<string, string>;
   nested?: (step: StepSpec) => Array<{ steps: StepSpec[]; path: string; adds: Record<string, string> }>;
+  /** May be `async`: the runtime awaits it. With an asynchronous driver it must await `store.*`, `resolve` and `text`. */
   run: (ctx: BlockCtx) => any;
 }
 
@@ -169,11 +170,13 @@ export interface BlockCtx {
   step: StepSpec;
   user: any;
   registry: Registry;
-  resolve: (obj: any) => any;
+  /** Resolves "@row.x", "= expr" and nested lists/objects; loads what they read, so await it. */
+  resolve: (obj: any) => Promise<any>;
+  /** Interpolates "{row.x}" placeholders; await it. */
   trace: (event: Record<string, any>) => void;
-  text: (s: string) => string;
-  run: (steps: StepSpec[], extra: Record<string, any>) => any;
-  fireCreated: (entity: string, id: number, values: Record<string, any>) => void;
+  text: (s: string) => Promise<string>;
+  run: (steps: StepSpec[], extra: Record<string, any>) => Promise<any>;
+  fireCreated: (entity: string, id: number, values: Record<string, any>) => Promise<void>;
 }
 
 /** A registry.transports[kind] entry — one per connector kind. */
@@ -253,6 +256,8 @@ export interface Registry {
   widgets: Record<string, WidgetType>;
   descriptors: Record<string, ConnectorDescriptor>;
   plugins: string[];
+  /** Plugins with blocks that did not declare `async: true` (or `api: 2`): written for a synchronous store. */
+  legacy: string[];
 }
 
 /** The per-request object every route module receives — built once in routes/context.mjs. */
@@ -331,6 +336,8 @@ export interface Dialect {
  * result "may be awaited" by contract; today's driver is synchronous and nothing awaits. */
 export interface Driver {
   dialect: Dialect;
+  /** True when the methods answer Promises; `validate(graph, registry, { asyncDriver })` then needs `async: true` plugins. */
+  async: boolean;
   /** Called with the SQL text (and the call's options) of every statement the driver executes; tests count queries with it. */
   onQuery: ((sql: string, opts?: { cache?: boolean }) => void) | null;
   /** SQLite-only diagnostic: the prepared-statement LRU, oldest first. */

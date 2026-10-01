@@ -84,6 +84,7 @@ export function hasWon(board) { return board.some((v) => v >= 2048); }
 const DIRECTIONS = ['up', 'down', 'left', 'right'];
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     // Round 5 closed the miss this used to work around: db.createRow now
     // fires the created entity's own event from any block, not only the

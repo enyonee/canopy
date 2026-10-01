@@ -1598,8 +1598,8 @@ const MUTATIONS = [
     replace: "if (!vc.settings) { ctx.deny(); return true; }" },
   // --- S4: await-first ---
   { name: "S4: serve() listens before it is ready", file: "runtime/server.mjs",
-    find: "  const app = { server, graph, store, perms, flusher: null, invalid: false, ready: null };",
-    replace: "  const app = { server, graph, store, perms, flusher: null, invalid: false, ready: null };\n  server.listen(port, host);" },
+    find: "  const app = { server, graph, store: null, perms: null, flusher: null, invalid: false, ready: null };",
+    replace: "  const app = { server, graph, store: null, perms: null, flusher: null, invalid: false, ready: null };\n  server.listen(port, host);" },
   { name: "S4: a transaction commits before its async callback has finished", file: "runtime/driver/sqlite.mjs",
     find: "if (typeof out?.then !== 'function') { drv.exec('COMMIT'); return out; }",
     replace: "if (true) { drv.exec('COMMIT'); return out; }" },
@@ -1624,6 +1624,15 @@ const MUTATIONS = [
   { name: "S4: a resolved list keeps no order (its elements are loaded out of turn)", file: "runtime/interp.mjs",
     find: "      if (Array.isArray(v)) { const out = []; for (const x of v) out.push(await one(x)); return out; }",
     replace: "      if (Array.isArray(v)) { const out = []; for (const x of [...v].reverse()) out.push(await one(x)); return out; }" },
+  { name: "S4: the checker lets an unmarked plugin through on an asynchronous driver", file: "runtime/check/plugins.mjs",
+    find: "  if (!h.asyncDriver) return;",
+    replace: "  return;" },
+  { name: "S4: the marker is ignored: every plugin with blocks counts as marked", file: "runtime/registry.mjs",
+    find: "if (plugin.blocks && plugin.async !== true && plugin.api !== 2) registry.legacy.push(name);",
+    replace: "if (false) registry.legacy.push(name);" },
+  { name: "S4: api: 2 is not accepted as the marker", file: "runtime/registry.mjs",
+    find: "plugin.async !== true && plugin.api !== 2)",
+    replace: "plugin.async !== true)" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

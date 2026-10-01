@@ -9,6 +9,7 @@ async function lineupOf(store, teamId) {
 }
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     // Game.created event: the standard entity-create route fires this (a
     // global action's db.createRow would not — see apps/chess and

@@ -7,6 +7,7 @@
 //   function    discount(a, pct) money after a percentage off
 //   block       loyalty.award    adds floor(amount) points to a user row
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   fields: {
     percent: {
       sql: 'INTEGER', exprKind: 'number', numeric: true, derivable: true,

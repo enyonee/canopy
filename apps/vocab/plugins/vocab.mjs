@@ -13,6 +13,7 @@ const answerKey = (word, kind, type) => {
 };
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     'vocab.grade': {
       summary: 'grade a submitted quiz attempt ("kind", "wordSet", "answers" as a JSON array of {wordId, value} or {wordId, type, value} for matching, or {wordId, knew} for flashcard) against the stored Word rows, and record the result as an Attempt',

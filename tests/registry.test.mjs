@@ -105,7 +105,7 @@ test('the store, the interpreter, the renderer and the outbox use the plugin at 
     assert.equal((await s.post('/User', { name: 'Bob', tier: '150' })).status, 400, 'and validates it');
     assert.match((await s.post('/User', { name: 'Bob', tier: '150' })).html, /tier must be between 0 and 100/);
     assert.equal((await s.post('/User', { name: 'Bob', tier: '7.6' })).status, 303);
-    assert.equal(s.app.store.get('User', 2).tier, 8, 'coerced by the plugin');
+    assert.equal((await s.app.store.get('User', 2)).tier, 8, 'coerced by the plugin');
     const created = await s.post('/Order', { customer: 1, total: '80' });
     assert.equal(created.status, 303);
     const orders = await s.get('/Order');
@@ -113,12 +113,12 @@ test('the store, the interpreter, the renderer and the outbox use the plugin at 
     assert.equal(rows((await s.get('/Order?total_from=100')).html).length, 0);
     const awarded = await s.post('/Order/1/action/award', {});
     assert.equal(awarded.location, '/Order/1?ok=awarded%2060', 'the plugin block ran and exposed its result');
-    assert.equal(s.app.store.get('User', 1).points, 60);
+    assert.equal((await s.app.store.get('User', 1)).points, 60);
     const line = fs.readFileSync(path.join(dir, 'audit.log'), 'utf8').trim();
     assert.equal(line, '{"order":1}', 'the plugin transport delivered');
-    assert.equal(s.app.store.outbox()[0].status, 'sent');
-    assert.equal(s.app.store.outbox()[0].kind, 'log', 'connector.send takes the kind from the connector');
-    assert.equal(s.app.store.outbox()[0].target, path.join(dir, 'audit.log'));
+    assert.equal((await s.app.store.outbox())[0].status, 'sent');
+    assert.equal((await s.app.store.outbox())[0].kind, 'log', 'connector.send takes the kind from the connector');
+    assert.equal((await s.app.store.outbox())[0].target, path.join(dir, 'audit.log'));
     const store = new Store(graph, ':memory:', s.app.perms ? (await loadPlugins(graph, dir)).registry : undefined);
     const patch = await deliver(store, graph, { id: 1, kind: 'log', connector: 'audit', payload: 1, attempts: 0 }, { registry: (await loadPlugins(graph, dir)).registry });
     assert.equal(patch, 'sent');

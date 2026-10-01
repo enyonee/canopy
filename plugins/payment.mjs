@@ -14,6 +14,7 @@ const luhn = (digits) => {
 export const DECLINED_CARD = '4000000000000002';
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   transports: {
     payment: {
       summary: 'a sandbox gateway: captures what payment.charge authorised; needs "currency"',

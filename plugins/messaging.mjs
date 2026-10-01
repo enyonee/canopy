@@ -13,6 +13,7 @@ const smsLike = (kind) => ({
 });
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   transports: { sms: smsLike('sms'), whatsapp: smsLike('whatsapp') },
   blocks: {
     'sms.send': {
