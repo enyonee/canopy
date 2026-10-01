@@ -5,6 +5,23 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **OpenAPI import (connector library, stage C6).** `node runtime/run.mjs --import-openapi spec.json --name x [--out
+  connectors/x/descriptor.json]` turns an OpenAPI 3.0/3.1 document in JSON (YAML is out of scope: no dependencies) into a
+  **draft** descriptor for a human to review and commit: `operationId` is the operation (sanitised, a clash numbered, else
+  `<method>_<path>`), path, query and header parameters and a JSON or form body its `input` and request template, the first
+  2xx JSON answer its `output`, `servers[0].url` the base (else `config.baseUrl`), an `apiKey` header, `bearer` or `basic`
+  scheme a header with a secret slot; GET, PUT and DELETE are idempotent, POST and PATCH are not unless the operation has
+  an idempotency header parameter, which is bound to the row's key. It is `live` only, with no sandbox rules. `$ref` is
+  followed inside the document, a cycle is cut (that schema is `{}`) and named; `allOf` of objects is merged, a
+  one-element `oneOf` unwrapped. **Nothing is guessed:** everything else (`oneOf` with several alternatives, callbacks,
+  webhooks, `oauth2`, an API key in the query, cookies, multipart, optional query parameters, `nullable`, an external
+  `$ref`, …) is printed on stderr as `not mapped: <pointer>: <why>`, and an operation the descriptor checker still refuses is
+  left out and listed, so the result always passes. New: `runtime/connectors/openapi.mjs`, `oas_schema.mjs`,
+  `oas_request.mjs`, `importCommand` in `admin.mjs`, `tests/connectors_openapi.test.mjs`,
+  `tests/connectors_openapi_fuzz.test.mjs`, `tests/fixtures/openapi`, `tests/golden/openapi`. Gates: golden imports of five
+  specs (descriptor and list), 600 generated specs and 1250 damaged fixtures that never throw, a round trip against the
+  Postmark descriptor, 15 `C6:` mutations.
+
 - **The first real providers (connector library, stage C5): Stripe, Postmark, Slack.** Three descriptors as data,
   `connectors/stripe`, `connectors/postmark` and `connectors/slack`, each sandbox by default (`"modes": ["sandbox",
   "live"]`): Stripe's PaymentIntents (create, retrieve, confirm), refunds, form-encoded bodies, the `Idempotency-Key`

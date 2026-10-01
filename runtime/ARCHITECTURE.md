@@ -140,6 +140,13 @@
   значение — токен до 128 знаков, отвечает `hooks.mjs#answerChallenge` только после подписи), составной и поэвентный `eventId`
   и `require` (`missingOf`: событие без нужного значения — `200 ignored` до строки дедупликации и до шагов). Дескрипторы
   провайдеров — данные в `connectors/<имя>/descriptor.json`, рантайм их имён не содержит.
+  **C6, импорт OpenAPI** (`docs/CONNECTORS.md` §15). Три чистых листа слоя 0: `connectors/oas_schema.mjs` (схема документа →
+  подмножество `schema.mjs`: локальные `$ref`, цикл режется в `{}` с пометкой, `allOf` объектов склеивается, потолок
+  глубины и узлов), `connectors/oas_request.mjs` (параметры и тело → `input` и шаблон запроса; обязательное, что не
+  отображается, убирает операцию) и `connectors/openapi.mjs` (`importOpenapi`: имена, безопасность → заголовок со слотом
+  секрета, сервер, первый 2xx JSON → `output`, и последнее слово `checkDescriptor`: отвергнутая операция выпадает и
+  попадает в `unsupported`). Ничего не додумывается: всё неотображённое — `{path, message}` в списке. Команда
+  `--import-openapi` — `admin.mjs#importCommand`, её зовёт `cli.mjs` до чтения графа; результат — черновик для человека.
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.
