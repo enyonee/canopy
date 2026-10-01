@@ -1,10 +1,11 @@
 # Canopy connector library: design (v0.2.0 baseline)
 
-**Status: design accepted (maintainer decisions, section 9). Stages C1, C3, C2 and C4 are done** (C1: descriptor,
+**Status: design accepted (maintainer decisions, section 9). Stages C1, C3, C2, C4 and C5 are done** (C1: descriptor,
 checker, engine, `connector.call`, `http` on it; C3: retries with backoff, `unknown`, timeouts, circuit
 breaker, background flusher, injectable clock; C2: encrypted secret store, sandbox and live mode; C4: inbound
-webhooks, signed and deduplicated; see "C1 as built", "C3 as built", "C2 as built" and "C4 as built" at the end).
-C5 to C7 are next, in the order of section 9.
+webhooks, signed and deduplicated; C5: the first real providers, Stripe, Postmark and Slack, as descriptors with
+hand-written fixtures; see "C1 as built", "C3 as built", "C2 as built", "C4 as built" and "C5 as built" at the end).
+C6 and C7 are next, in the order of section 9.
 
 The study below was read-only. All line numbers refer to /home/vyacheslav/code/canopy at main, before C1.
 
@@ -446,3 +447,102 @@ Where the code differs from, or narrows, sections 2.1, 2.2, 5 and 6:
   duplicate, and a scheme with a timestamp also refuses it after `toleranceS`; (5) the event id can only come from the signed body
   (a header id is a descriptor error), so a replay cannot become a new event. Residual: a header-carried `type` is not
   signed, so a replayer could route a captured body to another declared type whose schema it also satisfies.
+
+## 14. C5 as built
+
+Where the code differs from, or narrows, sections 2.1, 5, 6 and 7 (C5):
+- **What shipped.** Three descriptors as data, `connectors/stripe/descriptor.json`, `connectors/postmark/descriptor.json`
+  and `connectors/slack/descriptor.json`, each `"modes": ["sandbox", "live"]` (sandbox is the default, so an app that
+  lists one runs without a deploy step and sends nothing until `--connectors live NAME --confirm`), each with a `sandbox`
+  block for every operation. An app lists them like any plugin (`"plugins": ["../../connectors/stripe/descriptor.json"]`).
+  The reference app is `apps/checkout`. No runtime module names a provider.
+- **Fixtures are hand-written, not recorded.** The build had no keys, so every file under `connectors/<name>/fixtures/` is
+  written from the provider's public documentation and says so in itself: `"recordedAt": null, "source": "docs"`, a
+  `note` naming the page, and a `providerVersion`. They have the shape of section 6 (`op`, `case`, `request`, `response`)
+  plus the `input` (and connector `config`, and the `idemKey`) the request was built from, and, where the delivery is not
+  the plain reading of the status, an `outcome`. Inbound fixtures are `inbound.<type>.<case>.json`: the unsigned request
+  (`headers`, `body`) and the `values` the steps should get (a Slack `url_verification` fixture has the expected `answer`).
+  They are signed by the tests with a fixed secret on an injected clock. **The first real recording replaces a fixture's
+  `source` with `"recorded"` and a date**; until then a green contract test proves the descriptor agrees with the
+  documentation as read by its author, not with the provider. There is still no `--connectors record` or `drift` command.
+- **The hermetic helpers** are test code: `tests/replay.mjs` has `loadFixtures`, `replayFetch(fixtures)` (a `fetchImpl`
+  that matches on method, url and the canonical body and **throws `replay miss` on anything else**: no default answer,
+  no network), `canonicalBody`, `redactHeaders` and `suspicious(text)`, the scan used by the fixture test (`\bsk_`, other
+  Stripe key shapes, `Bearer `, Slack tokens, JWTs, and any token of 32+ characters that is hex or has entropy of 3.5 bits
+  or more; urls and media types are skipped). `tests/providers.test.mjs` holds the contract tests: (a) every sandbox
+  rule answers and a success validates against the operation's `output` (`drift` 0); (b) for each fixture the sandbox's
+  answer has the same keys and types, **a subset** of the recording (the sandbox may not invent a field the provider
+  lacks, the real answer may have many more); (c) the request built for the fixture's input is the recorded one
+  after redaction (a form body byte for byte, so nesting is covered); plus each recording delivered through `deliverRow`
+  with `replayFetch`, the inbound fixtures verified, parsed and routed through the real `/hook`, and the operations run
+  through a server in sandbox mode. `tests/connectors_c5.test.mjs` tests the engine features below.
+- **Form encoding** (`runtime/connectors/form.mjs`, `"request": {"encoding": "form"}`). The body object is flattened the
+  way bracket-syntax providers read it: `{"metadata": {"order": "7"}}` is `metadata[order]=7`, a list is `a[0]=x`, an
+  object may go any depth; `null` and absent values are left out, booleans are `true`/`false`, every name and value is
+  percent-encoded except the brackets (so a flat key written `metadata[order]` and the nested object are the same bytes).
+  The content type `application/x-www-form-urlencoded` is set unless the descriptor sets one. The checker refuses an
+  encoding other than `json` (the default) or `form`, and a form body that is not an object.
+- **The idempotency header** already existed (C3: the top-level `"idempotency": {"header": "Idempotency-Key"}` sends the
+  row's key; the key is fixed at enqueue and the same on every retry). Stripe declares it, and all four Stripe
+  operations say `"idempotent": true` (Stripe deduplicates on the key; a GET is idempotent anyway), so they retry on a
+  timeout, a 429 and a 5xx. The key is sent on a GET too: Stripe ignores it there. Postmark and Slack have no
+  idempotency mechanism, so `sendEmail` and `postMessage` are `"idempotent": false`: after an answer that is a failure
+  they are not retried, and after a timeout they end `unknown` for an operator, never a second letter or message on a guess.
+- **An answer that is HTTP 200 and a failure** (`"failure"` on an operation: `{path, equals, error?, code?, codes?}`).
+  Slack answers `{"ok": false, "error": "channel_not_found"}` with status 200. Decision: the rule names the flag
+  (`"$.ok"` equal to `false`), the reason (`"$.error"`) and the **status the failure counts as**: `codes[reason]`
+  if the reason is listed, else `code`, else 400 (statuses are 400 to 599; an inherited name such as `constructor` is
+  no reason). The delivery is then an ordinary failed one: `status: "failed"`, `code` the mapped status, `error:
+  "rejected: <reason>"` (the provider's text cut to 100 characters and cleaned to `[\w .:-]`), `response` kept, `result`
+  and `drift` empty; and **the retry classifier, `Retry-After` and the breaker see an ordinary status**, with no special
+  case in them: Slack's `ratelimited` is 429, `internal_error`, `fatal_error`, `service_unavailable` and
+  `request_timeout` are 503 (retryable, and counted against the breaker), `invalid_auth`, `not_authed`, `token_revoked`
+  and `account_inactive` are 401, `missing_scope` 403, and any other reason (`channel_not_found`, `is_archived`,
+  `msg_too_long`, …) the default 400 (permanent, and a sign of life for the breaker). Because `postMessage` is not
+  idempotent a 503 is **not** retried, but it does count toward opening the breaker. A 200 answer that is not JSON, on
+  an operation with a `failure` rule, cannot be told from a success, so it fails as 502. A real HTTP 429 (what Slack
+  sends for rate limits) never reaches the rule: it is an HTTP error as before and its `Retry-After` is honoured. The
+  rule is read in sandbox mode too, so a sandbox rule `{"body": {"ok": false, "error": "channel_not_found"}}` exercises it.
+- **Inbound, what C5 added to the block** (all generic, all checked in `inbound.mjs`):
+  - `challenge: {type, equals, echo}`, the one deliberate echo. A request whose `type` path holds `equals` (Slack's
+    `url_verification`) is answered `200 {"challenge": <the echo path's value>}`. It is **explicit** (only a descriptor that
+    declares it, only its connector), **after the signature** (a bad, missing or stale signature is the usual 401 with no
+    echo; the replay window applies), **bounded** (the value must match `^[A-Za-z0-9._~-]{1,128}$`, else `400
+    invalid_challenge` and the refusal does not repeat it) and **not an event** (no dedup row, no steps, a repeat is
+    answered again); the trace has `webhook_challenge`, never the value. It is checked before the type, so Slack's
+    `type` (`$.event.type`, absent in a challenge) is not needed.
+  - `eventId` may be a list of up to four body paths; the id is then the JSON array of the pieces (so no piece can run
+    into the next), and any missing or empty piece is "no id" (400). An event may carry its own `eventId`, which wins
+    over the block's. Postmark's `SubscriptionChange` has no id of its own, so its id is `[MessageID, Recipient,
+    ChangedAt]`; `Bounce` uses `ID`. (Postmark's `ID` is an int64: one above 2^53 is "no usable id", the documented
+    example in Postmark's page is such a number, real ones are not.)
+  - `require: ["order"]` on an event: names of its `map` that the payload must carry (not null or absent). An event
+    without one is answered `200 {ok:true, ignored:true}` (trace `webhook_ignored` with `missing`), **before** the dedup
+    row, so nothing is remembered and no step runs. Why: `@values.order` that is absent is dropped from a `where`,
+    so `db.each Order where {id: "@values.order", status: "paying"}` selected *every* paying order, and a Stripe
+    payment made outside the app (no `metadata.order`) would have marked all of them paid. The checkout app found it.
+    All three Stripe events require `order`. This is a footgun of `where` itself (an absent filter value is skipped, as a
+    list screen needs), recorded here and not changed in the runtime.
+- **Stripe.** Operations `createPaymentIntent`, `retrievePaymentIntent`, `confirmPaymentIntent`, `createRefund` (form
+  bodies, `Authorization: Bearer {secret.apiKey}`, `Stripe-Version` pinned to the descriptor's version, amounts in the
+  smallest unit, lower case currency, `metadata` a free object that becomes `metadata[k]`). Inbound: `stripe` signature
+  on `webhookSecret`, window 300 s, events `payment_intent.succeeded`, `payment_intent.payment_failed`,
+  `charge.refunded`, mapped to `intent`, `order` (from `metadata.order`), `amount`/`currency`, `reason`, `charge`,
+  `refunded`. Sandbox: the card `pm_card_chargeDeclined` is a 402, `confirm: true` with a payment method is
+  `succeeded`, a payment method alone `requires_confirmation`, nothing `requires_payment_method`; the fake id is
+  `pi_sbx_<idempotency key>`, so a retry gets the same one.
+- **Postmark.** `sendEmail` (JSON, `X-Postmark-Server-Token: {secret.serverToken}`, `From` and `MessageStream` from the
+  connector's `from` (required) and `stream` (default `outbound`)). Inbound `basic` on `webhookAuth` (the store value is
+  `user:password`, set in the webhook URL's credentials at Postmark): events `Bounce` and `SubscriptionChange` (type
+  `$.RecordType`). Basic credentials do not cover the body and have no clock, so a captured request can be replayed
+  within the 30 days of dedup, which is what dedup is for. Sandbox: `inactive@example.test` is a 422 (ErrorCode 406).
+- **Slack.** `postMessage` (`Authorization: Bearer {secret.botToken}`; the channel is an id or `#name`). Inbound `slack`
+  on `signingSecret`, type `$.event.type`, id `$.event_id`, the `url_verification` challenge, events `app_mention` and
+  `reaction_added`; `message` is not declared on purpose: the bot's own messages would come back as events. Sandbox:
+  `#nowhere` answers `channel_not_found` and `#flaky` `internal_error`, both with HTTP 200 and `ok:false`.
+- **The flow Stripe needs is two-phase** (section 2.3's limitation, still true: settlement events are not built). The
+  graph cannot read the PaymentIntent's id from the call's answer, so the order id travels in `metadata.order` and the
+  webhook brings it back: the order is "paying" after the call and "paid" only when the signed event arrives. The receipt
+  and the staff notice are sent from that event's steps.
+- **Not built.** `--connectors record` and `drift`; Twilio and SES; a Stripe Checkout/Elements flow (the app
+  uses the test payment method `pm_card_visa` in the transition, so it is a test-mode demo, not a payment page).

@@ -130,6 +130,14 @@
   (`interp.fireInbound`) — в одной транзакции, поэтому падение до COMMIT не оставляет строки. `check/events.mjs`
   проверяет `inbound: "<коннектор>.<тип>"` по дескриптору. `admin.mjs#simulate` подписывает файл хранимым секретом и
   шлёт его на локальный `/hook`. `server.mjs#startFlusher` раз в час удаляет строки старше `INBOUND_RETENTION_MS`.
+  **C5, первые провайдеры** (`docs/CONNECTORS.md` §14). `connectors/form.mjs` — чистый лист (`formEncode`: вложенность
+  `a[b]=1`, списки `a[0]=x`, `null` не уходит, скобки имени не кодируются); `engine.mjs` собирает им тело при
+  `request.encoding: "form"` и ставит тип содержимого. Правило `failure` операции (`engine.mjs#failureOf`) превращает ответ 2xx
+  с ошибкой в теле (Slack `ok:false`) в проваленную доставку с кодом из `codes`: дальше `settle`, `Retry-After` и автомат видят
+  обычный статус и ничего о Slack не знают. `inbound.mjs` получил `challenge` (`challengeOf`, единственное эхо:
+  значение — токен до 128 знаков, отвечает `hooks.mjs#answerChallenge` только после подписи), составной и поэвентный `eventId`
+  и `require` (`missingOf`: событие без нужного значения — `200 ignored` до строки дедупликации и до шагов). Дескрипторы
+  провайдеров — данные в `connectors/<имя>/descriptor.json`, рантайм их имён не содержит.
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.

@@ -5,6 +5,28 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **The first real providers (connector library, stage C5): Stripe, Postmark, Slack.** Three descriptors as data,
+  `connectors/stripe`, `connectors/postmark` and `connectors/slack`, each sandbox by default (`"modes": ["sandbox",
+  "live"]`): Stripe's PaymentIntents (create, retrieve, confirm), refunds, form-encoded bodies, the `Idempotency-Key`
+  header and the `stripe` webhook signature with `payment_intent.succeeded`, `payment_intent.payment_failed` and
+  `charge.refunded`; Postmark's `sendEmail` and `Bounce`/`SubscriptionChange` webhooks on `basic` auth; Slack's
+  `chat.postMessage` and Events API with the `slack` v0 signature. Three generic engine features, none naming a
+  provider: `request.encoding: "form"` (`metadata[k]`, `a[0]`), a per-operation `failure` rule that turns an HTTP 200
+  whose body says `{"ok": false, "error": …}` into a failed delivery with a status the retry classifier, `Retry-After`
+  and the breaker already understand (Slack's `ratelimited` is 429, `internal_error` 503, the rest 400), and for
+  inbound: `challenge` (Slack's `url_verification`, the one deliberate echo: only after the signature, a bounded token,
+  never an event), an `eventId` made of several fields or set per event (Postmark's `SubscriptionChange` has no id)
+  and `require` (an event without the named values is answered and ignored, because an absent `@values.x` is dropped
+  from a `where` and a payment made outside the app would have selected every paying order). The fixtures are
+  **written by hand from the providers' documentation, not recorded** (`"recordedAt": null, "source": "docs"`); tests use
+  `replayFetch`, which throws on a miss, and a scan keeps secrets out of the fixtures. The new reference app
+  `apps/checkout` orders a product, pays through Stripe (sandbox), is marked paid only by the signed
+  `payment_intent.succeeded` (also via `--connectors simulate`), sends the receipt through Postmark and a notice to
+  staff through Slack (sandbox), and answers Slack's challenge. New: `runtime/connectors/form.mjs`,
+  `connectors/`, `tests/providers.test.mjs`, `tests/connectors_c5.test.mjs`, `tests/replay.mjs`, `apps/checkout`.
+  Gates: contract tests (sandbox against `output`, recording against sandbox shape, request against recording),
+  45 `C5:` mutations. No network anywhere in tests or CI.
+
 - **Inbound webhooks (connector library, stage C4).** A connector whose descriptor has an `inbound` block now
   receives a provider's webhooks at `POST /hook/<connector>`, a route that is exempt from the session gate and
   authenticated only by the descriptor's signature recipe: `stripe` (`t=…,v1=…`, several `v1`), `slack` (`v0`),
