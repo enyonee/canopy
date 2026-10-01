@@ -1,0 +1,40 @@
+{
+  "op": "sendEmail",
+  "case": "sent",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://postmarkapp.com/developer/api/email-api#send-a-single-email; not recorded against the live API",
+  "idemKey": "idem_fixture_1",
+  "config": { "from": "shop@example.test" },
+  "input": { "to": "ann@example.test", "subject": "Receipt for order 7", "text": "Thank you.", "tag": "receipt", "metadata": { "order": "7" } },
+  "request": {
+    "method": "POST",
+    "url": "https://api.postmarkapp.com/email",
+    "headers": {
+      "accept": "application/json",
+      "content-type": "application/json",
+      "x-postmark-server-token": "«redacted»"
+    },
+    "body": {
+      "From": "shop@example.test",
+      "To": "ann@example.test",
+      "Subject": "Receipt for order 7",
+      "TextBody": "Thank you.",
+      "Tag": "receipt",
+      "Metadata": { "order": "7" },
+      "MessageStream": "outbound"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "application/json; charset=utf-8" },
+    "body": {
+      "To": "ann@example.test",
+      "SubmittedAt": "2023-11-14T22:13:20.1234567Z",
+      "MessageID": "00000000-0000-4000-8000-000000000001",
+      "ErrorCode": 0,
+      "Message": "OK"
+    }
+  }
+}

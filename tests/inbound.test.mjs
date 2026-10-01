@@ -157,7 +157,7 @@ test('checkInbound: every rule of the block is an error with a path', () => {
   assert.match(bad({ ...INBOUND, signature: { scheme: 'nope' } })[0], /"scheme"/);
   for (const secret of [undefined, 5, '1bad', 'a b']) assert.match(bad({ ...INBOUND, secret }).join('\n'), /names the "secret" slot/, String(secret));
   for (const toleranceS of [0, 1.5, 86401, '300']) assert.match(bad({ ...INBOUND, toleranceS }).join('\n'), /toleranceS/, String(toleranceS));
-  for (const eventId of [undefined, 5, 'id', '$.a[', ['$.id']]) assert.match(bad({ ...INBOUND, eventId }).join('\n'), /eventId/, JSON.stringify(eventId));
+  for (const eventId of [undefined, 5, 'id', '$.a[', [], ['$.a', 'b'], ['$.a', '$.b', '$.c', '$.d', '$.e']]) assert.match(bad({ ...INBOUND, eventId }).join('\n'), /eventId/, JSON.stringify(eventId));
   for (const eventId of [{ header: 'X-Delivery' }, { header: 'a b' }, { header: 'x', more: 1 }]) assert.match(bad({ ...INBOUND, eventId }).join('\n'), /header is not covered by the signature/, 'an unsigned header cannot be the dedup key');
   assert.match(bad({ ...INBOUND, type: 'type' }).join('\n'), /inbound\/type/);
   for (const type of [5, { header: 'a b' }, { header: 'x', more: 1 }, undefined]) assert.match(bad({ ...INBOUND, type }).join('\n'), /"type" is a \$\.path into the JSON body or \{"header"/, JSON.stringify(type));

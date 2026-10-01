@@ -1,0 +1,81 @@
+{
+  "descriptor": 1,
+  "name": "slack",
+  "title": "Slack: chat.postMessage and Events API webhooks (with the url_verification challenge)",
+  "version": "2026-10",
+  "modes": ["sandbox", "live"],
+  "base": "https://slack.com/api",
+  "timeoutMs": 10000,
+  "operations": {
+    "postMessage": {
+      "summary": "post a message to a channel as the bot; Slack answers HTTP 200 with {\"ok\": false, \"error\": ...} on errors, which \"failure\" turns into a failed delivery",
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "required": ["channel", "text"],
+        "properties": {
+          "channel": { "type": "string", "pattern": "^[#@]?[A-Za-z0-9._-]{1,80}$", "message": "a channel is its id (C0123456) or #name" },
+          "text": { "type": "string", "minLength": 1, "maxLength": 40000 },
+          "threadTs": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/chat.postMessage",
+        "headers": { "authorization": "Bearer {secret.botToken}", "content-type": "application/json; charset=utf-8" },
+        "body": { "channel": { "$": "input.channel" }, "text": { "$": "input.text" }, "thread_ts": { "$": "input.threadTs" } }
+      },
+      "output": {
+        "type": "object",
+        "required": ["ok"],
+        "properties": { "ok": { "type": "boolean" }, "channel": { "type": "string" }, "ts": { "type": "string" }, "error": { "type": "string" } }
+      },
+      "result": { "ts": "$.ts", "channel": "$.channel" },
+      "failure": {
+        "path": "$.ok",
+        "equals": false,
+        "error": "$.error",
+        "code": 400,
+        "codes": {
+          "ratelimited": 429,
+          "internal_error": 503,
+          "fatal_error": 503,
+          "service_unavailable": 503,
+          "request_timeout": 503,
+          "not_authed": 401,
+          "invalid_auth": 401,
+          "token_revoked": 401,
+          "account_inactive": 401,
+          "missing_scope": 403
+        }
+      }
+    }
+  },
+  "inbound": {
+    "signature": { "scheme": "slack" },
+    "secret": "signingSecret",
+    "toleranceS": 300,
+    "eventId": "$.event_id",
+    "type": "$.event.type",
+    "challenge": { "type": "$.type", "equals": "url_verification", "echo": "$.challenge" },
+    "events": {
+      "app_mention": {
+        "schema": { "type": "object", "required": ["event_id", "event"], "properties": { "event_id": { "type": "string" }, "event": { "type": "object", "required": ["type", "channel"], "properties": { "type": { "type": "string" }, "channel": { "type": "string" } } } } },
+        "map": { "channel": "$.event.channel", "user": "$.event.user", "text": "$.event.text", "ts": "$.event.ts", "thread": "$.event.thread_ts" }
+      },
+      "reaction_added": {
+        "schema": { "type": "object", "required": ["event_id", "event"], "properties": { "event_id": { "type": "string" }, "event": { "type": "object", "required": ["type", "reaction"], "properties": { "type": { "type": "string" }, "reaction": { "type": "string" } } } } },
+        "map": { "reaction": "$.event.reaction", "user": "$.event.user", "channel": "$.event.item.channel", "ts": "$.event.item.ts" }
+      }
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "postMessage": [
+        { "when": { "input.channel": "#nowhere" }, "body": { "ok": false, "error": "channel_not_found" } },
+        { "when": { "input.channel": "#flaky" }, "body": { "ok": false, "error": "internal_error" } },
+        { "body": { "ok": true, "channel": { "$": "input.channel" }, "ts": "1700000000.000100", "message": { "text": { "$": "input.text" } } } }
+      ]
+    }
+  }
+}

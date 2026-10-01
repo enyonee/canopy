@@ -1,0 +1,20 @@
+{
+  "inbound": "reaction_added",
+  "case": "basic",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://api.slack.com/events/reaction_added",
+  "request": {
+    "headers": { "content-type": "application/json" },
+    "body": {
+      "token": "fixture-verification-token",
+      "team_id": "T0000FIXT",
+      "type": "event_callback",
+      "event_id": "Ev0000FIXT2",
+      "event_time": 1700000100,
+      "event": { "type": "reaction_added", "user": "U0000FIXT", "reaction": "white_check_mark", "item": { "type": "message", "channel": "C0000FIXT1", "ts": "1700000000.000100" }, "event_ts": "1700000100.000300" }
+    }
+  },
+  "values": { "reaction": "white_check_mark", "user": "U0000FIXT", "channel": "C0000FIXT1", "ts": "1700000000.000100" }
+}

@@ -8,6 +8,7 @@ import { sandboxAnswer } from './sandbox.mjs';
 import { METHODS, MAX_TIMEOUT_MS } from './descriptor.mjs';
 import { faultOf } from './backoff.mjs';
 import { systemClock } from '../clock.mjs';
+import { formEncode, FORM_TYPE } from './form.mjs';
 
 export const DEFAULT_TIMEOUT_MS = 3000;
 // The most of an answer the outbox row keeps.
@@ -62,7 +63,7 @@ export function prepare(d, connector, opName, input) {
 }
 
 /**
- * The request of one operation: { method, url, headers, body (JSON text or undefined), timeout }.
+ * The request of one operation: { method, url, headers, body (JSON or form text, or undefined), timeout }.
  * A row queued before the descriptor existed already has its url (`target`): that one is used as is.
  * `timeout` is the descriptor's (or the connector's) `timeoutMs`, never above `timeoutCapMs` (half the outbox lease), so a
  * request cannot outlive the claim on its row. With `idemKey`, a descriptor that declares `idempotency.header` sends it there.
@@ -77,16 +78,19 @@ export function buildRequest(d, connector, opName, input, opts = {}) {
   if (!METHODS.includes(method)) throw new Error(`unsupported method "${method}"`);
   const body = r.body === undefined ? undefined : expand(r.body, scopes);
   const headers = expand(r.headers || {}, scopes);
+  // A form body is the descriptor's object flattened (runtime/connectors/form.mjs); its content type is set unless the descriptor set one.
+  const text = body === undefined ? undefined : r.encoding === 'form' ? formEncode(body) : JSON.stringify(body);
+  if (r.encoding === 'form' && text !== undefined && !Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')) headers['content-type'] = FORM_TYPE;
   if (idemKey !== undefined && d.idempotency) headers[d.idempotency.header] = idemKey;
   for (const [k, v] of Object.entries(headers)) if (/[\r\n]/.test(k) || /[\r\n]/.test(String(v))) throw new Error(`header "${k.replace(/[\r\n]/g, ' ')}" holds a line break`);
   return {
     method, url: target ?? requestUrl(op, scopes), headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: text,
     timeout: Math.min(scopes.config.timeout || d.timeoutMs || DEFAULT_TIMEOUT_MS, timeoutCapMs),
   };
 }
 
-// The answer of an operation that declares "output": its text (capped), the fields "result" names, and
+// The answer of an operation that declares "output" or "failure": its text (capped), the body, the fields "result" names, and
 // what does not fit the schema. Never throws: the effect has happened whatever the answer looks like.
 async function readAnswer(op, res) {
   let raw = '';
@@ -94,10 +98,24 @@ async function readAnswer(op, res) {
   try { raw = await res.text(); body = JSON.parse(raw); } catch (e) {
     return { response: raw.slice(0, RESPONSE_CAP), drift: [['/', `the answer is not JSON: ${e.message}`]] };
   }
-  const drift = validate(op.output, body, '', { extra: true });
-  const answer = { response: raw.slice(0, RESPONSE_CAP), drift };
+  const drift = op.output ? validate(op.output, body, '', { extra: true }) : [];
+  const answer = { response: raw.slice(0, RESPONSE_CAP), drift, body };
   if (op.result) answer.result = JSON.stringify(Object.fromEntries(Object.entries(op.result).map(([k, p]) => [k, pick(p, body)]).filter(([, v]) => v !== undefined)));
   return answer;
+}
+
+const UNREADABLE = { code: 502, error: 'rejected: the answer is not JSON, so whether it succeeded cannot be told' };
+
+// A success status whose body says it failed (a provider that answers 200 with {"ok": false, "error": "…"}): the
+// descriptor's "failure" rule names the flag, the reason and the status the failure counts as (`codes[reason]`, else
+// `code`, else 400), so the retry policy and the breaker see an ordinary failure. The reason is the provider's text, cut
+// and cleaned before it reaches the outbox row.
+function failureOf(rule, body) {
+  if (pick(rule.path, body) !== rule.equals) return null;
+  const raw = rule.error ? pick(rule.error, body) : undefined;
+  const reason = typeof raw === 'string' ? raw.replace(/[^\w .:-]/g, '_').slice(0, 100) : '';
+  const code = reason && rule.codes && Object.hasOwn(rule.codes, reason) ? rule.codes[reason] : rule.code ?? 400;
+  return { code, error: `rejected: ${reason || 'no reason given'}` };
 }
 
 // The answer a sandbox rule gives, shaped like a fetch Response so it goes through the same mapping as a real one.
@@ -115,8 +133,10 @@ export async function mapResponse(op, res) {
   // The provider's own wish for when to come back; the outbox reads it (runtime/settle.mjs) and does not store it.
   const retryAfter = res.headers?.get?.('retry-after');
   if (!res.ok && retryAfter) patch.retryAfter = retryAfter;
-  if (!res.ok || !op.output) return { patch, drift: [] };
-  const { drift, ...answer } = await readAnswer(op, res);
+  if (!res.ok || !(op.output || op.failure)) return { patch, drift: [] };
+  const { drift, body, ...answer } = await readAnswer(op, res);
+  const bad = op.failure && (body === undefined ? UNREADABLE : failureOf(op.failure, body));
+  if (bad) return { patch: { ...patch, ...bad, status: 'failed', response: answer.response }, drift: [] };
   return { patch: { ...patch, ...answer, drift: drift.length ? 1 : 0 }, drift };
 }
 

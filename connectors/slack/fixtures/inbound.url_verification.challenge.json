@@ -1,0 +1,13 @@
+{
+  "inbound": "url_verification",
+  "case": "challenge",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://api.slack.com/apis/connections/events-api#subscriptions (url_verification)",
+  "request": {
+    "headers": { "content-type": "application/json" },
+    "body": { "token": "fixture-verification-token", "challenge": "challenge-fixture-0001", "type": "url_verification" }
+  },
+  "answer": { "challenge": "challenge-fixture-0001" }
+}

@@ -1,0 +1,29 @@
+{
+  "op": "postMessage",
+  "case": "posted",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2026-10",
+  "note": "written by hand from https://api.slack.com/methods/chat.postMessage; not recorded against the live API",
+  "idemKey": "idem_fixture_1",
+  "input": { "channel": "#orders", "text": "Order 7 was paid" },
+  "request": {
+    "method": "POST",
+    "url": "https://slack.com/api/chat.postMessage",
+    "headers": {
+      "authorization": "«redacted»",
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": { "channel": "#orders", "text": "Order 7 was paid" }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "application/json; charset=utf-8" },
+    "body": {
+      "ok": true,
+      "channel": "C0000FIXT1",
+      "ts": "1700000000.000100",
+      "message": { "type": "message", "text": "Order 7 was paid", "ts": "1700000000.000100" }
+    }
+  }
+}

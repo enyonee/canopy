@@ -1,0 +1,21 @@
+{
+  "inbound": "payment_intent.payment_failed",
+  "case": "declined",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/events/types#event_types-payment_intent.payment_failed",
+  "request": {
+    "headers": { "content-type": "application/json" },
+    "body": {
+      "id": "evt_1Fixture0002",
+      "object": "event",
+      "api_version": "2024-06-20",
+      "created": 1700000050,
+      "livemode": false,
+      "type": "payment_intent.payment_failed",
+      "data": { "object": { "id": "pi_3Fixture0003", "object": "payment_intent", "amount": 900, "currency": "usd", "metadata": { "order": "9" }, "status": "requires_payment_method", "last_payment_error": { "code": "card_declined", "type": "card_error" } } }
+    }
+  },
+  "values": { "intent": "pi_3Fixture0003", "order": "9", "reason": "card_declined" }
+}

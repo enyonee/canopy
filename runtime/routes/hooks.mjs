@@ -1,15 +1,16 @@
 // POST /hook/<connector>: a provider's webhook. The one route that answers without a session, a cookie or a
 // user: who sent it is decided by the signature recipe of the connector's descriptor (`inbound`) and nothing
 // else, and only after the bytes are in (capped at 1 MiB) and before anything is parsed. It answers JSON only
-// and never echoes anything of the payload; every refusal body is a fixed word, and the trace keeps the reason
+// and never echoes anything of the payload, except the one bounded token of a descriptor's declared `challenge` (a
+// provider's "is this endpoint yours?" request, answered only after the signature); every refusal body is a fixed word, and the trace keeps the reason
 // (never the body). The steps of the event a webhook triggers run in ONE transaction with its dedup row, so a
 // crash or a failing step leaves no row and the provider's retry is processed exactly once; a duplicate is 200
-// (a provider retries anything else). Order: connector (404) → bytes (413) → signature (401) → JSON, type,
+// (a provider retries anything else). Order: connector (404) → bytes (413) → signature (401) → JSON, challenge, type,
 // schema, id (400) → unknown or unsubscribed type (200 ignored) → transaction (200 / duplicate / 500).
 import { TooBig } from './context.mjs';
 import { secretName } from '../connectors/engine.mjs';
 import { verifySignature } from '../connectors/signature.mjs';
-import { typeOf, eventIdOf, payloadProblems, valuesOf } from '../connectors/inbound.mjs';
+import { typeOf, eventIdOf, payloadProblems, valuesOf, challengeOf } from '../connectors/inbound.mjs';
 
 class Duplicate extends Error {}
 
@@ -42,6 +43,14 @@ function take(ctx, connector, type, eventId, values) {
   }
 }
 
+// The provider asks whether the endpoint is ours (only after the signature checked out): the one place a request's own
+// bytes are answered — a bounded token (challengeOf), as JSON, and nothing is stored or run.
+function answerChallenge(ctx, name, echo) {
+  if (echo === null) return refuse(ctx, name, 400, 'invalid_challenge');
+  ctx.trace({ kind: 'webhook_challenge', connector: name });
+  return ctx.sendJson(200, { challenge: echo });
+}
+
 async function receive(ctx, name, inbound) {
   const { req, graph, trace } = ctx;
   const raw = await ctx.rawBody();
@@ -50,6 +59,8 @@ async function receive(ctx, name, inbound) {
   if (!sig.ok) return refuse(ctx, name, 401, sig.reason, 'unauthorized');
   const payload = parseJson(raw);
   if (!isObject(payload)) return refuse(ctx, name, 400, 'invalid_json');
+  const echo = challengeOf(inbound, payload);
+  if (echo !== undefined) return answerChallenge(ctx, name, echo);
   const type = typeOf(inbound, payload, req.headers);
   if (type === undefined) return refuse(ctx, name, 400, 'missing_type');
   const ev = Object.hasOwn(inbound.events, type) ? inbound.events[type] : null;
@@ -58,7 +69,7 @@ async function receive(ctx, name, inbound) {
     return ctx.sendJson(200, { ok: true, ignored: true });
   }
   if (payloadProblems(ev, payload).length) return refuse(ctx, name, 400, 'invalid_payload');
-  const eventId = eventIdOf(inbound, payload);
+  const eventId = eventIdOf(inbound, payload, ev);
   if (eventId === undefined) return refuse(ctx, name, 400, 'invalid_event_id');
   if (!take(ctx, name, type, eventId, valuesOf(ev, payload))) {
     trace({ kind: 'webhook_duplicate', connector: name, type, eventId });

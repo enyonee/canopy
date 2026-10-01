@@ -1,0 +1,39 @@
+{
+  "op": "createPaymentIntent",
+  "case": "confirmed",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/payment_intents/create (confirm=true with a test payment method)",
+  "idemKey": "idem_fixture_1",
+  "input": { "amount": 1250, "currency": "usd", "paymentMethod": "pm_card_visa", "confirm": true, "metadata": { "order": "8" } },
+  "request": {
+    "method": "POST",
+    "url": "https://api.stripe.com/v1/payment_intents",
+    "headers": {
+      "authorization": "«redacted»",
+      "stripe-version": "2024-06-20",
+      "idempotency-key": "idem_fixture_1",
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "amount=1250&currency=usd&payment_method=pm_card_visa&confirm=true&metadata[order]=8&automatic_payment_methods[enabled]=true&automatic_payment_methods[allow_redirects]=never"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "application/json", "request-id": "req_fixture_2" },
+    "body": {
+      "id": "pi_3Fixture0002",
+      "object": "payment_intent",
+      "amount": 1250,
+      "amount_received": 1250,
+      "client_secret": "pi_3Fixture0002_secret_f02",
+      "created": 1700000100,
+      "currency": "usd",
+      "latest_charge": "ch_3Fixture0002",
+      "livemode": false,
+      "metadata": { "order": "8" },
+      "payment_method": "pm_card_visa",
+      "status": "succeeded"
+    }
+  }
+}
