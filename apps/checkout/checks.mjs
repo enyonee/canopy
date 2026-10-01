@@ -139,4 +139,29 @@ export const checks = [
       }
       return 'the signed challenge is echoed; unsigned, wrongly signed and stale ones are refused without an echo';
     } },
+  { task: 'The admin opens /settings, sets a secret and sees it as "set" without its value ever appearing; a customer, a guest and a foreign site are refused',
+    run: async ({ base, login, asGuest, get, post, must }) => {
+      const value = 'Qx7Vz9Kp2Lm4Wn8R-acceptance';
+      await login('admin@checkout.test', 'admin123');
+      const before = await get('/settings');
+      must(before.status === 200 && /<h3>pay /.test(before.html) && /<code>\/hook\/pay<\/code>/.test(before.html), `the settings screen is not shown: ${before.status}`);
+      must(/checkout_postmark_token<\/code><\/td><td><span class="error">MISSING/.test(before.html), 'an unset secret is not MISSING');
+      const set = await post('/settings/secret', { connector: 'mail', slot: 'serverToken', value }, { origin: base });
+      must(set.status === 303 && !set.location.includes(value), `the save was answered ${set.status} ${set.location}`);
+      const after = await get(set.location);
+      must(/checkout_postmark_token<\/code><\/td><td><span class="status">set<\/span>/.test(after.html), 'the secret is not shown as set');
+      const everything = [after.html, set.html, set.location, (await get('/outbox')).html, (await get('/settings')).html].join('\n');
+      must(!everything.includes(value) && !everything.includes(value.slice(0, 8)), 'the value of the secret came back in a response');
+      const foreign = await post('/settings/secret', { connector: 'mail', slot: 'serverToken', value: 'other-value-1234' }, { origin: 'https://evil.example' });
+      must(foreign.status === 403, `a post from another site was answered ${foreign.status}`);
+      const test = await post('/settings/test', { connector: 'staff' }, { origin: base });
+      must(test.status === 200 && /status">sent<\/span> 200/.test(test.html), 'send test did not run through the sandbox');
+      await login('ann@checkout.test', 'secret1');
+      must((await get('/settings')).status === 403, 'a customer opened the settings');
+      must((await post('/settings/secret', { connector: 'mail', slot: 'serverToken', value: 'other-value-1234' }, { origin: base })).status === 403, 'a customer set a secret');
+      asGuest();
+      must((await get('/settings')).status === 403, 'a guest opened the settings');
+      await login('admin@checkout.test', 'admin123');
+      return 'secret saved and shown as set, the value is in no response; a send test runs in the sandbox; customer, guest and a foreign origin get 403';
+    } },
 ];

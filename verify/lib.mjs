@@ -15,9 +15,9 @@ export const make = (base, sink = null) => {
     if ((r.status === 303 || r.status === 302) && location && hops < 5) { await r.text(); return { ...(await get(location, hops + 1)), location }; }
     return { status: r.status, location, html: await r.text(), type: r.headers.get('content-type') || '', disposition: r.headers.get('content-disposition') || '' };
   };
-  const post = async (p, body = {}) => {
+  const post = async (p, body = {}, extra = {}) => {
     const r = await fetch(base + p, { method: 'POST', redirect: 'manual',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers() },
+      headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers(), ...extra },
       body: new URLSearchParams(body).toString() });
     keep(r);
     return { status: r.status, location: r.headers.get('location') || '', html: await r.text() };

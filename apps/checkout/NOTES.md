@@ -32,3 +32,5 @@ providers end to end over HTTP: a call queued by a transition, the sandbox's ans
 - Inbound steps that call connectors: the `payment_intent.succeeded` event updates the order and queues a Postmark letter
   and a Slack message in the same transaction as its dedup row, so the provider's retry sends nothing twice.
 - `export const secrets` in `checks.mjs` (as in `shop`): verify puts the webhook secrets into the app's store before boot.
+- The ninth check drives the connector settings screen (`/settings`): the admin sets a secret and sees it as set, the value is in
+  no response, send test runs through the sandbox, and a customer, a guest and a foreign origin get 403.
