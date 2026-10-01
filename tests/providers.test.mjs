@@ -438,7 +438,7 @@ test('through the server in sandbox mode: a call is queued, answered by the desc
   const w = await world(t);
   const call = async (name) => { const r = await w.app.post(`/action/${name}`, {}); assert.equal(r.status, 303, `${name}: ${r.html.slice(0, 200)}`); };
   for (const name of ['charge', 'decline', 'letter', 'sayOk', 'sayNowhere', 'sayFlaky']) await call(name);
-  const rows = w.app.app.store.outbox();
+  const rows = await w.app.app.store.outbox();
   const by = (op, channel) => rows.find((r) => r.op === op && (!channel || r.payload.channel === channel));
   const charge = rows.find((r) => r.op === 'createPaymentIntent' && r.payload.amount === 2500);
   assert.deepEqual([charge.status, charge.code, charge.drift, charge.target], ['sent', 200, 0, 'https://api.stripe.com/v1/payment_intents']);
@@ -455,7 +455,7 @@ test('through the server in sandbox mode: a call is queued, answered by the desc
   assert.deepEqual([nowhere.status, nowhere.code, nowhere.error, nowhere.attempts], ['failed', 400, 'rejected: channel_not_found', 1]);
   const flaky = by('postMessage', '#flaky');
   assert.deepEqual([flaky.status, flaky.code, flaky.error, flaky.attempts, flaky.nextAttemptAt], ['failed', 503, 'rejected: internal_error', 1, null], 'a message is not posted twice: no automatic retry');
-  const breaker = w.app.app.store.breakers().find((b) => b.connector === 'chat');
+  const breaker = (await w.app.app.store.breakers()).find((b) => b.connector === 'chat');
   assert.equal(breaker.failures, 1, 'but the 503 counts against the provider\'s breaker, and the refusal does not');
   const page = await w.app.get('/outbox');
   assert.match(page.html, /rejected: channel_not_found/);
