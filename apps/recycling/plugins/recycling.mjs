@@ -7,6 +7,7 @@
 // the newGame transition, so "already sorted" only ever means "this
 // playthrough", the same shape a real leaderboard round would have.
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     'recycle.drop': {
       summary: 'sort "item" into "bin" for the current GameSession: refuses a finished game or a repeat of the same item, otherwise grades the drop against WasteItem.correctBin, updates the running score, and finishes the game (with a badge at 5+ correct) once every item has been sorted once',

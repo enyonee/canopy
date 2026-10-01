@@ -12,6 +12,7 @@ function mulberry32(seed) {
 const sameUser = (a, b) => a !== null && a !== undefined && b !== null && b !== undefined && Number(a) === Number(b);
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     // `own` (docs/FORMAT.md) scopes a CHILD entity's ref-to-User field; it
     // has no way to say "only the row's own id equals the session user" for
@@ -21,7 +22,7 @@ export default {
     'strategy.requireSelf': {
       summary: 'refuses unless the signed-in user is the row this action runs on',
       effects: [], requires: [],
-      run: ({ id, user }) => { if (!user || !sameUser(user.id, id)) throw new Error('You can only manage your own city'); return {}; },
+      run: async ({ id, user }) => { if (!user || !sameUser(user.id, id)) throw new Error('You can only manage your own city'); return {}; },
     },
     'strategy.chooseRace': {
       summary: 'the current user adopts the Race row this action runs on',

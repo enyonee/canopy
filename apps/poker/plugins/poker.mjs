@@ -168,6 +168,7 @@ async function resolveBots(store, roomId, handId) {
 }
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     // Room.created event (db.create's own route fires it; see docs/FORMAT.md
     // — a global action's db.createRow would not): seats the creator at

@@ -6,6 +6,7 @@
 // POST /Node/:id/delete, …) — no bespoke action needed for any of that, so
 // there is nothing else to register here.
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     'diagram.layout': {
       summary: 'arrange the current diagram\'s nodes by its stored "layout": horizontal row, vertical column, or a radial circle; "free" leaves stored positions untouched',

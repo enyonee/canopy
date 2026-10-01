@@ -603,6 +603,11 @@ test('registry entries have their documented contract keys — built-ins and eve
     const mod = await import(pathToFileURL(path.resolve(f)).href);
     const decl = mod.default || mod;
     for (const table of Object.keys(CONTRACT)) if (decl[table]) checkTable(f, table, decl[table]);
+    // S4: a plugin with blocks is written for the async store contract and says so; every block's run is an async function.
+    if (decl.blocks && decl.async !== true && decl.api !== 2) problems.push(`${f}: has blocks but does not export \`async: true\``);
+    for (const [name, b] of Object.entries(decl.blocks || {})) {
+      if (b.run.constructor.name !== 'AsyncFunction') problems.push(`${f}: blocks.${name}.run is not an async function`);
+    }
   }
   assert.deepEqual(problems, [], problems.join('\n'));
 });
@@ -612,13 +617,13 @@ test('registry entries have their documented contract keys — built-ins and eve
 // to Promises without touching a caller. A call that forgets its `await` works today and returns a Promise
 // where a row was expected tomorrow, so the scan below is what keeps the conversion from eroding.
 // ---------------------------------------------------------------------------
-// Where the gate looks. It is tightened per sub-stage and ends as "all of runtime/ except the store and the driver
-// themselves (they call their own methods synchronously, through `this`), all of plugins/, all of apps/*/plugins/".
+// Where the gate looks: all of runtime/ except the store and the driver themselves, all of plugins/, all of apps/*/plugins/.
 const PLUGIN_FILES = [...walk('plugins'), ...walk('apps').filter((f) => f.includes('/plugins/'))].sort();
 const PLUGIN_MASKED = Object.fromEntries(PLUGIN_FILES.map((f) => [f, mask(fs.readFileSync(f, 'utf8'))]));
 const AWAIT_SCOPE = [
-  ...RUNTIME_FILES.filter((f) => f.startsWith('runtime/routes/')
-    || ['runtime/server.mjs', 'runtime/boot.mjs', 'runtime/auth.mjs', 'runtime/cli.mjs', 'runtime/interp.mjs', 'runtime/blocks.mjs', 'runtime/outbox.mjs'].includes(f)),
+  // runtime/store.mjs, runtime/store/** and runtime/driver* are the store and the driver themselves: they call their own
+  // methods synchronously, through `this`, and an `await` there is S5's job. Everything that merely USES the store is in scope.
+  ...RUNTIME_FILES.filter((f) => f !== 'runtime/store.mjs' && !f.startsWith('runtime/store/') && f !== 'runtime/driver.mjs' && !f.startsWith('runtime/driver/')),
   ...PLUGIN_FILES,
 ];
 const MASKED_ANY = (f) => MASKED[f] ?? PLUGIN_MASKED[f];
@@ -690,6 +695,10 @@ test('unawaitedCalls sees a store call without await, allows the sync-by-design 
 
 test('await-first: no store call, transaction-view call or loader is left without `await` in the converted modules', () => {
   const found = [];
+  for (const f of ['runtime/interp.mjs', 'runtime/blocks.mjs', 'runtime/routes/entity.mjs', 'runtime/server.mjs', 'plugins/payment.mjs', 'apps/poker/plugins/poker.mjs']) {
+    assert.ok(AWAIT_SCOPE.includes(f), `${f} is inside the gate`);
+  }
+  assert.ok(!AWAIT_SCOPE.includes('runtime/store.mjs') && !AWAIT_SCOPE.some((f) => f.startsWith('runtime/driver')), 'the store and the driver are the callee, not a caller');
   for (const f of AWAIT_SCOPE) {
     for (const [idx, text] of unawaitedCalls(MASKED_ANY(f), f === 'runtime/blocks.mjs' || PLUGIN_FILES.includes(f))) found.push(`${f}:${lineOf(MASKED_ANY(f), idx)} ${text}`);
   }

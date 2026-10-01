@@ -34,12 +34,18 @@ import * as search from './check/search.mjs';
 export const TOP = ['app', 'task', 'note', 'theme', 'home', 'data', 'seed', 'identity', 'roles', 'views', 'override', 'lists',
   'dashboards', 'pages', 'actions', 'events', 'states', 'schedule', 'connectors', 'rules', 'allowDestructive', 'plugins', 'search'];
 
-export function validate(graph, registry = DEFAULT) {
+/**
+ * @param {any} graph
+ * @param {import('./types.d.ts').Registry} [registry]
+ * @param {{ asyncDriver?: boolean }} [opts] `asyncDriver`: the configured driver answers Promises (Driver#async), so a plugin
+ *   whose blocks are not marked `async: true` is an error. The SQLite driver is synchronous, which is what callers mean by omitting it.
+ */
+export function validate(graph, registry = DEFAULT, { asyncDriver = false } = {}) {
   const errors = [];
   const err = (path, message, hint) => errors.push({ path, message, hint });
   if (!graph || typeof graph !== 'object') return [{ path: '/', message: 'graph must be an object' }];
 
-  const h = { err, graph, registry, CATALOG: registry.blocks };
+  const h = { err, graph, registry, CATALOG: registry.blocks, asyncDriver };
   checkTop(graph, h, TOP);
   plugins.check(graph, h);
   if (!graph.data || typeof graph.data !== 'object' || !Object.keys(graph.data).length) {

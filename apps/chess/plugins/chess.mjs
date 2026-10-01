@@ -24,6 +24,7 @@ async function bumpStats(store, row, result) {
 }
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     'chess.setupGame': {
       summary: 'after a Game is created: in AI mode, assign the shared bot user as black and start play immediately; in human mode, leave black empty and status "waiting" for someone to join',

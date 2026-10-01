@@ -20,7 +20,7 @@ export const TABLES = ['fields', 'blocks', 'transports', 'functions', 'widgets']
 
 export function createRegistry() {
   return { fields: { ...FIELDS }, blocks: { ...CATALOG }, transports: { ...TRANSPORTS }, functions: { ...FUNCTIONS },
-    widgets: { ...WIDGETS }, descriptors: { ...BUILTIN }, plugins: [] };
+    widgets: { ...WIDGETS }, descriptors: { ...BUILTIN }, plugins: [], legacy: [] };
 }
 
 // A connector descriptor (a .json plugin): checked, then registered as a descriptor and as the
@@ -49,6 +49,10 @@ export function register(registry, plugin, name = 'plugin') {
     }
   }
   registry.plugins.push(name);
+  // Blocks get the store: a plugin that has them says `async: true` (or `api: 2`) once they await everything
+  // the store, `resolve` and `text` answer. One that does not is `legacy`: fine on a synchronous driver, refused
+  // by the checker on an asynchronous one (runtime/check/plugins.mjs).
+  if (plugin.blocks && plugin.async !== true && plugin.api !== 2) registry.legacy.push(name);
   return registry;
 }
 

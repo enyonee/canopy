@@ -15,6 +15,7 @@ function winner(board) {
 }
 
 export default {
+  async: true, // its blocks await store.*, resolve and text (docs/FORMAT.md "Plugins")
   blocks: {
     'ttt.move': {
       summary: 'apply a move at "cell" (0-8) to the current Game: refuses if the game is over, the cell is out of range, or it is already taken; otherwise flips the turn or resolves the winner/draw',

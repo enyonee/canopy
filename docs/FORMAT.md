@@ -652,10 +652,11 @@ the built-ins use. Node kinds (`roles`, `states`, …) are not extensible: they 
 
 ```js
 export default {
+  async: true,  // the blocks below await store.*, resolve and text; `api: 2` means the same
   fields:     { percent: { sql: 'INTEGER', exprKind: 'number', numeric: true, derivable: true,
                            def(f), coerce(raw), validate(v, f), toExpr?(v), fromExpr?(v), format(v, f, ctx), input(f, v, ctx) } },
   functions:  { discount: { arity: 2, kind(argKinds), run(args) } },
-  blocks:     { 'loyalty.award': { summary, effects, requires, connector?, check?(step, h), exposes?(step), nested?(step), run(ctx) } },
+  blocks:     { 'loyalty.award': { summary, effects, requires, connector?, check?(step, h), exposes?(step), nested?(step), async run(ctx) } },
   transports: { log: { summary, validate(connector) → [[key, message, hint]], deliver(row, connector, opts) → { status, code, error } } },
   widgets:    { chess: { summary, client, props?: [keys], check?(node, h) } },
 };
@@ -672,6 +673,19 @@ are the declared captions of a boolean column, `statusField` is the entity's sta
 and options before any hook runs, so a hook never queries; asking `ctx` for anything else, or for a label or an
 option nobody loaded, throws. (Until S3c `ctx` carried `store` and `label` was the title helper; no plugin
 kind used either.)
+
+**Blocks await the store.** `run(ctx)` may be `async` and the runtime awaits it. Everything in `ctx` that touches
+storage answers a promise on an asynchronous driver (PostgreSQL) and a plain value on SQLite today, so a block
+`await`s every one of them: `ctx.store.*` (`get`, `list`, `insert`, `update`, `remove`, `enqueue`, …),
+`ctx.resolve(value)`, `ctx.text(string)`, `ctx.run(steps, extra)` and `ctx.fireCreated(entity, id, values)`; a helper
+that calls one is `async` too. `ctx.store` is the transaction view of the store: write through it, never through a
+store imported from elsewhere. The lookups that only read the graph stay synchronous: `store.field(entity, name)`,
+`fieldAt`, `label`, `labelField`, `childVia`. A block never hands an async function to `Array#filter`, `some`, `every`,
+`find`, `sort` or `forEach` (a promise is always truthy, and `sort`/`forEach` do not wait): it loops with `for … of`.
+A module with blocks says so by exporting `async: true` (or `api: 2`). The checker refuses a plugin with blocks and
+no marker when the configured driver is asynchronous, as a checker error naming the plugin instead of a crash
+at run time (SQLite is synchronous, so an unmarked plugin still runs on it). Every plugin in this repository is
+marked and awaited, and `tests/arch.test.mjs` fails on a store call that is not.
 
 A name already taken by a built-in or another plugin is a load error; a plugin that cannot be
 imported makes the graph invalid. `connector.send { connector, body }` queues to any connector,
