@@ -15,8 +15,13 @@ import { loadPlugins } from '../runtime/registry.mjs';
 const BOOT_DEADLINE = 10_000; // apps in this repo start in well under a second (see REPORT.md); this is generous headroom
 const CHECK_TIMEOUT = Number(process.env.AG_CHECK_TIMEOUT || 20) * 1000; // one hung fetch must not stall the whole run
 
-const apps = process.argv.slice(2).length ? process.argv.slice(2)
-  : fs.readdirSync('apps').filter((d) => fs.existsSync(`apps/${d}/checks.mjs`));
+// `--dated`: only the apps whose graph reads the calendar (today / days( / addDays). Meant to run
+// with the clock shifted (verify/shift.mjs, see CI): a literal date in a seed or a check is a time bomb.
+const dated = process.argv.includes('--dated');
+const named = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const readsCalendar = (d) => /\btoday\b|\bdays\(|\baddDays\b/.test(fs.readFileSync(`apps/${d}/app.json`, 'utf8'));
+const apps = named.length ? named
+  : fs.readdirSync('apps').filter((d) => fs.existsSync(`apps/${d}/checks.mjs`) && (!dated || readsCalendar(d)));
 
 // A port already answering before we ever spawned anything on it is not ours: talking
 // to it would silently check a stale server instead of the one this run just booted.

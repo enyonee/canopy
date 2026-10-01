@@ -83,6 +83,11 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   passed. The parser now finds statements on the masked text and reads the specifier from the original
   source at the same offset (multi-line, `export ... from`, bare and literal dynamic `import`); a self-test
   covers it, including imports inside strings and comments. All 166 real edges match the allow-list.
+- **Fixes: acceptance no longer depends on the wall clock.** `domains` and `promos` failed from 2026-10-01
+  (seed expiry dates that a "must be in the future" rule rejects at boot; literal 2027 dates in `domains` checks).
+  Seeds that need a future date now use 2099, checks derive their dates from `Date.now()`. New guard:
+  `verify/shift.mjs` (preload, `SHIFT_DAYS`) and `node verify/run.mjs --dated` (apps that read `today`/`days(`/`addDays`),
+  run by CI with the clock ten years ahead.
 
 ## 0.3.0 (2026-09-29)
 

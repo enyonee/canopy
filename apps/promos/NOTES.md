@@ -32,3 +32,5 @@
 - A saved list scoped to `@me` alongside a public one and an admin one over the
   same entity (`top-deals` public, `my-promotions` member-owned, `board` admin,
   each with a different `where` and `rowActions`).
+
+- Dates: live seed promotions expire in 2099 (the rule rejects a live promotion in the past at boot); the check that shares a promotion derives its expiry from the real clock.
