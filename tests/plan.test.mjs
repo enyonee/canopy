@@ -104,7 +104,7 @@ test('plans are cached per store, by entity and field list', () => {
   assert.equal(all.aggs.size, 4, "total, mine, viaRow and nested: a derived field is expanded once per node");
 });
 
-test('a cycle is cut where evaluation cuts it; the plan terminates and the error text is unchanged', () => {
+test('a cycle is cut where evaluation cuts it; the plan terminates and the error text is unchanged', async () => {
   const g = { app: 'c', data: {
     Node: { parent: 'ref:Node', x: 'int := y + 1', y: 'int := x + 1', up: 'int := parent.up + 1' }, }, views: 'auto' };
   const s = new Store(g, ':memory:');
@@ -112,36 +112,36 @@ test('a cycle is cut where evaluation cuts it; the plan terminates and the error
   assert.ok(root.hops.has('parent'));
   // up := parent.up + 1: the walk enters the parent and stops there, where evaluation would throw.
   assert.deepEqual(hops(root.hops.get('parent')), []);
-  const a = s.insert('Node', {});
-  assert.throws(() => s.get('Node', a), /derived field Node\.x depends on itself \(Node\.x → Node\.y → Node\.x\)/);
+  const a = await s.insert('Node', {});
+  await assert.rejects(async () => await s.get('Node', a), /derived field Node\.x depends on itself \(Node\.x → Node\.y → Node\.x\)/);
   const only = new Store({ app: 'c', data: { Node: { parent: 'ref:Node', up: 'int := parent.up + 1' } }, views: 'auto' }, ':memory:');
-  const r = only.insert('Node', {});
-  assert.equal(only.get('Node', r).up, null, 'no parent: the hop reads null before any cycle is met');
-  const child = only.insert('Node', { parent: r });
-  assert.throws(() => only.get('Node', child), /derived field Node\.up depends on itself \(Node\.up → Node\.up\)/);
+  const r = await only.insert('Node', {});
+  assert.equal((await only.get('Node', r)).up, null, 'no parent: the hop reads null before any cycle is met');
+  const child = await only.insert('Node', { parent: r });
+  await assert.rejects(async () => await only.get('Node', child), /derived field Node\.up depends on itself \(Node\.up → Node\.up\)/);
 });
 
-test('a lookup that fails (an ambiguous link) is left to evaluation: the plan neither throws nor loads it', () => {
+test('a lookup that fails (an ambiguous link) is left to evaluation: the plan neither throws nor loads it', async () => {
   const g = { app: 'amb', data: {
     A: { n: 'int=0', maybe: 'bool := n > 0 and count(C) > 0' },
     C: { first: 'ref:A', second: 'ref:A' } }, views: 'auto' };
   const s = new Store(g, ':memory:');
-  const a = s.insert('A', {});
+  const a = await s.insert('A', {});
   assert.doesNotThrow(() => planFor(s, 'A', null));
-  assert.equal(s.get('A', a).maybe, 0, 'the ambiguous branch is never reached');
-  const b = s.insert('A', { n: 1 });
-  assert.throws(() => s.get('A', b), /C references A through first and second; name one: C\.first/);
+  assert.equal((await s.get('A', a)).maybe, 0, 'the ambiguous branch is never reached');
+  const b = await s.insert('A', { n: 1 });
+  await assert.rejects(async () => await s.get('A', b), /C references A through first and second; name one: C\.first/);
   s.lazyEval = true;
-  assert.throws(() => s.get('A', b), /C references A through first and second; name one: C\.first/);
+  await assert.rejects(async () => await s.get('A', b), /C references A through first and second; name one: C\.first/);
 });
 
-test('a derived field reached along many paths is expanded once per node (a diamond 40 deep is not 2^40 walks)', () => {
+test('a derived field reached along many paths is expanded once per node (a diamond 40 deep is not 2^40 walks)', async () => {
   const fields = { n: 'int=0' };
   for (let i = 0; i < 40; i++) fields[`f${i}`] = `int := f${i + 1} + f${i + 1}`;
   fields.f40 = 'int := n';
   const s = new Store({ app: 'diamond', data: { D: fields }, views: 'auto' }, ':memory:');
   assert.equal(planFor(s, 'D', ['f0']).hops.size, 0);
   // (Evaluating f0 itself would be 2^40 additions: the plan is what must not be.)
-  const d = s.insert('D', { n: 1 });
-  assert.equal(s.derived('D', s.raw('D', d), s.field('D', 'f39')), 2);
+  const d = await s.insert('D', { n: 1 });
+  assert.equal(s.derived('D', await s.raw('D', d), s.field('D', 'f39')), 2);
 });

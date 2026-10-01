@@ -1633,6 +1633,15 @@ const MUTATIONS = [
   { name: "S4: api: 2 is not accepted as the marker", file: "runtime/registry.mjs",
     find: "plugin.async !== true && plugin.api !== 2)",
     replace: "plugin.async !== true)" },
+  { name: "S4: Store.open answers a store that was never migrated", file: "runtime/store.mjs",
+    find: "    await store.migrate();\n    return store;",
+    replace: "    return store;" },
+  { name: "S4: serve() builds its store without waiting for it to migrate", file: "runtime/server.mjs",
+    find: "    const store = app.store = await Store.open(graph, dbFile, registry);",
+    replace: "    const store = app.store = new Store(graph, dbFile, registry, null, { migrate: false });" },
+  { name: "S4: a flusher stopped while the store answers arms a timer anyway", file: "runtime/server.mjs",
+    find: "    if (stopped) return;\n    clock.clear(shot);",
+    replace: "    clock.clear(shot);" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

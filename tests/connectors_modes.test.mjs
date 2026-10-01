@@ -15,7 +15,7 @@ import { Store } from '../runtime/store.mjs';
 import { flush, deliver } from '../runtime/outbox.mjs';
 import { serve } from '../runtime/server.mjs';
 import { main } from '../runtime/cli.mjs';
-import { fakeClock, boot, tmpDir, tmpGraph, rows } from './helpers.mjs';
+import { fakeClock, boot, tmpDir, tmpGraph, rows, outboxRows } from './helpers.mjs';
 
 const KEY = 'sk_live_TOPSECRET-1234';
 const PREV = 'sk_live_OLDSECRET-5678';
@@ -54,7 +54,7 @@ const world = (t, { deploy, secrets = { stripe_key: KEY }, d = SBX } = {}) => {
   const env = connectorEnv(dir, 'modes', {});
   return { dir, env, registry: registryOf(d), store: new Store(graph, ':memory:'), clock: fakeClock(), trace: [] };
 };
-const queue = (w, payload = { amount: 5 }, op = 'charge', connector = 'p', kind = 'sbx') => w.store.enqueue({ kind, connector, target: 'https://api.test/charge', payload, op });
+const queue = async (w, payload = { amount: 5 }, op = 'charge', connector = 'p', kind = 'sbx') => await w.store.enqueue({ kind, connector, target: 'https://api.test/charge', payload, op });
 const run = (w, net) => flush(w.store, graph, { registry: w.registry, clock: w.clock, env: w.env, fetchImpl: net.fetchImpl, trace: (e) => w.trace.push(e) });
 
 // --- the sandbox engine ---------------------------------------------------------------------
@@ -145,83 +145,83 @@ test('secret slots: the secrets a descriptor reads in its requests, and the stor
 
 test('sandbox mode is the default of a descriptor that lists it first: nothing is sent, the rule answers, output and result are read', async (t) => {
   const w = world(t);
-  const id = queue(w, { amount: 5, ref: 'r1' });
+  const id = await queue(w, { amount: 5, ref: 'r1' });
   const net = netOf(() => { throw new Error('the network must not be touched'); });
   assert.deepEqual(await run(w, net), ['sent']);
   assert.equal(net.calls.length, 0);
-  const row = w.store.outboxGet(id);
+  const row = await w.store.outboxGet(id);
   assert.deepEqual([row.status, row.code, row.drift], ['sent', 200, 0]);
   assert.match(row.response, /"id":"sbx_[0-9a-f]{32}"/);
   assert.deepEqual(JSON.parse(row.result), { id: JSON.parse(row.response).id });
-  assert.deepEqual(w.store.breakers(), [], 'a sign of life on a closed breaker writes nothing');
-  const again = queue(w, { amount: 5, ref: 'r1' });
+  assert.deepEqual(await w.store.breakers(), [], 'a sign of life on a closed breaker writes nothing');
+  const again = await queue(w, { amount: 5, ref: 'r1' });
   await run(w, net);
-  assert.notEqual(JSON.parse(w.store.outboxGet(again).response).id, JSON.parse(row.response).id, 'the fake id follows the idempotency key of each row');
+  assert.notEqual(JSON.parse((await w.store.outboxGet(again)).response).id, JSON.parse(row.response).id, 'the fake id follows the idempotency key of each row');
 });
 
 test('sandbox mode: a rule can answer with an error or a status the outbox treats like a real one; no matching rule fails the delivery for good', async (t) => {
   const w = world(t);
-  const big = queue(w, { amount: 5000 });
-  const flaky = queue(w, { amount: 1, ref: 'flaky' });
+  const big = await queue(w, { amount: 5000 });
+  const flaky = await queue(w, { amount: 1, ref: 'flaky' });
   const net = netOf(() => { throw new Error('no network'); });
   const [a, b] = await run(w, net);
-  assert.deepEqual([a, w.store.outboxGet(big).code, w.store.outboxGet(big).error], ['failed', 402, 'HTTP 402']);
+  assert.deepEqual([a, (await w.store.outboxGet(big)).code, (await w.store.outboxGet(big)).error], ['failed', 402, 'HTTP 402']);
   assert.equal(b, 'queued', 'a 503 in the sandbox is retried like a real one');
-  assert.equal(w.store.outboxGet(flaky).nextAttemptAt, w.clock.now() + 1000);
-  assert.deepEqual(w.store.breakers().map((x) => [x.connector, x.mode, x.state]), [['p', 'sandbox', 'open']], 'and the breaker is the sandbox one');
+  assert.equal((await w.store.outboxGet(flaky)).nextAttemptAt, w.clock.now() + 1000);
+  assert.deepEqual((await w.store.breakers()).map((x) => [x.connector, x.mode, x.state]), [['p', 'sandbox', 'open']], 'and the breaker is the sandbox one');
   const w2 = world(t, { d: { ...SBX, sandbox: { operations: { charge: [{ when: { 'input.amount': 1 } }], ping: [{}] } } } });
-  const id = queue(w2, { amount: 2 });
+  const id = await queue(w2, { amount: 2 });
   assert.deepEqual(await run(w2, net), ['failed']);
-  const row = w2.store.outboxGet(id);
+  const row = await w2.store.outboxGet(id);
   assert.match(row.error, /sbx\.charge: no sandbox rule answers this input/);
   assert.equal(row.nextAttemptAt, null);
-  assert.deepEqual(w2.store.breakers(), []);
+  assert.deepEqual(await w2.store.breakers(), []);
   const direct = { ...SBX, modes: ['live'] }; delete direct.sandbox;
   await assert.rejects(() => registryOf(direct).transports.sbx.deliver({ op: 'charge', payload: { amount: 1 } }, {}, { mode: 'sandbox', idemKey: 'k' }), /no sandbox rule answers/);
 });
 
 test('sandbox mode answers a Retry-After the way a provider does, and a body that is no JSON object is drift', async (t) => {
   const w = world(t, { d: { ...SBX, retry: { ...SBX.retry, capMs: 10000 }, sandbox: { operations: { charge: [{ status: 429, headers: { 'Retry-After': '4' } }], ping: [{}] } } } });
-  const id = queue(w);
+  const id = await queue(w);
   await run(w, netOf(() => { throw new Error('no network'); }));
-  assert.equal(w.store.outboxGet(id).nextAttemptAt, w.clock.now() + 4000);
+  assert.equal((await w.store.outboxGet(id)).nextAttemptAt, w.clock.now() + 4000);
   const w2 = world(t, { d: { ...SBX, sandbox: { operations: { charge: [{ body: { id: 5 } }], ping: [{}] } } } });
-  const drifted = queue(w2);
+  const drifted = await queue(w2);
   await run(w2, netOf(() => { throw new Error('no network'); }));
-  assert.equal(w2.store.outboxGet(drifted).drift, 1);
+  assert.equal((await w2.store.outboxGet(drifted)).drift, 1);
 });
 
 test('live mode: the request is built with the secret from the store, the mapping and its rotation; the row keeps the input only', async (t) => {
   const w = world(t, { deploy: { p: 'live' }, secrets: { stripe_key: KEY, 'stripe_key.prev': PREV } });
-  const id = queue(w, { amount: 7 });
+  const id = await queue(w, { amount: 7 });
   const net = netOf(() => answer(200, { id: 'ch_1' }));
   assert.deepEqual(await run(w, net), ['sent']);
   assert.equal(net.calls.length, 1);
   assert.equal(net.calls[0].url, 'https://api.test/charge');
   assert.equal(net.calls[0].init.headers.authorization, `Bearer ${KEY}`, 'the current value, not the previous one');
-  const row = w.store.outboxGet(id);
+  const row = await w.store.outboxGet(id);
   assert.equal(JSON.stringify(row).includes(KEY), false);
   assert.deepEqual(row.payload, { amount: 7 });
 });
 
 test('live mode: a secret that is not in the store fails the delivery for good — not retried, not a breaker failure, nothing sent', async (t) => {
   const w = world(t, { deploy: { p: 'live' }, secrets: {} });
-  const id = queue(w);
+  const id = await queue(w);
   const net = netOf(() => answer(200, { id: 'x' }));
   assert.deepEqual(await run(w, net), ['failed']);
-  const row = w.store.outboxGet(id);
+  const row = await w.store.outboxGet(id);
   assert.equal(row.error, 'secret "stripe_key" is not set: put it in the secret store (--secrets set stripe_key)');
   assert.deepEqual([row.attempts, row.nextAttemptAt, net.calls.length], [1, null, 0], 'the operation is idempotent, yet it is not retried');
-  assert.deepEqual(w.store.breakers(), [], 'the provider did nothing wrong');
+  assert.deepEqual(await w.store.breakers(), [], 'the provider did nothing wrong');
   assert.equal(w.trace.some((e) => e.kind === 'breaker'), false);
 });
 
 test('a previous value alone never signs a request: only the current one is used, and a missing current fails the delivery', async (t) => {
   const w = world(t, { deploy: { p: 'live' }, secrets: { 'stripe_key.prev': PREV } });
-  const id = queue(w);
+  const id = await queue(w);
   const net = netOf(() => answer(200, { id: 'x' }));
   assert.deepEqual(await run(w, net), ['failed']);
-  assert.match(w.store.outboxGet(id).error, /secret "stripe_key" is not set/);
+  assert.match((await w.store.outboxGet(id)).error, /secret "stripe_key" is not set/);
   assert.equal(net.calls.length, 0);
   assert.deepEqual(w.env.secrets.get('stripe_key'), [PREV], 'the list a verifier may accept still holds it');
 });
@@ -229,47 +229,47 @@ test('a previous value alone never signs a request: only the current one is used
 test('a store that cannot be opened (wrong key) fails the delivery closed with its own message and never falls back to sandbox', async (t) => {
   const w = world(t, { deploy: { p: 'live' } });
   fs.writeFileSync(path.join(w.dir, 'secrets.key'), `${Buffer.alloc(32, 7).toString('base64')}\n`);
-  const id = queue(w);
+  const id = await queue(w);
   const net = netOf(() => answer(200, { id: 'x' }));
   assert.deepEqual(await run(w, net), ['failed']);
-  assert.match(w.store.outboxGet(id).error, /secrets\.enc cannot be read: the master key is wrong/);
+  assert.match((await w.store.outboxGet(id)).error, /secrets\.enc cannot be read: the master key is wrong/);
   assert.equal(net.calls.length, 0);
 });
 
 test('a mode the connector kind does not offer fails the delivery: http is live only, mail is sandbox only, and nothing falls back', async (t) => {
   const w = world(t, { deploy: { web: 'sandbox', letters: 'live' } });
-  const a = w.store.enqueue({ kind: 'http', connector: 'web', target: 'https://h.test', payload: {} });
-  const b = w.store.enqueue({ kind: 'mail', connector: 'letters', target: 'x@y', payload: {} });
+  const a = await w.store.enqueue({ kind: 'http', connector: 'web', target: 'https://h.test', payload: {} });
+  const b = await w.store.enqueue({ kind: 'mail', connector: 'letters', target: 'x@y', payload: {} });
   const net = netOf(() => answer(200, {}));
   assert.deepEqual(await run(w, net), ['failed', 'failed']);
-  assert.equal(w.store.outboxGet(a).error, 'connector "web" cannot run in sandbox mode (it offers: live)');
-  assert.equal(w.store.outboxGet(b).error, 'connector "letters" cannot run in live mode (it offers: sandbox)');
+  assert.equal((await w.store.outboxGet(a)).error, 'connector "web" cannot run in sandbox mode (it offers: live)');
+  assert.equal((await w.store.outboxGet(b)).error, 'connector "letters" cannot run in live mode (it offers: sandbox)');
   assert.equal(net.calls.length, 0);
-  assert.deepEqual(w.store.breakers(), []);
+  assert.deepEqual(await w.store.breakers(), []);
 });
 
 test('with no deploy file every kind runs as it always did: http live, mail recorded (sandbox), a plain descriptor live', async (t) => {
   const w = world(t, { d: { ...SBX, modes: undefined, sandbox: undefined } });
-  const web = w.store.enqueue({ kind: 'http', connector: 'web', target: 'https://h.test/x', payload: { a: 1 } });
-  const letter = w.store.enqueue({ kind: 'mail', connector: 'letters', target: 'x@y', payload: {} });
-  const charge = queue(w);
+  const web = await w.store.enqueue({ kind: 'http', connector: 'web', target: 'https://h.test/x', payload: { a: 1 } });
+  const letter = await w.store.enqueue({ kind: 'mail', connector: 'letters', target: 'x@y', payload: {} });
+  const charge = await queue(w);
   const net = netOf(() => answer(200, { id: 'x' }));
   assert.deepEqual(await run(w, net), ['sent', 'sent', 'sent']);
   assert.deepEqual(net.calls.map((c) => c.url), ['https://h.test/x', 'https://api.test/charge']);
-  assert.deepEqual([web, letter, charge].map((id) => w.store.outboxGet(id).status), ['sent', 'sent', 'sent']);
+  assert.deepEqual((await outboxRows(w.store, [web, letter, charge])).map((r) => r.status), ['sent', 'sent', 'sent']);
   await flush(w.store, graph, { registry: w.registry, clock: w.clock, fetchImpl: net.fetchImpl });
   assert.equal(net.calls.length, 2, 'flush works with no environment at all');
 });
 
 test('the breaker is kept per connector and mode: the real mode of the delivery is the key', async (t) => {
   const w = world(t, { deploy: { p: 'live' } });
-  queue(w);
+  await queue(w);
   await run(w, netOf(() => answer(503, {})));
-  assert.deepEqual(w.store.breakers().map((b) => [b.connector, b.mode, b.state]), [['p', 'live', 'open']]);
+  assert.deepEqual((await w.store.breakers()).map((b) => [b.connector, b.mode, b.state]), [['p', 'live', 'open']]);
   fs.writeFileSync(path.join(w.dir, 'deploy.json'), JSON.stringify({ connectors: { p: 'sandbox' } }));
-  const id = queue(w);
+  const id = await queue(w);
   assert.deepEqual(await run(w, netOf(() => answer(500, {}))), ['sent'], 'sandbox is not held back by the open live breaker');
-  assert.equal(w.store.outboxGet(id).status, 'sent');
+  assert.equal((await w.store.outboxGet(id)).status, 'sent');
 });
 
 // --- secrets never leave ----------------------------------------------------------------------
@@ -279,14 +279,14 @@ const scan = (needle, ...haystacks) => haystacks.map((h) => (typeof h === 'strin
 test('redaction: neither the current nor the previous secret is in the outbox, the trace or an error, whatever the provider echoes', async (t) => {
   const w = world(t, { deploy: { p: 'live' }, secrets: { stripe_key: KEY, 'stripe_key.prev': PREV } });
   const echo = (_url, init) => answer(200, { id: `echo ${init.headers.authorization} ${PREV}`, status: encodeURIComponent(KEY) });
-  const ok = queue(w, { amount: 1 });
+  const ok = await queue(w, { amount: 1 });
   await run(w, netOf(echo));
-  const bad = queue(w, { amount: 2 });
+  const bad = await queue(w, { amount: 2 });
   await run(w, netOf(() => answer(200, `not json, but here is ${KEY}`)));
-  const boom = queue(w, { amount: 3 });
+  const boom = await queue(w, { amount: 3 });
   await run(w, netOf((_url, init) => { throw new TypeError(`fetch failed for ${init.headers.authorization}`); }));
-  const rows = [ok, bad, boom].map((id) => w.store.outboxGet(id));
-  for (const secret of [KEY, PREV]) assert.deepEqual(scan(secret, rows, w.trace, w.store.outbox()), [], `${secret.slice(0, 12)} leaked`);
+  const rows = await outboxRows(w.store, [ok, bad, boom]);
+  for (const secret of [KEY, PREV]) assert.deepEqual(scan(secret, rows, w.trace, await w.store.outbox()), [], `${secret.slice(0, 12)} leaked`);
   assert.match(rows[0].response, /echo Bearer «secret» «secret»/);
   assert.match(rows[1].response, /here is «secret»/);
   assert.match(rows[2].error, /fetch failed for Bearer «secret»/);
@@ -299,14 +299,14 @@ test('redaction: a plugin transport that traces or throws a secret it read is ma
     summary: 'leaks', validate: () => [],
     deliver: async (_row, _c, opts) => { const [v] = opts.secrets.get('stripe_key'); opts.trace({ kind: 'note', nested: [{ v }] }); throw new Error(`bad ${v}`); },
   } } }, 'leaky.mjs');
-  const id = w.store.enqueue({ kind: 'leaky', connector: 'p', target: 't', payload: {} });
+  const id = await w.store.enqueue({ kind: 'leaky', connector: 'p', target: 't', payload: {} });
   await flush(w.store, graph, { registry, clock: w.clock, env: w.env, trace: (e) => w.trace.push(e) });
-  assert.deepEqual(scan(KEY, w.trace, w.store.outboxGet(id)), []);
+  assert.deepEqual(scan(KEY, w.trace, await w.store.outboxGet(id)), []);
   assert.deepEqual(w.trace.find((e) => e.kind === 'note'), { kind: 'note', nested: [{ v: '«secret»' }] });
-  assert.equal(w.store.outboxGet(id).error, 'bad «secret»');
-  const direct = w.store.enqueue({ kind: 'leaky', connector: 'p', target: 't', payload: {} });
-  assert.equal(await deliver(w.store, graph, w.store.outboxGet(direct), { registry, clock: w.clock, secrets: w.env.secrets }), 'failed');
-  assert.equal(w.store.outboxGet(direct).error, 'bad «secret»', 'deliver called on its own masks too');
+  assert.equal((await w.store.outboxGet(id)).error, 'bad «secret»');
+  const direct = await w.store.enqueue({ kind: 'leaky', connector: 'p', target: 't', payload: {} });
+  assert.equal(await deliver(w.store, graph, await w.store.outboxGet(direct), { registry, clock: w.clock, secrets: w.env.secrets }), 'failed');
+  assert.equal((await w.store.outboxGet(direct)).error, 'bad «secret»', 'deliver called on its own masks too');
 });
 
 test('redaction, end to end: after deliveries with secrets nothing on the server — outbox screen, trace file, database — holds one', async () => {
@@ -320,19 +320,19 @@ test('redaction, end to end: after deliveries with secrets nothing on the server
   try {
     openSecrets({ dir: s.dir, app: 'modes', env: {} }).set('stripe_key', KEY);
     fs.writeFileSync(path.join(s.dir, 'deploy.json'), JSON.stringify({ connectors: { p: 'live' } }));
-    const order = s.app.store.insert('Order', { ref: 'R-1' });
+    const order = await s.app.store.insert('Order', { ref: 'R-1' });
     await s.post(`/Order/${order}/action/charge`, {});
     assert.equal(net.calls.length, 1);
     assert.equal(net.calls[0].init.headers.authorization, `Bearer ${KEY}`);
     const page = await s.get('/outbox');
     assert.equal(page.status, 200);
-    assert.match(s.app.store.outbox()[0].response, /seen Bearer «secret»/);
+    assert.match((await s.app.store.outbox())[0].response, /seen Bearer «secret»/);
     const files = fs.readdirSync(s.dir).filter((f) => f !== 'secrets.enc' && f !== 'secrets.key').map((f) => fs.readFileSync(path.join(s.dir, f)).toString('latin1'));
-    assert.deepEqual(scan(KEY, page.html, s.trace(), s.app.store.outbox(), files), []);
+    assert.deepEqual(scan(KEY, page.html, s.trace(), await s.app.store.outbox(), files), []);
     const failedNow = (await s.get('/outbox')).html;
     assert.match(failedNow, /Connector modes/);
     assert.match(failedNow, /<li><b>p<\/b> \(sbx\): <span class="status">live<\/span> <span class="muted">offers sandbox, live<\/span><\/li>/);
-    assert.equal(rows(failedNow).length, s.app.store.outbox().length, 'the modes are not rows of the outbox table');
+    assert.equal(rows(failedNow).length, (await s.app.store.outbox()).length, 'the modes are not rows of the outbox table');
   } finally { s.close(); }
 });
 

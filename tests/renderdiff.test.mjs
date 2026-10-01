@@ -19,7 +19,7 @@ const digest = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(
 
 // The viewers of an app: the anonymous one, the first role that may do everything (or the first role),
 // and up to two more whose grants are scoped by `own`. Each gets a known password on an existing user.
-function viewers(store, graph) {
+async function viewers(store, graph) {
   if (!graph.roles) return [{ name: 'open' }];
   const { entity, role, login, password, can } = graph.roles;
   const names = Object.keys(can);
@@ -27,19 +27,19 @@ function viewers(store, graph) {
   const owning = names.filter((n) => n !== admin && JSON.stringify(can[n]).includes('"own"')).slice(0, 2);
   const out = [{ name: 'guest' }];
   for (const n of new Set([admin, ...owning])) {
-    const row = store.listRaw(entity).find((r) => String(r[role]) === n);
+    const row = (await store.listRaw(entity)).find((r) => String(r[role]) === n);
     if (!row) continue;
-    store.update(entity, row.id, { [password]: 'pw' });
+    await store.update(entity, row.id, { [password]: 'pw' });
     out.push({ name: n, login: row[login], id: row.id });
   }
   return out;
 }
 
-function pathsOf(store, graph) {
+async function pathsOf(store, graph) {
   const out = ['/', '/search?q=a'];
   const first = Object.keys(graph.data)[0];
   for (const entity of Object.keys(graph.data)) {
-    const ids = store.listRaw(entity).slice(0, 1).map((r) => r.id);
+    const ids = (await store.listRaw(entity)).slice(0, 1).map((r) => r.id);
     out.push(`/${entity}`, `/${entity}/new`, ...ids.flatMap((id) => [`/${entity}/${id}`, `/${entity}/${id}/edit`]));
     if (entity === first) out.push(`/${entity}?q=a&sort=id&dir=desc`, `/${entity}.csv`);
   }
@@ -77,10 +77,10 @@ async function render(s, graph, viewer, paths) {
 
 // can / ownOk over every row of every entity for the viewer's user, ownWhere and ownField per entity.
 async function matrix(store, perms, graph, viewer) {
-  const user = viewer.id === undefined ? null : store.get(graph.roles.entity, viewer.id);
+  const user = viewer.id === undefined ? null : await store.get(graph.roles.entity, viewer.id);
   const out = [];
   for (const entity of Object.keys(graph.data)) {
-    const rows = store.list(entity, {});
+    const rows = await store.list(entity, {});
     await perms.prime?.(user, entity, rows);
     out.push([entity, perms.ownField(user, entity), JSON.stringify(await perms.ownWhere(user, entity)), JSON.stringify(await perms.ownWhere(user, entity, 'edit'))]);
     for (const r of rows) {
@@ -103,9 +103,9 @@ test('every app renders byte-identically to the output before S3c (HTML, JSON, C
       const s = await boot(file);
       try {
         const { store, perms } = s.app;
-        populate(store, graph, 3);
-        const list = pathsOf(store, graph);
-        for (const v of viewers(store, graph)) {
+        await populate(store, graph, 3);
+        const list = await pathsOf(store, graph);
+        for (const v of await viewers(store, graph)) {
           const seen = await render(s, graph, v, list);
           requests += seen.length;
           actual[`${app}|${v.name}`] = seen.map(([, d]) => d).join('');

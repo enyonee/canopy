@@ -113,7 +113,7 @@ function generator(rand) {
   return { parentField };
 }
 
-function seedRows(store, rand) {
+async function seedRows(store, rand) {
   const pick = (xs) => xs[Math.floor(rand() * xs.length)];
   const row = (extra) => {
     const qty = Math.floor(rand() * 7) - 2, price = pick(PRICES);
@@ -122,12 +122,12 @@ function seedRows(store, rand) {
     return { qty, n: rand() < 0.3 ? '' : Math.floor(rand() * 5) - 1, price, disc, on: rand() < 0.5, d: rand() < 0.15 ? '' : pick(DAYS), t: rand() < 0.15 ? '' : pick(STAMPS), ...extra };
   };
   for (let p = 0; p < 24; p++) {
-    const pid = store.insert('Parent', { name: `P${p}` });
+    const pid = await store.insert('Parent', { name: `P${p}` });
     const kids = p % 6 === 0 ? 0 : Math.floor(rand() * 6); // some parents are empty groups
     for (let c = 0; c < kids; c++) {
-      const cid = store.insert('Child', row({ parent: pid }));
+      const cid = await store.insert('Child', row({ parent: pid }));
       const grand = c % 3 === 0 ? 0 : Math.floor(rand() * 5);
-      for (let g = 0; g < grand; g++) store.insert('Grand', row({ child: cid }));
+      for (let g = 0; g < grand; g++) await store.insert('Grand', row({ child: cid }));
     }
   }
 }
@@ -136,11 +136,11 @@ function seedRows(store, rand) {
 const jsOnly = compilerOff;
 
 // The old lazy path (`store.lazyEval`, S3a): the same fields evaluated over a RowCtx that queries on demand.
-const lazily = (store, fn) => { store.lazyEval = true; try { return fn(); } finally { store.lazyEval = false; } };
+const lazily = async (store, fn) => { store.lazyEval = true; try { return await fn(); } finally { store.lazyEval = false; } };
 
 const graphOf = (parentFields) => ({ app: 'fuzz', data: { Parent: { name: 'text!', ...parentFields }, Child: CHILD_BASE, Grand: GRAND }, views: 'auto' });
 
-test('the SQL path equals the JS path over random expression trees, rows, empty groups and NULLs (seeded)', (t) => {
+test('the SQL path equals the JS path over random expression trees, rows, empty groups and NULLs (seeded)', async (t) => {
   t.after(freezeClock(NOW)); // both paths read one clock: a `now` in a body compares the same on both sides
   const rand = rng(SEED);
   const gen = generator(rand);
@@ -153,22 +153,22 @@ test('the SQL path equals the JS path over random expression trees, rows, empty 
       if (!validate(graphOf({ [name]: spec })).length) parentFields[name] = spec;
     }
     const store = new Store(graphOf(parentFields), ':memory:');
-    seedRows(store, rand);
-    const ids = store.listRaw('Parent', {}).map((r) => r.id);
-    const sqlPage = store.list('Parent', {}).map((r) => JSON.stringify(r));
-    const jsPage = jsOnly(store, () => store.list('Parent', {})).map((r) => JSON.stringify(r));
+    await seedRows(store, rand);
+    const ids = (await store.listRaw('Parent', {})).map((r) => r.id);
+    const sqlPage = (await store.list('Parent', {})).map((r) => JSON.stringify(r));
+    const jsPage = (await jsOnly(store, async () => await store.list('Parent', {}))).map((r) => JSON.stringify(r));
     // The snapshot path against the lazy path, compiler on and off: S3a moved evaluation, not meaning.
-    const lazyPage = lazily(store, () => store.list('Parent', {})).map((r) => JSON.stringify(r));
-    const lazyJsPage = lazily(store, () => jsOnly(store, () => store.list('Parent', {}))).map((r) => JSON.stringify(r));
+    const lazyPage = (await lazily(store, async () => await store.list('Parent', {}))).map((r) => JSON.stringify(r));
+    const lazyJsPage = (await lazily(store, async () => await jsOnly(store, async () => await store.list('Parent', {})))).map((r) => JSON.stringify(r));
     for (let k = 0; k < sqlPage.length; k++) {
       if (sqlPage[k] !== jsPage[k]) assert.fail(pointer(round, parentFields, JSON.parse(sqlPage[k]), JSON.parse(jsPage[k]), 'page'));
       if (sqlPage[k] !== lazyPage[k]) assert.fail(pointer(round, parentFields, JSON.parse(sqlPage[k]), JSON.parse(lazyPage[k]), 'page (snapshot vs lazy)'));
       if (jsPage[k] !== lazyJsPage[k]) assert.fail(pointer(round, parentFields, JSON.parse(jsPage[k]), JSON.parse(lazyJsPage[k]), 'page (snapshot vs lazy, JS only)'));
     }
     for (const id of ids) {
-      const sql = JSON.stringify(store.get('Parent', id)), js = JSON.stringify(jsOnly(store, () => store.get('Parent', id)));
+      const sql = JSON.stringify(await store.get('Parent', id)), js = JSON.stringify(await jsOnly(store, async () => await store.get('Parent', id)));
       if (sql !== js) assert.fail(pointer(round, parentFields, JSON.parse(sql), JSON.parse(js), `row ${id}`));
-      const lazy = JSON.stringify(lazily(store, () => store.get('Parent', id)));
+      const lazy = JSON.stringify(await lazily(store, async () => await store.get('Parent', id)));
       if (sql !== lazy) assert.fail(pointer(round, parentFields, JSON.parse(sql), JSON.parse(lazy), `row ${id} (snapshot vs lazy)`));
     }
     for (const name of Object.keys(parentFields)) {

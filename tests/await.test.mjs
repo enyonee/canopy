@@ -98,6 +98,20 @@ test('S4: an asynchronous driver refuses a plugin that is not marked, naming it;
   assert.equal(validate({ app: 'm', data: { Item: { title: 'text!' } } }, stray, { asyncDriver: true })[0].path, '/plugins', 'a legacy plugin the graph does not list is still reported');
 });
 
+test('S4: Store.open is the async factory and answers a migrated store; the constructor can be told not to migrate', async () => {
+  const graph = { app: 'o', data: { Item: { title: 'text!' } } };
+  const opened = await Store.open(graph, ':memory:');
+  assert.ok(opened instanceof Store);
+  assert.ok(opened.drv.tables().includes('item'), 'the table is there when open() answers');
+  assert.deepEqual(opened.migrations, ['create table item']);
+  const bare = new Store(graph, ':memory:', undefined, null, { migrate: false });
+  assert.ok(!bare.drv.tables().includes('item'), 'nothing is migrated until it is asked for');
+  await bare.migrate();
+  assert.ok(bare.drv.tables().includes('item'));
+  assert.deepEqual(bare.migrations, opened.migrations, 'the same migration, either way');
+  assert.ok(new Store(graph, ':memory:').drv.tables().includes('item'), 'new Store(...) is still the synchronous convenience');
+});
+
 test('S4: resolve answers a promise per value and keeps the order of a list and of an object; text and afterPath load before they format', async () => {
   const graph = { app: 'r', data: { Item: { title: 'text!', qty: 'int=1' } } };
   const store = new Store(graph, ':memory:');

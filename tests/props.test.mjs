@@ -60,7 +60,7 @@ test('migration is idempotent for any generated graph', () => {
   }
 });
 
-test('growing a graph never loses rows and always fills the new default', () => {
+test('growing a graph never loses rows and always fills the new default', async () => {
   for (let i = 0; i < 15; i++) {
     const graph = randomGraph(i);
     const entity = Object.keys(graph.data)[0];
@@ -69,10 +69,10 @@ test('growing a graph never loses rows and always fills the new default', () => 
     // "text!" fields with no default are required: give every one a value, or the
     // store's own required check (correctly) refuses the row.
     const required = Object.entries(graph.data[entity]).filter(([n, spec]) => n !== 'name' && spec === 'text!').map(([n]) => n);
-    for (let k = 0; k < 3; k++) before.insert(entity, { name: `row ${k}`, ...Object.fromEntries(required.map((n) => [n, `v${k}`])) });
+    for (let k = 0; k < 3; k++) await before.insert(entity, { name: `row ${k}`, ...Object.fromEntries(required.map((n) => [n, `v${k}`])) });
     const grown = { ...graph, data: { ...graph.data, [entity]: { ...graph.data[entity], added: 'enum[x,y]=x' } } };
     const after = new Store(grown, file);
-    const rows = after.list(entity, {});
+    const rows = await after.list(entity, {});
     assert.equal(rows.length, 3, 'rows survive the migration');
     assert.ok(rows.every((r) => r.added === 'x'), 'every old row gets the declared default');
   }
@@ -87,7 +87,7 @@ test('what a form sends and what a block sends land on the same value', () => {
   }
 });
 
-test('a stored row reads back exactly what was declared or sent, for every kind', () => {
+test('a stored row reads back exactly what was declared or sent, for every kind', async () => {
   const data = { A: {} };
   KINDS.forEach((k, i) => { data.A[`f${i}`] = k; });
   const store = new Store({ app: 'x', data }, ':memory:');
@@ -95,8 +95,8 @@ test('a stored row reads back exactly what was declared or sent, for every kind'
   // silently, so the round trip is of a given value, not of a default.
   const given = {};
   KINDS.forEach((k, i) => { if (k === 'text!') given[`f${i}`] = `required ${i}`; });
-  const id = store.insert('A', given);
-  const row = store.get('A', id);
+  const id = await store.insert('A', given);
+  const row = await store.get('A', id);
   KINDS.forEach((k, i) => {
     const f = parseField(`f${i}`, k);
     const expected = k === 'text!' ? given[`f${i}`] : defaultValue(f);
@@ -118,7 +118,7 @@ test('the trace of a run replays to the same state', async () => {
       await post('/Post', { title: 'one', topic: '1', rank: '2', mood: 'calm' });
       await post('/Post', { title: 'two', topic: '2', rank: '1', mood: 'loud' });
       await post('/Post/1/action/pin', {});
-      const rows = app.store.list('Post', { sort: { field: 'title', dir: 'asc' } })
+      const rows = (await app.store.list('Post', { sort: { field: 'title', dir: 'asc' } }))
         .map((r) => ({ title: r.title, topic: r.topic, pinned: r.pinned, rank: r.rank }));
       const kinds = fs.readFileSync(path.join(folder, 't.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l).kind);
       return { rows, kinds };

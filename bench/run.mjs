@@ -63,13 +63,13 @@ async function withServer(fn, graph = 'app.json') {
 // --- scenario 1: round 7's original latency table ---------------------------
 const CUSTOMERS = 500, ORDERS_PER_CUSTOMER = 4, ITEMS_PER_ORDER = 5; // 2000 orders, 10000 items
 
-function seedMain(store) {
-  store.transaction(() => {
+async function seedMain(store) {
+  await store.transaction(async () => {
     for (let c = 1; c <= CUSTOMERS; c++) {
-      const cid = store.insert('Customer', { name: `Customer ${c}` });
+      const cid = await store.insert('Customer', { name: `Customer ${c}` });
       for (let o = 0; o < ORDERS_PER_CUSTOMER; o++) {
-        const oid = store.insert('Order', { customer: cid, status: o % 3 === 0 ? 'paid' : 'new' });
-        for (let i = 0; i < ITEMS_PER_ORDER; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + (i % 3), price: (5 + i * 2.5).toFixed(2) });
+        const oid = await store.insert('Order', { customer: cid, status: o % 3 === 0 ? 'paid' : 'new' });
+        for (let i = 0; i < ITEMS_PER_ORDER; i++) await store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + (i % 3), price: (5 + i * 2.5).toFixed(2) });
       }
     }
   });
@@ -78,11 +78,11 @@ function seedMain(store) {
 async function benchMain() {
   await withServer(async (app, base, bootMs) => {
     const rssEmpty = rssMB();
-    seedMain(app.store);
+    await seedMain(app.store);
     const rssLoaded = rssMB();
-    const orderIds = app.store.listRaw('Order', {}).map((r) => r.id);
+    const orderIds = (await app.store.listRaw('Order', {})).map((r) => r.id);
     const detailUrl = `${base}/Order/${orderIds[Math.floor(orderIds.length / 2)]}`;
-    const customerIds = app.store.listRaw('Customer', {}).map((r) => r.id);
+    const customerIds = (await app.store.listRaw('Customer', {})).map((r) => r.id);
     const N = 30;
     const results = {};
     results['/Order'] = await timeRequests(`${base}/Order`, {}, N);
@@ -112,17 +112,17 @@ async function benchWide() {
   await withServer(async (app, base) => {
     const store = app.store;
     let wideOrder;
-    store.transaction(() => {
-      const c = store.insert('Customer', { name: 'Solo' });
-      wideOrder = store.insert('Order', { customer: c, status: 'new' });
-      for (let i = 0; i < 20_000; i++) store.insert('Item', { order: wideOrder, title: `Item ${i}`, qty: 1 + (i % 5), price: (1 + (i % 997) * 0.13).toFixed(2) });
+    await store.transaction(async () => {
+      const c = await store.insert('Customer', { name: 'Solo' });
+      wideOrder = await store.insert('Order', { customer: c, status: 'new' });
+      for (let i = 0; i < 20_000; i++) await store.insert('Item', { order: wideOrder, title: `Item ${i}`, qty: 1 + (i % 5), price: (1 + (i % 997) * 0.13).toFixed(2) });
     });
     let wideCustomer;
-    store.transaction(() => {
-      wideCustomer = store.insert('Customer', { name: 'BigSpender' });
+    await store.transaction(async () => {
+      wideCustomer = await store.insert('Customer', { name: 'BigSpender' });
       for (let o = 0; o < 5000; o++) {
-        const oid = store.insert('Order', { customer: wideCustomer, status: o % 2 ? 'paid' : 'new' });
-        for (let i = 0; i < 2; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + i, price: 10 + i });
+        const oid = await store.insert('Order', { customer: wideCustomer, status: o % 2 ? 'paid' : 'new' });
+        for (let i = 0; i < 2; i++) await store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + i, price: 10 + i });
       }
     });
 
@@ -137,19 +137,19 @@ async function benchWide() {
 }
 
 // --- scenario 3: R8 item 2 — RSS after heavy requests, before/after GC -----
-function seedFlat(store, orders) {
-  store.transaction(() => {
-    const c = store.insert('Customer', { name: 'Heavy' });
+async function seedFlat(store, orders) {
+  await store.transaction(async () => {
+    const c = await store.insert('Customer', { name: 'Heavy' });
     for (let o = 0; o < orders; o++) {
-      const oid = store.insert('Order', { customer: c, status: o % 2 ? 'paid' : 'new' });
-      for (let i = 0; i < 5; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + (i % 3), price: (5 + i * 2.5).toFixed(2) });
+      const oid = await store.insert('Order', { customer: c, status: o % 2 ? 'paid' : 'new' });
+      for (let i = 0; i < 5; i++) await store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + (i % 3), price: (5 + i * 2.5).toFixed(2) });
     }
   });
 }
 
 async function benchMemoryAt(orders) {
   await withServer(async (app, base) => {
-    seedFlat(app.store, orders);
+    await seedFlat(app.store, orders);
     if (global.gc) global.gc();
     const rssBefore = rssMB();
     await fetch(`${base}/dashboard/sales`).then((r) => r.arrayBuffer());
@@ -177,17 +177,17 @@ async function benchDerived() {
   await withServer(async (app, base) => {
     const store = app.store;
     let wide;
-    store.transaction(() => {
-      wide = store.insert('Customer', { name: 'BigSpender' });
+    await store.transaction(async () => {
+      wide = await store.insert('Customer', { name: 'BigSpender' });
       for (let o = 0; o < 5000; o++) {
-        const oid = store.insert('Order', { customer: wide, status: o % 2 ? 'paid' : 'new', placed: `2025-${String(1 + (o % 12)).padStart(2, '0')}-15` });
-        for (let i = 0; i < 2; i++) store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + i, price: 10 + i, shipped: `2026-0${1 + (o % 9)}-01` });
+        const oid = await store.insert('Order', { customer: wide, status: o % 2 ? 'paid' : 'new', placed: `2025-${String(1 + (o % 12)).padStart(2, '0')}-15` });
+        for (let i = 0; i < 2; i++) await store.insert('Item', { order: oid, title: `Item ${i}`, qty: 1 + i, price: 10 + i, shipped: `2026-0${1 + (o % 9)}-01` });
       }
       for (let c = 0; c < 200; c++) {
-        const cid = store.insert('Customer', { name: `Small ${c}` });
+        const cid = await store.insert('Customer', { name: `Small ${c}` });
         for (let o = 0; o < 10; o++) {
-          const oid = store.insert('Order', { customer: cid, status: 'new', placed: `2026-0${1 + (o % 9)}-10` });
-          store.insert('Item', { order: oid, title: 'x', qty: 2, price: (5 + o).toFixed(2), shipped: '2026-03-01' });
+          const oid = await store.insert('Order', { customer: cid, status: 'new', placed: `2026-0${1 + (o % 9)}-10` });
+          await store.insert('Item', { order: oid, title: 'x', qty: 2, price: (5 + o).toFixed(2), shipped: '2026-03-01' });
         }
       }
     });

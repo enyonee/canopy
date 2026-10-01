@@ -213,7 +213,7 @@ const session = async (respond) => {
   const sent = [];
   const fetchImpl = async (url, init) => { sent.push({ url, init }); return respond(url, init); };
   const s = await boot(tmpGraph(graphOf(dir)), { fetchImpl });
-  const order = s.app.store.insert('Order', { ref: 'R-1', total: 12.5, qty: 3 });
+  const order = await s.app.store.insert('Order', { ref: 'R-1', total: 12.5, qty: 3 });
   return { s, sent, order };
 };
 
@@ -222,7 +222,7 @@ test('connector.call queues a row with its op, sends the built request, and keep
   try {
     const r = await s.post(`/Order/${order}/action/charge`, {});
     assert.equal(r.status, 303);
-    const [row] = s.app.store.outbox();
+    const [row] = await s.app.store.outbox();
     assert.deepEqual([row.kind, row.connector, row.op, row.target, row.status, row.code, row.attempts], ['pay', 'p', 'charge', 'https://p.test/charges', 'sent', 200, 1]);
     assert.deepEqual(row.payload, { amount: 300, ref: 'R-1', total: 12.5, currency: 'USD' }, 'the input, completed with its defaults, is the payload');
     assert.equal(sent.length, 1);
@@ -242,7 +242,7 @@ test('an answer that does not match the output schema sets drift, traces contrac
   const { s, order } = await session(() => answer(200, { id: 7, status: 'paid' }));
   try {
     await s.post(`/Order/${order}/action/charge`, {});
-    const [row] = s.app.store.outbox();
+    const [row] = await s.app.store.outbox();
     assert.deepEqual([row.status, row.drift], ['sent', 1]);
     const drift = s.trace().filter((e) => e.kind === 'contract_drift');
     assert.deepEqual(drift.map((e) => [e.id, e.connector, e.op, e.path, e.message]), [[row.id, 'p', 'charge', '/id', 'must be a string']]);
@@ -254,13 +254,13 @@ test('a failed answer is a failed delivery with no body kept; a bad input refuse
   const { s, order } = await session(() => answer(500, { error: 'boom' }));
   try {
     await s.post(`/Order/${order}/action/charge`, {});
-    const [row] = s.app.store.outbox();
+    const [row] = await s.app.store.outbox();
     assert.deepEqual([row.status, row.code, row.error, row.response, row.result, row.drift], ['failed', 500, 'HTTP 500', null, null, null]);
-    s.app.store.update('Order', order, { qty: 0 });
+    await s.app.store.update('Order', order, { qty: 0 });
     const bad = await s.post(`/Order/${order}/action/charge`, {});
     assert.equal(bad.status, 400);
     assert.match(bad.html, /pay\.charge: input\/amount: must be at least 1/);
-    assert.equal(s.app.store.outbox().length, 1, 'a malformed request never reaches the outbox');
+    assert.equal((await s.app.store.outbox()).length, 1, 'a malformed request never reaches the outbox');
   } finally { s.close(); }
 });
 
@@ -268,7 +268,7 @@ test('a secret with no store behind it fails the delivery closed, with the reaso
   const { s, sent, order } = await session(() => answer(200, {}));
   try {
     await s.post(`/Order/${order}/action/secured`, {});
-    const [row] = s.app.store.outbox();
+    const [row] = await s.app.store.outbox();
     assert.equal(row.status, 'failed');
     assert.match(row.error, /secret "apiKey" is not set/);
     assert.deepEqual(sent, [], 'nothing was sent');
@@ -280,7 +280,7 @@ test('http.send still queues a legacy row (no op) and http through connector.cal
   try {
     await s.post(`/Order/${order}/action/legacy`, {});
     await s.post(`/Order/${order}/action/viaHttp`, {});
-    const rows = s.app.store.outbox().reverse();
+    const rows = (await s.app.store.outbox()).reverse();
     assert.deepEqual(rows.map((r) => [r.kind, r.op, r.target, r.status]), [['http', null, 'http://sink.test/h/x', 'sent'], ['http', 'send', 'http://sink.test/h', 'sent']]);
     assert.deepEqual(rows[0].payload, { r: 'R-1' });
     assert.deepEqual(rows[1].payload, { body: { r: 'R-1' } });
@@ -297,7 +297,7 @@ test('connector.call refuses a connector whose kind has no descriptor when the c
 
 // --- the outbox table ------------------------------------------------------------------------
 
-test('a database made before "op", "response", "result" and "drift" is upgraded in place, rows kept', () => {
+test('a database made before "op", "response", "result" and "drift" is upgraded in place, rows kept', async () => {
   const file = path.join(tmpDir('outbox-c1-'), 'old.sqlite');
   const old = open(file);
   old.exec(`CREATE TABLE "_outbox" (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, connector TEXT, target TEXT, payload TEXT,
@@ -306,10 +306,10 @@ test('a database made before "op", "response", "result" and "drift" is upgraded 
   old.close();
   const graph = { app: 'o', data: { A: { n: 'text' } } };
   const store = new Store(graph, file);
-  assert.deepEqual(store.outboxGet(1), { id: 1, kind: 'http', connector: 'hook', target: 'http://sink.test/o', payload: 1, status: 'sent', code: null, error: null, attempts: 1, at: null, updatedAt: null, claimedAt: null, op: null, response: null, result: null, drift: null, nextAttemptAt: null, idemKey: null });
-  const id = store.enqueue({ kind: 'pay', connector: 'p', target: 't', payload: { a: 1 }, op: 'charge' });
-  store.outboxUpdate(id, { response: 'r', result: '{}', drift: 1 });
-  assert.deepEqual([store.outboxGet(id).op, store.outboxGet(id).response, store.outboxGet(id).result, store.outboxGet(id).drift], ['charge', 'r', '{}', 1]);
-  assert.equal(new Store(graph, file).outboxGet(id).op, 'charge', 'a second boot finds the columns and changes nothing');
+  assert.deepEqual(await store.outboxGet(1), { id: 1, kind: 'http', connector: 'hook', target: 'http://sink.test/o', payload: 1, status: 'sent', code: null, error: null, attempts: 1, at: null, updatedAt: null, claimedAt: null, op: null, response: null, result: null, drift: null, nextAttemptAt: null, idemKey: null });
+  const id = await store.enqueue({ kind: 'pay', connector: 'p', target: 't', payload: { a: 1 }, op: 'charge' });
+  await store.outboxUpdate(id, { response: 'r', result: '{}', drift: 1 });
+  assert.deepEqual([(await store.outboxGet(id)).op, (await store.outboxGet(id)).response, (await store.outboxGet(id)).result, (await store.outboxGet(id)).drift], ['charge', 'r', '{}', 1]);
+  assert.equal((await new Store(graph, file).outboxGet(id)).op, 'charge', 'a second boot finds the columns and changes nothing');
   store.drv.close();
 });

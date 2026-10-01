@@ -63,32 +63,32 @@ function recorder(dialect, catalog = { tables: new Set(), cols: new Map(), idx: 
 }
 
 // Every builder shape once. Returns the statements in order.
-function scenario(store, log) {
+async function scenario(store, log) {
   const at = (label) => log.push(`-- ${label}`);
   at('write');
-  const id = store.insert('Order', { title: 'a', status: 'new' });
-  store.insert('Blank', {});
-  store.update('Order', id, { title: 'b', total: 5 });
-  store.remove('Order', id);
-  store.raw('Order', id);
-  store.exists('Customer', 'name', 'Ann', 1);
-  store.exists('Order', 'qty', 3);
-  store.existsAll('Order', ['title', 'status'], { title: 'a', status: 'new' }, 2);
-  store.count('Order', { qty: { gte: 2 } });
+  const id = await store.insert('Order', { title: 'a', status: 'new' });
+  await store.insert('Blank', {});
+  await store.update('Order', id, { title: 'b', total: 5 });
+  await store.remove('Order', id);
+  await store.raw('Order', id);
+  await store.exists('Customer', 'name', 'Ann', 1);
+  await store.exists('Order', 'qty', 3);
+  await store.existsAll('Order', ['title', 'status'], { title: 'a', status: 'new' }, 2);
+  await store.count('Order', { qty: { gte: 2 } });
   at('read');
   const where = { status: 'paid', qty: { gte: 1, lte: 9, gt: 0, lt: 10, ne: 4, in: [1, 2] }, customer: null, seen: { ne: null }, title: { like: '50%_x' } };
-  store.listRaw('Order', { where, q: 'Bo\\b', search: ['title', 'status'], sort: { field: 'title', dir: 'asc' } });
-  store.listRaw('Order', { sort: { field: 'total', dir: 'desc' } });
-  store.listRaw('Order');
-  store.listRawPage('Order', { where: { qty: 3 }, sort: { field: 'placed', dir: 'desc' } }, 50, 100);
-  store.countRaw('Order', { where: { done: 1 } });
-  store.listRawIn('Item', 'order', [1, 2, 3]);
+  await store.listRaw('Order', { where, q: 'Bo\\b', search: ['title', 'status'], sort: { field: 'title', dir: 'asc' } });
+  await store.listRaw('Order', { sort: { field: 'total', dir: 'desc' } });
+  await store.listRaw('Order');
+  await store.listRawPage('Order', { where: { qty: 3 }, sort: { field: 'placed', dir: 'desc' } }, 50, 100);
+  await store.countRaw('Order', { where: { done: 1 } });
+  await store.listRawIn('Item', 'order', [1, 2, 3]);
   at('aggregate');
-  store.aggregate('Order', { groupBy: 'placed', groupUnit: 'month', metrics: [{ fn: 'sum', field: 'total', as: 'sum_total' }, { fn: 'count', as: 'n' }], sort: { field: 'grp', dir: 'asc' }, limit: 5, where: { status: 'paid' } });
-  store.aggregate('Order', { groupBy: 'status', metrics: [{ fn: 'avg', field: 'qty', as: 'a' }], sort: { field: 'a', dir: 'desc' } });
-  store.aggregate('Order', { groupBy: 'qty', metrics: [{ fn: 'max', field: 'qty', as: 'm' }], sort: { field: 'grp', dir: 'desc' } });
-  store.aggregate('Order', { groupBy: 'seen', groupUnit: 'year', metrics: [{ fn: 'min', field: 'total', as: 'm' }], sort: { field: 'grp', dir: 'asc' } });
-  store.aggregate('Order', { groupBy: 'placed', groupUnit: 'day', metrics: [{ fn: 'count', as: 'n' }] });
+  await store.aggregate('Order', { groupBy: 'placed', groupUnit: 'month', metrics: [{ fn: 'sum', field: 'total', as: 'sum_total' }, { fn: 'count', as: 'n' }], sort: { field: 'grp', dir: 'asc' }, limit: 5, where: { status: 'paid' } });
+  await store.aggregate('Order', { groupBy: 'status', metrics: [{ fn: 'avg', field: 'qty', as: 'a' }], sort: { field: 'a', dir: 'desc' } });
+  await store.aggregate('Order', { groupBy: 'qty', metrics: [{ fn: 'max', field: 'qty', as: 'm' }], sort: { field: 'grp', dir: 'desc' } });
+  await store.aggregate('Order', { groupBy: 'seen', groupUnit: 'year', metrics: [{ fn: 'min', field: 'total', as: 'm' }], sort: { field: 'grp', dir: 'asc' } });
+  await store.aggregate('Order', { groupBy: 'placed', groupUnit: 'day', metrics: [{ fn: 'count', as: 'n' }] });
   at('compiled aggregates');
   const one = compileAgg(store, 'Order', parse('sum(Item: if(ok and not(qty > 1) or price != disc, qty * price, 0) + qty)'));
   runAggOne(store, one, 7, new Date('2026-01-02T03:04:05Z'));
@@ -99,20 +99,20 @@ function scenario(store, log) {
   const nested = compileAgg(store, 'Customer', parse('sum(Order: total + count(Item: ok))'));
   runAggOne(store, nested, 1);
   at('outbox and sessions');
-  store.enqueue({ kind: 'http', connector: 'c', target: 't', payload: { a: 1 } });
-  store.outbox({ status: 'queued', id: 3 });
-  store.outboxDue(1000, 500);
-  store.outboxClaim(3, 1000, 500);
-  store.outboxUpdate(3, { status: 'failed', error: 'x' });
-  store.outboxFinish(3, 1000, { status: 'sent', code: 200 });
-  store.sessionSet('sid', 4);
-  store.sessionUser('sid');
-  store.sessionEnd('sid');
+  await store.enqueue({ kind: 'http', connector: 'c', target: 't', payload: { a: 1 } });
+  await store.outbox({ status: 'queued', id: 3 });
+  await store.outboxDue(1000, 500);
+  await store.outboxClaim(3, 1000, 500);
+  await store.outboxUpdate(3, { status: 'failed', error: 'x' });
+  await store.outboxFinish(3, 1000, { status: 'sent', code: 200 });
+  await store.sessionSet('sid', 4);
+  await store.sessionUser('sid');
+  await store.sessionEnd('sid');
 }
 
 const GOLDEN = (name) => new URL(`./golden/dialect.${name}.sql`, import.meta.url);
 
-function statements(dialect) {
+async function statements(dialect) {
   let drv;
   if (dialect === sqlite) {
     drv = openSqlite(':memory:');
@@ -120,13 +120,13 @@ function statements(dialect) {
     drv.onQuery = (sql) => drv.log.push(flat(sql));
   } else drv = recorder(dialect);
   const store = new Store(GRAPH, ':memory:', undefined, drv);
-  scenario(store, drv.log);
+  await scenario(store, drv.log);
   return `${drv.log.join('\n')}\n`;
 }
 
 for (const dialect of [sqlite, postgres]) {
-  test(`golden SQL: every builder shape, ${dialect.name}`, () => {
-    const got = statements(dialect);
+  test(`golden SQL: every builder shape, ${dialect.name}`, async () => {
+    const got = await statements(dialect);
     if (process.env.UPDATE_GOLDEN) fs.writeFileSync(GOLDEN(dialect.name), got);
     assert.equal(got, fs.readFileSync(GOLDEN(dialect.name), 'utf8'));
   });
@@ -147,7 +147,7 @@ test('placeholders, quoting and column types per dialect', () => {
   assert.equal(sqlite.insert('t', []), 'INSERT INTO "t" DEFAULT VALUES');
 });
 
-test('LIKE: what the user typed is what is searched for, on both dialects', () => {
+test('LIKE: what the user typed is what is searched for, on both dialects', async () => {
   for (const d of [sqlite, postgres]) {
     assert.equal(d.likeArg('50%_a\\B'), '%50\\%\\_a\\\\b%', 'wildcards and the escape itself are escaped, the text lower-cased');
     assert.equal(d.escapeLike('idx_'), 'idx\\_');
@@ -155,9 +155,9 @@ test('LIKE: what the user typed is what is searched for, on both dialects', () =
     assert.equal(d.lowerEq('"c"', d.ph(1)), `LOWER("c")=LOWER(${d.ph(1)})`);
   }
   const store = new Store({ app: 'l', data: { Note: { body: 'text' } } }, ':memory:');
-  for (const body of ['100% sure', '1000 sure', 'a_b', 'axb']) store.insert('Note', { body });
-  assert.deepEqual(store.list('Note', { where: { body: { like: '0% s' } } }).map((r) => r.body), ['100% sure']);
-  assert.deepEqual(store.list('Note', { q: 'a_b', search: ['body'] }).map((r) => r.body), ['a_b']);
+  for (const body of ['100% sure', '1000 sure', 'a_b', 'axb']) await store.insert('Note', { body });
+  assert.deepEqual((await store.list('Note', { where: { body: { like: '0% s' } } })).map((r) => r.body), ['100% sure']);
+  assert.deepEqual((await store.list('Note', { q: 'a_b', search: ['body'] })).map((r) => r.body), ['a_b']);
 });
 
 test('date buckets, NULL order, ties and collation per dialect', () => {
@@ -221,16 +221,16 @@ test('PostgreSQL: a second boot over the same catalog recreates and drops no ind
   assert.ok(!second.log.some((l) => /CREATE INDEX|DROP INDEX/.test(l)), second.log.join('\n'));
 });
 
-test('SQLite: sessions upsert one row per id and an existing outbox keeps its mixed-case columns', () => {
+test('SQLite: sessions upsert one row per id and an existing outbox keeps its mixed-case columns', async () => {
   const store = new Store({ app: 'q', data: { Note: { body: 'text' } } }, ':memory:');
-  store.sessionSet('s1', 1);
-  store.sessionSet('s1', 2);
-  assert.equal(store.sessionUser('s1'), 2);
+  await store.sessionSet('s1', 1);
+  await store.sessionSet('s1', 2);
+  assert.equal(await store.sessionUser('s1'), 2);
   assert.equal(store.drv.get('SELECT COUNT(*) AS n FROM "_session"').n, 1);
-  const id = store.enqueue({ kind: 'http', connector: 'c', target: 't', payload: {} });
-  assert.equal(store.outboxClaim(id, 10, 5), true);
-  store.outboxUpdate(id, { status: 'sent' });
-  const row = store.outboxGet(id);
+  const id = await store.enqueue({ kind: 'http', connector: 'c', target: 't', payload: {} });
+  assert.equal(await store.outboxClaim(id, 10, 5), true);
+  await store.outboxUpdate(id, { status: 'sent' });
+  const row = await store.outboxGet(id);
   assert.deepEqual([row.status, row.attempts, typeof row.updatedAt, row.claimedAt], ['sent', 0, 'string', 10]);
   const cols = store.drv.columns('_outbox').map((c) => c.name);
   assert.ok(cols.includes('updatedAt') && cols.includes('claimedAt'), 'mixed-case names survive');

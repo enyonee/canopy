@@ -41,7 +41,7 @@ export async function boot(graphFile = 'tests/fixtures/kitchen.json', opts = {})
   const net = fakeFetch();
   const { registry, errors: pluginErrors } = await loadPlugins(JSON.parse(fs.readFileSync(graphFile, 'utf8')), path.dirname(path.resolve(graphFile)));
   const app = serve({ graphFile, dbFile: path.join(dir, 'data.sqlite'), traceFile, port: 0, fetchImpl: net.fetchImpl, registry, pluginErrors, ...opts });
-  await once(app.server, 'listening');
+  await Promise.all([once(app.server, 'listening'), app.ready]); // ready: migrated and seeded; then the port is open
   const base = `http://127.0.0.1:${app.server.address().port}`;
   let cookie = '';
   const keep = (r) => { const c = r.headers.get('set-cookie'); if (c) cookie = c.split(';')[0]; };
@@ -116,18 +116,21 @@ export const fakeClock = (start = 1_000_000) => {
 // The JS reference of the SQL-compiled aggregates: the compiler is off for the snapshot path
 // (`compileAggIn`) and for the lazy one (`aggValue`, and a page cache with no batches), so every
 // aggregate is evaluated by runtime/expr.mjs over child rows. Restores whatever `fn` returns/throws.
-export const compilerOff = (store, fn) => {
+export const compilerOff = async (store, fn) => {
   const { aggValue, buildAggCache } = store;
   store.compileAggIn = () => null;
   store.plans.clear(); // plans record which aggregates compile
   store.aggValue = () => undefined;
   store.buildAggCache = () => ({ groups: new Map(), scalars: new Map(), clock: new Date() });
-  try { return fn(); } finally { delete store.compileAggIn; store.plans.clear(); store.aggValue = aggValue; store.buildAggCache = buildAggCache; }
+  try { return await fn(); } finally { delete store.compileAggIn; store.plans.clear(); store.aggValue = aggValue; store.buildAggCache = buildAggCache; }
 };
 
 // Rows for every entity the app's own seed left empty (and a few extra for the seeded ones), in reference
 // order, each ref pointing at a row that exists: enough for every hop and aggregate to have something to read.
-export function populate(store, graph, perEntity = 8) {
+// The outbox rows `ids` name, in that order.
+export const outboxRows = async (store, ids) => { const rows = []; for (const id of ids) rows.push(await store.outboxGet(id)); return rows; };
+
+export async function populate(store, graph, perEntity = 8) {
   const refs = (e) => store.fields[e].filter((f) => f.kind === 'ref').map((f) => f.target).filter((t) => t !== e);
   const order = [], seen = new Set();
   const visit = (e) => { if (seen.has(e)) return; seen.add(e); refs(e).forEach(visit); order.push(e); };
@@ -147,11 +150,11 @@ export function populate(store, graph, perEntity = 8) {
   };
   const ids = {};
   for (const e of order) {
-    ids[e] = store.list(e, {}).map((r) => r.id);
+    ids[e] = (await store.list(e, {})).map((r) => r.id);
     for (let i = 0; i < perEntity; i++) {
       const row = {};
       for (const f of store.fields[e]) if (!f.derive) row[f.name] = value(f, i, ids);
-      try { ids[e].push(store.insert(e, row)); } catch { /* a rule or a required column refused this generated row: fewer rows, same test */ }
+      try { ids[e].push(await store.insert(e, row)); } catch { /* a rule or a required column refused this generated row: fewer rows, same test */ }
     }
   }
 }
@@ -204,13 +207,13 @@ export const PAGES_GRAPH = {
 
 // Users 1 (admin), 2 and 3 (members, each with a profile), three tags, `posts` posts split between the members
 // (Post.profile -> Profile.user is the ownership path) and `comments` comments on each post of member 2.
-export function seedPages(store, posts = 12, comments = 2) {
-  store.insert('User', { login: 'root', password: 'pw', role: 'admin' });
-  for (const m of [2, 3]) { store.insert('User', { login: `m${m}`, password: 'pw', role: 'member' }); store.insert('Profile', { user: m, nick: `nick ${m}` }); }
-  for (const c of ['a', 'b', 'c']) store.insert('Tag', { code: c });
+export async function seedPages(store, posts = 12, comments = 2) {
+  await store.insert('User', { login: 'root', password: 'pw', role: 'admin' });
+  for (const m of [2, 3]) { await store.insert('User', { login: `m${m}`, password: 'pw', role: 'member' }); await store.insert('Profile', { user: m, nick: `nick ${m}` }); }
+  for (const c of ['a', 'b', 'c']) await store.insert('Tag', { code: c });
   for (let i = 0; i < posts; i++) {
     const member = 2 + (i % 2);
-    const id = store.insert('Post', { profile: member - 1, owner: member, tag: 1 + (i % 3), title: `post ${i}`, score: i });
-    if (member === 2) for (let c = 0; c < comments; c++) store.insert('Comment', { post: id, tag: 1 + (c % 3), body: `comment ${c}` });
+    const id = await store.insert('Post', { profile: member - 1, owner: member, tag: 1 + (i % 3), title: `post ${i}`, score: i });
+    if (member === 2) for (let c = 0; c < comments; c++) await store.insert('Comment', { post: id, tag: 1 + (c % 3), body: `comment ${c}` });
   }
 }

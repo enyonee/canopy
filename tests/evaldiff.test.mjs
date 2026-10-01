@@ -50,35 +50,36 @@ const order = (store, graph) => {
   return out;
 };
 
-const attempt = (fn) => { try { return `ok ${JSON.stringify(fn())}`; } catch (e) { return `error ${e.message}`; } };
+const attempt = async (fn) => { try { return `ok ${JSON.stringify(await fn())}`; } catch (e) { return `error ${e.message}`; } };
 
 // The same writes against every store in `stores`; returns one outcome list per store.
-function writeAll(stores, graph) {
+async function writeAll(stores, graph) {
   const outcomes = stores.map(() => []);
   const ids = {};
   for (const e of order(stores[0], graph)) {
-    ids[e] = stores[0].list(e, {}).map((r) => r.id);
+    ids[e] = (await stores[0].list(e, {})).map((r) => r.id);
     const fields = stores[0].fields[e].filter((f) => !f.derive);
     const ruled = Boolean(graph.rules?.[e]?.length);
     for (let i = 0; i < (ruled ? 10 : 3); i++) {
       const row = Object.fromEntries(fields.map((f) => [f.name, value(f, i, ids)]));
-      const got = stores.map((s) => attempt(() => s.insert(e, row)));
+      const got = [];
+      for (const s of stores) got.push(await attempt(async () => await s.insert(e, row)));
       got.forEach((g, k) => outcomes[k].push(`insert ${e}#${i}: ${g}`));
       if (got[0].startsWith('ok')) ids[e].push(JSON.parse(got[0].slice(3)));
     }
     for (const id of ruled ? ids[e].slice(0, 6) : []) {
       for (let j = 0; j < 2; j++) {
         const patch = Object.fromEntries(fields.filter((f, k) => (k + j) % 2 === 0).map((f) => [f.name, value(f, id * 3 + j, ids)]));
-        stores.forEach((s, k) => outcomes[k].push(`update ${e}#${id}/${j}: ${attempt(() => s.update(e, id, patch))}`));
+        for (const [k, s] of stores.entries()) outcomes[k].push(`update ${e}#${id}/${j}: ${await attempt(async () => await s.update(e, id, patch))}`);
       }
     }
   }
   return outcomes;
 }
 
-const plain = (store, entity) => {
+const plain = async (store, entity) => {
   const secret = new Set(store.fields[entity].filter((f) => f.type.secret).map((f) => f.name));
-  return store.listRaw(entity).map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !secret.has(k))));
+  return (await store.listRaw(entity)).map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !secret.has(k))));
 };
 
 // Every object with a `do` list, with the entity its steps run on.
@@ -113,31 +114,31 @@ test('every app: rules and step values give the same answers over the snapshot a
       if (graph.identity) rehash(graph.identity.entity, graph.identity.defaults || {});
       const meIds = [];
       for (const s of stores) { const id = await bootstrapIdentity(graph, s); await bootstrapSeed(graph, s, dir, null); meIds.push(id); }
-      const [a, b] = writeAll(stores, graph);
+      const [a, b] = await writeAll(stores, graph);
       assert.deepEqual(a, b, `${app}: a write ended differently`);
       const messages = new Set(Object.values(graph.rules || {}).flat().filter((r) => r.check).map((r) => `error ${r.message}`));
       stats.byRule += a.filter((o) => messages.has(o.slice(o.indexOf(': ') + 2))).length;
       stats.writes += a.length; stats.refused += a.filter((o) => o.includes(': error')).length; stats.accepted += a.filter((o) => o.includes(': ok')).length;
-      for (const e of Object.keys(graph.data)) assert.deepEqual(plain(stores[0], e), plain(stores[1], e), `${app}/${e}: the stored rows differ`);
+      for (const e of Object.keys(graph.data)) assert.deepEqual(await plain(stores[0], e), await plain(stores[1], e), `${app}/${e}: the stored rows differ`);
       // The same rules, asked of the same store both ways, before and after the writes.
       for (const [e, list] of Object.entries(graph.rules || {})) {
         if (!list.some((r) => r.check)) continue;
-        for (const row of stores[0].listRaw(e).slice(0, 6)) {
-          const ask = () => attempt(() => stores[0].checkRules(e, { ...row, id: undefined }, row));
-          const snap = ask(); stores[0].lazyEval = true; const lazy = ask(); stores[0].lazyEval = false;
+        for (const row of (await stores[0].listRaw(e)).slice(0, 6)) {
+          const ask = async () => await attempt(async () => await stores[0].checkRules(e, { ...row, id: undefined }, row));
+          const snap = await ask(); stores[0].lazyEval = true; const lazy = await ask(); stores[0].lazyEval = false;
           assert.equal(snap, lazy, `${app}/${e}#${row.id}: checkRules differ`);
         }
       }
       const interps = stores.map((s, k) => createInterpreter({ graph, store: s, registry, perms: null, meId: meIds[k] }));
       for (const g of stepGroups(graph)) {
-        const rows = g.entity && stores[0].fields[g.entity] ? stores[0].list(g.entity, {}).slice(0, 3) : [null];
+        const rows = g.entity && stores[0].fields[g.entity] ? (await stores[0].list(g.entity, {})).slice(0, 3) : [null];
         for (const row of rows) for (const s of leaves(g.steps)) {
-          const one = (k) => {
+          const one = async (k) => {
             const ctx = { rowEntity: g.entity, id: row?.id, row, values: row || {}, user: null };
-            const run = async () => (s.startsWith('@') || s.startsWith('=') ? interps[k].resolve(ctx)(s) : await interps[k].interpolate(s, ctx));
-            return attempt(run);
+            const run = async () => (s.startsWith('@') || s.startsWith('=') ? await interps[k].resolve(ctx)(s) : await interps[k].interpolate(s, ctx));
+            return await attempt(run);
           };
-          assert.equal(one(0), one(1), `${app}/${g.entity}#${row?.id}: ${s} resolves differently`);
+          assert.equal(await one(0), await one(1), `${app}/${g.entity}#${row?.id}: ${s} resolves differently`);
           stats.values++;
         }
       }

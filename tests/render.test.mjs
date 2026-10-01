@@ -39,9 +39,9 @@ test('without a theme the page still paints itself', () => {
 
 test('a list with no override shows every field, offers create, and renders each kind', async () => {
   const s = store();
-  const peer = s.insert('Thing', { name: 'peer' });
-  s.insert('Thing', { name: 'row', body: 'text', n: 3, flag: 'true', kind: 'b', peer });
-  const html = await viewer(bare, s).list('Thing', s.list('Thing', {}));
+  const peer = await s.insert('Thing', { name: 'peer' });
+  await s.insert('Thing', { name: 'row', body: 'text', n: 3, flag: 'true', kind: 'b', peer });
+  const html = await viewer(bare, s).list('Thing', await s.list('Thing', {}));
   assert.match(html, /<th><a [^>]*>Name<\/a><\/th>/);
   assert.match(html, /<td>Yes<\/td>/, 'a boolean without declared labels reads Yes');
   assert.match(html, /<td>No<\/td>/);
@@ -54,8 +54,8 @@ test('a list with no override shows every field, offers create, and renders each
 
 test('an empty reference renders as a dash, not as a broken link', async () => {
   const s = store();
-  s.insert('Thing', { name: 'lonely' });
-  const html = await viewer(bare, s).list('Thing', s.list('Thing', {}));
+  await s.insert('Thing', { name: 'lonely' });
+  const html = await viewer(bare, s).list('Thing', await s.list('Thing', {}));
   assert.match(html, /<td>—<\/td>/);
 });
 
@@ -82,8 +82,8 @@ test('a form renders one control per kind and never asks for a timestamp', async
 
 test('a detail view without related sections still shows every field', async () => {
   const s = store();
-  const id = s.insert('Thing', { name: 'solo', flag: 'true' });
-  const html = await viewer(bare, s).detail('Thing', s.get('Thing', id));
+  const id = await s.insert('Thing', { name: 'solo', flag: 'true' });
+  const html = await viewer(bare, s).detail('Thing', await s.get('Thing', id));
   assert.match(html, /<th>Flag<\/th><td>Yes<\/td>/);
   assert.match(html, /<th>Peer<\/th><td>—<\/td>/);
   assert.ok(!/<h3>/.test(html), 'nothing is invented when nothing is declared');
@@ -92,9 +92,9 @@ test('a detail view without related sections still shows every field', async () 
 test('a related section can be read-only, and carries its own columns', async () => {
   const g = { ...bare, override: { 'Thing.detail': { related: [{ entity: 'Thing', via: 'peer', form: false, columns: ['name'] }] } } };
   const s = store();
-  const parent = s.insert('Thing', { name: 'parent' });
-  s.insert('Thing', { name: 'child', peer: parent });
-  const html = await viewer(g, s).detail('Thing', s.get('Thing', parent));
+  const parent = await s.insert('Thing', { name: 'parent' });
+  await s.insert('Thing', { name: 'child', peer: parent });
+  const html = await viewer(g, s).detail('Thing', await s.get('Thing', parent));
   assert.match(html, /<h3>Things<\/h3>/);
   assert.match(html, /child/);
   assert.ok(!/method="post"/.test(html), 'form: false means no form');
@@ -102,8 +102,8 @@ test('a related section can be read-only, and carries its own columns', async ()
 
 test('dashboards render floats, empty groups and tables without a group', async () => {
   const s = store();
-  s.insert('Numbered', { n: 1 });
-  s.insert('Numbered', { n: 2 });
+  await s.insert('Numbered', { n: 1 });
+  await s.insert('Numbered', { n: 2 });
   const html = await viewer({ ...bare }, s).dashboard({
     id: 'd', title: 'D',
     cards: [{ title: 'Average', entity: 'Numbered', fn: 'avg', field: 'n' }, { title: 'Count', entity: 'Numbered', fn: 'count' }],
@@ -116,7 +116,7 @@ test('dashboards render floats, empty groups and tables without a group', async 
   assert.match(html, /<th>Total<\/th>/);
   const empty = await viewer(bare, s).dashboard({ id: 'e', title: 'E' });
   assert.match(empty, /<h2>E<\/h2>/);
-  s.insert('Thing', { name: 'no peer' });
+  await s.insert('Thing', { name: 'no peer' });
   const withRefGroup = await viewer(bare, s).dashboard({ id: 'r', title: 'R',
     tables: [{ title: 'By peer', entity: 'Thing', groupBy: 'peer', metrics: [{ fn: 'count', as: 'n' }] }] });
   assert.match(withRefGroup, /<td>—<\/td>/, 'a group on an empty reference reads as a dash');
