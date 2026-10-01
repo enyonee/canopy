@@ -24,6 +24,14 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   `tests/inbound.test.mjs` (every recipe, the accept/reject matrix, exactly-once across a crash, the cap, no echo,
   no session, pruning, `simulate`), 42 `C4:` mutations.
 
+- **Fixes: a step's `where` failed open on a key that resolved to nothing.** In `db.each` and `db.ensure`,
+  a `where` key whose value was `undefined` (`"@values.order"` with no `order` submitted, `"@me"` with nobody
+  signed in) was silently dropped by the store, which reads an absent filter as "no filter", so the block acted
+  on every row the rest of the filter matched (an ensure created a row with the key missing). Now `db.each`
+  matches no rows and `db.ensure` refuses (the action fails and rolls back, nothing is created); both trace
+  `{ kind: 'where_unresolved', block, key }`. `null` is unchanged (`IS NULL`); list and route `?field=` filters
+  are unchanged (absent = no filter). No app relied on the drop. Gates: `tests/blocks2.test.mjs` and four
+  `Where:` mutations.
 - **Secrets and sandbox/live mode (connector library, stage C2).** `{secret.name}` in a descriptor's headers
   and body is now read from an encrypted **secret store**, `secrets.enc` beside the database: one AES-256-GCM
   blob (even the names are hidden) under a key derived with HKDF from `CANOPY_MASTER_KEY` or a `secrets.key` file

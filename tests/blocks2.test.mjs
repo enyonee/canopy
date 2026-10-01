@@ -14,7 +14,7 @@ const graph = {
 };
 const fresh = () => new Store(graph, ':memory:');
 const identity = (v) => v;
-const ctx = (store, extra = {}) => ({ store, graph, resolve: identity, text: identity, run: () => {}, fireCreated: () => {}, ...extra });
+const ctx = (store, extra = {}) => ({ store, graph, trace: () => {}, resolve: identity, text: identity, run: () => {}, fireCreated: () => {}, ...extra });
 
 test('db.adjust adds to the current row or a named one, in money when the field is money, and refuses below "min"', () => {
   const store = fresh();
@@ -62,6 +62,39 @@ test('db.each runs the nested steps once per matching row, oldest first, and rep
   assert.deepEqual(out, { count: 2 });
   assert.deepEqual(seen, [[['nested'], 2, 'Item'], [['nested'], 3, 'Item']]);
   assert.deepEqual(CATALOG['db.each'].run(ctx(store, { step: { from: 'Item', do: [] } })), { count: 3 }, 'no where means every row');
+});
+
+test('Where: a step where key that resolved to nothing matches no rows and is traced; null is IS NULL; a route filter stays absent = no filter', () => {
+  const store = fresh();
+  const paid = store.insert('Order', { customer: 'ann', status: 'placed' });
+  store.insert('Order', { customer: 'bob', status: 'placed' });
+  const events = [];
+  const trace = (e) => events.push(e);
+  const seen = [];
+  const each = (where) => CATALOG['db.each'].run(ctx(store, { trace, step: { from: 'Order', where, do: [] }, run: (_s, x) => seen.push(x.each.id) }));
+  assert.deepEqual(each({ status: 'placed', customer: undefined }), { count: 0 }, 'undefined must not widen the filter');
+  assert.deepEqual(events, [{ kind: 'where_unresolved', block: 'db.each', key: 'customer' }]);
+  assert.deepEqual(each({ customer: { ne: undefined } }), { count: 0 }, 'an undefined comparison value is unresolved too');
+  assert.equal(events[1].key, 'customer.ne');
+  assert.deepEqual(each({ customer: { in: ['ann', undefined] } }), { count: 0 });
+  assert.equal(events[2].key, 'customer.in.1');
+  const blank = store.insert('Product', { name: 'Blank' });
+  store.update('Product', blank, { stock: null });
+  store.insert('Product', { name: 'Stocked', stock: 4 });
+  const nulls = CATALOG['db.each'].run(ctx(store, { trace, step: { from: 'Product', where: { stock: null }, do: [] }, run: (_s, x) => seen.push(x.each.id) }));
+  assert.deepEqual(nulls, { count: 1 }, 'null still means IS NULL, not unresolved');
+  assert.equal(seen.at(-1), blank);
+  assert.equal(events.length, 3, 'a resolved where traces nothing');
+  assert.deepEqual(each({ customer: 'ann' }), { count: 1 });
+  assert.equal(seen.at(-1), paid);
+  const before = store.count('Order');
+  for (const where of [{ customer: undefined }, { status: 'placed', customer: undefined }]) {
+    assert.throws(() => CATALOG['db.ensure'].run(ctx(store, { trace, step: { entity: 'Order', where } })), /db\.ensure: "where" key "customer" resolved to nothing/);
+  }
+  assert.equal(store.count('Order'), before, 'a refused ensure creates nothing');
+  assert.deepEqual(events.at(-1), { kind: 'where_unresolved', block: 'db.ensure', key: 'customer' });
+  assert.equal(CATALOG['db.ensure'].run(ctx(store, { trace, step: { entity: 'Product', where: { stock: null } } })).found.id, blank, 'null finds the row without a stock');
+  assert.equal(store.list('Order', { where: { customer: undefined, status: 'placed' } }).length, 2, 'the store (list filters from ?field=) keeps absent = no filter');
 });
 
 test('http.send and mail.send only queue; the outbox row carries connector, target and payload', () => {
