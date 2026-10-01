@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { formEncode, FORM_TYPE } from '../runtime/connectors/form.mjs';
 import { buildRequest, mapResponse, deliverRow } from '../runtime/connectors/engine.mjs';
 import { checkDescriptor } from '../runtime/connectors/descriptor.mjs';
-import { checkInbound, eventIdOf, challengeOf } from '../runtime/connectors/inbound.mjs';
+import { checkInbound, eventIdOf, challengeOf, missingOf } from '../runtime/connectors/inbound.mjs';
 import { settle } from '../runtime/settle.mjs';
 
 // --- form encoding -----------------------------------------------------------------------------
@@ -111,6 +111,22 @@ test('checkInbound: eventId may be a list of up to four body paths, an event may
     assert.match(bad({ ...base, challenge: { ...challenge, [k]: { header: 'x' } } }), new RegExp(`challenge/${k}`), k);
   }
   for (const equals of [undefined, '', 5]) assert.match(bad({ ...base, challenge: { ...challenge, equals } }), /"equals" is the text the type has/, String(equals));
+});
+
+test('require: an event may name the mapped values it cannot do without; the checker holds it to the map', () => {
+  const base = { signature: { scheme: 'slack' }, secret: 's', eventId: '$.id', type: '$.type' };
+  const ev = (more) => ({ ...base, events: { a: { schema: { type: 'object' }, map: { order: '$.o', who: '$.w' }, ...more } } });
+  const bad = (inb) => checkInbound(inb).map(([p, m]) => `${p}: ${m}`).join('\n');
+  assert.equal(bad(ev({ require: ['order'] })), '');
+  assert.equal(bad(ev({ require: ['order', 'who'] })), '');
+  for (const require of [[], 'order', ['nope'], ['order', 'nope'], [5], ['constructor'], null]) assert.match(bad(ev({ require })), /\/inbound\/events\/a\/require: "require" lists names of the "map"/, JSON.stringify(require));
+  assert.match(bad({ ...base, events: { a: { schema: { type: 'object' }, require: ['order'] } } }), /a\/require/, 'no map, nothing to require');
+  assert.equal(missingOf({}, {}), undefined, 'nothing required');
+  assert.equal(missingOf({ require: ['a', 'b'] }, { a: 1, b: 0 }), undefined, 'zero and false are values');
+  assert.equal(missingOf({ require: ['a', 'b'] }, { a: 1, b: false }), undefined);
+  assert.equal(missingOf({ require: ['a', 'b'] }, { a: 1 }), 'b');
+  assert.equal(missingOf({ require: ['a', 'b'] }, { a: null, b: 1 }), 'a');
+  assert.equal(missingOf({ require: ['a'] }, { a: '' }), undefined, 'an empty text is present');
 });
 
 // --- ids and challenges ---------------------------------------------------------------------------
