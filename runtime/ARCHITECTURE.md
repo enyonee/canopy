@@ -147,6 +147,15 @@
   секрета, сервер, первый 2xx JSON → `output`, и последнее слово `checkDescriptor`: отвергнутая операция выпадает и
   попадает в `unsupported`). Ничего не додумывается: всё неотображённое — `{path, message}` в списке. Команда
   `--import-openapi` — `admin.mjs#importCommand`, её зовёт `cli.mjs` до чтения графа; результат — черновик для человека.
+  **C7, экран настроек** (`docs/CONNECTORS.md` §16). `routes/settings.mjs` (слой 8, после `hooks`, до `system`) и
+  `render/settings.mjs`; доступ — `vc.settings` (как `vc.outbox`: админ, а без ролей — все), любой отказ — свой 403 без
+  редиректа гостя. POST (`/settings/secret`, `/settings/secret/remove`, `/settings/test`) пропускает только тот, у кого `Origin`
+  (иначе `Referer`) — тот же хост, что в `Host`: токенов CSRF в приложении нет. Секрет пишется `env.secrets.set` и больше никуда
+  (ни в ответ, ни в редирект, ни в трассу; ошибка проходит через `redact`); слот — только из дескриптора коннектора. Данные
+  страницы — два запроса к БД на любое число коннекторов: `store.outboxStats(since)` (один GROUP BY по `_outbox`), `store.breakers()`
+  (теперь один `SELECT *`, а не по запросу на брейкер) плюс одно чтение имён хранилища (файл, не БД). Send test — `prepare` + `deliverRow` в
+  `mode: 'sandbox'` без строки ящика и без события брейкера; вызов задаёт `sandbox.test` дескриптора (`{op, input}`, проверяет
+  `sandbox.mjs`), иначе первая операция с правилами. В live — отказ; переключение режима остаётся командой.
   **Раунд 11, ящик** — `state.mjs`: `outboxClaim(id, now, leaseMs)` — один
   `UPDATE ... WHERE id=? AND (status='queued' OR (status='sending' AND claimedAt<=now-lease))`,
   истина только если изменилась ровно одна строка; `outboxDue` — кандидаты.

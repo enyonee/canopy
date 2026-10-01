@@ -406,7 +406,9 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   `status` defaults to 200, `headers` (strings) are the answer's (`Retry-After` works), `body` is a template over
   `{input.x}`, `{config.x}` and `{key}` (the row's idempotency key: the same fake id on every retry). The answer
   goes through the same mapping as a real one (`output`, `result`, `drift`, retry classification). No rule
-  matching is a failed delivery. Nothing is sent and no secret is read in sandbox mode.
+  matching is a failed delivery. Nothing is sent and no secret is read in sandbox mode. `"sandbox": {"test": {"op": "charge",
+  "input": {"amount": 100}}}` (optional) is the call the settings screen's "Send test" makes: `op` is an operation of the descriptor and
+  `input` is one it accepts (defaults filled in), both checked at load.
 - **Request encoding.** `"request": {"encoding": "form", "body": {…}}` sends the body as
   `application/x-www-form-urlencoded` instead of JSON: the object is flattened with brackets
   (`{"metadata": {"order": "7"}}` is `metadata[order]=7`, a list is `a[0]=x`, `null` and absent values are left out,
@@ -524,6 +526,34 @@ node runtime/run.mjs app.json --connectors simulate pay payment.succeeded --data
 
 `/outbox` lists each connector with the mode it runs in and the modes it offers.
 
+### The settings screen (`/settings`)
+
+For an admin (the same rule as `/outbox`: an admin role, or anyone when the app has no `/roles`; a customer, a guest and a
+signed-out request get 403), linked in the navigation next to Outbox. One card per connector of the graph: its kind, its
+mode (from `deploy.json`), the breaker of each mode it offers, the last 24 hours of its outbox (sent, failed, unknown, and
+how many answers drifted from their schema), each secret slot of its descriptor with the name it is stored under and
+**set** or **MISSING** (nothing else: never a value, a length or a prefix), and, for a kind with `inbound`, the webhook
+**path** `/hook/<name>` (the screen cannot know the public address, so it shows no origin and reflects no `Host` header).
+`accept: application/json` gets the same facts as data.
+
+- **Set or replace a secret.** `POST /settings/secret` with `connector`, `slot`, `value` (a password field per slot, always
+  empty). Only a slot the descriptor reads (or verifies webhooks with) can be named; the value is written to the encrypted
+  store under the connector's name for that slot and goes nowhere else: it is not echoed, not in the redirect (which says
+  only `<name> saved`), not in the trace (`secret_set` keeps the connector, the slot, the store name and who), and masked
+  in any error. An empty value changes nothing. At most 4096 characters. A rotation (`name.prev`) stays on the command line.
+- **Remove.** `POST /settings/secret/remove` with `connector`, `slot` and `confirm=yes` (a checkbox).
+- **Send test.** `POST /settings/test` with `connector`: in **sandbox** mode only, it runs one operation through the sandbox
+  rules and shows the status, the code and the *shape* (names and types, never values) of the answer. It queues nothing,
+  sends nothing and does not touch the breaker. The operation is the descriptor's `sandbox.test` (`{"op": "<operation>",
+  "input": {…}}`, checked by the descriptor checker: a real operation, an input it accepts), else the first operation with
+  sandbox rules called with an empty input (an input that cannot be built is reported, not thrown). A live connector, or a
+  kind with no descriptor, is refused.
+- **Going live is not here** (decision 6): the card prints the exact command, `node runtime/run.mjs <app.json>
+  --connectors live NAME --confirm`.
+- **Every POST needs the same origin.** The app has no CSRF token (forms are plain, the session cookie is `SameSite=Lax`), so
+  the `Origin` header (else `Referer`) must name the host the request was sent to; a missing header, `null` or another host
+  is 403 and nothing is changed.
+
 ## Search
 
 ```json
@@ -537,7 +567,7 @@ the `/search` page itself.
 
 ## Routes the runtime serves
 
-`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `POST /hook/<connector>` (a signed webhook, no session) · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
+`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `POST /hook/<connector>` (a signed webhook, no session) · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/settings`, `POST /settings/secret`, `POST /settings/secret/remove`, `POST /settings/test` (the connector settings screen, admin only) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
 
 Every successful POST answers 303 to a page with `?ok=<flash>`; validation failures answer 400 with the form and the messages; refusals 403; a transition from the wrong status 409.
 
