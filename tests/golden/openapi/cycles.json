@@ -1,0 +1,203 @@
+{
+  "descriptor": {
+    "descriptor": 1,
+    "name": "x",
+    "title": "Trees",
+    "version": "1",
+    "modes": [
+      "live"
+    ],
+    "base": "{config.baseUrl}",
+    "config": {
+      "type": "object",
+      "required": [
+        "baseUrl"
+      ],
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "the base url of the API, https://host[/prefix]"
+        }
+      }
+    },
+    "operations": {
+      "addNode": {
+        "idempotent": false,
+        "input": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "children": {
+              "type": "array",
+              "items": {}
+            },
+            "parent": {}
+          },
+          "required": [
+            "name"
+          ]
+        },
+        "request": {
+          "method": "POST",
+          "url": "{base}/nodes",
+          "headers": {
+            "accept": "application/json",
+            "content-type": "application/json"
+          },
+          "body": {
+            "name": {
+              "$": "input.name"
+            },
+            "children": {
+              "$": "input.children"
+            },
+            "parent": {
+              "$": "input.parent"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "children": {
+              "type": "array",
+              "items": {}
+            },
+            "parent": {}
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "loop": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "b": {
+              "type": "object",
+              "properties": {
+                "a": {},
+                "n": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "request": {
+          "method": "PUT",
+          "url": "{base}/loop",
+          "headers": {
+            "accept": "application/json",
+            "content-type": "application/json"
+          },
+          "body": {
+            "b": {
+              "$": "input.b"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "not": {}
+          },
+          "description": "just a leaf"
+        }
+      },
+      "mixed": {
+        "idempotent": true,
+        "input": {
+          "type": "object",
+          "properties": {
+            "body": {}
+          }
+        },
+        "request": {
+          "method": "DELETE",
+          "url": "{base}/loop",
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "$": "input.body"
+          }
+        }
+      }
+    }
+  },
+  "unsupported": [
+    {
+      "path": "#/paths/~1nodes/get/parameters/0/schema/oneOf",
+      "message": "oneOf with 2 alternatives is omitted"
+    },
+    {
+      "path": "#/paths/~1nodes/get/parameters/0",
+      "message": "parameter \"q\" is not a string, number, integer or boolean: it cannot be written into a url or a header"
+    },
+    {
+      "path": "#/paths/~1nodes/get",
+      "message": "the operation is left out"
+    },
+    {
+      "path": "#/paths/~1nodes/post/callbacks",
+      "message": "callbacks are not mapped"
+    },
+    {
+      "path": "#/paths/~1nodes/post/requestBody/content/application~1json/schema/properties/children/items",
+      "message": "$ref cycle: #/components/schemas/Node comes back to itself, cut here"
+    },
+    {
+      "path": "#/paths/~1nodes/post/requestBody/content/application~1json/schema/properties/parent",
+      "message": "$ref cycle: #/components/schemas/Node comes back to itself, cut here"
+    },
+    {
+      "path": "#/paths/~1nodes/post/responses/200/content/application~1json/schema/properties/children/items",
+      "message": "$ref cycle: #/components/schemas/Node comes back to itself, cut here"
+    },
+    {
+      "path": "#/paths/~1nodes/post/responses/200/content/application~1json/schema/properties/parent",
+      "message": "$ref cycle: #/components/schemas/Node comes back to itself, cut here"
+    },
+    {
+      "path": "#/paths/~1loop/put/requestBody/content/application~1json/schema/properties/b/properties/a",
+      "message": "$ref cycle: #/components/schemas/A comes back to itself, cut here"
+    },
+    {
+      "path": "#/paths/~1loop/put/responses/200/content/application~1json/schema/oneOf/0/properties/not/not",
+      "message": "\"not\" is omitted"
+    },
+    {
+      "path": "#/paths/~1loop/delete/requestBody/content/application~1json/schema/allOf",
+      "message": "an allOf that is not made of plain objects is omitted"
+    },
+    {
+      "path": "#/paths/~1loop/delete/responses/200/content/application~1json/schema/allOf/0/properties/not/not",
+      "message": "\"not\" is omitted"
+    },
+    {
+      "path": "#/paths/~1loop/delete/responses/200/content/application~1json/schema/allOf",
+      "message": "an allOf whose members disagree about \"label\" is omitted"
+    },
+    {
+      "path": "#/webhooks/nodeAdded",
+      "message": "webhooks are not mapped: a descriptor receives events through \"inbound\""
+    },
+    {
+      "path": "#/servers",
+      "message": "the document has no servers: the base url is the connector's configuration, config.baseUrl"
+    }
+  ]
+}

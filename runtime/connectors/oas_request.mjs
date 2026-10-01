@@ -90,7 +90,7 @@ function urlOf(pathKey, b) {
  * (`idem.header` is the one idempotency header of the whole descriptor).
  */
 export function mapParams(ctx, pathKey, lists, at) {
-  const b = { props: new Map(), required: [], headers: {}, path: new Map(), query: [], taken: new Set(), idem: false };
+  const b = { props: new Map(), required: [], headers: Object.create(null), path: new Map(), query: [], taken: new Set(), idem: false };
   for (const [p, where] of collect(ctx, lists)) if (!place(ctx, p, where, b)) return null;
   b.url = urlOf(pathKey, b);
   if (b.url === null) { ctx.note(at, `the path ${pathKey} names a parameter that is not declared as a path parameter: the operation is left out`); return null; }
