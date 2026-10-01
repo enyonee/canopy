@@ -1,15 +1,26 @@
 name: Mutation gate
 
-# Every mutant replays the whole suite, so this runs weekly and on demand rather than per push.
+# Every mutant replays the whole suite, so the gate is split into 8 shards that run in parallel
+# (one runner each): a full pass takes ~25-40 min of wall time instead of >3 h on one runner.
+# Runs on every pull request, weekly, and on demand.
 on:
+  pull_request:
+    branches: [main]
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
 
 jobs:
   mutate:
+    name: mutation shard ${{ matrix.shard }}/8
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    env:
+      MUTATE_SHARD: ${{ matrix.shard }}/8
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -18,3 +29,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run mutate
+
+  # One stable check name for branch protection: green only if every shard is green.
+  gate:
+    name: mutation gate
+    needs: mutate
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ "${{ needs.mutate.result }}" != "success" ]; then
+            echo "mutation shards: ${{ needs.mutate.result }}"; exit 1
+          fi

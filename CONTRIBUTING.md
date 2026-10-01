@@ -62,8 +62,11 @@ npm run gate          # tests, architecture gates, 100 % line coverage, types, m
 node verify/run.mjs   # every app's acceptance checks
 ```
 
-CI runs the tests, coverage, types and all acceptance checks on every pull request. The
-mutation gate runs weekly.
+CI runs the tests, coverage, types and all acceptance checks on every pull request, and the
+mutation gate too: in 8 parallel shards (`MUTATE_SHARD=i/8`, workflow `mutate.yml`), about
+25-40 minutes of wall time, with the aggregate check `mutation gate`. It also runs weekly.
+Locally the full gate takes hours; run one shard (`MUTATE_SHARD=3/8 npm run mutate`) or only the
+mutations you touched (`node tests/mutate.mjs "<name part>"`).
 
 Keep each pull request to one logical change: no drive-by refactors, generated noise or
 features outside the agreed scope. Update `CHANGELOG.md` under *Unreleased* for anything

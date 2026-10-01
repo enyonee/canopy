@@ -41,7 +41,8 @@ node runtime/run.mjs apps/<name>/app.json --port 8901    # serve it
 npm test                                      # runtime tests + architecture gates
 npm run coverage                              # 100 % lines per runtime module
 npm run types                                 # tsc --checkJs
-npm run mutate                                # mutation gate (slow; rewrites runtime files while it runs)
+npm run mutate                                # mutation gate (hours; rewrites runtime files while it runs)
+MUTATE_SHARD=3/8 npm run mutate               # only shard 3 of 8 (CI runs all 8 in parallel on every PR)
 npm run gate                                  # all of the above
 node verify/run.mjs                           # acceptance checks of every app (+ patch-based changes)
 node verify/run.mjs <app> [<app>…]            # only some apps
