@@ -17,3 +17,5 @@
 - `mail.send` to two parties from one transition, and `{values.x}` / `{created}` in a confirm text.
 - A stored ref field (`transferTo`) that exists only to be asked on a transition form.
 - Saved lists filtered on a derived int against `@me` (`daysLeft lte 30` + `holder = @me`) and a role-restricted dashboard with a period.
+
+- Dates: seed expiries are in 2099 because the rule requires a future expiry; the checks compute lease and renewal dates from the real clock (`Date.now()`), so the app passes on any day (CI runs it with the clock ten years ahead).

@@ -1,6 +1,9 @@
 // WebGen-Bench 000039 — domain leasing with accounts, orders and payments.
 import { colorCheck } from '../../verify/lib.mjs';
 
+// Dates come from the real clock: a literal year turns into a time bomb (the rule needs a future expiry).
+const DAY = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+const LEASE = DAY(365), RENEW = DAY(730);
 let bright = null, northwind = null, eliId = null;
 const field = (html, name) => (new RegExp(`<th>${name}</th><td>([\\s\\S]*?)</td>`).exec(html) || [, null])[1];
 
@@ -10,26 +13,26 @@ export const checks = [
       asGuest();
       const leased = await get('/Domain?q=northwind.com');
       must(leased.status === 200 && rows(leased.html).length === 1, `expected 1 row for northwind.com, got ${rows(leased.html).length}`);
-      must(/northwind\.com/.test(rows(leased.html)[0]) && /status">Leased/.test(rows(leased.html)[0]) && /2026-10-01/.test(rows(leased.html)[0]), 'the leased domain does not show its status and expiry');
+      must(/northwind\.com/.test(rows(leased.html)[0]) && /status">Leased/.test(rows(leased.html)[0]) && /2099-10-01/.test(rows(leased.html)[0]), 'the leased domain does not show its status and expiry');
       northwind = idOf(leased.html, 'northwind.com');
       const free = await get('/Domain?q=bright.io');
       must(rows(free.html).length === 1 && /status">Available/.test(rows(free.html)[0]) && /<td>12\.00<\/td>/.test(rows(free.html)[0]), 'the available domain does not show as available with its price');
       bright = idOf(free.html, 'bright.io');
       must(rows((await get('/Domain?q=nothing.zzz')).html).length === 0, 'an unknown name still lists domains');
-      return 'northwind.com → leased until 2026-10-01; bright.io → available at 12.00; unknown → nothing';
+      return 'northwind.com → leased until 2099-10-01; bright.io → available at 12.00; unknown → nothing';
     } },
   { task: 'A customer leases an available domain, gets a confirmation, sees it in the leasing records and pays the order',
     run: async ({ asGuest, login, get, post, follow, rowWith, idOf, must, flashOf }) => {
       asGuest();
-      must((await post(`/Domain/${bright}/go/lease`, { expiresAt: '2027-09-14' })).status === 403, 'a guest could lease');
+      must((await post(`/Domain/${bright}/go/lease`, { expiresAt: LEASE })).status === 403, 'a guest could lease');
       must((await login('dana@domains.test', 'dana123')).status === 303, 'dana could not sign in');
       const noDate = await post(`/Domain/${bright}/go/lease`, {});
       must(noDate.status === 400 && /expiresAt is required/.test(noDate.html), 'leasing without an expiry date was accepted');
-      const page = await follow(`/Domain/${bright}/go/lease`, { expiresAt: '2027-09-14' });
-      must(/Leased until 2027-09-14 — order #\d+ is waiting for payment/.test(flashOf(page.html)), `flash: ${flashOf(page.html)}`);
+      const page = await follow(`/Domain/${bright}/go/lease`, { expiresAt: LEASE });
+      must(new RegExp(`Leased until ${LEASE} — order #\\d+ is waiting for payment`).test(flashOf(page.html)), `flash: ${flashOf(page.html)}`);
       must(/<h2>bright\.io<\/h2>/.test(page.html), 'the confirmation did not land on the leased domain');
-      must(/status">Leased/.test(page.html) && /dana@domains\.test/.test(field(page.html, 'Holder')) && field(page.html, 'Expires At') === '2027-09-14', 'the domain is not leased to dana');
-      must((await post(`/Domain/${bright}/go/lease`, { expiresAt: '2028-01-01' })).status === 409, 'a leased domain could be leased again');
+      must(/status">Leased/.test(page.html) && /dana@domains\.test/.test(field(page.html, 'Holder')) && field(page.html, 'Expires At') === LEASE, 'the domain is not leased to dana');
+      must((await post(`/Domain/${bright}/go/lease`, { expiresAt: DAY(400) })).status === 409, 'a leased domain could be leased again');
       const mine = await get('/list/my-domains');
       must(rowWith(mine.html, 'bright.io') && rowWith(mine.html, 'northwind.com') && !rowWith(mine.html, 'oldlace.shop'), 'the leasing records are wrong');
       const orders = await get('/Order');
@@ -43,22 +46,22 @@ export const checks = [
     run: async ({ asGuest, login, get, post, follow, rowWith, must, flashOf }) => {
       asGuest();
       await login('eli@domains.test', 'eli123');
-      const other = await post(`/Domain/${northwind}/go/renew`, { expiresAt: '2027-10-01' });
+      const other = await post(`/Domain/${northwind}/go/renew`, { expiresAt: RENEW });
       must(other.status === 400 && /Only the current holder can renew this domain/.test(other.html), `another customer could renew: ${other.status}`);
-      must(field((await get(`/Domain/${northwind}`)).html, 'Expires At') === '2026-10-01', 'the refused renewal changed the expiry');
+      must(field((await get(`/Domain/${northwind}`)).html, 'Expires At') === '2099-10-01', 'the refused renewal changed the expiry');
       asGuest();
       await login('dana@domains.test', 'dana123');
       const past = await post(`/Domain/${northwind}/go/renew`, { expiresAt: '2020-01-01' });
       must(past.status === 400 && /The expiry date must be in the future/.test(past.html), 'a past expiry was accepted');
-      const page = await follow(`/Domain/${northwind}/go/renew`, { expiresAt: '2027-10-01' });
-      must(/Lease renewed until 2027-10-01 — order #\d+ is waiting for payment/.test(flashOf(page.html)) && /<h2>northwind\.com<\/h2>/.test(page.html), `flash: ${flashOf(page.html)}`);
-      must(field(page.html, 'Expires At') === '2027-10-01' && field(page.html, 'Renewals') === '1' && /status">Leased/.test(page.html), 'the renewed domain is wrong');
+      const page = await follow(`/Domain/${northwind}/go/renew`, { expiresAt: RENEW });
+      must(new RegExp(`Lease renewed until ${RENEW} — order #\\d+ is waiting for payment`).test(flashOf(page.html)) && /<h2>northwind\.com<\/h2>/.test(page.html), `flash: ${flashOf(page.html)}`);
+      must(field(page.html, 'Expires At') === RENEW && field(page.html, 'Renewals') === '1' && /status">Leased/.test(page.html), 'the renewed domain is wrong');
       const mine = await get('/list/my-domains');
-      must(/2027-10-01/.test(rowWith(mine.html, 'northwind.com')), 'the leasing records do not show the new expiry');
+      must(rowWith(mine.html, 'northwind.com').includes(RENEW), 'the leasing records do not show the new expiry');
       const orders = await get('/Order');
       const renewal = rowWith(orders.html, 'renewal');
       must(renewal && /northwind\.com/.test(renewal) && /<td>15\.00<\/td>/.test(renewal), `no renewal order: ${renewal}`);
-      return 'eli refused and nothing changed; past date refused; dana renewed to 2027-10-01, renewal order 15.00';
+      return `eli refused and nothing changed; past date refused; dana renewed to ${RENEW}, renewal order 15.00`;
     } },
   { task: 'A domain is transferred to another account; both accounts are notified and their records change',
     run: async ({ asGuest, login, get, post, follow, rows, rowWith, must, flashOf }) => {
@@ -76,7 +79,7 @@ export const checks = [
       asGuest();
       await login('eli@domains.test', 'eli123');
       const his = await get(`/Domain/${bright}`);
-      must(/eli@domains\.test/.test(field(his.html, 'Holder')) && field(his.html, 'Transfers') === '1' && field(his.html, 'Expires At') === '2027-09-14', 'eli is not the holder');
+      must(/eli@domains\.test/.test(field(his.html, 'Holder')) && field(his.html, 'Transfers') === '1' && field(his.html, 'Expires At') === LEASE, 'eli is not the holder');
       must(rowWith((await get('/list/my-domains')).html, 'bright.io'), 'the domain is not in the receiver\'s records');
       const back = await post(`/Domain/${bright}/go/transfer`, { transferTo: '2' });
       must(back.status === 303, 'the new holder cannot transfer the domain on');

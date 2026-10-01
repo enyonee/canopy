@@ -28,7 +28,7 @@ export const checks = [
     run: async ({ post, follow, must, flashOf }) => {
       must((await post('/register', { email: 'newmember@deals.test', password: 'newpass1', name: 'New Member' })).status === 303, 'registration failed');
       const shared = await follow('/Promotion', { title: 'Great new gadget discount', merchant: 'GadgetCo', category: '1',
-        description: 'A fine gadget discount for early adopters this week only.', tags: 'gadget', discount: '15', code: 'GADGET15', expiresAt: '2026-12-31' });
+        description: 'A fine gadget discount for early adopters this week only.', tags: 'gadget', discount: '15', code: 'GADGET15', expiresAt: new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10) });
       must(/Your promotion is on the board/.test(flashOf(shared.html)), `share was not confirmed: ${flashOf(shared.html)}`);
       must(/<th>Merchant<\/th><td>GadgetCo<\/td>/.test(shared.html) && /<th>Discount<\/th><td>15<\/td>/.test(shared.html) && /<th>Code<\/th><td>GADGET15<\/td>/.test(shared.html),
         `submitted details did not save: ${shared.html.slice(shared.html.indexOf('<table'), shared.html.indexOf('<table') + 400)}`);
