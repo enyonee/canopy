@@ -136,6 +136,7 @@ export interface BlockCtx {
   user: any;
   registry: Registry;
   resolve: (obj: any) => any;
+  trace: (event: Record<string, any>) => void;
   text: (s: string) => string;
   run: (steps: StepSpec[], extra: Record<string, any>) => any;
   fireCreated: (entity: string, id: number, values: Record<string, any>) => void;

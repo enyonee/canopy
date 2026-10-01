@@ -13,6 +13,29 @@ import { toMinor } from './fields.mjs';
 import { prepare } from './connectors/engine.mjs';
 import { checkCall } from './check/calls.mjs';
 
+// A step's "where" is the author's own filter, so a key that resolved to undefined ("@values.order"
+// with no order submitted, "@me" with nobody signed in) must never fall out of it: the store reads an
+// absent filter as "no filter" (right for a list's ?field= query, wrong here). Returns the path of the
+// first unresolved key ("order", "n.gte", "status.in.1"), or null. null itself stays IS NULL.
+function unresolvedKey(where, prefix = '') {
+  for (const [k, v] of Object.entries(where)) {
+    if (v === undefined) return prefix + k;
+    if (v && typeof v === 'object') { const deep = unresolvedKey(v, `${prefix}${k}.`); if (deep) return deep; }
+  }
+  return null;
+}
+
+// Resolve a step's "where" and refuse an unresolved key: a read block matches no rows (the trace says
+// why), a write block throws, so the action is refused and rolled back instead of acting on a guess.
+function resolvedWhere(ctx, block, write) {
+  const where = ctx.resolve(ctx.step.where || {});
+  const key = unresolvedKey(where);
+  if (key === null) return where;
+  ctx.trace({ kind: 'where_unresolved', block, key });
+  if (write) throw new Error(`${block}: "where" key "${key}" resolved to nothing; refusing to act on every row`);
+  return null;
+}
+
 /** @type {Record<string, import('./types.d.ts').BlockType>} */
 export const CATALOG = {
   'db.create': {
@@ -111,8 +134,9 @@ export const CATALOG = {
     summary: 'find the first row of "entity" matching "where", or create it from where + "values"; exposes it as @found, and @made says whether it was created — a made row fires its "created" event',
     effects: ['db.write'], requires: ['entity', 'where'],
     exposes: (step) => ({ found: step.entity }),
-    run: ({ store, step, resolve, fireCreated }) => {
-      const where = resolve(step.where);
+    run: (ctx) => {
+      const { store, step, resolve, fireCreated } = ctx;
+      const where = resolvedWhere(ctx, 'db.ensure', true);
       const [hit] = store.list(step.entity, { where, sort: { field: 'id', dir: 'asc' } });
       if (hit) return { found: hit, made: false };
       const values = { ...where, ...resolve(step.values || {}) };
@@ -125,8 +149,10 @@ export const CATALOG = {
     summary: 'run the nested "do" steps once per row of "from" matching "where"; the row is @each',
     effects: ['db.read'], requires: ['from', 'do'],
     nested: (step) => [{ steps: step.do, path: 'do', adds: { each: step.from } }],
-    run: ({ store, step, resolve, run }) => {
-      const rows = store.list(step.from, { where: resolve(step.where || {}), sort: { field: 'id', dir: 'asc' } });
+    run: (ctx) => {
+      const { store, step, run } = ctx;
+      const where = resolvedWhere(ctx, 'db.each', false);
+      const rows = where ? store.list(step.from, { where, sort: { field: 'id', dir: 'asc' } }) : [];
       for (const row of rows) run(step.do, { each: row, eachEntity: step.from });
       return { count: rows.length };
     },

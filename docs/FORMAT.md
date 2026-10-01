@@ -184,6 +184,8 @@ Every step is `{ "block": "<name>", …parameters }`. Values may be literals, `"
 | `db.adjust` | `field`, `by`, optional `entity` + `id`, `min`, `message` | adds `by` to an int/money field (stock, balances); refuses below `min` |
 | `db.ensure` | `entity`, `where`, optional `values` | finds the first row matching `where` or creates it; `@found` is the row, `@made` says which; a made row fires `entity`'s `created` event |
 | `db.each` | `from`, optional `where`, `do` | runs the nested steps once per row; the row is `@each` |
+
+**`where` in a step fails closed.** A key (or a comparison value, or an `in` element) that resolves to nothing, such as `"@values.order"` when no `order` was submitted or `"@me"` with nobody signed in, never drops out of the filter: `db.each` then matches no rows and `db.ensure` refuses (the action fails and rolls back, nothing is created), and the trace gets `{ "kind": "where_unresolved", "block", "key" }`. A write must not act on a guess, so the refusal is an error rather than an empty result. `null` is a value: `{ "field": null }` means `IS NULL`. Only a step's `where` is strict: a list's `where` and the `?field=` filters of a route still read an absent value as no filter.
 | `random.pick` | `from`, optional `weight` | picks a random row; `@picked` |
 | `check.matchRef` | `ref`, `field`, `against`, `into` | compares a field with one on a referenced row, writes 1/0 |
 | `http.send` | `connector`, `body`, optional `path` | queues a JSON request to an http connector; delivered after commit |
