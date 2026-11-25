@@ -136,6 +136,7 @@ function dashboardModel(graph, openapi, entities, d) {
   return {
     id: d.id, title: d.title || title(d.id), intro: d.intro || null, roles: d.roles || null, refresh: d.refresh || null,
     period: Boolean(d.period && Object.keys(d.period).length),
+    periodEntities: Object.keys(d.period || {}),
     cards: (d.cards || []).map((c) => ({ title: c.title, entity: c.entity, fn: c.fn || 'count', money: money(c.entity, c.field, c.fn || 'count') })),
     tables: (d.tables || []).map((t) => ({
       title: t.title, entity: t.entity, groupTitle: t.groupTitle || (t.groupBy ? title(t.groupBy) : null), group: t.groupBy ? group(t.entity, t.groupBy, t.groupUnit) : null,
@@ -175,14 +176,15 @@ const ICONS = [
 ];
 const iconFor = (words, fallback) => ICONS.find(([re]) => words.some((w) => re.test(w)))?.[1] || fallback;
 
+// Menu groups: what a shopper browses, the records people work on, saved lists, dashboards, pages.
 function navModel(graph, entities, lists, dashboards, pages) {
   const nav = [];
   for (const e of Object.values(entities)) {
-    if (!e.list.hidden) nav.push({ kind: 'entity', to: `/${e.name}`, title: e.list.title, icon: iconFor([e.name, e.list.title], 'table'), entity: e.name, roles: null });
+    if (!e.list.hidden) nav.push({ kind: 'entity', to: `/${e.name}`, title: e.list.title, icon: iconFor([e.name, e.list.title], 'table'), entity: e.name, roles: null, group: e.surface === 'storefront' ? 'Browse' : 'Records' });
   }
-  for (const l of lists) if (!l.hidden) nav.push({ kind: 'list', to: `/list/${l.id}`, title: l.title, icon: iconFor([l.id, l.title], 'list'), entity: l.entity, roles: l.roles });
-  for (const d of dashboards) nav.push({ kind: 'dashboard', to: `/dashboard/${d.id}`, title: d.title, icon: 'chart', entity: null, roles: d.roles });
-  for (const p of pages) nav.push({ kind: 'page', to: `/page/${p.id}`, title: p.title, icon: iconFor([p.id, p.title], 'file-text'), entity: null, roles: p.roles });
+  for (const l of lists) if (!l.hidden) nav.push({ kind: 'list', to: `/list/${l.id}`, title: l.title, icon: iconFor([l.id, l.title], 'list'), entity: l.entity, roles: l.roles, group: 'Lists' });
+  for (const d of dashboards) nav.push({ kind: 'dashboard', to: `/dashboard/${d.id}`, title: d.title, icon: 'chart', entity: null, roles: d.roles, group: 'Insights' });
+  for (const p of pages) nav.push({ kind: 'page', to: `/page/${p.id}`, title: p.title, icon: iconFor([p.id, p.title], 'file-text'), entity: null, roles: p.roles, group: 'Pages' });
   // The home screen leads the menu; the rest keep the graph's order.
   const home = nav.findIndex((n) => n.to === graph.home);
   if (home > 0) nav.unshift(...nav.splice(home, 1));
@@ -198,9 +200,40 @@ function currencyOf(graph, config) {
   return null;
 }
 
+// Storefront or workspace. An entity is a storefront when a visitor or a self-registered customer (a role that is
+// not an admin) may view all of its rows (no `own` scoping), its list is in the menu, and it reads like something
+// offered: it has a description (longtext), a picture or a price, or a declared action that role may run on it.
+// Everything else (own records such as orders, the admin's CRUD lists) is a workspace: tables, filters, statuses.
+function surfaceOf(graph, entity, e) {
+  const r = graph.roles;
+  if (!r || e.list.hidden) return 'workspace';
+  const shoppers = [r.anonymous, r.register].filter(Boolean).filter((role) => r.can?.[role] !== '*');
+  const offered = e.fields.some((f) => ['longtext', 'image', 'money'].includes(f.kind));
+  return shoppers.some((role) => {
+    const g = r.can?.[role]?.[entity] ?? r.can?.[role]?.['*'];
+    if (!g) return false;
+    const ops = Array.isArray(g) ? g : g.can || [];
+    const all = Array.isArray(g) ? [] : g.all || [];
+    const unscoped = Array.isArray(g) || !g.own || all.includes('view') || all.includes('*');
+    const views = ops.includes('view') || ops.includes('*') || all.includes('view');
+    const acts = e.actions.some((a) => ops.includes(`do:${a.name}`) || ops.includes('do:*') || (a.by || []).includes(role));
+    return views && unscoped && (offered || acts);
+  }) ? 'storefront' : 'workspace';
+}
+
+// The storefront's front page: the list's own intro, else the first page's words; the developer `note` is not used.
+function heroOf(graph, entities) {
+  const home = Object.values(entities).find((e) => `/${e.name}` === graph.home && e.surface === 'storefront');
+  if (!home) return null;
+  const page = (graph.pages || [])[0];
+  return { entity: home.name, title: home.list.title, eyebrow: title(graph.app || 'app'),
+    subtitle: home.list.intro || page?.heading || [].concat(page?.body || [])[0] || null };
+}
+
 /** The model of an app: what src/gen/app.ts of the generated project holds. */
 export function buildModel(graph, openapi, config = {}) {
   const entities = Object.fromEntries(Object.keys(graph.data).map((e) => [e, entityModel(graph, openapi, e)]));
+  for (const [name, e] of Object.entries(entities)) e.surface = surfaceOf(graph, name, e);
   const lists = listsModel(graph, entities);
   const dashboards = (graph.dashboards || []).map((d) => dashboardModel(graph, openapi, entities, d));
   const pages = pagesModel(graph);
@@ -214,6 +247,7 @@ export function buildModel(graph, openapi, config = {}) {
     locale: config.locale || 'en-US',
     roles: rolesModel(graph),
     entities, lists, dashboards, pages,
+    hero: heroOf(graph, entities),
     search: graph.search ? { entities: graph.search.entities, title: graph.search.title || 'Search' } : null,
     nav: navModel(graph, entities, lists, dashboards, pages),
     globalActions: (graph.actions || []).filter((a) => !a.in).map((a) => ({ name: a.name, title: a.title || title(a.name), fields: a.fields || [], by: a.by || null, after: a.after || null })),

@@ -30,36 +30,51 @@ export function visibleNav(viewer: Viewer): NavItem[] {
 function Brand() {
   return (
     <Link to="/" className="flex items-center gap-2.5 rounded-md px-1 font-semibold tracking-tight">
-      <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-sm" aria-hidden="true">{app.title[0]}</span>
+      <span className="flex size-8 items-center justify-center rounded-lg bg-brand-gradient text-sm font-bold text-white shadow-md" aria-hidden="true">{app.title[0]}</span>
       <span className="text-lg">{app.title}</span>
     </Link>
   );
 }
 
+function NavLink({ n, active, onNavigate }: { n: NavItem; active: boolean; onNavigate?: () => void }) {
+  const Icon = iconFor(n.icon);
+  return (
+    <Link to={n.to} onClick={onNavigate} aria-current={active ? 'page' : undefined}
+      className={cn('group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+        active && 'bg-primary/10 text-primary shadow-xs hover:bg-primary/15 hover:text-primary')}>
+      <span className={cn('flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:text-foreground', active && 'bg-primary text-primary-foreground group-hover:text-primary-foreground')}>
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      {n.title}
+    </Link>
+  );
+}
+
+// The menu in groups (Browse, Records, Lists, Insights, Pages: webgen's model), each with its heading.
 function NavLinks({ viewer, onNavigate }: { viewer: Viewer & { loading: boolean }; onNavigate?: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const items = visibleNav(viewer);
+  const groups = [...new Set(items.map((n) => n.group))];
   return (
-    <nav aria-label="Main" className="flex flex-col gap-1">
+    <nav aria-label="Main" className="flex flex-col gap-5">
       {viewer.loading
-        ? Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-9 w-full" />)
-        : items.map((n) => {
-            const Icon = iconFor(n.icon);
-            const active = path === n.to || path.startsWith(`${n.to}/`);
-            return (
-              <Link key={n.to} to={n.to} onClick={onNavigate} aria-current={active ? 'page' : undefined}
-                className={cn('flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-                  active && 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary')}>
-                <Icon className="size-4" aria-hidden="true" />
-                {n.title}
-              </Link>
-            );
-          })}
+        ? <div className="space-y-2">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
+        : groups.map((g) => (
+            <div key={g} className="space-y-1">
+              {groups.length > 1 && <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground/80 uppercase">{g}</p>}
+              {items.filter((n) => n.group === g).map((n) => (
+                <NavLink key={n.to} n={n} active={path === n.to || path.startsWith(`${n.to}/`)} onNavigate={onNavigate} />
+              ))}
+            </div>
+          ))}
       {!viewer.loading && isAdmin(viewer) && app.roles && (
-        <a href="/admin" className="mt-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-          <ExternalLink className="size-4" aria-hidden="true" />
-          Admin console
-        </a>
+        <div className="space-y-1">
+          <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground/80 uppercase">Admin</p>
+          <a href="/admin" className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+            <span className="flex size-7 items-center justify-center rounded-md bg-muted"><ExternalLink className="size-4" aria-hidden="true" /></span>
+            Admin console
+          </a>
+        </div>
       )}
     </nav>
   );

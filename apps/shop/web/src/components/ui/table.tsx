@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-function Table({ className, ...props }: React.ComponentProps<'table'>) {
+// `sticky`: the header stays under the app bar while the page scrolls; the container then clips instead of
+// scrolling sideways (a scrolling box would capture the sticky header).
+function Table({ className, sticky, ...props }: React.ComponentProps<'table'> & { sticky?: boolean }) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div data-slot="table-container" className={cn('relative w-full', sticky ? 'overflow-x-clip' : 'overflow-x-auto')}>
       <table data-slot="table" className={cn('w-full caption-bottom text-sm', className)} {...props} />
     </div>
   );

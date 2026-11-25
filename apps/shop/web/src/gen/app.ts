@@ -227,7 +227,8 @@ export const app: AppModel = {
         "labels": {},
         "private": {},
         "related": []
-      }
+      },
+      "surface": "workspace"
     },
     "Category": {
       "name": "Category",
@@ -291,7 +292,8 @@ export const app: AppModel = {
         "labels": {},
         "private": {},
         "related": []
-      }
+      },
+      "surface": "workspace"
     },
     "Product": {
       "name": "Product",
@@ -471,7 +473,8 @@ export const app: AppModel = {
         "labels": {},
         "private": {},
         "related": []
-      }
+      },
+      "surface": "storefront"
     },
     "Order": {
       "name": "Order",
@@ -753,7 +756,8 @@ export const app: AppModel = {
             ]
           }
         ]
-      }
+      },
+      "surface": "workspace"
     },
     "OrderItem": {
       "name": "OrderItem",
@@ -887,7 +891,8 @@ export const app: AppModel = {
         "labels": {},
         "private": {},
         "related": []
-      }
+      },
+      "surface": "workspace"
     }
   },
   "lists": [
@@ -949,6 +954,9 @@ export const app: AppModel = {
       ],
       "refresh": null,
       "period": true,
+      "periodEntities": [
+        "Order"
+      ],
       "cards": [
         {
           "title": "Orders placed",
@@ -1054,6 +1062,12 @@ export const app: AppModel = {
     }
   ],
   "pages": [],
+  "hero": {
+    "entity": "Product",
+    "title": "Shop",
+    "eyebrow": "Shop",
+    "subtitle": null
+  },
   "search": null,
   "nav": [
     {
@@ -1062,7 +1076,8 @@ export const app: AppModel = {
       "title": "Shop",
       "icon": "package",
       "entity": "Product",
-      "roles": null
+      "roles": null,
+      "group": "Browse"
     },
     {
       "kind": "entity",
@@ -1070,7 +1085,8 @@ export const app: AppModel = {
       "title": "Customers",
       "icon": "users",
       "entity": "User",
-      "roles": null
+      "roles": null,
+      "group": "Records"
     },
     {
       "kind": "entity",
@@ -1078,7 +1094,8 @@ export const app: AppModel = {
       "title": "Orders",
       "icon": "receipt",
       "entity": "Order",
-      "roles": null
+      "roles": null,
+      "group": "Records"
     },
     {
       "kind": "list",
@@ -1088,7 +1105,8 @@ export const app: AppModel = {
       "entity": "Order",
       "roles": [
         "customer"
-      ]
+      ],
+      "group": "Lists"
     },
     {
       "kind": "list",
@@ -1098,7 +1116,8 @@ export const app: AppModel = {
       "entity": "Product",
       "roles": [
         "admin"
-      ]
+      ],
+      "group": "Lists"
     },
     {
       "kind": "dashboard",
@@ -1108,7 +1127,8 @@ export const app: AppModel = {
       "entity": null,
       "roles": [
         "admin"
-      ]
+      ],
+      "group": "Insights"
     }
   ],
   "globalActions": []
