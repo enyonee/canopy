@@ -47,6 +47,22 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   so every request through them gets it, the `accept: application/json` one included. A direct `own` keeps filling its
   field; an edit that would give the row away to someone else is now refused too. New: `tests/ownwrite.test.mjs`,
   `tests/fixtures/ownhop.json`, 5 `SEC3:` mutations.
+- **`/api` and an OpenAPI contract derived from the graph (frontend, stage F1).** Every JSON route is also served under
+  `/api/<the same path>` and runs the same route (permissions, own scoping, validation, events, effects); the answer is
+  always JSON, whatever `Accept` says. Under it: an entity's list, row, create, edit, delete, row action, transition and
+  related add, `/list`, `/dashboard`, `/search`, a global `/action`; the session as JSON (`POST /api/login`, `/api/register`,
+  `/api/logout`, `GET /api/me`); `GET /api/<Entity>/:id/related/<Child>`, a page of a detail page's related table; anything
+  else is a JSON 404. A POST must come from this site (`Origin`, else `Referer`, names the `Host`: the `/settings` check,
+  now shared) with an `application/json` body of one flat object (else 403, 415, 400; 413 past 1 MiB); a JSON value is read
+  as the text a form would post, an absent key is absent (no "unchecked box means false"), and a file field cannot be set
+  from JSON. Every row under `/api` carries `_labels`, the caption of each reference the screens show in such a row (one
+  `labelsFor` query per target, whatever the page size), and a dashboard group by a reference its caption.
+  `GET /api/openapi.json` and `node runtime/run.mjs app.json --openapi [--out file]` give the same OpenAPI 3.1 document,
+  derived from the graph only (schemas of rows, bodies, pages and answers; one operation per route; no permissions), with
+  keys sorted at every depth so documents compare byte for byte. The old addresses and their Accept mode are unchanged
+  (`tests/renderdiff.test.mjs`). Also: `run.mjs` no longer cuts a long stdout short when it exits into a pipe. New:
+  `runtime/routes/api.mjs`, `runtime/contract.mjs`, `runtime/contract/{schemas,paths}.mjs`, `tests/api.test.mjs`,
+  `tests/contract.test.mjs`, 41 `F1:` mutations.
 
 - **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
   `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per

@@ -18,7 +18,8 @@
 | 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
 | 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 5); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
 | 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 5) |
-| 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule,hooks}.mjs` | маршруты, поверх интерпретатора и рендера |
+| 7 | `contract.mjs`, `contract/{schemas,paths}.mjs` | F1: документ OpenAPI 3.1 для `/api`, чистая функция графа и реестра (поверх `spec.mjs` и `captioned` из `render.mjs`) |
+| 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule,hooks,settings,api}.mjs` | маршруты, поверх интерпретатора и рендера (`api.mjs` — префикс `/api`, F1) |
 
 | 8 | `routes/{context,session,views,system,entity,rows,load,widgets,schedule}.mjs` | маршруты, поверх интерпретатора и рендера (`load.mjs` — фаза загрузки страницы, S3c) |
 | 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний и фоновый `startFlusher` |
@@ -342,6 +343,21 @@
   Гейты: `tests/arch.test.mjs` («вызов `store.`/`tx.`/`ctx.store.` и загрузчиков без `await`», «async-функция не
   передаётся в `filter/some/every/find/sort/forEach`»), `tests/await.test.mjs`, `npm run test:async`
   (`tests/asyncstore.mjs`: каждый внешний вызов метода хранилища отвечает Promise), мутации `S4:`.
+  **F1, `/api` и контракт.** `/api/<путь>` — тот же маршрут `<путь>`, отвечающий всегда JSON: второй реализации
+  маршрутов нет. `routes/context.mjs` снимает префикс до того, как любой маршрут читает `parts`, ставит `ctx.api` и
+  `wantsJSON`, а тело `/api` читает как JSON (`jsonBody`: один плоский объект, значения — текст, как его прислала бы
+  форма; `BadBody` — 400). `ctx.submitted(entity, values)` — единственное место, где тело формы и тело JSON расходятся:
+  у формы «снятая галочка = false» и «пустая загрузка = без изменений», у JSON отсутствующий ключ — отсутствие, а поле
+  файла отбрасывается. `sameOrigin` (Origin, иначе Referer, против Host) перенесён сюда из `settings.mjs`, им пользуются
+  оба. `routes/api.mjs` стоит первым в `dispatch`: что под префиксом есть (остальное — JSON 404), допуск POST (свой сайт,
+  `application/json`, тело читается один раз до маршрута: 403/415/400/413), `GET /api/me`; после шлюза входа —
+  `GET /api/openapi.json` (`contract`). Сессионные ответы в JSON — `routes/session.mjs` по `ctx.api`; 500 под `/api` —
+  JSON в `server.mjs`. Подписи ссылок: `routes/load.mjs#jsonRows` пишет строки через `rowJSON`, а под `/api` добавляет
+  `_labels` одним `labelsFor` на целевую сущность для всего набора; какие ссылки подписывать, решает `captioned` в
+  `render.mjs` (что экраны показывают в такой строке), его же читает контракт. `GET /api/<E>/:id/related/<C>` —
+  `relatedSection` + `relatedQuery` (тот же запрос, что у таблицы карточки в `detailPre`). `contract.mjs` строит документ
+  только из графа и реестра, без прав и без хранилища; ключи сортируются на всех уровнях. Гейты: `tests/api.test.mjs`,
+  `tests/contract.test.mjs`, мутации `F1:`.
 - **`runtime/server.mjs`** — только подъём: валидирует граф, открывает `Store`
   (`Store.open`), права, сессии, интерпретатор, заводит таймеры расписаний (`schedule.mjs`'s
   `everyMs`, отключаемо `noTimers`), и на каждый запрос строит контекст и
