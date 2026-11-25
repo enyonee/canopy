@@ -16,7 +16,7 @@ for (const app of ['shop', 'crm', 'trading']) {
     const t = buildTheme(themeOf(app));
     const failing = t.pairs.filter((p) => p.ratio < p.min);
     assert.deepEqual(failing, [], failing.map((p) => `${p.mode} ${p.fg} on ${p.on}: ${p.ratio} < ${p.min}`).join('\n'));
-    assert.ok(t.pairs.length >= 68, `only ${t.pairs.length} pairs checked`);
+    assert.ok(t.pairs.length >= 80, `only ${t.pairs.length} pairs checked`);
   });
 }
 
@@ -41,4 +41,25 @@ test('the accent is the solid colour in light mode, and the CSS is deterministic
   assert.match(t.css.light.primary, new RegExp(`oklch\\(${a.l.toFixed(3)} `));
   assert.equal(themeCss({ background: 'seashell', accent: 'darkslateblue' }), themeCss({ background: 'seashell', accent: 'darkslateblue' }));
   assert.doesNotThrow(() => buildTheme({}), 'a graph without a theme gets the default palette');
+});
+
+// The pairs above hold only if the screens draw text with the tokens they check. `--primary` is a solid (a button,
+// a mark): as text it is checked against nothing, so a template that writes `text-primary` (or white on a solid of
+// its own) is refused here; accent-coloured text is `text-accent-text`, text on a solid its `-foreground`.
+test('the template draws accent text with checked tokens only', () => {
+  const dir = path.join(import.meta.dirname, '..', 'template', 'src');
+  const offenders = [];
+  for (const f of fs.readdirSync(dir, { recursive: true })) {
+    if (!/\.(tsx|ts|css)$/.test(f)) continue;
+    fs.readFileSync(path.join(dir, f), 'utf8').split('\n').forEach((line, i) => {
+      if (/(?<![\w-])text-primary(?![\w-])|(?<![\w-])text-white(?![\w-])/.test(line)) offenders.push(`${f}:${i + 1}`);
+    });
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test('the gradient, the red button and accent text on tinted surfaces are in the checked pairs', () => {
+  const names = buildTheme(themeOf('shop')).pairs.map((p) => `${p.fg}/${p.on}`);
+  for (const p of ['primary-foreground/brand-end', 'destructive-foreground/destructive-solid', 'accent-text/brand-soft', 'accent-text/background', 'accent-text/sidebar'])
+    assert.ok(names.includes(p), `${p} is not checked`);
 });

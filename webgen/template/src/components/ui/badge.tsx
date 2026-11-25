@@ -13,7 +13,7 @@ const badgeVariants = cva(
         destructive: 'border-transparent bg-destructive/12 text-destructive',
         success: 'border-transparent bg-success/14 text-success',
         warning: 'border-transparent bg-warning/18 text-[color-mix(in_oklab,var(--warning)_60%,black)] dark:text-warning',
-        info: 'border-transparent bg-primary/12 text-primary',
+        info: 'border-transparent bg-brand-soft text-accent-text',
         outline: 'text-foreground',
         muted: 'border-transparent bg-muted text-muted-foreground',
       },
