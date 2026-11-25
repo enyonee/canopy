@@ -1687,6 +1687,12 @@ const MUTATIONS = [
   { name: "SEC1: the sign-up form asks for the status field", file: "runtime/render/pages.mjs",
     find: "[role, graph.states?.[entity]?.field,",
     replace: "[role," },
+  { name: "SEC1: a field no form shows (a timestamp) is written when a create or edit posts it", file: "runtime/interp.mjs",
+    find: "filter((f) => !f.type.input).map((f) => f.name);",
+    replace: "filter((f) => f.type.input === 0).map((f) => f.name);" },
+  { name: "SEC1: a field the entity's form fills is re-chosen by posting it on edit", file: "runtime/interp.mjs",
+    find: "[statusField, own, ...unasked, ...fill]",
+    replace: "[statusField, own, ...unasked]" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

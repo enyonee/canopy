@@ -231,9 +231,10 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   };
   // What a client may set on this entity through a form. The form's declared field
   // list is not a rendering hint: a field the form does not offer is not writable.
-  // Two fields are never writable whatever the form says — the status of an entity with
-  // states (transitions own it) and the role field for a user who only reaches the row
-  // because they own it (otherwise editing your profile promotes you to admin).
+  // Some fields are never writable whatever the form says — the status of an entity with
+  // states (transitions own it), the role field for a user who only reaches the row
+  // because they own it (otherwise editing your profile promotes you to admin), a field
+  // no form can show and a field the entity's form fills.
   const writable = (entity, user, allow = null) => {
     const statusField = graph.states?.[entity]?.field;
     // Only the fillable own field (never a second-or-later own field like a
@@ -241,7 +242,11 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     // that is the one field a client could otherwise reassign away from itself.
     const own = perms.ownField(user, entity);
     const roleField = graph.roles?.entity === entity ? graph.roles.role : null;
-    const banned = new Set([statusField, own].filter(Boolean));
+    // No form ever asks for a field without an input (a `time`) or one the form fills itself: a
+    // client that posts one is choosing what the graph decides (a placed-at time, the author, the clock-in).
+    const unasked = store.fields[entity].filter((f) => !f.type.input).map((f) => f.name);
+    const fill = Object.keys(graph.override?.[`${entity}.form`]?.fill || {});
+    const banned = new Set([statusField, own, ...unasked, ...fill].filter(Boolean));
     if (roleField && (own || !perms.can(user, entity, 'edit'))) banned.add(roleField);
     return { allow: allow ? new Set(allow) : null, banned };
   };
