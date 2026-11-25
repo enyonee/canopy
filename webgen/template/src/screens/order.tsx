@@ -151,7 +151,9 @@ export function OrderLayout({ entity, row, viewer, steps, rel, product, header, 
   const summary = moneyFields.filter((f, i) => i === moneyFields.length - 1 || Number(row[f.name]) !== Number(row[moneyFields[moneyFields.length - 1].name]));
   const time = entity.fields.find((f) => f.kind === 'time' && entity.detail.fields.includes(f.name));
   const facts = entity.detail.fields.filter((n) => n !== st?.field && !moneyFields.some((m) => m.name === n) && n !== time?.name && n !== 'id'
-    && entity.fields.find((f) => f.name === n)?.kind !== 'int');
+    && entity.fields.find((f) => f.name === n)?.kind !== 'int'
+    // the viewer's own name on their own order says nothing
+    && !(entity.fields.find((f) => f.name === n)?.target === app.roles?.entity && viewer.user && String(row[n]) === String(viewer.user.id)));
   const [main, ...more] = steps.filter((s) => !(s.kind === 'go' && s.t.destructive));
   const undo = steps.filter((s) => s.kind === 'go' && s.t.destructive);
   return (
@@ -196,7 +198,7 @@ export function OrderLayout({ entity, row, viewer, steps, rel, product, header, 
             )}
             {(main || undo.length > 0) && (
               <div className="space-y-2 border-t pt-4">
-                {main && <StepButton entity={entity} row={row} step={main} viewer={viewer} size="lg" className="h-12 w-full text-base" />}
+                {main && <StepButton entity={entity} row={row} step={main} viewer={viewer} size="lg" variant="default" className="h-12 w-full text-base" />}
                 {more.map((s) => <StepButton key={s.kind === 'go' ? s.t.name : s.a.name} entity={entity} row={row} step={s} viewer={viewer} variant="outline" className="w-full" />)}
                 {undo.map((s) => <StepButton key={s.kind === 'go' ? s.t.name : ''} entity={entity} row={row} step={s} viewer={viewer} variant="outline" className="w-full" />)}
               </div>

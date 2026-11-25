@@ -168,20 +168,21 @@ await scenario('A guest browses the storefront, searches and filters without sig
   await g.gone('Blue mug');
   must((await g.text()).includes('Mountain poster'), 'search lost the poster');
   must((await g.path()).includes('q=poster'), 'search not in the URL');
-  await g.click('Clear');
+  await g.click('Clear all');
   await g.see('Blue mug');
   // On the storefront the category filter is the row of quick links in the hero (the same ?category= filter).
-  await guest.evaluate(() => [...document.querySelectorAll('[aria-label^="Quick"] button')].find((b) => b.innerText.trim() === 'Mugs').setAttribute('data-e2e-target', '1'));
+  await guest.evaluate(() => [...document.querySelectorAll('[aria-label^="Filter by"] button')].find((b) => b.innerText.trim() === 'Mugs').setAttribute('data-e2e-target', '1'));
   await realClick(guest);
   await settle(guest);
   must((await g.path()).includes('category='), `the category is not in the URL: ${await g.path()}`);
   await g.gone('Mountain poster');
   must((await g.text()).includes('Blue mug'), 'filter lost the mug');
   await g.shot('02-guest-filter-mugs');
-  await g.click('Table');
-  await g.see('PRICE');
+  // The same catalogue as a table (the staff view, by URL for a guest): the price column is there.
+  await g.go('/Product?view=table');
+  await guest.waitForFunction(() => [...document.querySelectorAll('main th')].some((th) => th.innerText.trim().toLowerCase() === 'price'));
   await g.shot('03-guest-catalogue-table');
-  return 'cards and table, money 12.50, search ?q=, category filter';
+  return 'cards and table, money 12.50, search ?q=, category chips (?category=)';
 });
 
 await scenario('A guest is sent to sign in for orders and gets no dashboard', async () => {

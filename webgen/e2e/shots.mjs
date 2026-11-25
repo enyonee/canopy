@@ -50,12 +50,20 @@ const PLANS = {
     const admin = person();
     await admin.post('/api/login', { login: 'admin@shop.test', password: 'admin123' });
     await admin.post(`/api/Order/${cart}/go/ship`);
+    // Ann's next cart, left open: the cart as the customer sees it.
+    await ann.post('/api/Product/2/action/addToCart');
+    await ann.post('/api/Product/1/action/addToCart', { qty: 2 });
+    const annCart = (await ann.get('/api/list/cart')).rows[0].id;
     return [
       { name: 'catalogue', path: '/Product', who: null },
+      { name: 'cart', path: `/Order/${annCart}`, who: ann },
+      { name: 'order-customer', path: `/Order/${cart}`, who: ann },
       { name: 'product', path: '/Product/1', who: null },
+      { name: 'product-customer', path: '/Product/1', who: ann },
       { name: 'order', path: `/Order/${cart}`, who: admin },
       { name: 'dashboard', path: '/dashboard/sales', who: admin },
       { name: 'catalogue-mobile', path: '/Product', who: null, phone: true },
+      { name: 'product-mobile', path: '/Product/1', who: ann, phone: true },
       { name: 'catalogue-dark', path: '/Product', who: null, dark: true },
       { name: 'dashboard-dark', path: '/dashboard/sales', who: admin, dark: true },
     ];
