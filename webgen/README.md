@@ -39,3 +39,7 @@ committed. The runtime serves it at `/`, and the stand moves to `/admin`.
 
 Settings that are not in the graph go in `<web>/webgen.config.json`, read on every run: `{ "currency": "EUR",
 "locale": "de-DE" }`. A currency named by a connector of the graph takes precedence.
+
+The bundle carries the graph's `roles.can` matrix, so the browser can decide which buttons to offer. This is
+acceptable: the stand already shows the same permissions, and the server checks every request.
+Links to `/admin` (the stand) work once the runtime serves the front end at `/` (F2).
