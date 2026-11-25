@@ -149,6 +149,7 @@
         "additionalProperties": false,
         "properties": {
           "currency": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "USD",
               "EUR",
@@ -161,6 +162,7 @@
             "x-canopy-kind": "enum"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -168,6 +170,7 @@
             "x-canopy-kind": "text"
           },
           "phone": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -175,6 +178,7 @@
             "x-canopy-kind": "text"
           },
           "riskLimit": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "number",
               "null"
@@ -336,6 +340,7 @@
         "additionalProperties": false,
         "properties": {
           "opportunity": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -344,15 +349,8 @@
             "x-canopy-kind": "ref",
             "x-canopy-ref": "Opportunity"
           },
-          "placedAt": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ],
-            "x-canopy-kind": "time"
-          },
           "price": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "number",
               "null"
@@ -360,6 +358,7 @@
             "x-canopy-kind": "money"
           },
           "quantity": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -367,6 +366,7 @@
             "x-canopy-kind": "int"
           },
           "trader": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -532,6 +532,7 @@
         "additionalProperties": false,
         "properties": {
           "askPrice": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "number",
               "null"
@@ -539,6 +540,7 @@
             "x-canopy-kind": "money"
           },
           "closesAt": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -547,6 +549,7 @@
             "x-canopy-kind": "date"
           },
           "kind": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "stock",
               "bond",
@@ -560,6 +563,7 @@
             "x-canopy-kind": "enum"
           },
           "quantity": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -567,6 +571,7 @@
             "x-canopy-kind": "int"
           },
           "title": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -699,6 +704,7 @@
         "additionalProperties": false,
         "properties": {
           "email": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -706,6 +712,7 @@
             "x-canopy-kind": "text"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -713,6 +720,7 @@
             "x-canopy-kind": "text"
           },
           "password": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -721,6 +729,7 @@
             "x-canopy-kind": "password"
           },
           "role": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "admin",
               "trader"
@@ -987,6 +996,7 @@
         "additionalProperties": false,
         "properties": {
           "email": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -994,6 +1004,7 @@
             "x-canopy-kind": "text"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1001,6 +1012,7 @@
             "x-canopy-kind": "text"
           },
           "password": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -2001,6 +2013,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "price": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "number",
                       "null"
@@ -2008,6 +2021,7 @@
                     "x-canopy-kind": "money"
                   },
                   "quantity": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "integer",
                       "null"

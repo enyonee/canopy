@@ -58,7 +58,6 @@ export const endpoints: AppEndpoints = {
       },
       action: {},
       add: {
-        "OrderItem": (id, body) => call(client.POST("/api/Order/{id}/add/OrderItem", { params: { path: { id } }, body: body as B<"/api/Order/{id}/add/OrderItem"> })) as Promise<Saved>,
       },
       related: {
         "OrderItem": (id, query) => call(client.GET("/api/Order/{id}/related/OrderItem", { params: { path: { id }, query: query as Q<"/api/Order/{id}/related/OrderItem"> } })) as Promise<Page>,

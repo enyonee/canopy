@@ -106,6 +106,7 @@
         "additionalProperties": false,
         "properties": {
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -279,21 +280,15 @@
         "additionalProperties": false,
         "properties": {
           "address": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
             ],
             "x-canopy-kind": "text"
           },
-          "createdAt": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ],
-            "x-canopy-kind": "time"
-          },
           "customer": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -303,6 +298,7 @@
             "x-canopy-ref": "User"
           },
           "paymentMethod": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "card",
               "paypal",
@@ -446,6 +442,7 @@
         "additionalProperties": false,
         "properties": {
           "qty": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -586,6 +583,7 @@
         "additionalProperties": false,
         "properties": {
           "about": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -593,6 +591,7 @@
             "x-canopy-kind": "longtext"
           },
           "active": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "boolean",
               "null"
@@ -600,6 +599,7 @@
             "x-canopy-kind": "bool"
           },
           "category": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -609,6 +609,7 @@
             "x-canopy-ref": "Category"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -616,6 +617,7 @@
             "x-canopy-kind": "text"
           },
           "price": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "number",
               "null"
@@ -623,6 +625,7 @@
             "x-canopy-kind": "money"
           },
           "stock": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -753,6 +756,7 @@
         "additionalProperties": false,
         "properties": {
           "discount": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -760,6 +764,7 @@
             "x-canopy-kind": "percent"
           },
           "email": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -767,6 +772,7 @@
             "x-canopy-kind": "text"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -774,6 +780,7 @@
             "x-canopy-kind": "text"
           },
           "password": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -782,6 +789,7 @@
             "x-canopy-kind": "password"
           },
           "points": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -789,6 +797,7 @@
             "x-canopy-kind": "int"
           },
           "role": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "admin",
               "customer"
@@ -1054,14 +1063,8 @@
       "canopy.Register": {
         "additionalProperties": false,
         "properties": {
-          "discount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "x-canopy-kind": "percent"
-          },
           "email": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1069,6 +1072,7 @@
             "x-canopy-kind": "text"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1076,19 +1080,13 @@
             "x-canopy-kind": "text"
           },
           "password": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
             ],
             "writeOnly": true,
             "x-canopy-kind": "password"
-          },
-          "points": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "x-canopy-kind": "int"
           }
         },
         "type": "object"
@@ -1615,87 +1613,6 @@
         ]
       }
     },
-    "/api/Order/{id}/add/OrderItem": {
-      "post": {
-        "operationId": "Order_add_OrderItem",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "price": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "x-canopy-kind": "money"
-                  },
-                  "product": {
-                    "type": [
-                      "string",
-                      "integer",
-                      "null"
-                    ],
-                    "x-canopy-kind": "ref",
-                    "x-canopy-ref": "Product"
-                  },
-                  "qty": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "x-canopy-kind": "int"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrderItem.saved"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "413": {
-            "$ref": "#/components/responses/TooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          }
-        },
-        "tags": [
-          "Order"
-        ]
-      }
-    },
     "/api/Order/{id}/delete": {
       "post": {
         "operationId": "deleteOrder",
@@ -1951,6 +1868,7 @@
                 "additionalProperties": true,
                 "properties": {
                   "address": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -1958,6 +1876,7 @@
                     "x-canopy-kind": "text"
                   },
                   "paymentMethod": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "enum": [
                       "card",
                       "paypal",

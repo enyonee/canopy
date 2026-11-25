@@ -143,15 +143,8 @@
       "Task.input": {
         "additionalProperties": false,
         "properties": {
-          "createdAt": {
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ],
-            "x-canopy-kind": "time"
-          },
           "done": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "boolean",
               "null"
@@ -159,6 +152,7 @@
             "x-canopy-kind": "bool"
           },
           "notes": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -166,6 +160,7 @@
             "x-canopy-kind": "longtext"
           },
           "priority": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "low",
               "normal",
@@ -178,6 +173,7 @@
             "x-canopy-kind": "enum"
           },
           "title": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"

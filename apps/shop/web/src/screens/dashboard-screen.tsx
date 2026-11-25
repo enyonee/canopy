@@ -6,6 +6,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Activity, BarChart3, CalendarRange, Inbox, Package, ShoppingBag, Table2, Target, TrendingDown, TrendingUp, Trophy, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { Sparkline } from '@/components/sparkline';
+import { statusTone, TONE_COLOR } from '@/lib/visual';
 import { app } from '@/gen/app';
 import { endpoints } from '@/gen/endpoints';
 import type { Dashboard as Spec, Group } from '@/lib/model';
@@ -74,7 +75,7 @@ function ChartTip({ active, payload, label, money, metric }: { active?: boolean;
 }
 
 // One series in the theme's accent: bars for categories, a line over time, slices for a share.
-function SeriesChart({ type, data, money, metric, title }: { type: string; data: { name: string; v: number }[]; money: boolean; metric: string; title: string }) {
+function SeriesChart({ type, data, money, metric, title }: { type: string; data: { name: string; v: number; color?: string }[]; money: boolean; metric: string; title: string }) {
   const gid = `ch${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const axis = { stroke: 'var(--muted-foreground)', fontSize: 12, tickLine: false, axisLine: false } as const;
   const tip = <Tooltip cursor={{ fill: 'var(--muted)', opacity: 0.6 }} content={<ChartTip money={money} metric={metric} />} />;
@@ -115,7 +116,9 @@ function SeriesChart({ type, data, money, metric, title }: { type: string; data:
             <XAxis dataKey="name" {...axis} interval={0} />
             <YAxis {...axis} width={56} tickFormatter={fmt} allowDecimals={money} />
             {tip}
-            <Bar dataKey="v" fill={`url(#${gid}-bar)`} radius={[6, 6, 0, 0]} maxBarSize={48} />
+            <Bar dataKey="v" fill={`url(#${gid}-bar)`} radius={[6, 6, 0, 0]} maxBarSize={48}>
+              {data.map((d) => <Cell key={d.name} fill={d.color ?? `url(#${gid}-bar)`} />)}
+            </Bar>
           </BarChart>
         )}
       </ResponsiveContainer>
@@ -125,7 +128,11 @@ function SeriesChart({ type, data, money, metric, title }: { type: string; data:
 
 function GroupedTable({ spec, rows }: { spec: Spec['tables'][number]; rows: GroupRow[] }) {
   const first = spec.metrics[0];
-  const series = rows.map((r) => ({ name: groupText(spec.group, r), v: Number(r[first?.as] ?? 0) }));
+  // Groups by an entity's status take the status colours of its badges.
+  const owner = app.entities[spec.entity];
+  const byStatus = Boolean(spec.group && owner?.states?.field === spec.group.field);
+  const series = rows.map((r) => ({ name: groupText(spec.group, r), v: Number(r[first?.as] ?? 0),
+    color: byStatus ? TONE_COLOR[statusTone(owner, String(r.grp ?? ''))] : undefined }));
   const overTime = spec.group?.kind === 'date' || spec.group?.kind === 'time';
   const subtitle = first ? `${first.title} by ${(spec.groupTitle ?? 'group').toLowerCase()}` : '';
   const table = (
@@ -218,7 +225,7 @@ function Kpi({ spec, card, index, value: v, pending, series }: { spec: Spec; car
               {`${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`}<span className="sr-only"> compared with the month before</span>
             </span>
           ) : line ? <span className="text-xs text-muted-foreground">Last 6 months</span> : <span />}
-          {line && line.some((x) => x !== 0) && <Sparkline values={line} className="h-8 w-28" />}
+          {line && line.filter((x) => x !== 0).length >= 3 && <Sparkline values={line} className="h-8 w-28" />}
         </div>
       </CardContent>
     </Card>

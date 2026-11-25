@@ -161,7 +161,7 @@ function Hero({ spec, total, viewer, filter, onFilter }: { spec: Spec; total: nu
         <p className="text-sm font-medium tracking-wide text-white/75 uppercase">{hero.eyebrow}</p>
         <h1 id="hero-title" className="text-4xl font-semibold tracking-tight sm:text-5xl">{hero.title}</h1>
         <p className="text-lg text-white/85">
-          {hero.subtitle ?? (total === null ? '\u00a0' : `${formatNumber(total)} ${total === 1 ? spec.entity.label.toLowerCase() : spec.entity.plural.toLowerCase()} to explore${(options.data?.length ?? 0) > 1 ? ` across ${options.data!.length} ${cat!.name.toLowerCase()}s` : ''}.`)}
+          {hero.subtitle ?? (total === null ? '\u00a0' : `${formatNumber(total)} ${total === 1 ? spec.entity.label.toLowerCase() : spec.entity.plural.toLowerCase()} to explore${(options.data?.length ?? 0) > 1 ? ` across ${options.data!.length} ${app.entities[target!]?.plural.toLowerCase() ?? cat!.name.toLowerCase()}` : ''}.`)}
         </p>
         {cat && (options.data?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-2 pt-2" role="group" aria-label={`Quick ${cat.name.toLowerCase()} filter`}>
@@ -205,6 +205,7 @@ function ListBody({ spec }: { spec: Spec }) {
   const filters = Object.fromEntries(spec.filters.flatMap((f) => (f.range ? [`${f.field}_from`, `${f.field}_to`] : [f.field])).map((k) => [k, String(search[k] ?? '')]));
   const [text, setText] = useState(q);
   const grid = catalogue(spec) && search.view !== 'table';
+  const heroShown = catalogue(spec) && app.hero?.entity === spec.entity.name;
   const heroFilter = spec.filters.find((f) => spec.entity.fields.find((x) => x.name === f.field)?.kind === 'ref')?.field ?? null;
 
   const set = (patch: Record<string, string | number | undefined>) =>
@@ -245,7 +246,7 @@ function ListBody({ spec }: { spec: Spec }) {
               </div>
             </div>
           )}
-          {spec.filters.filter((f) => !f.range).map((f) => (
+          {spec.filters.filter((f) => !f.range && !(heroShown && f.field === heroFilter)).map((f) => (
             <FilterSelect key={f.field} entity={spec.entity} filter={f} value={filters[f.field]} viewer={viewer} onChange={(v) => set({ [f.field]: v, page: undefined })} />
           ))}
           {spec.filters.filter((f) => f.range).map((f) => (
@@ -280,7 +281,7 @@ function ListBody({ spec }: { spec: Spec }) {
           </div>
         ) : (
           <div aria-busy={data.isFetching || undefined}>
-            <Card className="gap-0 overflow-hidden py-0">
+            <Card className="gap-0 overflow-clip py-0">
               <DataTable entity={spec.entity} rows={data.data.rows} columns={spec.columns} rowActions={spec.rowActions} viewer={viewer} labels={spec.labels} sort={sort} onSort={onSort} caption={spec.title} />
               {data.data.pages > 1 && <Pager framed page={data.data.page} pages={data.data.pages} total={data.data.total} onPage={(p) => set({ page: p })} />}
             </Card>

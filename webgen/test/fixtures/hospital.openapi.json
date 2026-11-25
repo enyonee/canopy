@@ -158,6 +158,7 @@
         "additionalProperties": false,
         "properties": {
           "amount": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "number",
               "null"
@@ -165,6 +166,7 @@
             "x-canopy-kind": "money"
           },
           "filedAt": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -173,6 +175,7 @@
             "x-canopy-kind": "date"
           },
           "insurer": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -180,6 +183,7 @@
             "x-canopy-kind": "text"
           },
           "note": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -187,6 +191,7 @@
             "x-canopy-kind": "text"
           },
           "patient": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -327,6 +332,7 @@
         "additionalProperties": false,
         "properties": {
           "activities": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -334,6 +340,7 @@
             "x-canopy-kind": "longtext"
           },
           "date": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -342,6 +349,7 @@
             "x-canopy-kind": "date"
           },
           "hours": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -349,6 +357,7 @@
             "x-canopy-kind": "int"
           },
           "superior": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -501,6 +510,7 @@
         "additionalProperties": false,
         "properties": {
           "amount": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "number",
               "null"
@@ -508,6 +518,7 @@
             "x-canopy-kind": "money"
           },
           "date": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -516,6 +527,7 @@
             "x-canopy-kind": "date"
           },
           "method": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "cash",
               "card",
@@ -528,6 +540,7 @@
             "x-canopy-kind": "enum"
           },
           "patient": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -537,6 +550,7 @@
             "x-canopy-ref": "Patient"
           },
           "service": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -675,6 +689,7 @@
         "additionalProperties": false,
         "properties": {
           "date": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -683,6 +698,7 @@
             "x-canopy-kind": "date"
           },
           "patient": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -692,6 +708,7 @@
             "x-canopy-ref": "Patient"
           },
           "result": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -699,6 +716,7 @@
             "x-canopy-kind": "text"
           },
           "test": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -832,6 +850,7 @@
         "additionalProperties": false,
         "properties": {
           "dosageForm": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "tablet",
               "capsule",
@@ -845,6 +864,7 @@
             "x-canopy-kind": "enum"
           },
           "expiry": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -853,6 +873,7 @@
             "x-canopy-kind": "date"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -860,6 +881,7 @@
             "x-canopy-kind": "text"
           },
           "reorderLevel": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -867,6 +889,7 @@
             "x-canopy-kind": "int"
           },
           "stock": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -1012,6 +1035,7 @@
         "additionalProperties": false,
         "properties": {
           "comments": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1019,6 +1043,7 @@
             "x-canopy-kind": "longtext"
           },
           "diagnosis": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1026,6 +1051,7 @@
             "x-canopy-kind": "text"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1033,6 +1059,7 @@
             "x-canopy-kind": "text"
           },
           "phone": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1040,6 +1067,7 @@
             "x-canopy-kind": "text"
           },
           "visitDate": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -1191,6 +1219,7 @@
         "additionalProperties": false,
         "properties": {
           "date": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -1199,6 +1228,7 @@
             "x-canopy-kind": "date"
           },
           "kind": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "in",
               "out"
@@ -1210,6 +1240,7 @@
             "x-canopy-kind": "enum"
           },
           "medicine": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -1219,6 +1250,7 @@
             "x-canopy-ref": "Medicine"
           },
           "quantity": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "integer",
               "null"
@@ -1226,6 +1258,7 @@
             "x-canopy-kind": "int"
           },
           "reason": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1233,6 +1266,7 @@
             "x-canopy-kind": "text"
           },
           "recordedBy": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -1406,6 +1440,7 @@
         "additionalProperties": false,
         "properties": {
           "date": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -1414,6 +1449,7 @@
             "x-canopy-kind": "date"
           },
           "note": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1421,6 +1457,7 @@
             "x-canopy-kind": "text"
           },
           "patient": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -1430,6 +1467,7 @@
             "x-canopy-ref": "Patient"
           },
           "procedure": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1437,6 +1475,7 @@
             "x-canopy-kind": "text"
           },
           "room": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "main",
               "minor"
@@ -1448,6 +1487,7 @@
             "x-canopy-kind": "enum"
           },
           "startTime": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1455,6 +1495,7 @@
             "x-canopy-kind": "text"
           },
           "surgeon": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -1602,6 +1643,7 @@
         "additionalProperties": false,
         "properties": {
           "amount": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "number",
               "null"
@@ -1609,6 +1651,7 @@
             "x-canopy-kind": "money"
           },
           "category": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1616,6 +1659,7 @@
             "x-canopy-kind": "text"
           },
           "date": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -1624,6 +1668,7 @@
             "x-canopy-kind": "date"
           },
           "kind": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "income",
               "expense"
@@ -1635,6 +1680,7 @@
             "x-canopy-kind": "enum"
           },
           "note": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1642,6 +1688,7 @@
             "x-canopy-kind": "text"
           },
           "patient": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -1766,6 +1813,7 @@
         "additionalProperties": false,
         "properties": {
           "email": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1773,6 +1821,7 @@
             "x-canopy-kind": "text"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1780,6 +1829,7 @@
             "x-canopy-kind": "text"
           },
           "password": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1788,6 +1838,7 @@
             "x-canopy-kind": "password"
           },
           "position": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -1795,6 +1846,7 @@
             "x-canopy-kind": "text"
           },
           "role": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "admin",
               "staff"
@@ -2470,6 +2522,7 @@
                 "additionalProperties": true,
                 "properties": {
                   "note": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -3042,6 +3095,7 @@
                 "additionalProperties": true,
                 "properties": {
                   "method": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "enum": [
                       "cash",
                       "card",
@@ -3579,6 +3633,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "kind": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "enum": [
                       "in",
                       "out"
@@ -3590,6 +3645,7 @@
                     "x-canopy-kind": "enum"
                   },
                   "quantity": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "integer",
                       "null"
@@ -3597,6 +3653,7 @@
                     "x-canopy-kind": "int"
                   },
                   "reason": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -3963,6 +4020,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "amount": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "number",
                       "null"
@@ -3970,6 +4028,7 @@
                     "x-canopy-kind": "money"
                   },
                   "service": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -4035,6 +4094,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "result": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -4042,6 +4102,7 @@
                     "x-canopy-kind": "text"
                   },
                   "test": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -4061,113 +4122,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LabTest.saved"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "413": {
-            "$ref": "#/components/responses/TooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          }
-        },
-        "tags": [
-          "Patient"
-        ]
-      }
-    },
-    "/api/Patient/{id}/add/Surgery": {
-      "post": {
-        "operationId": "Patient_add_Surgery",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "date": {
-                    "format": "date",
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "date"
-                  },
-                  "note": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "text"
-                  },
-                  "procedure": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "text"
-                  },
-                  "room": {
-                    "enum": [
-                      "main",
-                      "minor"
-                    ],
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "enum"
-                  },
-                  "startTime": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "text"
-                  },
-                  "surgeon": {
-                    "type": [
-                      "string",
-                      "integer",
-                      "null"
-                    ],
-                    "x-canopy-kind": "ref",
-                    "x-canopy-ref": "User"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Surgery.saved"
                 }
               }
             },

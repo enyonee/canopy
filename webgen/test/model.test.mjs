@@ -104,3 +104,17 @@ test('a graph without roles, with pages, search and global actions', () => {
   assert.deepEqual(n.nav.map((x) => x.to), ['/Note', '/page/about']);
   assert.equal(n.entities.Note.fields[1].type, 'boolean', 'without a contract the kind decides the JSON type');
 });
+
+test('surface: what a visitor or a new customer may browse whole and is offered is a storefront; the rest a workspace', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  assert.deepEqual(Object.values(m.entities).map((e) => [e.name, e.surface]),
+    [['User', 'workspace'], ['Category', 'workspace'], ['Product', 'storefront'], ['Order', 'workspace'], ['OrderItem', 'workspace']]);
+  assert.deepEqual(m.hero, { entity: 'Product', title: 'Shop', eyebrow: 'Shop', subtitle: null });
+  assert.deepEqual([...new Set(m.nav.map((n) => n.group))], ['Store', 'Workspace', 'Insights']);
+  const crm = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'apps/crm/app.json'), 'utf8'));
+  const c = buildModel(crm, JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures/crm.openapi.json'), 'utf8')));
+  assert.ok(Object.values(c.entities).every((e) => e.surface === 'workspace'), 'an app without visitors or self-registration has no storefront');
+  assert.equal(c.hero, null);
+  assert.deepEqual(m.dashboards[0].periodEntities, ['Order']);
+});
