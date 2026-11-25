@@ -69,11 +69,10 @@
 
   "events": [
     { "on": "StudentProfile.created", "do": [ { "block": "db.each", "from": "Provider",
-        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "student": "@row.id", "provider": "@each.id" },
-                  "values": { "studentUser": "@row.user", "providerUser": "@each.user" } } ] } ] },
+        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "student": "@row.id", "provider": "@each.id" } } ] } ] },
     { "on": "Provider.created", "do": [ { "block": "db.each", "from": "StudentProfile",
-        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "student": "@each.id", "provider": "@row.id" },
-                  "values": { "studentUser": "@each.user", "providerUser": "@row.user" } } ] } ] },
+        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "student": "@each.id", "provider": "@row.id" } } ] } ] },
+    { "on": "Match.created", "do": [ { "block": "db.update", "set": { "studentUser": "= student.user", "providerUser": "= provider.user" } } ] },
     { "on": "Match.updated", "do": [ { "block": "db.update", "set": { "studentUser": "= student.user", "providerUser": "= provider.user" } } ] }
   ],
 

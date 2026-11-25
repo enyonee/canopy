@@ -5,11 +5,14 @@ import { colorCheck, navCheck } from '../../verify/lib.mjs';
 let profileId = null, matchId = null;
 
 // A JSON read as a signed-in user, on a session of its own (the check's cookie jar answers HTML).
-const jsonAs = async (base, login, password, p) => {
+// With `form`, the same session posts it (a JSON write answers with the row it stored).
+const jsonAs = async (base, login, password, p, form = null) => {
   const signIn = await fetch(`${base}/login`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ login, password }).toString() });
   const cookie = (signIn.headers.get('set-cookie') || '').split(';')[0];
-  const res = await fetch(base + p, { headers: { cookie, accept: 'application/json' } });
+  const res = await fetch(base + p, form
+    ? { method: 'POST', headers: { cookie, accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() }
+    : { headers: { cookie, accept: 'application/json' } });
   return { status: res.status, body: await res.json() };
 };
 
@@ -109,6 +112,19 @@ export const checks = [
       const maria = String(thread.body.rows.find((m) => /visit next week/.test(m.body)).sender);
       const signed = (await jsonAs(base, 'maria@portal.test', 'maria123', '/Message')).body.rows.find((m) => m.body === 'Signed as the provider');
       must(!signed || String(signed.sender) === maria, `a student posted a message signed as user #${signed?.sender}`);
+      // The match's owner copies follow its student and provider, whatever even an admin posts for them.
+      const admin = (p, form) => jsonAs(base, 'admin@portal.test', 'admin123', p, form);
+      const forged = { student: '1', provider: '1', studentUser: '3', providerUser: '5' };
+      const made = await admin('/Match', forged);
+      must(made.status === 200 && made.body.id, `the admin could not create a match: ${made.status} ${JSON.stringify(made.body).slice(0, 200)}`);
+      const asMade = await admin(`/Match/${made.body.id}`);
+      must(String(asMade.body.studentUser) === '4' && String(asMade.body.providerUser) === '2',
+        `a created match kept the posted owners: ${JSON.stringify(asMade.body)}`);
+      await admin(`/Match/${made.body.id}`, forged);
+      const asEdited = await admin(`/Match/${made.body.id}`);
+      must(String(asEdited.body.studentUser) === '4' && String(asEdited.body.providerUser) === '2',
+        `an edited match kept the posted owners: ${JSON.stringify(asEdited.body)}`);
+      must((await admin(`/Match/${made.body.id}/delete`, {})).status === 200, 'the admin could not remove the test match');
       asGuest();
       must((await login('alice@portal.test', 'alice123')).status === 303, 'alice could not sign in');
       const intrusion = await post('/Message', { match: matchId, body: 'Alice slips into the thread' });
