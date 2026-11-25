@@ -25,8 +25,19 @@
 - `field kind`: no multi-select/checkbox-group field kind for "pick several from a catalog" in
   one form submission — each pick is its own POST (line-item pattern), which is correct and
   auditable but is N requests instead of one.
+- Runtime, not the format: a subscriber may still `POST /AssessmentItem` with `assessment` set to another
+  subscriber's assessment — a one-hop `own` scopes view/edit/delete, but create neither checks the parent of
+  the new row nor fills it. Closed by the runtime fix SEC3 (one-hop own on create/edit/related add); until it
+  lands, check 5 fails on exactly this ("another subscriber's assessment changed").
 
 ## New for this app
+- Selected items belong to the assessment's owner: `AssessmentItem` is granted with `own: "assessment.owner"`.
+  Before, it was granted without `own`, so any subscriber listed every assessment's items (`/AssessmentItem`
+  JSON, `/AssessmentItem.csv?assessment=<id>` with the other assessment's title), opened, edited and deleted
+  them, although the assessments themselves were owner-only. The dashboard therefore narrows to the viewer's
+  own items too (the Assessments card already did): check 4 used to expect the demo subscriber's seeded
+  Financial item on Jane's chart and now expects it absent; check 5 asserts Jane cannot read, export, edit or
+  remove the demo subscriber's item.
 - A "subscription" modelled as plain `roles` self-registration (`register: "subscriber"`) with
   immediate, ordinary permission grants — no payment plugin needed since the brief only asks for
   granted access, not a charge.

@@ -25,7 +25,7 @@
     "register": "subscriber", "anonymous": "guest",
     "can": {
       "admin":      "*",
-      "subscriber": { "RiskItem": ["view"], "Assessment": { "own": "owner", "can": ["view", "create"] }, "AssessmentItem": ["view", "create", "edit", "delete"] },
+      "subscriber": { "RiskItem": ["view"], "Assessment": { "own": "owner", "can": ["view", "create"] }, "AssessmentItem": { "own": "assessment.owner", "can": ["view", "create", "edit", "delete"] } },
       "guest":      { "RiskItem": ["view"] }
     }
   },
@@ -68,7 +68,7 @@
   },
 
   "dashboards": [
-    { "id": "risk", "title": "Risk dashboard", "intro": "Risk exposure by category across every selected item.",
+    { "id": "risk", "title": "Risk dashboard", "intro": "Risk exposure by category across your selected items.",
       "roles": ["admin", "subscriber"],
       "cards": [ { "title": "Assessments", "entity": "Assessment", "fn": "count" },
                  { "title": "Items assessed", "entity": "AssessmentItem", "fn": "count" },
