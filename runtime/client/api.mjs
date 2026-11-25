@@ -14,11 +14,16 @@
 // A POST body stays form-encoded (the same shape every <form> on the scaffold
 // already posts, and every route already parses) — only the *answer* is JSON,
 // asked for the same way a GET is: the Accept header, nothing new to parse.
+// BASE is the path the scaffold is served under: '' here, and routes/widgets.mjs hands this file out with the
+// scaffold's base written in when the app serves a front (runtime/web.mjs), so a widget's `api.post('/Game/1/…')`
+// reaches /admin/Game/1/… there. Only a root-absolute path gets it.
+const BASE = '';
+const at = (path) => (/^\/(?![/\\])/.test(path) ? BASE + path : path);
 const form = (body) => new URLSearchParams(Object.entries(body ?? {}).map(([k, v]) => [k, String(v)]));
 
 export const api = {
-  get: (path) => fetch(path, { headers: { accept: 'application/json' } }).then((r) => r.json()),
-  post: (path, body) => fetch(path, {
+  get: (path) => fetch(at(path), { headers: { accept: 'application/json' } }).then((r) => r.json()),
+  post: (path, body) => fetch(at(path), {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
     body: form(body).toString(),

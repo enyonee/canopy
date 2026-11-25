@@ -90,6 +90,14 @@ async function jsonBody(req) {
   return out;
 }
 
+// With a front (runtime/web.mjs), the scaffold answers under a base path: every root-absolute link, form target
+// and script source of a page, and every redirect, is written for the base here, at the one place a page or a
+// redirect leaves the server, so no screen knows it. Without a front `base` is '' and nothing is touched.
+// Values are escaped (`"` is `&quot;`), so only real attributes match; "//host" and "/\\host" are not paths.
+const LINK = /(\s(?:href|src|action|formaction)=")\/(?![/\\])/g;
+export const rebase = (html, base) => html.replace(LINK, `$1${base}/`);
+export const rebaseTo = (to, base) => (/^\/(?![/\\])/.test(to) ? base + to : to);
+
 // "//evil.test" and "/\evil.test" are links off this site; only a single-slash path stays.
 const safeNext = (to) => (typeof to === 'string' && /^\/(?![/\\])[^\s\x00-\x1f]*$/.test(to) ? to : '/');
 
@@ -127,7 +135,7 @@ const submittedOf = (api, store, interp) => (entity, values) => {
   return values;
 };
 
-export async function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
+export async function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile, base = '' }) {
   const parts = url.pathname.split('/').filter(Boolean);
   const wantsCsv = parts.length > 0 && parts[parts.length - 1].endsWith('.csv');
   if (wantsCsv) parts[parts.length - 1] = parts[parts.length - 1].slice(0, -4);
@@ -138,8 +146,8 @@ export async function createContext({ req, res, url, graph, store, perms, sess, 
   const flash = url.searchParams.get('ok') || '';
   const headers = {};
 
-  const send = (code, html) => { res.writeHead(code, { 'content-type': 'text/html; charset=utf-8', ...headers }); res.end(html); };
-  const redirect = (to) => { res.writeHead(303, { location: to, ...headers }); res.end(); };
+  const send = (code, html) => { res.writeHead(code, { 'content-type': 'text/html; charset=utf-8', ...headers }); res.end(base ? rebase(html, base) : html); };
+  const redirect = (to) => { res.writeHead(303, { location: base ? rebaseTo(to, base) : to, ...headers }); res.end(); };
   const ok = (to, msg) => redirect(msg ? `${to}${to.includes('?') ? '&' : '?'}ok=${encodeURIComponent(msg)}` : to);
   const sendCsv = (name, header, lines) => { res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}.csv"`, ...headers }); res.end(csv(header, lines)); };
   const sendJson = (code, data) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', ...headers }); res.end(JSON.stringify(data)); };
@@ -176,7 +184,7 @@ export async function createContext({ req, res, url, graph, store, perms, sess, 
 
   return {
     req, res, url, parts, api, flash, wantsCsv, wantsJSON, headers,
-    graph, store, perms, sess, registry, interp, trace, filesDir, fetchImpl, clock, env, graphFile,
+    graph, store, perms, sess, registry, interp, trace, filesDir, fetchImpl, clock, env, graphFile, base,
     user, role, vc, ownWhere, deny,
     send, redirect, ok, sendCsv, exportRows, sendJson, answer,
     body, rawBody: () => rawBody(req), resolveTop, paged, sortOf, safeNext, submitted: submittedOf(api, store, interp),

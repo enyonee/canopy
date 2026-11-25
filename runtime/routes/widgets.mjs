@@ -16,11 +16,14 @@ function notFound(ctx, message) {
   ctx.res.end(message);
 }
 
+// The scaffold's base (routes/context.mjs), written into the helper's one `BASE` line; '' leaves the file as it is.
+export const withBase = (src, base) => (base ? src.replace("const BASE = '';", `const BASE = ${JSON.stringify(base)};`) : src);
+
 export function handle(ctx) {
   const { parts, req, registry } = ctx;
   if (parts[0] !== 'widget' || parts.length !== 2 || req.method !== 'GET' || !parts[1].endsWith('.mjs')) return undefined;
   const file = parts[1];
-  if (file === '_api.mjs') { sendJs(ctx, fs.readFileSync(API_FILE, 'utf8')); return true; }
+  if (file === '_api.mjs') { sendJs(ctx, withBase(fs.readFileSync(API_FILE, 'utf8'), ctx.base)); return true; }
   const name = file.slice(0, -4);
   const w = registry.widgets[name];
   if (!w) { notFound(ctx, `no widget "${name}"`); return true; }

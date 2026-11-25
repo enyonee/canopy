@@ -15,19 +15,20 @@
 | 2 | `driver.mjs`, `blocks.mjs`, `auth.mjs`, `check/scope.mjs`, `check/data.mjs`, `check/steps.mjs`, `check/basics.mjs`, `check/calls.mjs` | каталог блоков; пароли и сессии; общие помощники чекера |
 | 3 | `registry.mjs` | сборка пяти таблиц (плюс `widgets`) + загрузка плагинов |
 | 4 | `store.mjs`, `outbox.mjs`, `settle.mjs` | хранилище (говорит с базой только через `this.drv`) и исходящий ящик; `settle.mjs` — чистое «во что превратилась доставка» (повтор, `unknown`, событие разрывателю) |
-| 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
+| 5 | `check/{roles,override,lists,dashboards,pages,seed,actions,events,states,schedule,connectors,rules,plugins,search,web}.mjs` | по чекеру на вид узла (плюс `checkWidget` в `check/util.mjs`, общий для `pages.mjs`/`override.mjs`) |
 | 6 | `validate.mjs`, `patch.mjs`, `interp.mjs`, `boot.mjs`, `render.mjs` | чекер-драйвер; патч по узлу; интерпретатор шагов (без HTTP); бутстрап identity/seed (плюс сидируемые файлы, раунд 5); каркас рендера (плюс `rowJSON`/`widgetBlock`/`mayRunAction`) |
 | 7 | `render/{list,form,detail,dashboard,pages,search}.mjs` | сами экраны, поверх `render.mjs` (`dashboard.mjs` — и графики; `search.mjs` — раунд 5) |
 | 7 | `contract.mjs`, `contract/{schemas,paths}.mjs` | F1: документ OpenAPI 3.1 для `/api`, чистая функция графа и реестра (поверх `spec.mjs` и `captioned` из `render.mjs`) |
 | 8 | `routes/{context,session,views,system,entity,rows,widgets,schedule,hooks,settings,api}.mjs` | маршруты, поверх интерпретатора и рендера (`api.mjs` — префикс `/api`, F1) |
 
 | 8 | `routes/{context,session,views,system,entity,rows,load,widgets,schedule}.mjs` | маршруты, поверх интерпретатора и рендера (`load.mjs` — фаза загрузки страницы, S3c) |
+| 8 | `web.mjs` | собранный фронт приложения (`"web"`, F2): файлы каталога на `/`, SPA-fallback, решение «фронт или стенд» до контекста запроса; ничего не импортирует изнутри рантайма |
 | 9 | `server.mjs` | тонкая HTTP-обвязка: строит контекст запроса, перебирает маршруты, заводит таймеры расписаний и фоновый `startFlusher` |
 | 10 | `cli.mjs`, `run.mjs` | точка входа |
 
 `node:` втроенные модули — по отдельной таблице в `tests/arch.test.mjs`: `node:sqlite`
 только в `driver/sqlite.mjs`; `node:http` только в `server.mjs`; `node:fs` также в `routes/widgets.mjs`
-(читает файл виджета, который назвал плагин) и в `boot.mjs` (копирует сидируемый файл в
+(читает файл виджета, который назвал плагин), в `web.mjs` (файлы собранного фронта, F2) и в `boot.mjs` (копирует сидируемый файл в
 `files/`, раунд 5); `fs`/`path` — там же, где сегодня
 (`auth.mjs`, `patch.mjs`, `server.mjs`, `cli.mjs`, `routes/context.mjs`, `routes/system.mjs`, `boot.mjs`).
 
@@ -364,6 +365,18 @@
   перебирает модули маршрутов по порядку. `serve()` возвращает `{ server, ready, ... }`: порт
   слушается только после `ready`. Ни один маршрут не знает про
   HTTP-подъём; сам `server.mjs` не знает про конкретные пути.
+- **`runtime/web.mjs`** (F2) — фронт приложения с `"web"`. `server.mjs#requestHandler` спрашивает его первым, до
+  `createContext` (файл фронта не открывает сессию и не трогает хранилище). Первый сегмент пути решает всё:
+  `admin` — стенд, с `/admin` срезанным из `url` и базой `/admin`; `api`, `hook` — стенд как есть, без базы; `file`,
+  `widget` — стенд как есть, с базой `/admin`; любой другой — фронт (`RESERVED` — эти пять имён). Фронт: `locate`
+  декодирует путь по сегментам, отказывает точечным именам, закодированным `/`, `\` и NUL, проходит симлинки
+  `realpath` и требует результат внутри каталога; иначе GET/HEAD без расширения и без `accept: application/json`
+  получает `index.html`. Отсутствующий `index.html` — ошибка графа при старте (`webProblems`, `/web`), сервер
+  отвечает ею на любой путь и не открывает базу. **База стенда — одна точка:** `routes/context.mjs` переписывает
+  `href`/`src`/`action`/`formaction`, начинающиеся с одного `/`, в `send` и цель в `redirect` (`rebase`, `rebaseTo`);
+  экраны и маршруты базы не знают. Без `web` база `''` и ответ не трогается (доказательство — `tests/renderdiff.test.mjs`
+  и приёмки всех приложений). Помощник виджетов `client/api.mjs` держит строку `const BASE = '';`, `routes/widgets.mjs`
+  подставляет в неё базу (`withBase`), так что `api.post('/Game/1/…')` из виджета стенда идёт на `/admin/Game/1/…`.
 
 ## Правило роста
 
