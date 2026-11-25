@@ -28,6 +28,15 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   on edit, a key the entity's form `fill`s (`hospital` staff re-assigning `LabTest.technician`). Both are now never
   writable from a client, in HTML and JSON alike; on create the fill still decides as before. 2 `SEC1:` mutations.
 
+- **Fixes (SEC1): a related table without a form still took a POST.** `POST /Entity/:id/add/<Child>` read `form: false`
+  as "no field list" and wrote every posted field (8 related tables across the apps, e.g. `calls` Client → CallLog);
+  it now answers 404, as for an unknown related table. `form: true` crashed (`new Set(true)`) and now takes every
+  input, as the detail page renders it. 2 `SEC1:` mutations.
+
+- **Fixes (SEC1): in `apps/shop` a customer read and changed other customers' cart lines.** `OrderItem` was granted
+  `view`/`edit`/`delete` with no `own`; it is now `"own": "order.customer"`, and check 8 proves another customer sees
+  none of the lines (HTML and JSON) and gets 403 on reading, editing and deleting one.
+
 - **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
   `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per
   connector with its kind, its mode (`deploy.json`), the breaker of each mode, the last 24 hours of its outbox (sent, failed,

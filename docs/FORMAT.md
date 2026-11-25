@@ -122,7 +122,7 @@ Keys are `"Entity.list"`, `"Entity.form"`, `"Entity.detail"`.
   (HTML), its JSON answers, and its CSV export. A related child table, a saved list, a page
   section and search results all read the same field the same way, so the same redaction applies
   there too — `private` is declared once, on `.detail`, and enforced wherever the field is read.
-- `related`: `[ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": [...], "form": ["qty"] | false, "fill": {…}, "submit": "Add", "confirm": "…", "rowActions": ["edit", "delete"] } ]` — a child table with an inline add form; `fill` resolves `@row.*` against the **parent** row (the one the detail page is showing), unlike `Entity.form`'s top-level `fill`, which runs before any row of the new entity exists and has no `@row`
+- `related`: `[ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": [...], "form": ["qty"] | true | false, "fill": {…}, "submit": "Add", "confirm": "…", "rowActions": ["edit", "delete"] } ]` — a child table with an inline add form; `fill` resolves `@row.*` against the **parent** row (the one the detail page is showing), unlike `Entity.form`'s top-level `fill`, which runs before any row of the new entity exists and has no `@row`; `form` lists the child fields the inline form asks for (`true` or absent: every input), and `false` means no add form and no `POST /Entity/:id/add/<Child>` either (404)
 
 ## Lists, dashboards, pages
 
