@@ -118,3 +118,9 @@ test('surface: what a visitor or a new customer may browse whole and is offered 
   assert.equal(c.hero, null);
   assert.deepEqual(m.dashboards[0].periodEntities, ['Order']);
 });
+
+test('undoing transitions are found by whole words: close, closed and avoid are not lose or void', async () => {
+  const { undoes } = await import('../lib/model.mjs');
+  for (const n of ['cancel', 'reject', 'lose', 'markLost', 'void', 'decline_offer', 'refundOrder']) assert.equal(undoes(n), true, n);
+  for (const n of ['close', 'closed', 'closeDeal', 'avoid', 'avoidance', 'place', 'pay', 'ship', 'deliver', 'win', 'reopen', 'qualify']) assert.equal(undoes(n), false, n);
+});
