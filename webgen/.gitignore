@@ -1,0 +1,4 @@
+node_modules/
+screenshots/
+e2e/.dbg/
+.tmp/

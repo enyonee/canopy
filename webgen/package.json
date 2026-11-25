@@ -1,0 +1,22 @@
+{
+  "name": "canopy-webgen",
+  "private": true,
+  "type": "module",
+  "description": "Generates a React front end for a Canopy app from its graph (app.json) and its OpenAPI contract. Outside the runtime gates: the runtime keeps zero dependencies.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "gen:shop": "node gen.mjs ../apps/shop/app.json --openapi ../apps/shop/web/openapi.json --out ../apps/shop/web",
+    "check:contract": "node check-contract.mjs ../apps/shop/app.json",
+    "e2e": "node e2e/run.mjs"
+  },
+  "dependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  },
+  "devDependencies": {
+    "puppeteer-core": "25.18.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
