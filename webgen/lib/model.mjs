@@ -87,7 +87,7 @@ function transitionsOf(graph, entity) {
     field: st.field,
     transitions: st.transitions.map((t) => ({
       name: t.name, title: t.title || title(t.name), from: t.from === undefined || t.from === '*' ? null : [].concat(t.from),
-      to: t.to, fields: t.fields || [], by: t.by || null, after: t.after || null, destructive: /cancel|reject|delete|refund/i.test(t.name),
+      to: t.to, fields: t.fields || [], by: t.by || null, after: t.after || null, destructive: /cancel|reject|delete|refund|lose|lost|fail|declin|abandon|void/i.test(t.name),
     })),
   };
 }
