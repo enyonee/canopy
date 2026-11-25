@@ -1,7 +1,7 @@
 // Small standalone pages: a static /page/<id>, the login and register forms,
 // and the outbox listing.
 import { esc, label, plural, anyone, noPre, loaded, columnsOf, page, cell, enctype, widgetBlock } from '../render.mjs';
-import { formFields } from './form.mjs';
+import { formFields, formFieldsFor, inputFields } from './form.mjs';
 
 // One live section (item 6): an embedded saved list (read with the viewer's own
 // permissions, same as /list/<id>), an entity's create form (posting to the
@@ -65,13 +65,23 @@ export function loginView(graph, { error = '', next = '', login = '' } = {}, vc 
       <p><button type="submit">Login</button>${graph.roles.register ? ` <a class="btn" href="/register">Register</a>` : ''}</p></form>` });
 }
 
+// What the sign-up form asks for: the register role's own `User.form` list, else `User.form`'s list, else every field
+// without a declared default — a default (a discount, a balance, a score) is the app's to set, not the visitor's. Never
+// the role, the status field or a field the form fills. POST /register writes exactly these (routes/session.mjs), so a
+// field the form does not show cannot be set by posting it.
+export function registerFields(graph, store) {
+  const { entity, role, register } = graph.roles;
+  const ov = graph.override?.[`${entity}.form`] || {}, fields = store.fields[entity];
+  const only = formFieldsFor(ov, register) ?? fields.filter((f) => f.def === null).map((f) => f.name);
+  return inputFields(store, entity, fields, only, [role, graph.states?.[entity]?.field, ...Object.keys(ov.fill || {})]).map((f) => f.name);
+}
+
 export function registerView(graph, store, fields, submitted = {}, errors = [], vc = anyone, pre = noPre) {
   const problems = errors.length
     ? `<div class="card"><p class="error">Please fix the following before submitting:</p><ul>${errors.map((e) => `<li class="error">${esc(e)}</li>`).join('')}</ul></div>` : '';
-  const skip = [graph.roles.role];
   return page(graph, { title: 'Register', vc,
     body: `<h2>Register</h2>${problems}<form class="card" method="post" action="/register"${enctype(fields)}>
-      ${formFields(store, graph.roles.entity, fields, submitted, null, { skip, pre })}
+      ${formFields(store, graph.roles.entity, fields, submitted, registerFields(graph, store), { pre })}
       <p><button type="submit">Register</button> <a class="btn" href="/login">Login</a></p></form>` });
 }
 

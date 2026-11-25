@@ -6,7 +6,7 @@ import { esc, label, anyone, noPre, page, enctype } from '../render.mjs';
 
 // The fields a form renders, in order: stored, visible (the state field only when asked for by name),
 // with an input. Shared by the renderer (formFields) and by the route that loads what they need.
-function inputFields(store, entity, fields, only, skip = []) {
+export function inputFields(store, entity, fields, only, skip = []) {
   const statusField = store.graph?.states?.[entity]?.field;
   return fields.filter(isStored).filter((f) => !skip.includes(f.name) && (f.name !== statusField || only?.includes(f.name)))
     .filter((f) => (only ? only.includes(f.name) : true)).filter((f) => f.type.input);

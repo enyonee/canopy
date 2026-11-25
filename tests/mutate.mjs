@@ -1672,6 +1672,21 @@ const MUTATIONS = [
   { name: "CHK1: a non-array actions crashes the action checker", file: "runtime/check/pages.mjs",
     find: "(Array.isArray(p.actions) ? p.actions : []).forEach",
     replace: "(p.actions || []).forEach" },
+  { name: "SEC1: POST /register writes every posted field (HTML and JSON), not only what the form shows", file: "runtime/routes/session.mjs",
+    find: "    interp.onlyWritable(entity, null, submitted, registerFields(graph, store));\n",
+    replace: "    delete submitted[graph.roles.role];\n" },
+  { name: "SEC1: the sign-up form shows the fields with a default (a discount, a balance) as well", file: "runtime/render/pages.mjs",
+    find: "fields.filter((f) => f.def === null).map((f) => f.name)",
+    replace: "fields.map((f) => f.name)" },
+  { name: "SEC1: the sign-up form ignores the register role's own User.form list", file: "runtime/render/pages.mjs",
+    find: "formFieldsFor(ov, register) ??",
+    replace: "ov.fields ??" },
+  { name: "SEC1: the sign-up form asks for a field User.form fills", file: "runtime/render/pages.mjs",
+    find: "graph.states?.[entity]?.field, ...Object.keys(ov.fill || {})]",
+    replace: "graph.states?.[entity]?.field]" },
+  { name: "SEC1: the sign-up form asks for the status field", file: "runtime/render/pages.mjs",
+    find: "[role, graph.states?.[entity]?.field,",
+    replace: "[role," },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

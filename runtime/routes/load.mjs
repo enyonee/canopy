@@ -9,7 +9,7 @@ import { prefetched, refPairs, columnsOf } from '../render.mjs';
 import { listNeeds } from '../render/list.mjs';
 import { formView, formSpec, inputTargets } from '../render/form.mjs';
 import { detailView, detailNeeds, relatedOf } from '../render/detail.mjs';
-import { sectionList, sectionForm } from '../render/pages.mjs';
+import { sectionList, sectionForm, registerFields } from '../render/pages.mjs';
 
 // A list page: the rows of one page, its reference cells and its reference filters.
 export async function listPre({ store, vc }, entity, fields, ov, rows) {
@@ -77,7 +77,7 @@ export async function searchPre({ graph, store, vc }, results) {
 
 // /register: the options of the reference inputs on the sign-up form.
 export async function registerPre({ graph, store }, fields) {
-  return prefetched(await store.labelsFor([]), await store.optionsFor(inputTargets(store, graph.roles.entity, fields, null, [graph.roles.role])));
+  return prefetched(await store.labelsFor([]), await store.optionsFor(inputTargets(store, graph.roles.entity, fields, registerFields(graph, store))));
 }
 
 // A dashboard: every aggregate its cards, tables and charts show (the same `aggregate` calls the CSV and

@@ -1,6 +1,6 @@
 // /login, /register, POST /logout — real sessions when /roles is declared.
 import { verifyPassword } from '../auth.mjs';
-import { loginView, registerView } from '../render/pages.mjs';
+import { loginView, registerView, registerFields } from '../render/pages.mjs';
 import { registerPre } from './load.mjs';
 
 export async function handle(ctx) {
@@ -41,7 +41,7 @@ export async function handle(ctx) {
     const entity = graph.roles.entity, fields = store.fields[entity];
     if (req.method === 'GET') { send(200, registerView(graph, store, fields, {}, [], vc, await registerPre(ctx, fields))); return true; }
     const submitted = interp.dropEmptyUploads(entity, interp.checkboxes(entity, await ctx.body()));
-    delete submitted[graph.roles.role];
+    interp.onlyWritable(entity, null, submitted, registerFields(graph, store));
     const values = { ...submitted, [graph.roles.role]: graph.roles.register };
     const problems = await interp.validateValues(entity, values);
     if (!problems.length && await store.exists(entity, graph.roles.login, values[graph.roles.login])) problems.push(`${graph.roles.login} is already registered`);
