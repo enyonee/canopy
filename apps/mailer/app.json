@@ -32,8 +32,8 @@
     "can": {
       "admin": "*",
       "sender": { "Email": { "own": "owner", "can": ["view", "create", "edit", "delete", "go:send"] },
-                  "EmailRecipient": ["view", "create", "delete"],
-                  "Attachment": ["view", "create", "delete"],
+                  "EmailRecipient": { "own": "email.owner", "can": ["view", "create", "delete"] },
+                  "Attachment": { "own": "email.owner", "can": ["view", "create", "delete"] },
                   "Recipient": ["view", "create", "edit"],
                   "Template": ["view", "create", "edit", "do:compose"] }
     }
