@@ -9,6 +9,15 @@ const chartTable = (html, title) => {
 
 let assessmentId = null;
 
+// A JSON read as a signed-in user, on a session of its own (the check's cookie jar answers HTML).
+const jsonAs = async (base, login, password, p) => {
+  const signIn = await fetch(`${base}/login`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ login, password }).toString() });
+  const cookie = (signIn.headers.get('set-cookie') || '').split(';')[0];
+  const res = await fetch(base + p, { headers: { cookie, accept: 'application/json' } });
+  return { status: res.status, body: await res.json() };
+};
+
 export const checks = [
   { task: 'Check the subscription feature.',
     run: async ({ asGuest, post, get, must }) => {
@@ -46,17 +55,19 @@ export const checks = [
   { task: 'Test chart generation.',
     run: async ({ get, post, must }) => {
       const before = chartTable((await get('/dashboard/risk')).html, 'Risk score by category');
-      must(/Cyber<\/td><td>16<\/td>/.test(before) && /Financial<\/td><td>8<\/td>/.test(before), 'the chart does not yet reflect the item already selected');
+      must(/Cyber<\/td><td>16<\/td>/.test(before), 'the chart does not yet reflect the item already selected');
+      // The demo subscriber's seeded Financial item is hers: Jane's chart is built from Jane's selections only.
+      must(!/Financial/.test(before), "another subscriber's Financial item shows on this subscriber's chart");
       must(!/Compliance/.test(before), 'Compliance should not be on the chart before this category is selected');
       const added = await post(`/Assessment/${assessmentId}/add/AssessmentItem`, { riskItem: 6 });
       must(added.status === 303, `selecting the second risk item failed: ${added.status}`);
       const after = chartTable((await get('/dashboard/risk')).html, 'Risk score by category');
-      must(/Compliance<\/td><td>10<\/td>/.test(after) && /Cyber<\/td><td>16<\/td>/.test(after) && /Financial<\/td><td>8<\/td>/.test(after),
+      must(/Compliance<\/td><td>10<\/td>/.test(after) && /Cyber<\/td><td>16<\/td>/.test(after) && !/Financial/.test(after),
         'the chart does not reflect the newly selected item');
-      return 'the chart gains a labelled Compliance bar at 10 the moment that item is selected, earlier categories unchanged';
+      return "the chart gains a labelled Compliance bar at 10 the moment that item is selected, earlier categories unchanged, another subscriber's items absent";
     } },
   { task: 'Test report creation functionality.',
-    run: async ({ get, must }) => {
+    run: async ({ base, get, post, must }) => {
       const detail = await get(`/Assessment/${assessmentId}`);
       must(/<th>Item Count<\/th><td>2<\/td>/.test(detail.html) && /<th>Total Risk Score<\/th><td>26<\/td>/.test(detail.html) && /<th>Avg Risk Score<\/th><td>13<\/td>/.test(detail.html),
         'the report row does not summarise its selected items');
@@ -65,7 +76,20 @@ export const checks = [
       must(/Phishing Attack Exposure/.test(csv.html) && /16/.test(csv.html), 'the downloadable report is missing the selected item\'s populated data');
       const dash = await get('/dashboard/risk');
       must(/<svg role="img"/.test(dash.html), 'the report has no generated chart to accompany it');
-      return 'the assessment summarises its own items (count 2, total 26, avg 13); a CSV download and the dashboard chart both carry the same data';
+      // The demo subscriber's assessment (seed #1, its item seed #1) stays hers: Jane neither reads, exports, edits nor removes it.
+      const theirs = await get('/AssessmentItem.csv?assessment=1');
+      must(!/Vendor Payment Fraud|Q3 Vendor Risk Review/.test(theirs.html), "another subscriber's assessment items are in this subscriber's CSV");
+      const listed = await jsonAs(base, 'jane@risk.test', 'jane123', '/AssessmentItem');
+      must(listed.status === 200 && listed.body.total === 2 && listed.body.rows.every((r) => String(r.assessment) === String(assessmentId)),
+        `this subscriber lists items that are not hers: ${JSON.stringify(listed.body).slice(0, 200)}`);
+      must((await get('/AssessmentItem/1')).status === 403, "this subscriber opened another subscriber's item");
+      must((await post('/AssessmentItem/1', { riskItem: 6 })).status === 403, "this subscriber edited another subscriber's item");
+      must((await post('/AssessmentItem/1/delete', {})).status === 403, "this subscriber removed another subscriber's item");
+      const intrusion = await post('/AssessmentItem', { assessment: 1, riskItem: 2 });
+      const demo = await jsonAs(base, 'demo@riskassess.test', 'demo123', '/Assessment/1');
+      must(demo.status === 200 && demo.body.itemCount === 1 && demo.body.totalRiskScore === 8, `another subscriber's assessment changed: ${JSON.stringify(demo.body).slice(0, 200)}`);
+      must(intrusion.status !== 303, `this subscriber added an item to another subscriber's assessment: ${intrusion.status} ${intrusion.location}`);
+      return "the assessment summarises its own items (count 2, total 26, avg 13); a CSV download and the dashboard chart both carry the same data; another subscriber's assessment is out of reach";
     } },
   { task: 'Test navigation between pages.',
     run: async ({ get, must }) => {
