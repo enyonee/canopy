@@ -66,6 +66,15 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   `runtime/routes/api.mjs`, `runtime/contract.mjs`, `runtime/contract/{schemas,paths}.mjs`, `tests/api.test.mjs`,
   `tests/contract.test.mjs`, 45 `F1:` mutations.
 
+- **A built front: `"web"` (F2).** An app may name its built front, a directory relative to `app.json` (`"web": "web/dist"`):
+  the runtime serves its files at `/` (content types, `immutable` caching for bundler-hashed `assets/`, ETag and 304 for the
+  rest, no directory listing, nothing outside the directory: dot-names, encoded separators and symlinks out are refused)
+  with an SPA fallback to `index.html` for navigations, and the whole scaffold moves under `/admin`: links, forms, script
+  sources, 303 redirects with `?ok=`, login and register, outbox, settings and the widget helper's `api` all carry the prefix,
+  rewritten at the one place a page or a redirect leaves the server; JSON answers under `/admin` are byte-identical. `/hook`,
+  `/api`, `/file` and `/widget` keep answering at the root, every other path is the front's. A front that was never built is a
+  start-up error (`/web: …/index.html not found`), not a 404 at run time. Without `web` nothing changes. New:
+  `runtime/web.mjs`, `runtime/check/web.mjs`, `tests/web.test.mjs`, `tests/fixtures/web`, 28 `F2:` mutations.
 - **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
   `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per
   connector with its kind, its mode (`deploy.json`), the breaker of each mode, the last 24 hours of its outbox (sent, failed,
