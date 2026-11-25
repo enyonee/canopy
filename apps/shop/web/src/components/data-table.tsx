@@ -44,7 +44,7 @@ export function DataTable({ entity, rows, columns, rowActions, viewer, labels = 
   // The first column opens the row, unless it is itself a link (a reference to another row).
   const firstLinks = linkFirst && mayOpen && cols[0]?.f?.kind !== 'ref';
   const first = (r: Row, i: number, content: React.ReactNode) =>
-    i === 0 && firstLinks ? <Link to={`/${entity.name}/${r.id}`} className="font-medium text-foreground underline-offset-4 hover:text-primary hover:underline">{content}</Link> : content;
+    i === 0 && firstLinks ? <Link to={`/${entity.name}/${r.id}`} className="font-medium text-foreground underline-offset-4 hover:text-accent-text hover:underline">{content}</Link> : content;
 
   if (loading) {
     return (
@@ -99,7 +99,7 @@ export function DataTable({ entity, rows, columns, rowActions, viewer, labels = 
         {rows.map((r) => (
           <li key={r.id} className="space-y-3 p-4" data-row-id={r.id}>
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 font-medium">{mayOpen && linkFirst ? <Link to={`/${entity.name}/${r.id}`} className="underline-offset-4 hover:text-primary hover:underline">{rowName(entity, r)}</Link> : rowName(entity, r)}</div>
+              <div className="min-w-0 font-medium">{mayOpen && linkFirst ? <Link to={`/${entity.name}/${r.id}`} className="underline-offset-4 hover:text-accent-text hover:underline">{rowName(entity, r)}</Link> : rowName(entity, r)}</div>
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               {cols.slice(cols[0]?.name === entity.labelField || cols[0]?.name === 'id' ? 1 : 0).map(({ name, f }) => (

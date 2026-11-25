@@ -50,7 +50,7 @@ export function Forbidden() {
 export function NotFound({ what }: { what?: string }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-20 text-center">
-      <p className="text-6xl font-semibold tracking-tight text-primary/30">404</p>
+      <p className="text-6xl font-semibold tracking-tight text-accent-text/40" aria-hidden="true">404</p>
       <h1 className="text-2xl font-semibold">Page not found</h1>
       <p className="text-muted-foreground">{what ?? 'The page you are looking for does not exist or was moved.'}</p>
       <Button asChild variant="outline"><Link to="/">Go to the start page</Link></Button>

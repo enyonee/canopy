@@ -40,7 +40,7 @@ export function DeleteDialog({ entity, row, open, onOpenChange, after }: { entit
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90"
+          <AlertDialogAction className="bg-destructive-solid text-destructive-foreground hover:bg-destructive-solid/90"
             onClick={() => { void run.mutateAsync({ go: () => endpoints.entities[entity.name].remove(row.id), opts: { after: after ?? null } }).catch(() => undefined); }}>
             Delete
           </AlertDialogAction>

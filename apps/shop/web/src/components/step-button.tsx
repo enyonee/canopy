@@ -67,7 +67,7 @@ export function StepButton({ entity, row, step, viewer, size = 'default', varian
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Keep it</AlertDialogCancel>
-              <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => { void go().catch(() => undefined); }}>{label}</AlertDialogAction>
+              <AlertDialogAction className="bg-destructive-solid text-destructive-foreground hover:bg-destructive-solid/90" onClick={() => { void go().catch(() => undefined); }}>{label}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

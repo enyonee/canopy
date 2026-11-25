@@ -53,7 +53,7 @@ export function Stepper({ entity, row }: { entity: Entity; row: Row }) {
       {path.map((s, i) => (
         <li key={s} className="flex items-center gap-2.5 sm:flex-1" aria-current={i === at ? 'step' : undefined}>
           <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold',
-            i < at && 'border-primary bg-primary text-primary-foreground', i === at && 'border-primary text-primary', i > at && 'border-border text-muted-foreground')}>
+            i < at && 'border-primary bg-primary text-primary-foreground', i === at && 'border-primary text-accent-text', i > at && 'border-border text-muted-foreground')}>
             {i < at ? <Check className="size-4" aria-hidden="true" /> : i + 1}
           </span>
           <span className={cn('text-sm whitespace-nowrap', i === at ? 'font-semibold' : i < at ? 'text-foreground' : 'text-muted-foreground')}>
@@ -112,7 +112,7 @@ function Lines({ parent, row, rel, product, viewer }: { parent: Entity; row: Row
                 <div className="flex items-center gap-4">
                   {qty && (edit && draft ? (
                     <div className="flex items-center rounded-lg border" role="group" aria-label={`${qty.label} of ${label}`}>
-                      <Button variant="ghost" size="icon-sm" aria-label={`One less ${label}`} disabled={run.isPending} onClick={() => setQty(n - 1)}><Minus /></Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={`One less ${label}`} disabled={run.isPending || n <= 1} onClick={() => setQty(n - 1)}><Minus /></Button>
                       <span className="w-8 text-center text-sm font-medium tabular-nums" aria-live="polite">{n}</span>
                       <Button variant="ghost" size="icon-sm" aria-label={`One more ${label}`} disabled={run.isPending} onClick={() => setQty(n + 1)}><Plus /></Button>
                     </div>
