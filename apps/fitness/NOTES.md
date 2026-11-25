@@ -23,3 +23,7 @@
   which a plain unscoped grant never allowed; a signed-in user opening another user's
   `/Exercise/:id` directly still only *views* it (unchanged) and cannot edit or delete it
   (changed — this was the one open boundary the old Miss named).
+- The diary is personal: `DiaryEntry` is granted with `own: "user"`. Before, it was granted without `own`, so
+  "My Fitness Diary" only *filtered* by `user: "@me"` while `/DiaryEntry` (JSON) and `/DiaryEntry/<id>` gave
+  every user every other user's entries. Check 3 asserts that Kai lists none of the new entry and gets 403 on
+  it. Exercises stay readable by everyone (`all: ["view"]`): the leaderboard ranks all users by them.
