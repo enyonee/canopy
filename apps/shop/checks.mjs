@@ -19,8 +19,16 @@ const hook = async (base, payload, { secret = secrets.psp_webhook, at = Date.now
   return { status: res.status, body: await res.json(), type: res.headers.get('content-type') };
 };
 
+// A JSON read as a signed-in user, on a session of its own (the check's cookie jar answers HTML).
+const jsonAs = async (base, login, password, p) => {
+  const signIn = await fetch(`${base}/login`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ login, password }).toString() });
+  const cookie = (signIn.headers.get('set-cookie') || '').split(';')[0];
+  const res = await fetch(base + p, { headers: { cookie, accept: 'application/json' } });
+  return { status: res.status, body: await res.json() };
+};
 const itemId = (row) => { const m = /\/OrderItem\/(\d+)/.exec(row || ''); return m ? m[1] : null; };
-let annOrder = null, bobOrder = null;
+let annOrder = null, bobOrder = null, annItem = null;
 
 export const checks = [
   { task: 'A guest browses the storefront, searches and filters without signing in',
@@ -81,6 +89,7 @@ export const checks = [
       const detail = await get(`/Order/${annOrder}`);
       const item = itemId(rowWith(detail.html, 'Blue mug'));
       must(item, 'no edit link on the item row');
+      annItem = item;
       const bad = await post(`/OrderItem/${item}`, { qty: 0 });
       must(bad.status === 400 && /Quantity must be at least 1/.test(bad.html), 'qty 0 was accepted');
       const saved = await post(`/OrderItem/${item}`, { qty: 3 });
@@ -119,7 +128,7 @@ export const checks = [
       return 'paid once, second pay 409, ship forbidden for customers';
     } },
   { task: 'A customer sees only their own orders and nothing of the admin surface',
-    run: async ({ asGuest, post, get, rows, must }) => {
+    run: async ({ base, asGuest, post, get, rows, must }) => {
       asGuest();
       const r = await post('/register', { email: 'bob@shop.test', password: 'secret2', name: 'Bob' });
       must(r.status === 303, 'bob could not register');
@@ -127,10 +136,19 @@ export const checks = [
       must(rows(orders.html).length === 0, `bob sees ${rows(orders.html).length} order(s) that are not his`);
       const other = await get(`/Order/${annOrder}`);
       must(other.status === 403, `bob opened ann's order: ${other.status}`);
+      // Ann's cart lines are hers too: not in Bob's /OrderItem (HTML or JSON), not readable, editable or deletable by id.
+      const items = await get('/OrderItem');
+      must(items.status === 200 && rows(items.html).length === 0, `bob sees ${rows(items.html).length} cart line(s) of ann's`);
+      const asJson = await jsonAs(base, 'bob@shop.test', 'secret2', '/OrderItem');
+      must(asJson.status === 200 && asJson.body.total === 0, `bob reads ann's cart lines as JSON: ${JSON.stringify(asJson.body).slice(0, 200)}`);
+      const line = annItem;
+      must((await get(`/OrderItem/${line}`)).status === 403, "bob opened ann's cart line");
+      must((await post(`/OrderItem/${line}`, { qty: 50 })).status === 403, "bob edited ann's cart line");
+      must((await post(`/OrderItem/${line}/delete`, {})).status === 403, "bob deleted ann's cart line");
       must((await get('/dashboard/sales')).status === 403, 'bob opened the sales dashboard');
       must((await get('/outbox')).status === 403, 'bob opened the outbox');
       must((await get('/User')).status === 403, 'bob listed the customers');
-      return 'own rows only; dashboard, outbox and users are 403';
+      return "own rows only, ann's cart lines hidden and 403; dashboard, outbox and users are 403";
     } },
   { task: 'Not enough stock refuses the order and rolls everything back',
     run: async ({ get, follow, post, idOf, rowWith, must, sink }) => {
