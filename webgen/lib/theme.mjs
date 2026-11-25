@@ -46,21 +46,25 @@ function palette(bgBase, accent, dark) {
   t['muted-foreground'] = ensure(ensure(ensure(n[11], background, 4.5, dark ? 1 : -1), card, 4.5, dark ? 1 : -1), n[3], 4.5, dark ? 1 : -1);
   // The accent as the solid: the graph's own colour in light; in dark lifted until a button stands out from the page.
   const solid = dark ? ensure({ ...accent, c: Math.min(accent.c, 0.16) }, background, 3, 1) : ensure(accent, background, 3, -1);
-  t.primary = solid;
-  t['primary-foreground'] = onSolid(solid, accent.h);
+  // Text on the solid: white or near-black, whichever reads better; when neither reaches 4.5:1 (a mid-tone accent)
+  // the solid itself moves away from its text until it does.
+  const onIt = onSolid(solid, accent.h);
+  const fixed = ensure(solid, onIt, 4.5, onIt.l > 0.5 ? -1 : 1);
+  t.primary = fixed;
+  t['primary-foreground'] = onIt;
   t.secondary = a[3]; t['secondary-foreground'] = ensure(a[12], a[3], 4.5, dark ? 1 : -1);
   t.accent = a[3]; t['accent-foreground'] = t['secondary-foreground'];
   t.border = dark ? n[6] : n[6];
   t.input = ensure(n[8], background, 3, dark ? 1 : -1);
   t.ring = ensure(a[8], background, 3, dark ? 1 : -1);
   t.sidebar = dark ? n[1] : n[3];
-  t.brand = solid; // the accent itself, for gradients and marks
+  t.brand = fixed; // the accent itself, for gradients and marks
   t['brand-soft'] = a[4];
   t['sidebar-border'] = n[6];
   t['accent-text'] = ensure(a[11], card, 4.5, dark ? 1 : -1); // accent-coloured text: links
   t.destructive = ensure({ l: dark ? 0.68 : 0.55, c: 0.19, h: 25 }, card, 4.5, dark ? 1 : -1);
   // Charts: one hue (the accent) at three depths plus two neutrals, each readable on a card (3:1, WCAG 1.4.11).
-  t['chart-1'] = ensure(solid, card, 3, dark ? 1 : -1);
+  t['chart-1'] = ensure(fixed, card, 3, dark ? 1 : -1);
   t['chart-2'] = ensure(inGamut({ l: dark ? 0.75 : 0.7, c: accent.c * 0.7, h: accent.h }), card, 3, dark ? 1 : -1);
   t['chart-3'] = ensure(inGamut({ l: dark ? 0.55 : 0.45, c: accent.c * 0.9, h: (accent.h + 330) % 360 }), card, 3, dark ? 1 : -1);
   t['chart-4'] = ensure(n[9], card, 3, dark ? 1 : -1);

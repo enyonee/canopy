@@ -249,7 +249,7 @@ export function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelet
   const signIn = signInSteps(entity, entity.detail.actions, viewer);
   const [main, ...others] = steps;
   const name = rowName(entity, row);
-  const cta = main ? <StepButton entity={entity} row={row} step={main} viewer={viewer} size="lg" className="h-12 w-full text-base" />
+  const cta = main ? <StepButton entity={entity} row={row} step={main} viewer={viewer} size="lg" variant="default" className="h-12 w-full text-base" />
     : signIn[0] ? <SignInCta title={signIn[0].title} /> : null;
   const priceNode = price ? <FieldValue entity={entity} field={price} row={row} viewer={viewer} /> : null;
   return (
@@ -286,7 +286,7 @@ export function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelet
               {priceNode && <p className="text-3xl font-semibold tracking-tight tabular-nums">{priceNode}</p>}
             </div>
             {stock && <StockNote value={row[stock.name]} inline />}
-            {cta && <div className="space-y-3">{cta}{others.map((st) => <StepButton key={st.kind === 'go' ? st.t.name : st.a.name} entity={entity} row={row} step={st} viewer={viewer} variant="outline" className="w-full" />)}</div>}
+            {cta && <div className="hidden space-y-3 lg:block">{cta}{others.map((st) => <StepButton key={st.kind === 'go' ? st.t.name : st.a.name} entity={entity} row={row} step={st} viewer={viewer} variant="outline" className="w-full" />)}</div>}
             {(about || details.length > 0) && (
               <Tabs defaultValue={about && row[about.name] ? 'about' : 'details'} className="border-t pt-6">
                 <TabsList>
