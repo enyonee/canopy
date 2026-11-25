@@ -583,9 +583,11 @@ the `/search` page itself.
 "web": "web/dist"
 ```
 A directory relative to `app.json`, below it (no absolute path, no `..`, not the app directory itself, forward
-slashes): the output of the front's own build, with an `index.html`. The checker checks only that shape; the
-server checks at start that `<web>/index.html` exists and otherwise serves the error (`/web: … not found`) on every
-path, as for any invalid graph, without opening the database. Without `web` nothing below applies.
+slashes, no hidden or `node_modules` segment, not inside the app's `files/` or `plugins/`): the output of the front's
+own build, with an `index.html`. Everything in it is served to anyone. The checker checks only that shape; the server
+checks at start that `<web>/index.html` exists and that the directory, resolved through symlinks, neither holds the
+app directory or the database directory nor lies inside the uploads; otherwise it serves the error (`/web: …`) on
+every path, as for any invalid graph, without opening the database. Without `web` nothing below applies.
 
 With `web`:
 - **`/` is the front.** A GET or HEAD names a file below the directory (decoded segment by segment; a dot-name such
@@ -593,12 +595,14 @@ With `web`:
   listed). A path whose last segment has no extension (and that does not ask for `accept: application/json`) is a
   navigation: it gets `index.html` (the SPA fallback), so the front's router reads it. Anything else is 404 (JSON
   with `accept: application/json`); other methods are 405. Files under `assets/` whose name carries a bundler hash
-  (`index-BdX3k9aZ.js`) are `cache-control: public, max-age=31536000, immutable`; every other file, `index.html`
+  (Vite's `-` and 8 characters with a capital or a digit: `index-t4OmGtGK.js`; `vendor-dropdown.js` is not one) are `cache-control: public, max-age=31536000, immutable`; every other file, `index.html`
   first, is `no-cache` with an ETag (304 when unchanged).
 - **The scaffold is under `/admin`.** Every route of «Routes the runtime serves» answers at `/admin<route>`
   (`/admin/Product/3`, `POST /admin/login`, `/admin/outbox`, `/admin/settings`), JSON answers included and byte for
   byte the same. Its links, form targets, script sources and redirects carry the prefix (`303 /admin/Product?ok=…`,
-  `/admin/login?next=…`); the session cookie stays `Path=/`, so the front and the scaffold share a sign-in.
+  `/admin/login?next=…`); the session cookie stays `Path=/`, so the front and the scaffold share a sign-in. Paths the
+  graph writes (`home`, `pages[].links`, `after`) and a login's `next` are paths inside the scaffold, written as without
+  `web` (`/Product`); one that already starts with `/admin` (`/admin`, `/admin/…`, `/admin?…`) is left as it is.
 - **Kept at the root:** `/hook/<connector>` (a provider's webhook URL does not move), `/api/…`, `/file/Entity/:id/<field>`
   (also at `/admin/file/…`) and `/widget/<name>.mjs` (also at `/admin/widget/…`; inside the scaffold, the widget helper's
   `api.get`/`api.post` prefix root-absolute paths with `/admin`).

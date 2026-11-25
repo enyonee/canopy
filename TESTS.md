@@ -1112,6 +1112,12 @@ test в live, запрос на коннектор (брейкер, счётчи
 - **Файлы и виджеты.** Загрузка через `/admin`, ссылка и `<img>` на `/admin/file/…`, сам файл по `/file/…` и `/admin/file/…`;
   `/widget/_api.mjs` и `/admin/widget/_api.mjs` с `BASE = "/admin"`; копия `apps/tictactoe` с `web`: скрипт виджета с
   `/admin/widget/ttt.mjs`, его `api` ходит на `/admin/Game/1/…`, а `//host`, `https://…` и относительный путь не трогает.
+- **Доработка после ревью.** Чекер отказывает `files`, `files/front`, `./files/dist`, `plugins`, `plugins/ui`, `.git`,
+  `web/.cache/dist`, `node_modules/front`, `web/node_modules/x/dist` и пропускает `web/files`, `filesystem/dist`; при старте —
+  симлинк `web/dist` на каталог приложения, на `files/` и внутрь `files/`, база данных внутри каталога фронта (симлинк наружу
+  без них — можно). Кэш: `dashboard-screen-BGaXfOAc.js` (хеш Vite без цифры) — immutable, `vendor-component.js` и
+  `my.backgrounds.png` в `assets/` — `no-cache`. Повторной базы нет: `next=/admin/Product` ведёт на `/admin/Product`,
+  `rebase`/`rebaseTo` не трогают `/admin`, `/admin/…`, `/admin?…`, `/admin#…`, но дают базу `/administrator`.
 - **Без `web`** — `/` по-прежнему редирект стенда, `BASE = ''`, `/admin` — обычный путь под шлюзом входа.
 - **Фронт не собран** — `webProblems` (путь, подсказка), каталог вместо `index.html`, `serve()` отдаёт ошибку на любой путь и не
   создаёт базу; `index.html`, ставший каталогом после старта, — 500 и строка `error` в трассе, сервер работает дальше.
