@@ -507,3 +507,29 @@ test('an app can queue sms/whatsapp alerts end to end, visible in /outbox', asyn
     assert.equal(delivery.payload.text, 'Hi +15559876543');
   } finally { s.close(); }
 });
+
+// CHK1: the checker refuses a page shape the renderer cannot survive (a string `body` passed
+// --check and then answered 500 at /page/<id>).
+test('checker: a page whose body/links/actions/sections have the wrong shape is refused, by page name', async () => {
+  const g = { app: 'r', data: { A: { n: 'int' } } };
+  const msgs = (p) => validate({ ...g, pages: [{ id: 'about', title: 'About', ...p }] }).map((e) => e.message);
+  assert.deepEqual(msgs({ body: 'hello' }), ['page "about": body must be an array']);
+  assert.deepEqual(msgs({ body: { a: 1 } }), ['page "about": body must be an array']);
+  assert.deepEqual(msgs({ body: ['ok', 1] }), ['page "about": body[1] must be a string (one paragraph)']);
+  for (const k of ['links', 'actions', 'sections']) assert.deepEqual(msgs({ [k]: 'x' }), [`page "about": ${k} must be an array`]);
+  assert.deepEqual(msgs({ links: [{ label: 'Shop' }] }), ['page "about": links[0] needs a string "href"']);
+  assert.deepEqual(msgs({ links: ['x'] }).length, 2);
+  assert.deepEqual(msgs({ links: [null] }).length, 2);
+  assert.deepEqual(msgs({ heading: 5 }), ['page "about": heading must be a string']);
+  assert.deepEqual(msgs({ id: 7 }), ['page "7": id must be a string']);
+  assert.deepEqual(msgs({ title: 7 }), ['page "about": title must be a string']);
+  assert.deepEqual(msgs({ sections: [null] }), ['a section must be an object']);
+  assert.deepEqual(msgs({ sections: [['x']] }), ['a section must be an object']);
+  assert.deepEqual(msgs({ body: ['a'], links: [{ label: 'L', href: '/A' }], heading: 'H', sections: [{ text: 't' }] }), []);
+  assert.deepEqual(validate({ ...g, pages: [null] }).map((e) => e.message), ['a page must be an object']);
+  assert.deepEqual(validate({ ...g, pages: [[]] }).map((e) => e.message), ['a page must be an object']);
+  assert.deepEqual(validate({ ...g, pages: {} }).map((e) => e.message), ['pages must be an array of page objects']);
+  assert.deepEqual(validate({ ...g, pages: [{ title: 'T', body: 'x' }] }).map((e) => e.message).sort(),
+    ['page "T": body must be an array', 'page needs an id (it becomes /page/<id>)']);
+  assert.deepEqual(validate({ ...g, pages: [{ id: 'p', title: 'P', actions: [] }] }), []);
+});
