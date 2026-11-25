@@ -82,7 +82,7 @@ export function RowActions({ entity, row, names, viewer, onEdit }: { entity: Ent
       {(edit || del) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={`More for ${name}`}><MoreHorizontal /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label={`More for ${name}`} className="text-muted-foreground opacity-60 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"><MoreHorizontal /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {edit && <DropdownMenuItem onSelect={() => (onEdit ? onEdit(row) : void navigate({ to: `/${entity.name}/${row.id}/edit` }))}><Pencil />Edit</DropdownMenuItem>}

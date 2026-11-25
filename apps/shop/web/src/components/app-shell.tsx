@@ -2,7 +2,7 @@
 // the theme switch, and the page itself in <main>.
 import { useState, type ReactNode } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
-import { ExternalLink, LogIn, LogOut, Menu, Monitor, Moon, Sun, UserPlus } from 'lucide-react';
+import { ExternalLink, LogIn, LogOut, Menu, Monitor, Moon, PanelLeft, Sun, UserPlus } from 'lucide-react';
 import { app } from '@/gen/app';
 import { endpoints } from '@/gen/endpoints';
 import type { NavItem } from '@/lib/model';
@@ -27,31 +27,31 @@ export function visibleNav(viewer: Viewer): NavItem[] {
   });
 }
 
-function Brand() {
+function Brand({ compact }: { compact?: boolean } = {}) {
   return (
     <Link to="/" className="flex items-center gap-2.5 rounded-md px-1 font-semibold tracking-tight">
       <span className="flex size-8 items-center justify-center rounded-lg bg-brand-gradient text-sm font-bold text-white shadow-md" aria-hidden="true">{app.title[0]}</span>
-      <span className="text-lg">{app.title}</span>
+      {!compact && <span className="text-lg">{app.title}</span>}
     </Link>
   );
 }
 
-function NavLink({ n, active, onNavigate }: { n: NavItem; active: boolean; onNavigate?: () => void }) {
+function NavLink({ n, active, onNavigate, compact }: { n: NavItem; active: boolean; onNavigate?: () => void; compact?: boolean }) {
   const Icon = iconFor(n.icon);
   return (
-    <Link to={n.to} onClick={onNavigate} aria-current={active ? 'page' : undefined}
-      className={cn('group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+    <Link to={n.to} onClick={onNavigate} aria-current={active ? 'page' : undefined} title={compact ? n.title : undefined} aria-label={compact ? n.title : undefined}
+      className={cn(compact && 'justify-center px-0', 'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
         active && 'bg-primary/10 text-primary shadow-xs hover:bg-primary/15 hover:text-primary')}>
       <span className={cn('flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:text-foreground', active && 'bg-primary text-primary-foreground group-hover:text-primary-foreground')}>
         <Icon className="size-4" aria-hidden="true" />
       </span>
-      {n.title}
+      {!compact && n.title}
     </Link>
   );
 }
 
 // The menu in groups (Browse, Records, Lists, Insights, Pages: webgen's model), each with its heading.
-function NavLinks({ viewer, onNavigate }: { viewer: Viewer & { loading: boolean }; onNavigate?: () => void }) {
+function NavLinks({ viewer, onNavigate, compact }: { viewer: Viewer & { loading: boolean }; onNavigate?: () => void; compact?: boolean }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const items = visibleNav(viewer);
   const groups = [...new Set(items.map((n) => n.group))];
@@ -61,18 +61,18 @@ function NavLinks({ viewer, onNavigate }: { viewer: Viewer & { loading: boolean 
         ? <div className="space-y-2">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
         : groups.map((g) => (
             <div key={g} className="space-y-1">
-              {groups.length > 1 && <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground/80 uppercase">{g}</p>}
+              {groups.length > 1 && !compact && <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground/80 uppercase">{g}</p>}
               {items.filter((n) => n.group === g).map((n) => (
-                <NavLink key={n.to} n={n} active={path === n.to || path.startsWith(`${n.to}/`)} onNavigate={onNavigate} />
+                <NavLink key={n.to} n={n} compact={compact} active={path === n.to || path.startsWith(`${n.to}/`)} onNavigate={onNavigate} />
               ))}
             </div>
           ))}
       {!viewer.loading && isAdmin(viewer) && app.roles && (
         <div className="space-y-1">
-          <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground/80 uppercase">Admin</p>
-          <a href="/admin" className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+          {!compact && <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-muted-foreground/80 uppercase">Admin</p>}
+          <a href="/admin" title={compact ? 'Admin console' : undefined} aria-label={compact ? 'Admin console' : undefined} className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">
             <span className="flex size-7 items-center justify-center rounded-md bg-muted"><ExternalLink className="size-4" aria-hidden="true" /></span>
-            Admin console
+            {!compact && 'Admin console'}
           </a>
         </div>
       )}
@@ -166,22 +166,39 @@ function TopLinks({ viewer }: { viewer: Viewer }) {
   );
 }
 
+const COLLAPSE_KEY = 'canopy-sidebar';
+
+// The workspace frame (shadcn's sidebar-07 shape): a full-height sidebar that folds to icons, a header with the fold
+// button and the account; on phones the menu is a drawer. One or two places to go need no sidebar: they sit in the header.
 export function AppShell({ children }: { children?: ReactNode }) {
   const viewer = useViewer();
   const [open, setOpen] = useState(false);
+  const [compact, setCompact] = useState(() => { try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; } });
+  const fold = () => { const next = !compact; setCompact(next); try { localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0'); } catch { /* the choice is not kept */ } };
   const count = viewer.loading ? 0 : visibleNav(viewer).length + (isAdmin(viewer) && app.roles ? 1 : 0);
   const sidebar = viewer.loading || count > TOP_NAV_MAX;
   return (
-    <div className="min-h-dvh">
+    <div className="flex min-h-dvh">
       <a href="#main" className="sr-only z-50 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-3 focus:left-3">Skip to content</a>
       {sidebar && (
-        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-6 border-r bg-sidebar px-4 py-5 lg:flex">
-          <Brand />
-          <NavLinks viewer={viewer} />
+        <aside className={cn('hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-snappy lg:block', compact ? 'w-16' : 'w-64')} aria-label="Sidebar">
+          <div className={cn('sticky top-0 flex h-dvh flex-col gap-6 overflow-y-auto py-4', compact ? 'px-2' : 'px-3')}>
+            <div className={cn('flex h-8 items-center', compact && 'justify-center')}><Brand compact={compact} /></div>
+            <NavLinks viewer={viewer} compact={compact} />
+            {viewer.user && !compact && (
+              <div className="mt-auto flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 shadow-xs">
+                <span className="flex size-8 items-center justify-center rounded-full bg-primary/12 text-xs font-semibold text-primary" aria-hidden="true">{initials(userName(viewer.user))}</span>
+                <div className="min-w-0 text-sm">
+                  <p className="truncate font-medium">{userName(viewer.user)}</p>
+                  <p className="truncate text-xs text-muted-foreground">{enumLabel(viewer.role)}</p>
+                </div>
+              </div>
+            )}
+          </div>
         </aside>
       )}
-      <div className={cn(sidebar && 'lg:pl-64')}>
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-6">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-6">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu"><Menu /></Button>
@@ -193,6 +210,12 @@ export function AppShell({ children }: { children?: ReactNode }) {
               <NavLinks viewer={viewer} onNavigate={() => setOpen(false)} />
             </SheetContent>
           </Sheet>
+          {sidebar && (
+            <>
+              <Button variant="ghost" size="icon-sm" className="hidden lg:inline-flex" aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={compact} onClick={fold}><PanelLeft /></Button>
+              <span className="hidden h-5 w-px bg-border lg:block" aria-hidden="true" />
+            </>
+          )}
           <div className={cn(sidebar && 'lg:hidden')}><Brand /></div>
           {!sidebar && <TopLinks viewer={viewer} />}
           <div className="ml-auto flex items-center gap-1.5">
@@ -200,7 +223,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
             <UserMenu viewer={viewer} />
           </div>
         </header>
-        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-7xl px-4 py-6 outline-none sm:px-6 sm:py-8 lg:px-8">
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 outline-none sm:px-6 sm:py-8 lg:px-8">
           {children ?? <Outlet />}
         </main>
       </div>

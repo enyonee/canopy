@@ -24,7 +24,7 @@ import { can, type Viewer } from '@/lib/perms';
 import { useRefLabel } from '@/lib/refs';
 import { useRun } from '@/lib/run';
 import { formatNumber } from '@/lib/format';
-import { iconWord, stockField } from '@/lib/visual';
+import { categoryTone, iconWord, stockField } from '@/lib/visual';
 import { cn } from '@/lib/utils';
 import { Pager, useFilterChoices, useListState, type Spec } from '@/screens/list-screen';
 
@@ -35,7 +35,7 @@ const categoryOf = (entity: Entity, columns: readonly string[]) =>
 export function ProductCover({ entity, row, category, className, size }: { entity: Entity; row: Row; category: string | null; className?: string; size?: 'sm' | 'md' | 'lg' }) {
   const image = entity.fields.find((f) => f.kind === 'image');
   if (image && row[image.name]) return <img src={`/file/${entity.name}/${row.id}/${image.name}`} alt="" loading="lazy" className={cn('bg-muted object-cover', className)} />;
-  return <Cover name={rowName(entity, row)} icon={iconWord(category, rowName(entity, row), entity.name)} className={className} size={size} />;
+  return <Cover name={rowName(entity, row)} icon={iconWord(category, rowName(entity, row), entity.name)} tone={categoryTone(category)} className={className} size={size} />;
 }
 
 /** Only the exceptions are badges: few left (amber), none left (grey). Being in stock is the normal case. */
@@ -79,15 +79,17 @@ function ProductCard({ spec, row, viewer }: { spec: Spec; row: Row; viewer: View
   const soldOut = stock !== null && Number(row[stock.name]) <= 0;
   const quick = rowSteps(e, row, spec.rowActions, viewer).find((s): s is Step & { kind: 'do' } => s.kind === 'do' && s.a.fields.length === 0);
   const open = can(viewer, e.name, 'view', row);
+  // Photos take a tall 4:5 frame; a generated cover is lower (4:3), so a catalogue without photos is not mostly empty.
+  const photos = e.fields.some((f) => f.kind === 'image');
   return (
     <article className={cn('group relative flex flex-col', soldOut && 'opacity-60')} data-row-id={row.id}>
       <div className="relative overflow-hidden rounded-xl transition duration-200 ease-snappy group-hover:-translate-y-0.5 group-hover:shadow-md motion-reduce:transition-none motion-reduce:group-hover:translate-y-0">
-        <ProductCover entity={e} row={row} category={catLabel} className="aspect-[4/5] w-full transition-transform duration-300 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
+        <ProductCover entity={e} row={row} category={catLabel} className={cn(photos ? 'aspect-[4/5]' : 'aspect-[4/3]', 'w-full transition-transform duration-300 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100')} />
         {stock && <div className="absolute top-3 left-3"><StockNote value={row[stock.name]} /></div>}
         {quick && <QuickAdd entity={e} row={row} step={quick} />}
       </div>
       <div className="mt-3 space-y-1">
-        {catLabel && <p className="text-xs text-muted-foreground">{catLabel}</p>}
+        {catLabel && <p className="text-xs font-medium" style={{ color: `var(--tone-${categoryTone(catLabel)}-fg)` }}>{catLabel}</p>}
         <h3 className="line-clamp-2 text-[15px] leading-snug font-medium">
           {open ? <Link to={`/${e.name}/${row.id}`} className="after:absolute after:inset-0 focus-visible:outline-none">{name}</Link> : name}
         </h3>
@@ -103,7 +105,7 @@ function CardSkeletons() {
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 lg:gap-6" aria-busy="true" aria-label="Loading">
       {Array.from({ length: 8 }, (_, i) => (
-        <div key={i} className="space-y-3"><Skeleton className="aspect-[4/5] w-full rounded-xl" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/3" /></div>
+        <div key={i} className="space-y-3"><Skeleton className="aspect-[4/3] w-full rounded-xl" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/3" /></div>
       ))}
     </div>
   );
@@ -248,6 +250,7 @@ export function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelet
     && !['image', 'bool'].includes(entity.fields.find((f) => f.name === n)?.kind ?? ''));
   const signIn = signInSteps(entity, entity.detail.actions, viewer);
   const [main, ...others] = steps;
+  const detailsTab = images.length > 0 ? details : [];
   const name = rowName(entity, row);
   const cta = main ? <StepButton entity={entity} row={row} step={main} viewer={viewer} size="lg" variant="default" className="h-12 w-full text-base" />
     : signIn[0] ? <SignInCta title={signIn[0].title} /> : null;
@@ -266,7 +269,20 @@ export function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelet
         <div className="space-y-3 lg:col-span-7">
           {images.length > 0
             ? <img src={`/file/${entity.name}/${row.id}/${images[shown].name}`} alt={`${name}: ${images[shown].label}`} className="aspect-[4/5] w-full rounded-2xl bg-muted object-cover sm:aspect-square" />
-            : <ProductCover entity={entity} row={row} category={catLabel} size="lg" className="aspect-[4/5] w-full rounded-2xl sm:aspect-square" />}
+            : <ProductCover entity={entity} row={row} category={catLabel} size="lg" className="aspect-square max-h-[460px] w-full rounded-2xl" />}
+          {images.length === 0 && details.length > 0 && (
+            <dl className="grid grid-cols-2 gap-3 pt-3 sm:grid-cols-3">
+              {details.map((n) => {
+                const f: Field | undefined = columnField(entity, n);
+                return (
+                  <div key={n} className="rounded-xl border bg-card px-4 py-3">
+                    <dt className="text-xs text-muted-foreground">{f?.label ?? n}</dt>
+                    <dd className="mt-1 text-sm font-medium"><FieldValue entity={entity} field={f} row={row} viewer={viewer} labels={entity.detail.labels[n]} /></dd>
+                  </div>
+                );
+              })}
+            </dl>
+          )}
           {images.length > 1 && (
             <div className="flex gap-3" role="group" aria-label="Pictures">
               {images.map((f, i) => (
@@ -281,23 +297,23 @@ export function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelet
         <div className="lg:col-span-5">
           <div className="space-y-6 lg:sticky lg:top-24">
             <div className="space-y-2">
-              {catLabel && <p className="text-sm font-medium text-accent-text">{catLabel}</p>}
+              {catLabel && <p className="text-sm font-medium" style={{ color: `var(--tone-${categoryTone(catLabel)}-fg)` }}>{catLabel}</p>}
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{name}</h1>
               {priceNode && <p className="text-3xl font-semibold tracking-tight tabular-nums">{priceNode}</p>}
             </div>
             {stock && <StockNote value={row[stock.name]} inline />}
             {cta && <div className="hidden space-y-3 lg:block">{cta}{others.map((st) => <StepButton key={st.kind === 'go' ? st.t.name : st.a.name} entity={entity} row={row} step={st} viewer={viewer} variant="outline" className="w-full" />)}</div>}
-            {(about || details.length > 0) && (
+            {((about && row[about.name]) || detailsTab.length > 0) && (
               <Tabs defaultValue={about && row[about.name] ? 'about' : 'details'} className="border-t pt-6">
                 <TabsList>
                   {about && row[about.name] ? <TabsTrigger value="about">{about.label}</TabsTrigger> : null}
-                  {details.length > 0 && <TabsTrigger value="details">Details</TabsTrigger>}
+                  {detailsTab.length > 0 && <TabsTrigger value="details">Details</TabsTrigger>}
                 </TabsList>
                 {about && row[about.name] ? <TabsContent value="about"><p className="pt-2 leading-relaxed whitespace-pre-line text-muted-foreground">{String(row[about.name])}</p></TabsContent> : null}
-                {details.length > 0 && (
+                {detailsTab.length > 0 && (
                   <TabsContent value="details">
                     <dl className="divide-y text-sm">
-                      {details.map((n) => {
+                      {detailsTab.map((n) => {
                         const f: Field | undefined = columnField(entity, n);
                         return (
                           <div key={n} className="flex justify-between gap-4 py-2.5">
