@@ -54,6 +54,10 @@ test('web: the checker takes a relative directory below the app and names every 
   one('web/../../front', /leaves the app directory/);
   one('.', /app directory itself/);
   one('./', /app directory itself/);
+  for (const w of ['files', 'files/', 'files/front', './files/dist']) one(w, /inside files\/, the uploads/);
+  for (const w of ['plugins', 'plugins/ui']) one(w, /inside plugins\/, the server-side plugins/);
+  for (const w of ['.git', 'web/.cache/dist', 'node_modules/front', 'web/node_modules/x/dist']) one(w, /hidden or dependency directory/);
+  for (const w of ['web/files', 'filesystem/dist', 'front/plugins-ui']) assert.deepEqual(errorsAt(w), [], `${w}: only the app's own directories are refused`);
   assert.match(validate({ ...GRAPH, wbe: 1 }).find((e) => e.path === '/wbe').hint, /did you mean: web\b/);
 });
 
@@ -95,6 +99,10 @@ test('web: the front is served at / — types, caching, ETag, HEAD, no listing',
   assert.equal(js.headers.get('content-type'), 'text/javascript; charset=utf-8');
   assert.equal(js.headers.get('cache-control'), 'public, max-age=31536000, immutable', 'a hashed asset is cached for good');
   assert.equal(js.html, 'console.log("front");\n');
+  assert.equal((await s.get('/assets/dashboard-screen-BGaXfOAc.js')).headers.get('cache-control'), 'public, max-age=31536000, immutable',
+    'a Vite hash with no digit is still a hash');
+  for (const p of ['/assets/vendor-component.js', '/assets/my.backgrounds.png'])
+    assert.equal((await s.get(p)).headers.get('cache-control'), 'no-cache', `${p}: a plain name under assets/ is revalidated`);
   const css = await s.get('/style.css');
   assert.equal(css.headers.get('content-type'), 'text/css; charset=utf-8');
   assert.equal(css.headers.get('cache-control'), 'no-cache', 'an unhashed file is revalidated');
@@ -174,6 +182,9 @@ test('web: the scaffold is under /admin — login, redirects with ?ok=, links an
   assert.match(wrong.html, /action="\/admin\/login"/);
   const r = await s.post('/admin/login', { login: 'admin@x.test', password: 'secret', next: '/Product' });
   assert.equal(r.location, '/admin/Product?ok=Welcome%2C%20admin%40x.test');
+  await s.post('/admin/logout');
+  const again = await s.post('/admin/login', { login: 'admin@x.test', password: 'secret', next: '/admin/Product' });
+  assert.equal(again.location, '/admin/Product?ok=Welcome%2C%20admin%40x.test', 'a next already under /admin does not get it twice');
   const home = await s.get('/admin/');
   assert.equal(home.location, '/admin/page/about');
   const about = await s.get('/admin/page/about');
@@ -332,20 +343,25 @@ test('web: rebase rewrites root-absolute attributes only; rebaseTo leaves other 
     + '<p data-props=\'{"to":"/x"}\'>href=&quot;/x&quot;</p><a href="?page=2">2</a><a class="btn" href="/admin/">home</a>');
   assert.equal(rebaseTo('/Product?ok=Saved', '/admin'), '/admin/Product?ok=Saved');
   assert.equal(rebaseTo('/', '/admin'), '/admin/');
+  for (const to of ['/admin', '/admin/', '/admin/Product', '/admin?ok=1', '/admin#top']) assert.equal(rebaseTo(to, '/admin'), to, `${to} is already under the base`);
+  assert.equal(rebaseTo('/administrator', '/admin'), '/admin/administrator', 'only the exact segment is the base');
+  assert.equal(rebase('<a href="/admin/Product">p</a><a href="/admin">a</a><a href="/adminx">x</a>', '/admin'),
+    '<a href="/admin/Product">p</a><a href="/admin">a</a><a href="/admin/adminx">x</a>');
   for (const to of ['//evil.test', '/\\evil.test', 'https://pay.test/checkout', 'next']) assert.equal(rebaseTo(to, '/admin'), to);
 });
 
 test('web: a front that was never built stops the start with the path and the way out; --check does not ask', async (t) => {
   const { dir, file, dist } = copyFixture(t);
   fs.rmSync(dist, { recursive: true });
-  const problems = webProblems(file, JSON.parse(fs.readFileSync(file, 'utf8')));
+  const dirs = { dataDir: dir, filesDir: path.join(dir, 'files') };
+  const problems = webProblems(file, JSON.parse(fs.readFileSync(file, 'utf8')), dirs);
   assert.equal(problems.length, 1);
   assert.equal(problems[0].path, '/web');
   assert.match(problems[0].message, new RegExp(`${path.join(dir, 'web/dist/index.html').replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')} not found`));
   assert.match(problems[0].hint, /must contain index\.html.*or remove "web"/);
   assert.deepEqual(validate(GRAPH), [], 'the graph itself stays valid: a front is built after its graph is written');
   fs.mkdirSync(path.join(dist, 'index.html'), { recursive: true });
-  assert.equal(webProblems(file, GRAPH).length, 1, 'a directory named index.html is not a built front');
+  assert.equal(webProblems(file, GRAPH, dirs).length, 1, 'a directory named index.html is not a built front');
   const errors = console.error;
   console.error = () => {};
   t.after(() => { console.error = errors; });
@@ -358,6 +374,27 @@ test('web: a front that was never built stops the start with the path and the wa
   assert.equal(r.status, 500);
   assert.match(await r.text(), /\/web: .*index\.html not found/);
   assert.equal(webRoot(file, GRAPH), dist);
+});
+
+test('web: a front directory that is, or holds, the app\'s own directories is refused at start', (t) => {
+  const { dir, file, dist } = copyFixture(t);
+  const dirs = { dataDir: dir, filesDir: path.join(dir, 'files') };
+  assert.deepEqual(webProblems(file, GRAPH, dirs), [], 'the fixture\'s web/dist is fine');
+  const at = (to, d = dirs) => { fs.rmSync(dist, { recursive: true, force: true }); fs.symlinkSync(to, dist); return webProblems(file, GRAPH, d); };
+  fs.writeFileSync(path.join(dir, 'index.html'), '<p>x</p>');
+  assert.match(at(dir)[0].message, /holds the app directory/, 'a symlink to the app directory');
+  fs.mkdirSync(path.join(dir, 'files/front'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'files/front/index.html'), '<script>steal()</script>');
+  assert.match(at(path.join(dir, 'files/front'))[0].message, /is inside the uploads/, 'a symlink into the uploads');
+  fs.writeFileSync(path.join(dir, 'files/index.html'), '<script>steal()</script>');
+  assert.match(at(path.join(dir, 'files'))[0].message, /is inside the uploads/, 'the uploads themselves');
+  const front = tmpDir('ag-web-out-', t);
+  fs.writeFileSync(path.join(front, 'index.html'), '<p>y</p>');
+  fs.mkdirSync(path.join(front, 'db'));
+  assert.deepEqual(at(front), [], 'a front outside the app, through a symlink, is fine');
+  const p = at(front, { dataDir: path.join(front, 'db'), filesDir: path.join(dir, 'files') });
+  assert.match(p[0].message, /holds the database directory/, 'a database kept inside the front');
+  assert.match(p[0].hint, /web\/dist/);
 });
 
 test('web: a front file that cannot be read is a 500 and a trace line, not a crash', async (t) => {

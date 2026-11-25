@@ -93,10 +93,13 @@ async function jsonBody(req) {
 // With a front (runtime/web.mjs), the scaffold answers under a base path: every root-absolute link, form target
 // and script source of a page, and every redirect, is written for the base here, at the one place a page or a
 // redirect leaves the server, so no screen knows it. Without a front `base` is '' and nothing is touched.
-// Values are escaped (`"` is `&quot;`), so only real attributes match; "//host" and "/\\host" are not paths.
-const LINK = /(\s(?:href|src|action|formaction)=")\/(?![/\\])/g;
-export const rebase = (html, base) => html.replace(LINK, `$1${base}/`);
-export const rebaseTo = (to, base) => (/^\/(?![/\\])/.test(to) ? base + to : to);
+// Values are escaped (`"` is `&quot;`), so only real attributes match; "//host" and "/\\host" are not paths, and a
+// path already under the base (`/admin`, `/admin/…`, `/admin?…`) is not given it twice.
+const LINK = /(\s(?:href|src|action|formaction)=")(\/[^"]*)/g;
+const under = (to, base) => to.startsWith(base) && (to.length === base.length || '/?#'.includes(to[base.length]));
+const rebased = (to, base) => /^\/(?![/\\])/.test(to) && !under(to, base);
+export const rebase = (html, base) => html.replace(LINK, (m, attr, to) => (rebased(to, base) ? `${attr}${base}${to}` : m));
+export const rebaseTo = (to, base) => (rebased(to, base) ? base + to : to);
 
 // "//evil.test" and "/\evil.test" are links off this site; only a single-slash path stays.
 const safeNext = (to) => (typeof to === 'string' && /^\/(?![/\\])[^\s\x00-\x1f]*$/.test(to) ? to : '/');
