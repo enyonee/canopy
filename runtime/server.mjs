@@ -30,6 +30,7 @@ import { everyMs } from './schedule.mjs';
 import { flush } from './outbox.mjs';
 import { systemClock } from './clock.mjs';
 import { connectorEnv } from './deploy.mjs';
+import { openFront, webRoot, webProblems } from './web.mjs';
 
 // What a server answers while the graph cannot be served: the errors, on every path.
 function invalidHandler(graph, errors) {
@@ -117,10 +118,19 @@ export function startFlusher({ store, graph, server, trace, noTimers, clock = sy
 }
 
 // The request handler of a booted app: one request context per request, the route modules in order.
+// With "web" (runtime/web.mjs) the front answers first: its own files and the SPA fallback never open a session or
+// ask the store; what it hands back is the scaffold, under its base.
 function requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
+  const front = graph.web ? openFront(webRoot(graphFile, graph)) : null;
   return async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const ctx = await createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile });
+    let url = new URL(req.url, `http://${req.headers.host}`), base = '';
+    if (front) {
+      let to;
+      try { to = front(req, res, url); } catch (e) { trace({ kind: 'error', message: String(e && e.message) }); res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }); res.end('the front could not be read'); return; }
+      if (!to) return;
+      ({ url, base } = to);
+    }
+    const ctx = await createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile, base });
     try {
       await dispatch(ctx);
     } catch (e) {
@@ -148,6 +158,7 @@ async function bootData(graph, store, graphFile, filesDir) {
 export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [], noTimers = false, clock = systemClock }) {
   const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
   const errors = [...pluginErrors, ...validate(graph, registry)];
+  if (!errors.length && graph.web) errors.push(...webProblems(graphFile, graph)); // a declared front that was never built
   if (errors.length) return invalidGraphServer(graph, errors, port, host);
 
   const dir = path.dirname(dbFile);

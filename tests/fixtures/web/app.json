@@ -1,0 +1,19 @@
+{
+  "app": "webfront",
+  "note": "tests/web.test.mjs: an app with a built front (web/dist) — the scaffold moves under /admin",
+  "web": "web/dist",
+  "data": {
+    "User": { "email": "text!", "password": "password!", "role": "enum[admin,customer]=customer" },
+    "Product": { "name": "text!", "photo": "image", "price": "money=0" }
+  },
+  "seed": {
+    "User": [ { "email": "admin@x.test", "password": "secret", "role": "admin" } ],
+    "Product": [ { "name": "Mug", "price": 5 } ]
+  },
+  "roles": { "entity": "User", "login": "email", "password": "password", "role": "role", "register": "customer",
+    "can": { "admin": "*", "customer": { "Product": ["view"] } } },
+  "views": "auto",
+  "actions": [ { "name": "ping", "title": "Ping", "do": [ { "block": "http.send", "connector": "hook", "body": { "x": 1 } } ] } ],
+  "connectors": { "hook": { "kind": "http", "url": "http://127.0.0.1:9/hook", "method": "POST" } },
+  "pages": [ { "id": "about", "title": "About", "body": ["Hello"], "links": [{ "label": "Products", "href": "/Product" }], "actions": ["ping"] } ]
+}

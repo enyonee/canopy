@@ -217,6 +217,7 @@ const ALLOWED = {
   'runtime/check/schedule.mjs': ['runtime/schedule.mjs'],
   'runtime/check/scope.mjs': ['runtime/expr.mjs', 'runtime/spec.mjs', 'runtime/check/util.mjs'],
   'runtime/check/search.mjs': [],
+  'runtime/check/web.mjs': [],
   'runtime/check/seed.mjs': [],
   'runtime/check/states.mjs': [],
   'runtime/check/steps.mjs': ['runtime/check/util.mjs'],
@@ -280,7 +281,7 @@ const ALLOWED = {
   'runtime/server.mjs': ['runtime/validate.mjs', 'runtime/store.mjs', 'runtime/registry.mjs', 'runtime/auth.mjs', 'runtime/interp.mjs',
     'runtime/boot.mjs', 'runtime/render.mjs', 'runtime/routes/context.mjs', 'runtime/routes/session.mjs', 'runtime/routes/views.mjs',
     'runtime/routes/system.mjs', 'runtime/routes/entity.mjs', 'runtime/routes/widgets.mjs', 'runtime/routes/schedule.mjs', 'runtime/routes/hooks.mjs', 'runtime/routes/settings.mjs', 'runtime/routes/api.mjs', 'runtime/schedule.mjs',
-    'runtime/outbox.mjs', 'runtime/clock.mjs', 'runtime/deploy.mjs'],
+    'runtime/outbox.mjs', 'runtime/clock.mjs', 'runtime/deploy.mjs', 'runtime/web.mjs'],
   'runtime/spec.mjs': ['runtime/expr.mjs', 'runtime/fields.mjs'],
   'runtime/store.mjs': ['runtime/spec.mjs', 'runtime/expr.mjs', 'runtime/auth.mjs', 'runtime/registry.mjs', 'runtime/driver.mjs', 'runtime/store/query.mjs', 'runtime/store/hydrate.mjs', 'runtime/store/lazy.mjs', 'runtime/store/state.mjs', 'runtime/store/rules.mjs', 'runtime/store/migrate.mjs', 'runtime/store/ctx.mjs'],
   'runtime/store/aggexpr.mjs': [],
@@ -298,7 +299,8 @@ const ALLOWED = {
   'runtime/validate.mjs': ['runtime/registry.mjs', 'runtime/check/scope.mjs', 'runtime/check/steps.mjs', 'runtime/check/basics.mjs',
     'runtime/check/plugins.mjs', 'runtime/check/data.mjs', 'runtime/check/roles.mjs', 'runtime/check/override.mjs', 'runtime/check/lists.mjs',
     'runtime/check/dashboards.mjs', 'runtime/check/pages.mjs', 'runtime/check/seed.mjs', 'runtime/check/actions.mjs', 'runtime/check/events.mjs',
-    'runtime/check/states.mjs', 'runtime/check/connectors.mjs', 'runtime/check/rules.mjs', 'runtime/check/schedule.mjs', 'runtime/check/search.mjs'],
+    'runtime/check/states.mjs', 'runtime/check/connectors.mjs', 'runtime/check/rules.mjs', 'runtime/check/schedule.mjs', 'runtime/check/search.mjs', 'runtime/check/web.mjs'],
+  'runtime/web.mjs': [],
   'runtime/widgets.mjs': [],
 };
 
@@ -316,6 +318,7 @@ const NODE_BUILTINS = {
   'runtime/routes/context.mjs': ['node:fs', 'node:path', 'node:stream'],
   'runtime/routes/system.mjs': ['node:fs', 'node:path'],
   'runtime/routes/widgets.mjs': ['node:fs'],
+  'runtime/web.mjs': ['node:fs', 'node:path'],
   'runtime/server.mjs': ['node:http', 'node:fs', 'node:path'],
   'runtime/driver/sqlite.mjs': ['node:sqlite'],
 };

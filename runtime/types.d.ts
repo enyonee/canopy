@@ -27,6 +27,8 @@ export interface Graph {
   rules?: Record<string, RuleSpec[]>;
   allowDestructive?: boolean;
   plugins?: string[];
+  /** the built front's directory, relative to app.json: served at /, the scaffold moves under /admin */
+  web?: string;
   [key: string]: any;
 }
 
