@@ -49,21 +49,24 @@ export function rowSchema(fields, captioned) {
   return { type: 'object', properties, required, additionalProperties: false };
 }
 
-// One field as a JSON body may send it. A reference also takes the numeric id; null is the empty value.
+// One field as a JSON body may send it. A reference also takes the numeric id; null is the empty value, which means the
+// field's declared default (none without one), on an edit exactly as on a create, as a blank form box does.
+const EMPTY = 'null is the empty value: the declared default, on an edit as on a create';
 function inputField(f) {
-  if (f.kind === 'ref') return { type: ['string', 'integer', 'null'], 'x-canopy-ref': f.target, 'x-canopy-kind': f.kind };
-  const out = { ...nullable(base(f)), 'x-canopy-kind': f.kind };
+  if (f.kind === 'ref') return { type: ['string', 'integer', 'null'], 'x-canopy-ref': f.target, 'x-canopy-kind': f.kind, description: EMPTY };
+  const out = { ...nullable(base(f)), 'x-canopy-kind': f.kind, description: EMPTY };
   if (f.type.secret) out.writeOnly = true;
   return out;
 }
 
 /**
- * The fields a body may set: stored, not uploaded (a JSON body carries no file), not the status an entity's
+ * The fields a body may set: stored, asked for by a form (a kind with an input: never a `time`, which the graph sets), not
+ * uploaded (a JSON body carries no file), not the status an entity's
  * transitions own, minus what the caller leaves out; `only` is a declared form list. Which of them a role may
  * really write (byRole, `own`, the role field) is the route's decision, made per request and not repeated here.
  */
 export function writableFields(fields, { only = null, skip = [] } = {}) {
-  return fields.filter((f) => !f.derive && !f.type.upload && !skip.includes(f.name) && (!only || only.includes(f.name)));
+  return fields.filter((f) => !f.derive && f.type.input && !f.type.upload && !skip.includes(f.name) && (!only || only.includes(f.name)));
 }
 
 /** A body of named fields; `open` lets the steps read `values.<name>` beyond the declared ones. */

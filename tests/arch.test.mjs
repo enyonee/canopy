@@ -222,7 +222,7 @@ const ALLOWED = {
   'runtime/check/steps.mjs': ['runtime/check/util.mjs'],
   'runtime/check/util.mjs': [],
   'runtime/cli.mjs': ['runtime/server.mjs', 'runtime/validate.mjs', 'runtime/registry.mjs', 'runtime/admin.mjs', 'runtime/contract.mjs'],
-  'runtime/contract.mjs': ['runtime/spec.mjs', 'runtime/render.mjs', 'runtime/contract/schemas.mjs', 'runtime/contract/paths.mjs'],
+  'runtime/contract.mjs': ['runtime/spec.mjs', 'runtime/render.mjs', 'runtime/render/pages.mjs', 'runtime/contract/schemas.mjs', 'runtime/contract/paths.mjs'],
   'runtime/contract/paths.mjs': ['runtime/contract/schemas.mjs'],
   'runtime/contract/schemas.mjs': [],
   'runtime/client/api.mjs': [],

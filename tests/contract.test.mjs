@@ -30,10 +30,11 @@ test('F1: contract: the shop document names every route /api serves, and every $
   assert.equal(doc.openapi, '3.1.0');
   assert.equal(doc.info.title, 'shop');
   for (const p of ['/api/Product', '/api/Product/{id}', '/api/Product/{id}/delete', '/api/Product/{id}/action/addToCart', '/api/Order/{id}/go/place',
-    '/api/Order/{id}/add/OrderItem', '/api/list/cart', '/api/dashboard/sales', '/api/login', '/api/logout', '/api/register', '/api/me', '/api/openapi.json']) {
+    '/api/Order/{id}/related/OrderItem', '/api/list/cart', '/api/dashboard/sales', '/api/login', '/api/logout', '/api/register', '/api/me', '/api/openapi.json']) {
     assert.ok(doc.paths[p], p);
   }
   assert.equal(doc.paths['/api/search'], undefined, 'shop declares no search');
+  assert.equal(doc.paths['/api/Order/{id}/add/OrderItem'], undefined, 'a related table with form: false has no add');
   assert.equal(doc.paths['/api/Product'].get.operationId, 'listProduct');
   assert.equal(doc.paths['/api/Product'].post.operationId, 'createProduct');
   assert.deepEqual(Object.keys(doc.paths['/api/Order/{id}/go/place'].post.responses), ['200', '400', '403', '404', '409', '413', '415']);
@@ -73,17 +74,18 @@ test('F1: contract: a row reads as the JSON answers write it — money a number,
 test('F1: contract: a body names what a form may set — no status, no derived, no upload; a declared form list narrows it', async () => {
   const { doc } = await docOf('apps/shop/app.json');
   const s = doc.components.schemas;
-  assert.deepEqual(Object.keys(s['Order.input'].properties), ['address', 'createdAt', 'customer', 'paymentMethod'], 'status belongs to the transitions');
+  assert.deepEqual(Object.keys(s['Order.input'].properties), ['address', 'customer', 'paymentMethod'], 'status belongs to the transitions, createdAt (a time) to the graph');
   assert.deepEqual(Object.keys(s['OrderItem.input'].properties), ['qty'], 'OrderItem.form fields');
-  assert.deepEqual(s['Order.input'].properties.customer, { type: ['string', 'integer', 'null'], 'x-canopy-kind': 'ref', 'x-canopy-ref': 'User' });
+  assert.deepEqual(s['Order.input'].properties.customer, { type: ['string', 'integer', 'null'], 'x-canopy-kind': 'ref', 'x-canopy-ref': 'User', description: 'null is the empty value: the declared default, on an edit as on a create' });
+  assert.match(s['Product.input'].properties.active.description, /^null is the empty value/);
   assert.equal(s['User.input'].properties.password.writeOnly, true);
-  assert.deepEqual(Object.keys(s['canopy.Register'].properties), ['discount', 'email', 'name', 'password', 'points'], 'never the role');
+  assert.deepEqual(Object.keys(s['canopy.Register'].properties), ['email', 'name', 'password'], 'what the sign-up form asks for (registerFields): never the role, nor a field with a default');
   const place = doc.paths['/api/Order/{id}/go/place'].post.requestBody.content['application/json'].schema;
   assert.deepEqual(place.required, ['address', 'paymentMethod']);
   assert.equal(place.additionalProperties, true, 'the steps may read any values.<name>');
-  const add = doc.paths['/api/Order/{id}/add/OrderItem'].post.requestBody.content['application/json'].schema;
-  assert.deepEqual(Object.keys(add.properties), ['price', 'product', 'qty'], 'never the via field');
   const v2 = (await docOf('tests/fixtures/v2.json')).doc;
+  const add = v2.paths['/api/Project/{id}/add/Expense'].post.requestBody.content['application/json'].schema;
+  assert.deepEqual(Object.keys(add.properties), ['amount', 'note'], 'the related form list; never the via field');
   assert.equal(v2.components.schemas['Project.input'].properties.attachment, undefined, 'a JSON body carries no file');
   assert.match(v2.components.schemas.Project.properties.attachment.description, /\/file\/<Entity>\/<id>\/attachment/);
   assert.deepEqual(v2.components.schemas.Project.properties.start, { format: 'date', type: ['string', 'null'], 'x-canopy-kind': 'date' });
@@ -92,6 +94,14 @@ test('F1: contract: a body names what a form may set — no status, no derived, 
   assert.deepEqual(v2.paths['/api/Expense/{id}/delete'].post.responses['200'].content['application/json'].schema, { $ref: '#/components/schemas/canopy.Deleted' });
   const list = v2.paths['/api/Project'].get.parameters.map((p) => p.name);
   assert.deepEqual(list, ['q', 'page', 'sort', 'dir', 'status', 'start_from', 'start_to', 'over', 'budget_from', 'budget_to']);
+});
+
+test('F1: contract: a body never names what a form fills itself — the entity form\'s fill, the related fill, the child form\'s fill', () => {
+  const graph = { app: 'f', views: 'auto', data: { A: { name: 'text!', by: 'text', at: 'time=now' }, B: { a: 'ref:A!', note: 'text', who: 'text', tag: 'text' } },
+    override: { 'A.form': { fill: { by: '@me' } }, 'B.form': { fill: { who: '@me' } }, 'A.detail': { related: [{ entity: 'B', via: 'a', fill: { tag: 'x' } }] } } };
+  const doc = openapi(graph, { fields: FIELDS });
+  assert.deepEqual(Object.keys(doc.components.schemas['A.input'].properties), ['name']);
+  assert.deepEqual(Object.keys(doc.paths['/api/A/{id}/add/B'].post.requestBody.content['application/json'].schema.properties), ['note']);
 });
 
 test('F1: contract: search, global action fields, no roles, and a plugin kind stored as REAL', () => {
