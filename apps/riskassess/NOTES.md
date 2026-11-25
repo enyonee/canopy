@@ -18,6 +18,11 @@
   derived totals (item count, total/average risk score — the report row itself), a CSV download
   of its selected items (`GET /AssessmentItem.csv?assessment=<id>`, using the generic entity-list
   CSV export plus a `ref` filter), and the dashboard chart. See Misses.
+- Case 4 (report creation), until the runtime fix SEC3 lands: a subscriber may still `POST /AssessmentItem`
+  with `assessment` set to another subscriber's assessment. This is a runtime defect, not a format miss:
+  `own` ("assessment.owner") scopes view/edit/delete, but create neither checks the parent of the new row nor
+  fills it. Check 5 asserts the refusal and so fails on exactly this ("another subscriber's assessment
+  changed").
 
 ## Misses
 - `node kind`: no document/report-generation node (no way to bundle a chart image and a table
@@ -25,10 +30,6 @@
 - `field kind`: no multi-select/checkbox-group field kind for "pick several from a catalog" in
   one form submission — each pick is its own POST (line-item pattern), which is correct and
   auditable but is N requests instead of one.
-- Runtime, not the format: a subscriber may still `POST /AssessmentItem` with `assessment` set to another
-  subscriber's assessment — a one-hop `own` scopes view/edit/delete, but create neither checks the parent of
-  the new row nor fills it. Closed by the runtime fix SEC3 (one-hop own on create/edit/related add); until it
-  lands, check 5 fails on exactly this ("another subscriber's assessment changed").
 
 ## New for this app
 - Selected items belong to the assessment's owner: `AssessmentItem` is granted with `own: "assessment.owner"`.
