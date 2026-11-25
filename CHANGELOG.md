@@ -23,6 +23,11 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   escrow `balance`; strategy its eleven starting stats; chess `wins`/`losses`/`draws`; poker `handsPlayed`/`handsWon`;
   promos `joinedAt`; medjournal `self` (not in its `User.form`). New: `tests/sec1.test.mjs`, 5 `SEC1:` mutations.
 
+- **Fixes (SEC1): a create or edit wrote fields its form never shows.** `interp.writable` let a POST set a field without
+  an input (a `time`: `trading` `Bid.placedAt`, `dmv` `Answer.answeredAt` and 21 more timestamps across the apps) and,
+  on edit, a key the entity's form `fill`s (`hospital` staff re-assigning `LabTest.technician`). Both are now never
+  writable from a client, in HTML and JSON alike; on create the fill still decides as before. 2 `SEC1:` mutations.
+
 - **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
   `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per
   connector with its kind, its mode (`deploy.json`), the breaker of each mode, the last 24 hours of its outbox (sent, failed,

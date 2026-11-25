@@ -57,3 +57,29 @@ test('SEC1: a declared User.form decides the sign-up fields — the register rol
     assert.deepEqual([u.team, u.score, u.bio, u.role, u.state, u.tier], ['1', 7, null, 'customer', 'new', 'free']);
   } finally { s.close(); }
 });
+
+test('SEC1: a create or edit never writes a timestamp, a derived value or a field the form fills, over HTML and JSON', async () => {
+  const s = await boot(tmpGraph({
+    app: 'w', data: { User: { email: 'text!', password: 'password!', role: 'enum[admin,m]=m' },
+      Bid: { price: 'int!', placedAt: 'time=now', by: 'ref:User', note: 'text', twice: 'int := price * 2' } },
+    roles: roles({ register: 'm', can: { admin: '*', m: { Bid: ['view', 'create', 'edit'] } } }),
+    seed: { User: [{ email: 'other@w', password: 'x', role: 'm' }] },
+    override: { 'Bid.form': { fill: { by: '@me' } } },
+  }));
+  try {
+    await s.post('/register', { email: 'me@w', password: 'pw' });
+    const me = (await user(s, 'me@w')).id, forged = '2000-01-01T00:00:00.000Z';
+    for (const [i, extra] of [[1, {}], [2, json]]) {
+      const r = await s.post('/Bid', { price: '5', placedAt: forged, by: '1', twice: '999' }, extra);
+      assert.ok(r.status === 303 || r.status === 200, `create ${i}: ${r.status}`);
+      const bid = await s.app.store.get('Bid', i);
+      assert.notEqual(bid.placedAt, forged, 'the clock, not the client, says when');
+      assert.deepEqual([bid.by, bid.twice], [String(me), 10]);
+      const e = await s.post(`/Bid/${i}`, { price: '6', note: 'n', placedAt: forged, by: '1' }, extra);
+      assert.ok(e.status === 303 || e.status === 200, `edit ${i}: ${e.status}`);
+      const after = await s.app.store.get('Bid', i);
+      assert.deepEqual([after.price, after.note, after.by], [6, 'n', String(me)], 'a filled field is not re-chosen on edit');
+      assert.equal(after.placedAt, bid.placedAt);
+    }
+  } finally { s.close(); }
+});
