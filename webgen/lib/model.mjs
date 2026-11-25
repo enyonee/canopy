@@ -80,6 +80,12 @@ function detailModel(graph, entity, fields, ov = {}) {
   };
 }
 
+// A transition that undoes or refuses something (it gets a confirmation and a danger colour): one of these words, as a
+// whole word of its name (camelCase and snake_case split), so "close", "closed" and "avoid" are not "lose" or "void".
+const UNDO = new Set(['cancel', 'cancelled', 'canceled', 'reject', 'rejected', 'delete', 'deleted', 'refund', 'refunded', 'lose', 'lost',
+  'fail', 'failed', 'decline', 'declined', 'abandon', 'abandoned', 'void', 'voided', 'revoke', 'revoked', 'dismiss', 'dismissed']);
+export const undoes = (name) => String(name).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).some((w) => UNDO.has(w));
+
 function transitionsOf(graph, entity) {
   const st = graph.states?.[entity];
   if (!st) return null;
@@ -87,7 +93,7 @@ function transitionsOf(graph, entity) {
     field: st.field,
     transitions: st.transitions.map((t) => ({
       name: t.name, title: t.title || title(t.name), from: t.from === undefined || t.from === '*' ? null : [].concat(t.from),
-      to: t.to, fields: t.fields || [], by: t.by || null, after: t.after || null, destructive: /cancel|reject|delete|refund|lose|lost|fail|declin|abandon|void/i.test(t.name),
+      to: t.to, fields: t.fields || [], by: t.by || null, after: t.after || null, destructive: undoes(t.name),
     })),
   };
 }
