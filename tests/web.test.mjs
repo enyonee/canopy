@@ -240,6 +240,30 @@ test('web: the scaffold\'s answers are the app\'s own answers, only rebased — 
   assert.equal(y.html, x.html, 'a JSON POST under /admin answers what it answered at the root');
 });
 
+test('web: /api and /admin live side by side — the API at the root, unchanged, and JSON under /admin', async (t) => {
+  const plain = copyFixture(t, (g) => { delete g.web; return g; });
+  const a = await boot(plain.file);
+  const b = await boot(`${FIXTURE}/app.json`);
+  t.after(() => { a.close(); b.close(); });
+  for (const s of [a, b]) {
+    const r = await s.json('/api/login', { login: 'admin@x.test', password: 'secret' });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('location'), null, '/api/login answers JSON, never a redirect into the scaffold');
+  }
+  for (const p of ['/api/Product', '/api/Product/1', '/api/me', '/api/openapi.json', '/api/Ghost', '/api/outbox'])
+    assert.equal((await b.get(p)).html, (await a.get(p)).html, `${p}: the same API with and without a front`);
+  const [x, y] = [await a.json('/api/Product', { name: 'Pan', price: 3 }), await b.json('/api/Product', { name: 'Pan', price: 3 })];
+  assert.deepEqual([y.status, y.text], [x.status, x.text], 'a POST to /api is the same with a front');
+  assert.equal(y.headers.get('location'), null);
+  const accept = { accept: 'application/json' };
+  const viaAdmin = await b.get('/admin/Product', accept);
+  assert.equal(viaAdmin.headers.get('content-type'), 'application/json; charset=utf-8');
+  assert.equal(viaAdmin.html, (await a.get('/Product', accept)).html, 'Accept-JSON of the old address works under /admin');
+  assert.equal(JSON.parse((await b.get('/api/Product')).html).total, JSON.parse(viaAdmin.html).total, 'one session for /api and /admin');
+  const refused = await b.json('/api/Product', { name: 'X' }, { origin: 'http://evil.test' });
+  assert.equal(refused.status, 403, 'the Origin check of /api holds with a front');
+});
+
 test('web: uploads are served at /file and /admin/file, the widget helper at /widget and /admin/widget, with the base', async (t) => {
   const s = await boot(`${FIXTURE}/app.json`);
   t.after(s.close);
