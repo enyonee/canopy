@@ -6,10 +6,12 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 ## Unreleased
 
 - **Fix: a page with a wrongly typed `body` passed `--check` and answered 500.** `pages[].body` as a string (and `links`,
-  `actions`, `sections` as non-arrays, a non-string paragraph, a link without a string `label`/`href`, a non-string
-  `id`/`title`/`heading`, a non-object section or page) went through the checker and crashed `GET /page/<id>` in the
-  renderer (`p.body.map`). The checker now refuses each with the page's name; the renderer is unchanged. Some of these
-  (`actions`, `sections`, a null section) used to crash the checker itself. 9 `CHK1:` mutations.
+  `actions`, `sections` as non-arrays, or a null section) went through the checker and crashed `GET /page/<id>` in the
+  renderer (`p.body.map`); `actions`, `sections` and a null section also crashed the checker itself. All are now refused
+  with the page's name; the renderer is unchanged. The checker also now requires strings, as `docs/FORMAT.md` says, for a
+  paragraph, a link's `label`/`href` and a page's `id`/`title`/`heading`, and objects for a page and a section: those did
+  not crash (`esc()` turns a number into text), so a number there, which used to render, is now refused by `--check`.
+  10 `CHK1:` mutations.
 
 - **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
   `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per

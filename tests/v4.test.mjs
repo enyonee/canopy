@@ -518,6 +518,8 @@ test('checker: a page whose body/links/actions/sections have the wrong shape is 
   assert.deepEqual(msgs({ body: ['ok', 1] }), ['page "about": body[1] must be a string (one paragraph)']);
   for (const k of ['links', 'actions', 'sections']) assert.deepEqual(msgs({ [k]: 'x' }), [`page "about": ${k} must be an array`]);
   assert.deepEqual(msgs({ links: [{ label: 'Shop' }] }), ['page "about": links[0] needs a string "href"']);
+  assert.deepEqual(msgs({ links: [{ label: 5, href: '/A' }] }), ['page "about": links[0] needs a string "label"']);
+  assert.deepEqual(msgs({ links: [{ label: 'L', href: 5 }] }), ['page "about": links[0] needs a string "href"']);
   assert.deepEqual(msgs({ links: ['x'] }).length, 2);
   assert.deepEqual(msgs({ links: [null] }).length, 2);
   assert.deepEqual(msgs({ heading: 5 }), ['page "about": heading must be a string']);
