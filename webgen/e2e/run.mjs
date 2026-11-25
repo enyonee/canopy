@@ -423,7 +423,8 @@ await scenario('The sales dashboard sums derived totals, charts them and filters
   must(t.includes('Orders by status') && t.includes('Units by product'), 'tables missing');
   must(await admin.evaluate(() => document.querySelectorAll('.recharts-surface').length >= 1), 'no chart drawn');
   await ad.shot('21-dashboard');
-  await admin.evaluate(() => [...document.querySelectorAll('[role="tab"]')].filter((x) => x.innerText.trim() === 'Table').forEach((x) => { x.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); x.click(); }));
+  // Each chart's numbers are one click away: "Show table" under it.
+  await admin.evaluate(() => [...document.querySelectorAll('main button')].filter((x) => x.innerText.trim() === 'Show table').forEach((x) => x.click()));
   await settle(admin);
   const tables = await ad.text();
   must(/Shipped\s+1\s+100\.00/.test(tables), 'by-status table wrong');

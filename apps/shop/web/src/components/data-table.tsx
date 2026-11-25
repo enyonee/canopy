@@ -30,7 +30,7 @@ function SortHeader({ f, sort, onSort }: { f: Field; sort?: Sort; onSort?: (fiel
   const Icon = !active ? ChevronsUpDown : sort?.dir === 'asc' ? ArrowUp : ArrowDown;
   if (!onSort || (f.derived && f.name !== 'id')) return <>{f.label}</>;
   return (
-    <button type="button" onClick={() => onSort(f.name)} className={cn('-mx-1.5 inline-flex items-center gap-1 rounded px-1.5 py-1 uppercase hover:bg-muted hover:text-foreground', active && 'text-foreground')}>
+    <button type="button" onClick={() => onSort(f.name)} className={cn('-mx-1.5 inline-flex items-center gap-1 rounded px-1.5 py-1 hover:bg-muted hover:text-foreground', active && 'text-foreground')}>
       {f.label}
       <Icon className={cn('size-3.5', !active && 'opacity-40')} aria-hidden="true" />
     </button>
@@ -75,7 +75,7 @@ export function DataTable({ entity, rows, columns, rowActions, viewer, labels = 
           </TableHeader>
           <TableBody>
             {rows.map((r) => (
-              <TableRow key={r.id} data-row-id={r.id} className="even:bg-muted/35">
+              <TableRow key={r.id} data-row-id={r.id} className="group/row">
                 {shown.map(({ name, f }, i) => (
                   <TableCell key={name} className={cn(numeric(f) && 'text-right')}>
                     {i === 0 && lead ? (

@@ -54,3 +54,6 @@ export const stockField = (entity: Entity) => entity.fields.find((f) => f.type =
 
 export const appInitial = () => app.title.slice(0, 1).toUpperCase();
 
+
+/** The ordinal tone (1–6) of a category, by a hash of its name: every row of one category shares it. */
+export const categoryTone = (name: string | null | undefined) => (name ? (hash(name) % 6) + 1 : 0);
