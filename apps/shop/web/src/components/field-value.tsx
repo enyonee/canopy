@@ -36,11 +36,11 @@ export function FieldValue({ entity, field, row, viewer, labels, className }: { 
     const person = app.roles?.entity === field.target && text ? <Avatar name={text} size="sm" /> : null;
     if (person) {
       const label = target && can(viewer, field.target, 'view')
-        ? <Link to={`/${field.target}/${String(v)}`} className="relative z-10 font-medium text-primary underline-offset-4 hover:underline">{text}</Link> : <span>{text}</span>;
+        ? <Link to={`/${field.target}/${String(v)}`} className="relative z-10 font-medium text-accent-text underline-offset-4 hover:underline">{text}</Link> : <span>{text}</span>;
       return <span className={cn('inline-flex items-center gap-2', className)}>{person}{label}</span>;
     }
     return target && can(viewer, field.target, 'view') ? (
-      <Link to={`/${field.target}/${String(v)}`} className={cn('font-medium text-primary underline-offset-4 hover:underline', className)}>{text}</Link>
+      <Link to={`/${field.target}/${String(v)}`} className={cn('font-medium text-accent-text underline-offset-4 hover:underline', className)}>{text}</Link>
     ) : <span className={className}>{text}</span>;
   }
   if (field.kind === 'bool' && !labels) {

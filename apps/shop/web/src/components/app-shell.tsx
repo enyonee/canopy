@@ -30,7 +30,7 @@ export function visibleNav(viewer: Viewer): NavItem[] {
 function Brand({ compact }: { compact?: boolean } = {}) {
   return (
     <Link to="/" className="flex items-center gap-2.5 rounded-md px-1 font-semibold tracking-tight">
-      <span className="flex size-8 items-center justify-center rounded-lg bg-brand-gradient text-sm font-bold text-white shadow-md" aria-hidden="true">{app.title[0]}</span>
+      <span className="flex size-8 items-center justify-center rounded-lg bg-brand-gradient text-sm font-bold text-primary-foreground shadow-md" aria-hidden="true">{app.title[0]}</span>
       {!compact && <span className="text-lg">{app.title}</span>}
     </Link>
   );
@@ -129,7 +129,7 @@ function UserMenu({ viewer }: { viewer: Viewer & { loading: boolean } }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-9 gap-2 rounded-full pr-3 pl-1" aria-label={`Account: ${name}`}>
-          <span className="flex size-7 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary" aria-hidden="true">{initials(name)}</span>
+          <span className="flex size-7 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-accent-text" aria-hidden="true">{initials(name)}</span>
           <span className="hidden max-w-32 truncate text-sm sm:inline">{name}</span>
         </Button>
       </DropdownMenuTrigger>
@@ -156,7 +156,7 @@ function TopLinks({ viewer }: { viewer: Viewer }) {
         const active = path === n.to || path.startsWith(`${n.to}/`);
         return (
           <Link key={n.to} to={n.to} aria-current={active ? 'page' : undefined}
-            className={cn('rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground', active && 'bg-primary/10 text-primary')}>
+            className={cn('rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground', active && 'bg-primary/10 text-accent-text')}>
             {n.title}
           </Link>
         );
@@ -181,13 +181,13 @@ export function AppShell({ children }: { children?: ReactNode }) {
     <div className="flex min-h-dvh">
       <a href="#main" className="sr-only z-50 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-3 focus:left-3">Skip to content</a>
       {sidebar && (
-        <aside className={cn('hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-snappy lg:block', compact ? 'w-16' : 'w-64')} aria-label="Sidebar">
+        <aside id="app-sidebar" className={cn('hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-snappy lg:block', compact ? 'w-16' : 'w-64')} aria-label="Sidebar">
           <div className={cn('sticky top-0 flex h-dvh flex-col gap-6 overflow-y-auto py-4', compact ? 'px-2' : 'px-3')}>
             <div className={cn('flex h-8 items-center', compact && 'justify-center')}><Brand compact={compact} /></div>
             <NavLinks viewer={viewer} compact={compact} />
             {viewer.user && !compact && (
               <div className="mt-auto flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 shadow-xs">
-                <span className="flex size-8 items-center justify-center rounded-full bg-primary/12 text-xs font-semibold text-primary" aria-hidden="true">{initials(userName(viewer.user))}</span>
+                <span className="flex size-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-accent-text" aria-hidden="true">{initials(userName(viewer.user))}</span>
                 <div className="min-w-0 text-sm">
                   <p className="truncate font-medium">{userName(viewer.user)}</p>
                   <p className="truncate text-xs text-muted-foreground">{enumLabel(viewer.role)}</p>
@@ -212,7 +212,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           </Sheet>
           {sidebar && (
             <>
-              <Button variant="ghost" size="icon-sm" className="hidden lg:inline-flex" aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={compact} onClick={fold}><PanelLeft /></Button>
+              <Button variant="ghost" size="icon-sm" className="hidden lg:inline-flex" aria-label="Sidebar labels" aria-controls="app-sidebar" aria-expanded={!compact} onClick={fold}><PanelLeft /></Button>
               <span className="hidden h-5 w-px bg-border lg:block" aria-hidden="true" />
             </>
           )}
