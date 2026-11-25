@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { generate } from '../lib/generate.mjs';
@@ -16,7 +17,7 @@ test('generate() twice: byte-identical file maps, also when the document\'s keys
 });
 
 test('the CLI twice into two directories: the same bytes, and --check finds nothing to change', () => {
-  const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || path.join(ROOT, 'webgen', '.tmp'), 'webgen-det-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'webgen-det-'));
   try {
     const run = (out, ...extra) => execFileSync(process.execPath, [path.join(ROOT, 'webgen/gen.mjs'), path.join(ROOT, 'apps/shop/app.json'),
       '--openapi', path.join(ROOT, 'apps/shop/web/openapi.json'), '--out', out, ...extra], { encoding: 'utf8' });
