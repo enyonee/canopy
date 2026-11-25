@@ -1,8 +1,8 @@
 // Row-scoped POST routes on an already-resolved entity+row: a declared
 // action, a state transition ("go"), or an inline add to a related child
 // table. Called from routes/entity.mjs once it has the row in hand.
-import { errorPage, forbiddenPage, label, transitionsFor, rowJSON, mayRunAction } from '../render.mjs';
-import { renderDetail } from './load.mjs';
+import { errorPage, forbiddenPage, label, transitionsFor, mayRunAction } from '../render.mjs';
+import { renderDetail, jsonRow } from './load.mjs';
 
 async function runAction(ctx, entity, fields, id, row) {
   const { graph, store, vc, user, interp, trace, ok, parts } = ctx;
@@ -25,7 +25,7 @@ async function runAction(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = action.confirm ? await interp.interpolate(action.confirm, out) : '';
-  if (ctx.wantsJSON) { const updated = await store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
+  if (ctx.wantsJSON) { const updated = await store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: await jsonRow(ctx, entity, updated) }); return true; }
   ok(await interp.afterPath(action.after || `/${entity}`, entity, id, { created: out.created }), flash);
   return true;
 }
@@ -60,7 +60,7 @@ async function runTransition(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = t.confirm ? await interp.interpolate(t.confirm, out) : `${label(entity)} is now ${t.to}`;
-  if (ctx.wantsJSON) { const updated = await store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
+  if (ctx.wantsJSON) { const updated = await store.get(entity, id); ctx.sendJson(200, { ok: true, id: updated.id, created: out.created, flash, row: await jsonRow(ctx, entity, updated) }); return true; }
   ok(await interp.afterPath(t.after || `/${entity}/${id}`, entity, id, { created: out.created }), flash);
   return true;
 }
@@ -97,7 +97,7 @@ async function addRelated(ctx, entity, fields, id, row) {
     return true;
   }
   const flash = rel.confirm || `${label(child)} added successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: kid, created: kid, flash, row: rowJSON(store, child, store.fields[child], await store.get(child, kid), vc) }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: kid, created: kid, flash, row: await jsonRow(ctx, child, await store.get(child, kid)) }); return true; }
   ok(`/${entity}/${id}`, flash);
   return true;
 }

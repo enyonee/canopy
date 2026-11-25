@@ -5,11 +5,11 @@
 // is "no entity at /X", and an unmatched shape under a real entity really is
 // "no route". Row actions/transitions/related-add are routes/rows.mjs, called
 // from here once the row itself is resolved.
-import { errorPage, label, rowJSON } from '../render.mjs';
+import { errorPage, label } from '../render.mjs';
 import { listView } from '../render/list.mjs';
 import { formFieldsFor } from '../render/form.mjs';
 import { handleRow } from './rows.mjs';
-import { listPre, renderForm, renderDetail } from './load.mjs';
+import { listPre, renderForm, renderDetail, jsonRows, jsonRow, relatedQuery, relatedSection } from './load.mjs';
 
 async function listRoute(ctx, entity, fields, ov) {
   const { store, vc, url, ownWhere, resolveTop, sortOf, paged, exportRows, wantsCsv, trace, user, flash, graph, send } = ctx;
@@ -42,7 +42,7 @@ async function listRoute(ctx, entity, fields, ov) {
   trace({ kind: 'query', entity, q, where, rows: pg.total, who: user?.id ?? null });
   const pre = await listPre(ctx, entity, fields, ov, pg.rows);
   ctx.answer(200, listView(graph, store, entity, fields, pg.rows, { q, where, flash, vc, range, pre, query: url.searchParams.toString(), sort: sort?.field, dir: sort?.dir, ...pg }),
-    { rows: pg.rows.map((r) => rowJSON(store, entity, fields, r, vc)), total: pg.total, page: pg.page, pages: pg.pages });
+    { rows: await jsonRows(ctx, entity, pg.rows), total: pg.total, page: pg.page, pages: pg.pages });
   return true;
 }
 
@@ -78,7 +78,7 @@ async function createRoute(ctx, entity, fields, formOv) {
   // row, exactly like an action/transition's confirm already does.
   const createdRow = await store.get(entity, id);
   const flash = formOv.confirm ? await interp.interpolate(formOv.confirm, { rowEntity: entity, row: createdRow, id, created: id }) : `${label(entity)} saved successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id, created: id, flash, row: rowJSON(store, entity, fields, createdRow, vc) }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id, created: id, flash, row: await jsonRow(ctx, entity, createdRow) }); return true; }
   ok(await interp.afterPath(formOv.after || `/${entity}`, entity, id, { created: id }), flash);
   return true;
 }
@@ -107,7 +107,7 @@ async function updateRoute(ctx, entity, fields, formOv, id, row) {
   }
   const updated = await store.get(entity, id);
   const flash = formOv.confirmEdit ? await interp.interpolate(formOv.confirmEdit, { rowEntity: entity, row: updated, id }) : `${label(entity)} updated successfully`;
-  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: updated.id, flash, row: rowJSON(store, entity, fields, updated, vc) }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { ok: true, id: updated.id, flash, row: await jsonRow(ctx, entity, updated) }); return true; }
   ok(await interp.afterPath(formOv.afterEdit || `/${entity}`, entity, id), flash);
   return true;
 }
@@ -144,6 +144,18 @@ async function fireViewed(ctx, entity, row) {
   return await store.get(entity, row.id);
 }
 
+// GET /api/<Entity>/:id/related/<Child>: one page of a related table of the detail page — the children it shows this
+// viewer (the same relatedOf and relatedQuery), under the same "view" of the parent row. Only under /api.
+async function relatedRoute(ctx, entity, row) {
+  const { graph, parts, vc } = ctx;
+  const { rel, shown } = relatedSection(graph, vc, entity, parts[3]);
+  if (!rel) { ctx.sendJson(404, { ok: false, status: 404, errors: [`no related ${parts[3]} on ${entity}`] }); return true; }
+  if (!vc.can(entity, 'view', row) || !shown) { ctx.deny(); return true; }
+  const pg = await ctx.paged(rel.entity, await relatedQuery(ctx, rel, row), rel);
+  ctx.sendJson(200, { rows: await jsonRows(ctx, rel.entity, pg.rows), total: pg.total, page: pg.page, pages: pg.pages });
+  return true;
+}
+
 async function getRoutes(ctx, entity, fields, ov) {
   const { parts, vc, store, flash, send, graph } = ctx;
   if (parts.length === 1) return listRoute(ctx, entity, fields, ov);
@@ -151,14 +163,15 @@ async function getRoutes(ctx, entity, fields, ov) {
     if (vc.can(entity, 'create')) send(200, await renderForm(ctx, entity, fields, {}, 'new', [], flash)); else ctx.deny();
     return true;
   }
-  if (parts.length === 2 || parts[2] === 'edit') {
+  if (parts.length === 2 || parts[2] === 'edit' || (ctx.api && parts[2] === 'related')) {
     const row = await store.get(entity, parts[1]);
     if (!row) { ctx.answer(404, errorPage(graph, `no ${entity} #${parts[1]}`), { ok: false, status: 404, errors: [`no ${entity} #${parts[1]}`] }); return true; }
     await vc.prime(entity, [row]);
+    if (parts[2] === 'related') return relatedRoute(ctx, entity, row);
     if (parts.length === 2) {
       if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
       const current = await fireViewed(ctx, entity, row);
-      ctx.answer(200, await renderDetail(ctx, entity, fields, current, flash), rowJSON(store, entity, fields, current, vc));
+      ctx.answer(200, await renderDetail(ctx, entity, fields, current, flash), await jsonRow(ctx, entity, current));
       return true;
     }
     if (vc.can(entity, 'edit', row)) send(200, await renderForm(ctx, entity, fields, row, 'edit', [], flash)); else ctx.deny();

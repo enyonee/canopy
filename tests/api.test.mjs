@@ -8,18 +8,23 @@ import { openapiText } from '../runtime/contract.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
 
 const J = { accept: 'application/json' };
+// An /api answer less the reference captions only /api adds: the Accept-mode answer.
+const unlabel = (v) => (Array.isArray(v) ? v.map(unlabel) : v && typeof v === 'object'
+  ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== '_labels').map(([k, x]) => [k, unlabel(x)])) : v);
+const same = (api, old) => assert.deepEqual(unlabel(JSON.parse(api)), JSON.parse(old));
 let s;
 before(async () => { s = await boot('apps/shop/app.json'); });
 after(() => s.close());
 
-test('F1: api: a read under /api is the Accept-mode answer byte for byte, JSON without asking', async () => {
+test('F1: api: a read under /api is the Accept-mode answer plus reference captions, JSON without asking', async () => {
   s.asGuest();
   for (const p of ['/Product', '/Product/1', '/Product?q=mug', '/Product?category=2&sort=price&dir=desc']) {
     const old = await s.get(p, J), now = await s.get(`/api${p}`);
     assert.equal(now.status, 200, p);
-    assert.equal(now.html, old.html, p);
+    same(now.html, old.html);
     assert.match(now.headers.get('content-type'), /^application\/json/);
   }
+  assert.deepEqual(JSON.parse((await s.get('/api/Product/1')).html)._labels, { category: 'Mugs' });
   const missing = await s.get('/api/Product/99');
   assert.equal(missing.status, 404);
   assert.deepEqual(JSON.parse(missing.html), { ok: false, status: 404, errors: ['no Product #99'] });
@@ -86,7 +91,7 @@ test('F1: api: sign in, who am I, sign out — the session cookie is the form pa
   assert.match(r.headers.get('set-cookie'), /^ag_session=[^;]+; Path=\/; HttpOnly; SameSite=Lax$/);
   assert.equal(r.body.flash, 'Welcome, admin@shop.test');
   assert.equal(r.body.role, 'admin');
-  assert.deepEqual(r.body.user, { id: 1, email: 'admin@shop.test', name: 'Admin', role: 'admin', discount: 0, points: 0 }, 'never the password');
+  assert.deepEqual(r.body.user, { id: 1, email: 'admin@shop.test', name: 'Admin', role: 'admin', discount: 0, points: 0, _labels: {} }, 'never the password');
   const me = JSON.parse((await s.get('/api/me')).html);
   assert.deepEqual(me, { user: r.body.user, role: 'admin' });
   const out = await s.json('/api/logout', {});
@@ -146,7 +151,7 @@ test('F1: api: an admin writes rows; an absent key is absent (no unchecked-box f
   await s.login('admin@shop.test', 'admin123');
   const made = await s.json('/api/Product', { name: 'Green mug', price: 9.99, stock: 3, category: 1 });
   assert.equal(made.status, 200);
-  assert.deepEqual(made.body.row, { id: made.body.id, name: 'Green mug', category: '1', price: 9.99, stock: 3, about: null, active: true });
+  assert.deepEqual(made.body.row, { id: made.body.id, name: 'Green mug', category: '1', price: 9.99, stock: 3, about: null, active: true, _labels: { category: 'Mugs' } });
   assert.equal(made.body.created, made.body.id);
   const id = made.body.id;
   const edited = await s.json(`/api/Product/${id}`, { stock: 5 });
@@ -167,8 +172,8 @@ test('F1: api: an admin writes rows; an absent key is absent (no unchecked-box f
   assert.deepEqual(gone.body, { ok: true, id, flash: 'Product deleted' });
   assert.equal((await s.get(`/api/Product/${id}`)).status, 404);
   const old = await s.get('/dashboard/sales', J), now = await s.get('/api/dashboard/sales');
-  assert.equal(now.html, old.html);
-  assert.equal((await s.get('/api/list/all-products')).html, (await s.get('/list/all-products', J)).html);
+  same(now.html, old.html);
+  same((await s.get('/api/list/all-products')).html, (await s.get('/list/all-products', J)).html);
 });
 
 test('F1: api: GET /api/openapi.json is the --openapi document, behind the sign-in gate', async () => {
@@ -218,7 +223,7 @@ test('F1: api: search and a role-free app (no session routes)', async () => {
   const n = await boot(file);
   try {
     const r = await n.get('/api/search?q=milk');
-    assert.equal(r.html, (await n.get('/search?q=milk', J)).html);
+    same(r.html, (await n.get('/search?q=milk', J)).html);
     assert.equal(JSON.parse(r.html).results[0].rows[0].title, 'milk');
     assert.equal((await n.json('/api/login', {})).status, 404);
     assert.equal((await n.json('/api/logout', {})).status, 404);
@@ -231,4 +236,91 @@ test('F1: api: search and a role-free app (no session routes)', async () => {
   const r = await boot(tmpGraph({ app: 'closed', data: { User: { email: 'text!', password: 'password!', role: 'enum[admin]=admin' } }, views: 'auto',
     roles: { entity: 'User', login: 'email', password: 'password', role: 'role', can: { admin: '*' } } }));
   try { assert.equal((await r.json('/api/register', {})).status, 404, 'no self-registration declared'); } finally { r.close(); }
+});
+
+test('F1: api: captions — a customer reads the label of a user it may not view, the related table of its own order, the dashboard group', async () => {
+  s.asGuest();
+  await s.json('/api/register', { email: 'eve@shop.test', password: 'pw', name: 'Eve' });
+  await s.json('/api/Product/2/action/addToCart', { qty: 1 });
+  const order = JSON.parse((await s.get('/api/list/cart')).html).rows[0];
+  assert.deepEqual(order._labels, { customer: 'eve@shop.test' });
+  assert.equal((await s.get(`/api/User/${order.customer}`)).status, 403, 'the user row itself stays closed');
+  const kids = await s.get(`/api/Order/${order.id}/related/OrderItem`);
+  assert.equal(kids.status, 200);
+  const page = JSON.parse(kids.html);
+  assert.deepEqual([page.total, page.page, page.pages], [1, 1, 1]);
+  assert.equal(page.rows[0]._labels.product, 'Red mug');
+  assert.deepEqual(Object.keys(page.rows[0]._labels), ['order', 'product']);
+  assert.equal(page.rows[0].product, '2');
+  assert.equal((await s.get(`/api/order/${order.id}/related/orderitem`)).status, 200, 'any case, like every entity path');
+  assert.equal((await s.get(`/api/Order/${order.id}/related/Nope`)).status, 404);
+  assert.equal((await s.get('/api/Order/999/related/OrderItem')).status, 404);
+  assert.equal((await s.get(`/Order/${order.id}/related/OrderItem`, J)).status, 404, 'only under /api');
+  s.asGuest();
+  assert.equal((await s.get(`/api/Order/${order.id}/related/OrderItem`)).status, 403);
+  await s.json('/api/register', { email: 'fox@shop.test', password: 'pw', name: 'Fox' });
+  assert.equal((await s.get(`/api/Order/${order.id}/related/OrderItem`)).status, 403, 'not their order');
+  await s.login('admin@shop.test', 'admin123');
+  await s.json(`/api/Order/${order.id}/go/place`, { address: 'x', paymentMethod: 'card' });
+  const dash = JSON.parse((await s.get('/api/dashboard/sales')).html);
+  const units = dash.tables.find((t) => t.title === 'Units by product').rows;
+  assert.ok(units.length && units.every((r) => typeof r._labels.grp === 'string' && r._labels.grp.length), JSON.stringify(units));
+  assert.ok(dash.tables.find((t) => t.title === 'Orders by status').rows.every((r) => r._labels === undefined), 'an enum group has no caption');
+});
+
+const CARDS = {
+  app: 'cards', views: 'auto',
+  data: { User: { email: 'text!', password: 'password!', role: 'enum[admin,member]=member' }, Tag: { name: 'text!' },
+    Card: { title: 'text!', owner: 'ref:User', tag: 'ref:Tag', extra: 'ref:Tag' }, Odd: { _labels: 'text', tag: 'ref:Tag' },
+    Note: { card: 'ref:Card!', body: 'text', tag: 'ref:Tag' } },
+  roles: { entity: 'User', login: 'email', password: 'password', role: 'role',
+    can: { admin: '*', member: { Card: ['view'], Tag: ['view'], Odd: ['view'] } } },
+  override: { 'Card.detail': { fields: ['title', 'owner', 'tag'], private: { tag: 'owner' }, related: [{ entity: 'Note', via: 'card', columns: ['body'] }] },
+    'Card.list': { columns: ['title', 'tag'] }, 'Note.detail': { fields: ['body'] }, 'Note.list': { columns: ['body'] } },
+  seed: { User: [{ email: 'a@x', password: 'a', role: 'member' }, { email: 'b@x', password: 'b', role: 'member' }], Tag: [{ name: 'red' }],
+    Card: [{ title: 'one', owner: 1, tag: 1, extra: 1 }], Odd: [{ _labels: 'mine', tag: 1 }], Note: [{ card: 1, body: 'hi', tag: 1 }] },
+};
+
+test('F1: api: a caption is never more than the stand shows — a private reference, a field it never shows, an own _labels field', async () => {
+  const c = await boot(tmpGraph(CARDS));
+  try {
+    await c.json('/api/login', { login: 'b@x', password: 'b' });
+    const other = JSON.parse((await c.get('/api/Card/1')).html);
+    assert.equal(other.tag, null, 'private to its owner');
+    assert.deepEqual(other._labels, { owner: 'a@x' }, 'no caption for the hidden tag, none for "extra", which no screen shows');
+    assert.equal(other.extra, '1');
+    assert.equal((await c.get('/api/Card/1/related/Note')).status, 403, 'the child is not viewable: the detail page shows no table');
+    await c.json('/api/login', { login: 'a@x', password: 'a' });
+    assert.deepEqual(JSON.parse((await c.get('/api/Card/1')).html)._labels, { owner: 'a@x', tag: 'red' });
+    const odd = JSON.parse((await c.get('/api/Odd/1')).html);
+    assert.equal(odd._labels, 'mine', 'the field wins; no captions are added');
+    assert.deepEqual(JSON.parse((await c.get('/Odd/1', J)).html), odd);
+  } finally { c.close(); }
+});
+
+test('F1: api: captions and a related page cost the same number of queries for 6 rows and for 40', async () => {
+  const graph = { app: 'q', views: 'auto', data: { Owner: { name: 'text!' }, Box: { owner: 'ref:Owner!', label: 'text!' }, Item: { box: 'ref:Box!', owner: 'ref:Owner', note: 'text' } },
+    override: { 'Box.detail': { related: [{ entity: 'Item', via: 'box' }] } } };
+  const count = async (n) => {
+    const q = await boot(tmpGraph(graph));
+    try {
+      const { store } = q.app;
+      const box = await store.insert('Box', { owner: await store.insert('Owner', { name: 'o0' }), label: 'b' });
+      for (let i = 0; i < n; i++) {
+        const o = await store.insert('Owner', { name: `o${i + 1}` });
+        await store.insert('Box', { owner: o, label: `b${i}` });
+        await store.insert('Item', { box, owner: o, note: `n${i}` });
+      }
+      let k = 0;
+      store.drv.onQuery = (sql, opts) => { if (opts?.cache !== false) k++; };
+      const list = JSON.parse((await q.get('/api/Box')).html);
+      const kids = JSON.parse((await q.get(`/api/Box/${box}/related/Item`)).html);
+      store.drv.onQuery = null;
+      assert.equal(list.rows.length, n + 1);
+      assert.equal(kids.rows.length, n);
+      assert.ok(kids.rows.every((r) => r._labels.owner.startsWith('o') && r._labels.box === 'b'));
+      return k;
+    } finally { q.close(); }
+  };
+  assert.equal(await count(6), await count(40));
 });

@@ -2,12 +2,12 @@
 // /list/<id> and /search — every read that is not a declared entity's own
 // routes (routes/entity.mjs) or a row action (routes/rows.mjs).
 import { formatMoney } from '../spec.mjs';
-import { errorPage, rowJSON } from '../render.mjs';
+import { errorPage } from '../render.mjs';
 import { staticPage } from '../render/pages.mjs';
 import { dashboardView } from '../render/dashboard.mjs';
 import { listView } from '../render/list.mjs';
 import { searchView } from '../render/search.mjs';
-import { listPre, pagePre, searchPre, dashboardPre } from './load.mjs';
+import { listPre, pagePre, searchPre, dashboardPre, jsonRows } from './load.mjs';
 
 // The CSV of a dashboard: the aggregates and labels the route loaded (routes/load.mjs), one line per value.
 function dashboardCsv(ctx, d, mine, pre) {
@@ -57,11 +57,16 @@ function moneyAggregate(store, entity, fieldName, fn, v) {
 // metric per card/chart, one row per group in a table/chart.
 function dashboardJson(ctx, mine, pre) {
   const { store } = ctx;
+  // Under /api a group by reference also carries its caption, the one the dashboard shows (loaded with the aggregates).
+  const caption = (x, r) => {
+    const g = ctx.api && x.groupBy ? store.field(x.entity, x.groupBy) : null;
+    return g?.kind === 'ref' ? { _labels: { grp: pre.label(g.target, r.grp) } } : {};
+  };
   const cards = mine.cards.map((c, i) => ({ title: c.title, value: moneyAggregate(store, c.entity, c.field, c.fn || 'count', pre.dash.cards[i]) ?? 0 }));
   const tables = mine.tables.map((t, i) => ({ title: t.title, rows: pre.dash.tables[i]
-    .map((r) => { const out = { ...r }; for (const m of t.metrics || []) out[m.as] = moneyAggregate(store, t.entity, m.field, m.fn, r[m.as]); return out; }) }));
+    .map((r) => { const out = { ...r }; for (const m of t.metrics || []) out[m.as] = moneyAggregate(store, t.entity, m.field, m.fn, r[m.as]); return { ...out, ...caption(t, r) }; }) }));
   const charts = (mine.charts || []).map((c, i) => ({ title: c.title, type: c.type,
-    rows: pre.dash.charts[i].map((r) => ({ ...r, v: moneyAggregate(store, c.entity, c.metric.field, c.metric.fn, r.v) })) }));
+    rows: pre.dash.charts[i].map((r) => ({ ...r, v: moneyAggregate(store, c.entity, c.metric.field, c.metric.fn, r.v), ...caption(c, r) })) }));
   ctx.sendJson(200, { cards, tables, charts });
 }
 
@@ -119,7 +124,7 @@ async function list(ctx) {
   const cols = view.columns || store.fields[l.entity].filter((f) => !f.type.secret).map((f) => f.name);
   if (wantsCsv) { await exportRows(l.id, l.entity, await store.list(l.entity, opts), cols, view.labels || {}); return true; }
   const pg = await paged(l.entity, opts, view);
-  if (ctx.wantsJSON) { ctx.sendJson(200, { rows: pg.rows.map((r) => rowJSON(store, l.entity, store.fields[l.entity], r, vc)), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
+  if (ctx.wantsJSON) { ctx.sendJson(200, { rows: await jsonRows(ctx, l.entity, pg.rows), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
   const g = { ...graph, override: { ...graph.override, [`${l.entity}.list`]: view } };
   const pre = await listPre(ctx, l.entity, store.fields[l.entity], view, pg.rows);
   ctx.send(200, listView(g, store, l.entity, store.fields[l.entity], pg.rows, { q: url.searchParams.get('q') || '', where: {}, flash, vc, pre, path: `/list/${l.id}`,
@@ -140,7 +145,9 @@ async function search(ctx) {
     results.push({ entity, rows });
   }
   if (ctx.wantsJSON) {
-    ctx.sendJson(200, { results: results.map(({ entity, rows }) => ({ entity, rows: rows.map((r) => rowJSON(store, entity, store.fields[entity], r, vc)) })) });
+    const out = [];
+    for (const { entity, rows } of results) out.push({ entity, rows: await jsonRows(ctx, entity, rows) });
+    ctx.sendJson(200, { results: out });
     return true;
   }
   ctx.send(200, searchView(graph, store, q, results, vc, await searchPre(ctx, results)));

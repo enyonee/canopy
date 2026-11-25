@@ -46,6 +46,7 @@ function entityPaths(graph, fields, entity) {
   const st = graph.states?.[entity];
   const body = ref(`${entity}.input`);
   const at = `/api/${entity}/{id}`;
+  /** @type {Record<string, any>} */
   const paths = {
     [`/api/${entity}`]: { ...get(`list${entity}`, entity, `${entity}.page`, [], listParams(own, ov)), ...post(`create${entity}`, entity, `${entity}.saved`, [], body) },
     [at]: { ...get(`get${entity}`, entity, entity, [404], [idParam]), ...post(`update${entity}`, entity, `${entity}.saved`, [404], body, [idParam]) },
@@ -62,6 +63,7 @@ function entityPaths(graph, fields, entity) {
     const kid = fields[rel.entity];
     const body = inputSchema(writableFields(kid, { only: Array.isArray(rel.form) ? rel.form : null, skip: [rel.via, ...Object.keys(rel.fill || {}), graph.states?.[rel.entity]?.field] }));
     paths[`${at}/add/${rel.entity}`] = post(`${entity}_add_${rel.entity}`, entity, `${rel.entity}.saved`, [404], body, [idParam]);
+    paths[`${at}/related/${rel.entity}`] = get(`${entity}_related_${rel.entity}`, entity, `${rel.entity}.page`, [404], [idParam, query('page', { type: 'integer', minimum: 1 })]);
   }
   return paths;
 }

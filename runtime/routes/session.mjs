@@ -2,16 +2,15 @@
 // /api/logout) the same steps answer JSON: the session cookie is set or cleared exactly as here, and where the form path
 // redirects with a flash, the JSON answer is `{ ok: true, flash, user, role }` (the signed-in row as a JSON GET reads it).
 import { verifyPassword } from '../auth.mjs';
-import { rowJSON } from '../render.mjs';
 import { loginView, registerView, registerFields } from '../render/pages.mjs';
-import { registerPre } from './load.mjs';
+import { registerPre, jsonRow } from './load.mjs';
 
 // Where the form path redirects with a flash, /api answers the user it signed in (or out).
 async function signedIn(ctx, id, to, flash) {
   if (!ctx.api) { ctx.ok(to, flash); return; }
   const entity = ctx.graph.roles.entity;
   const row = id === null ? null : await ctx.store.get(entity, id);
-  ctx.sendJson(200, { ok: true, flash, user: row && rowJSON(ctx.store, entity, ctx.store.fields[entity], row), role: row ? ctx.perms.roleOf(row) : ctx.perms.roleOf(null) });
+  ctx.sendJson(200, { ok: true, flash, user: row && await jsonRow(ctx, entity, row), role: row ? ctx.perms.roleOf(row) : ctx.perms.roleOf(null) });
 }
 
 // A refusal: the form again with the message, or under /api the JSON error.
