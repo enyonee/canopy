@@ -1,0 +1,3313 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Bad Request"
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Conflict"
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Forbidden"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Not Found"
+      },
+      "TooLarge": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Too Large"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unauthorized"
+      },
+      "UnsupportedMediaType": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unsupported Media Type"
+      }
+    },
+    "schemas": {
+      "Category": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Category.input": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "type": "object"
+      },
+      "Category.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Category.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Category"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Order": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "customer": {
+                "type": "string",
+                "x-canopy-ref": "User"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "time"
+          },
+          "customer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "items": {
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "net": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "paymentMethod": {
+            "enum": [
+              "card",
+              "paypal",
+              "cash"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "status": {
+            "enum": [
+              "cart",
+              "placed",
+              "paid",
+              "shipped",
+              "delivered",
+              "cancelled"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "total": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          }
+        },
+        "required": [
+          "id",
+          "customer",
+          "status",
+          "createdAt",
+          "address",
+          "paymentMethod",
+          "items",
+          "total",
+          "net",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Order.input": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "time"
+          },
+          "customer": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          },
+          "paymentMethod": {
+            "enum": [
+              "card",
+              "paypal",
+              "cash"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "type": "object"
+      },
+      "Order.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Order"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Order.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Order"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "OrderItem": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "order": {
+                "type": "string",
+                "x-canopy-ref": "Order"
+              },
+              "product": {
+                "type": "string",
+                "x-canopy-ref": "Product"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "line": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "order": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Order"
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "product": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Product"
+          },
+          "qty": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "product",
+          "qty",
+          "price",
+          "line",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "OrderItem.input": {
+        "additionalProperties": false,
+        "properties": {
+          "qty": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          }
+        },
+        "type": "object"
+      },
+      "OrderItem.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "OrderItem.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/OrderItem"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Product": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "category": {
+                "type": "string",
+                "x-canopy-ref": "Category"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "about": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "active": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "x-canopy-kind": "bool"
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Category"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "stock": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category",
+          "price",
+          "stock",
+          "about",
+          "active",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Product.input": {
+        "additionalProperties": false,
+        "properties": {
+          "about": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "active": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "x-canopy-kind": "bool"
+          },
+          "category": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Category"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "stock": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          }
+        },
+        "type": "object"
+      },
+      "Product.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Product.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Product"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "discount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "percent"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "points": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "customer"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "discount",
+          "points",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "User.input": {
+        "additionalProperties": false,
+        "properties": {
+          "discount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "percent"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true,
+            "x-canopy-kind": "password"
+          },
+          "points": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "customer"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "type": "object"
+      },
+      "User.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "User.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "canopy.Dashboard": {
+        "properties": {
+          "cards": {
+            "items": {
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "title",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "charts": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "grp": {},
+                      "v": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "grp",
+                      "v"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "type",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tables": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cards",
+          "tables",
+          "charts"
+        ],
+        "type": "object"
+      },
+      "canopy.Deleted": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Done": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Error": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "const": false
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "status",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "canopy.Me": {
+        "properties": {
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user",
+          "role"
+        ],
+        "type": "object"
+      },
+      "canopy.OpenAPI": {
+        "description": "this document",
+        "type": "object"
+      },
+      "canopy.Register": {
+        "additionalProperties": false,
+        "properties": {
+          "discount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "percent"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true,
+            "x-canopy-kind": "password"
+          },
+          "points": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          }
+        },
+        "type": "object"
+      },
+      "canopy.Search": {
+        "properties": {
+          "results": {
+            "items": {
+              "properties": {
+                "entity": {
+                  "type": "string"
+                },
+                "rows": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "entity",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "canopy.Signed": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "flash",
+          "user",
+          "role"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "in": "cookie",
+        "name": "ag_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Derived from app.json by the Canopy runtime. Every route answers JSON; a POST needs a JSON body and the Origin of this site.",
+    "title": "shop",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/Category": {
+      "get": {
+        "operationId": "listCategory",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "name"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Category"
+        ]
+      },
+      "post": {
+        "operationId": "createCategory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Category.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Category"
+        ]
+      }
+    },
+    "/api/Category/{id}": {
+      "get": {
+        "operationId": "getCategory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Category"
+        ]
+      },
+      "post": {
+        "operationId": "updateCategory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Category.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Category"
+        ]
+      }
+    },
+    "/api/Category/{id}/delete": {
+      "post": {
+        "operationId": "deleteCategory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Category"
+        ]
+      }
+    },
+    "/api/Order": {
+      "get": {
+        "operationId": "listOrder",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "customer",
+                "status",
+                "createdAt",
+                "address",
+                "paymentMethod",
+                "items",
+                "total",
+                "net"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      },
+      "post": {
+        "operationId": "createOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Order.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      },
+      "post": {
+        "operationId": "updateOrder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Order.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}/add/OrderItem": {
+      "post": {
+        "operationId": "Order_add_OrderItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "price": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "x-canopy-kind": "money"
+                  },
+                  "product": {
+                    "type": [
+                      "string",
+                      "integer",
+                      "null"
+                    ],
+                    "x-canopy-kind": "ref",
+                    "x-canopy-ref": "Product"
+                  },
+                  "qty": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "x-canopy-kind": "int"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderItem.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}/delete": {
+      "post": {
+        "operationId": "deleteOrder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}/go/cancel": {
+      "post": {
+        "operationId": "Order_go_cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}/go/deliver": {
+      "post": {
+        "operationId": "Order_go_deliver",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}/go/pay": {
+      "post": {
+        "operationId": "Order_go_pay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}/go/place": {
+      "post": {
+        "operationId": "Order_go_place",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {
+                  "address": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  },
+                  "paymentMethod": {
+                    "enum": [
+                      "card",
+                      "paypal",
+                      "cash"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "enum"
+                  }
+                },
+                "required": [
+                  "address",
+                  "paymentMethod"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}/go/ship": {
+      "post": {
+        "operationId": "Order_go_ship",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/Order/{id}/related/OrderItem": {
+      "get": {
+        "operationId": "Order_related_OrderItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderItem.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/OrderItem": {
+      "get": {
+        "operationId": "listOrderItem",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "order",
+                "product",
+                "qty",
+                "price",
+                "line"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderItem.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "OrderItem"
+        ]
+      },
+      "post": {
+        "operationId": "createOrderItem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderItem.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderItem.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "OrderItem"
+        ]
+      }
+    },
+    "/api/OrderItem/{id}": {
+      "get": {
+        "operationId": "getOrderItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderItem"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "OrderItem"
+        ]
+      },
+      "post": {
+        "operationId": "updateOrderItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderItem.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderItem.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "OrderItem"
+        ]
+      }
+    },
+    "/api/OrderItem/{id}/delete": {
+      "post": {
+        "operationId": "deleteOrderItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "OrderItem"
+        ]
+      }
+    },
+    "/api/Product": {
+      "get": {
+        "operationId": "listProduct",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "name",
+                "category",
+                "price",
+                "stock",
+                "about",
+                "active"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Product"
+        ]
+      },
+      "post": {
+        "operationId": "createProduct",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Product.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Product"
+        ]
+      }
+    },
+    "/api/Product/{id}": {
+      "get": {
+        "operationId": "getProduct",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Product"
+        ]
+      },
+      "post": {
+        "operationId": "updateProduct",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Product.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Product"
+        ]
+      }
+    },
+    "/api/Product/{id}/action/addToCart": {
+      "post": {
+        "operationId": "Product_action_addToCart",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Product"
+        ]
+      }
+    },
+    "/api/Product/{id}/delete": {
+      "post": {
+        "operationId": "deleteProduct",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Product"
+        ]
+      }
+    },
+    "/api/User": {
+      "get": {
+        "operationId": "listUser",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "email",
+                "password",
+                "name",
+                "role",
+                "discount",
+                "points"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      },
+      "post": {
+        "operationId": "createUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/User/{id}": {
+      "get": {
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      },
+      "post": {
+        "operationId": "updateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/User/{id}/delete": {
+      "post": {
+        "operationId": "deleteUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/dashboard/sales": {
+      "get": {
+        "operationId": "dashboard_sales",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Dashboard"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/list/all-products": {
+      "get": {
+        "operationId": "list_all-products",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "name",
+                "category",
+                "price",
+                "stock",
+                "about",
+                "active"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "lists"
+        ]
+      }
+    },
+    "/api/list/cart": {
+      "get": {
+        "operationId": "list_cart",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "customer",
+                "status",
+                "createdAt",
+                "address",
+                "paymentMethod",
+                "items",
+                "total",
+                "net"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "lists"
+        ]
+      }
+    },
+    "/api/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "login",
+                  "password"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "operationId": "logout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Me"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.OpenAPI"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "contract"
+        ]
+      }
+    },
+    "/api/register": {
+      "post": {
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/canopy.Register"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    }
+  }
+}
