@@ -18,6 +18,10 @@
   profile fields (the same scoring the student side uses, symmetrically); "direct communication"
   is a message thread nested under the match (`apps/qna`'s answer-under-question shape, reused
   for a two-party thread instead of one-to-many).
+- Case 7 (direct communication), until the runtime fix SEC3 lands: a student or provider may still
+  `POST /Message` with `match` set to a match that is not theirs. This is a runtime defect, not a format miss:
+  `own` scopes reads by the one-hop path, but create does not check the parent of the new row. The check
+  asserts the refusal and so fails on exactly this ("another student posted into Maria's conversation").
 
 ## Misses
 
@@ -34,15 +38,14 @@
 - `composition` (own in two hops): a message belongs to the two users of its match, but they sit two hops away
   (`Message.match → Match.student → StudentProfile.user`, likewise through `provider`), and `own` takes a
   direct field or one hop only. Worked around by keeping the two owners on the match itself: `Match.studentUser`
-  and `Match.providerUser` are stored `ref:User` copies, written only by the server (seed, the `values` of the
-  `db.ensure` that makes every match, and a `Match.updated` event that re-derives them after an admin edit;
-  `StudentProfile.user`/`Provider.user` are on no form, so they never change over HTTP). Students and providers
+  and `Match.providerUser` are stored `ref:User` copies, written only by the server: the seed, and `Match.created`/`Match.updated` events that
+  re-derive both from `student.user`/`provider.user` after every create and form edit, so whatever a request
+  posts for them (even an admin's `POST /Match`) is overwritten in the same transaction; every match the
+  profile events make with `db.ensure` fires `Match.created` too. `StudentProfile.user`/`Provider.user` are on
+  no form, so they never change over HTTP. Check 7 posts forged copies as the admin, on create and on edit,
+  and asserts they are replaced. Students and providers
   may not create or edit a Match at all. A two-hop `own` ("match.student.user") would make the copies
   unnecessary — a candidate for the format.
-- Runtime, not the format: a student or provider may still `POST /Message` with `match` set to a match that is
-  not theirs — the one-hop part of `own` scopes reads, but create does not check the parent of the new row.
-  Closed by the runtime fix SEC3; until it lands, check 7 fails on exactly this ("another student posted into
-  Maria's conversation").
 
 ## New for this app
 
