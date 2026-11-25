@@ -165,9 +165,8 @@ test('F1: api: an admin writes rows; an absent key is absent (no unchecked-box f
   const neg = await s.json('/api/Product', { name: 'Bad', price: -1 });
   assert.deepEqual(neg.body, { ok: false, status: 400, errors: ['Price cannot be negative'] });
   const orders = JSON.parse((await s.get('/api/Order')).html).rows;
-  const kid = await s.json(`/api/Order/${orders[0].id}/add/OrderItem`, { product: 2, qty: 1, price: 14 });
-  assert.equal(kid.status, 200);
-  assert.equal(kid.body.row.order, String(orders[0].id));
+  const none = await s.json(`/api/Order/${orders[0].id}/add/OrderItem`, { product: 2, qty: 1, price: 14 });
+  assert.equal(none.status, 404, 'a related table declared with form: false has no add, under /api as on the form path');
   const gone = await s.json(`/api/Product/${id}/delete`, {});
   assert.deepEqual(gone.body, { ok: true, id, flash: 'Product deleted' });
   assert.equal((await s.get(`/api/Product/${id}`)).status, 404);
@@ -204,6 +203,9 @@ test('F1: api: a JSON body cannot name a stored file; a crash is a JSON 500', as
     const r = await v2.json('/api/Project', { name: 'P', attachment: '../../etc/passwd' });
     assert.equal(r.status, 200);
     assert.equal(r.body.row.attachment, null, 'the upload field is dropped, not stored');
+    const kid = await v2.json(`/api/Project/${r.body.id}/add/Expense`, { amount: 5, note: 'paint' });
+    assert.equal(kid.status, 200, 'a related table with a form takes an add');
+    assert.deepEqual([kid.body.row.project, kid.body.row.amount, kid.body.row.note, kid.body.row._labels.project], [String(r.body.id), 5, 'paint', 'P']);
     assert.equal((await v2.json('/api/action/ping', {})).status, 200, 'a global action');
     const { store } = v2.app;
     const real = store.listPage;
