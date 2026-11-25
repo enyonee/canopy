@@ -13,6 +13,16 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   not crash (`esc()` turns a number into text), so a number there, which used to render, is now refused by `--check`.
   10 `CHK1:` mutations.
 
+- **Fixes (SEC1): self-registration set fields the visitor must not choose.** `/register` rendered every stored field
+  except the role and `POST /register` wrote whatever was posted, so in `apps/shop` a new customer could give
+  themselves `discount=100` (HTML form or `accept: application/json`), in `escrow` a `balance`, in `strategy` gold and
+  soldiers. The sign-up form now asks for `<entity>.form`'s `byRole.<register role>.fields`, else its `fields`, else
+  every field without a declared default; never the role, the status field or a `fill` key (`registerFields`,
+  `runtime/render/pages.mjs`). The POST writes only those, through `interp.onlyWritable` like every create form: anything
+  else is dropped, the same answer a create form gives. Fields that left the sign-up forms: shop `discount`, `points`;
+  escrow `balance`; strategy its eleven starting stats; chess `wins`/`losses`/`draws`; poker `handsPlayed`/`handsWon`;
+  promos `joinedAt`; medjournal `self` (not in its `User.form`). New: `tests/sec1.test.mjs`, 5 `SEC1:` mutations.
+
 - **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
   `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per
   connector with its kind, its mode (`deploy.json`), the breaker of each mode, the last 24 hours of its outbox (sent, failed,

@@ -297,7 +297,10 @@ entirely — `verify/run.mjs` sets it, so an app's checks control every schedule
            "guest": { "Product": ["view"] } } }
 ```
 - `entity` has a `text` login, a `password` field and an `enum` role field; seed users with plain passwords.
-- `register` (optional): the role a visitor gets from `/register`; without it there is no self-registration.
+- `register` (optional): the role a visitor gets from `/register`; without it there is no self-registration. The sign-up
+  form asks for `<entity>.form`'s `byRole.<register role>.fields`, else its `fields`, else every field **without a declared
+  default** (a `discount: "percent=0"`, a `balance: "money=0"` or a score stays the app's to set); never the role, the
+  status field or a key of that form's `fill`. `POST /register` writes only those fields: anything else posted is dropped.
 - `anonymous` (optional): the role of a visitor without a session; without it every page asks for login.
 - Operations: `view`, `create`, `edit`, `delete`, `go:<transition>`/`go:*`, `do:<action>`/`do:*`, `*`; entity `"*"` is the fallback.
 - `own`: scopes the operations in `can` to rows the role owns — **not** all-or-nothing (below). Fired from the
