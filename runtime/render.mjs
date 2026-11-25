@@ -36,6 +36,19 @@ export const noPre = prefetched({ get: (target, id) => { if (id === null || id =
 // The columns a list-like table shows: the declared ones, else every field that is not a secret.
 export const columnsOf = (ov, fields) => ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name);
 
+// The reference fields whose caption the stand shows somewhere in a row of this entity: on its detail page, in its list,
+// in a saved list of it, in a related table of it. Only these are captioned under /api (routes/load.mjs's jsonRows, and
+// the contract's row schemas): never more than the stand shows.
+export function captioned(graph, fieldsOf, entity) {
+  const fields = fieldsOf[entity], ov = graph.override || {};
+  const names = new Set([...(ov[`${entity}.detail`]?.fields || columnsOf({}, fields)), ...columnsOf(ov[`${entity}.list`] || {}, fields)]);
+  for (const l of (graph.lists || []).filter((x) => x.entity === entity)) columnsOf({ ...(ov[`${entity}.list`] || {}), ...l }, fields).forEach((c) => names.add(c));
+  for (const key of Object.keys(ov).filter((k) => k.endsWith('.detail'))) {
+    for (const rel of (ov[key].related || []).filter((r) => r.entity === entity)) (rel.columns || columnsOf({}, fields.filter((f) => f.name !== rel.via))).forEach((c) => names.add(c));
+  }
+  return fields.filter((f) => f.target && names.has(f.name));
+}
+
 // The [target, id] of every reference cell of `rows` under columns `cols`, for Store#labelsFor.
 export const refPairs = (fields, cols, rows) => {
   const refs = cols.map((c) => fields.find((f) => f.name === c)).filter((f) => f?.target);

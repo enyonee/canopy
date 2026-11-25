@@ -5,7 +5,7 @@
 //   - the rows of every select a form offers, one `optionsFor` read per target,
 //   - the parents an ownership check reads (`vc.prime`), one query per one-hop path.
 // Each `…Pre` returns the `pre` object the view takes; the `render…` helpers load, then call the view.
-import { prefetched, refPairs, columnsOf } from '../render.mjs';
+import { prefetched, refPairs, columnsOf, rowJSON, captioned } from '../render.mjs';
 import { listNeeds } from '../render/list.mjs';
 import { formView, formSpec, inputTargets } from '../render/form.mjs';
 import { detailView, detailNeeds, relatedOf } from '../render/detail.mjs';
@@ -27,6 +27,17 @@ export async function formPre({ graph, store, vc }, entity, fields) {
 export const renderForm = async (ctx, entity, fields, row, mode, errors = [], flash = '') =>
   formView(ctx.graph, ctx.store, entity, fields, row, mode, errors, ctx.vc, flash, await formPre(ctx, entity, fields));
 
+// The rows of one related table of a detail page: the children of this row the viewer may read, oldest first. The page's
+// own table (detailPre) and GET /api/<Entity>/:id/related/<Child> read them with this one query.
+export const relatedQuery = async ({ vc }, rel, row) => ({ where: { [rel.via]: row.id, ...await vc.ownWhere(rel.entity) }, sort: { field: 'id', dir: 'asc' } });
+
+// A related section of an entity's detail page by the child's name (any case), and whether the page shows it to this viewer.
+export function relatedSection(graph, vc, entity, child) {
+  const ov = graph.override?.[`${entity}.detail`] || {};
+  const rel = (ov.related || []).find((r) => r.entity.toLowerCase() === child.toLowerCase()) || null;
+  return { rel, shown: Boolean(rel) && relatedOf(ov, vc).includes(rel) };
+}
+
 // A detail page: the row, each related table the viewer may see (read with the viewer's own scope), the
 // labels of all their reference cells and the options of every form the page offers.
 export async function detailPre(ctx, entity, fields, row) {
@@ -34,7 +45,7 @@ export async function detailPre(ctx, entity, fields, row) {
   await vc.prime(entity, [row]);
   const kids = new Map();
   for (const rel of relatedOf(graph.override?.[`${entity}.detail`] || {}, vc)) {
-    const rows = await store.list(rel.entity, { where: { [rel.via]: row.id, ...await vc.ownWhere(rel.entity) }, sort: { field: 'id', dir: 'asc' } });
+    const rows = await store.list(rel.entity, await relatedQuery(ctx, rel, row));
     await vc.prime(rel.entity, rows);
     kids.set(rel, rows);
   }
@@ -106,3 +117,23 @@ export async function dashboardPre({ store }, d, mine, period) {
   });
   return prefetched(await store.labelsFor(pairs), new Map(), { dash: { cards, tables, charts } });
 }
+
+/**
+ * Rows as the JSON answers write them (rowJSON). Under /api each row also carries `_labels`: the caption of each
+ * reference it shows (`{ "customer": "ann@shop.test" }`), read the way the stand reads it, one labelsFor query per
+ * target entity for the whole set. A reference the viewer may not read (null) has no caption; an entity with a field
+ * named `_labels` keeps its field and gets no captions.
+ */
+export async function jsonRows(ctx, entity, rows) {
+  const { api, graph, store, vc } = ctx;
+  const fields = store.fields[entity];
+  const out = rows.map((r) => rowJSON(store, entity, fields, r, vc));
+  if (!api || fields.some((f) => f.name === '_labels')) return out;
+  const refs = captioned(graph, store.fields, entity);
+  const pre = prefetched(await store.labelsFor(out.flatMap((o) => refs.map((f) => [f.target, o[f.name]]))));
+  for (const o of out) o._labels = Object.fromEntries(refs.filter((f) => o[f.name] !== null).map((f) => [f.name, pre.label(f.target, o[f.name])]));
+  return out;
+}
+
+/** One row as jsonRows writes it. */
+export const jsonRow = async (ctx, entity, row) => (await jsonRows(ctx, entity, [row]))[0];

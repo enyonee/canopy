@@ -7,10 +7,11 @@
 //                                 outbox, settings, files, widgets, webhooks, schedules) is a JSON 404
 //   how a POST must arrive        from this site (Origin, else Referer, names the Host — the check /settings uses) and
 //                                 as an application/json body of one flat object; else 403, 415, 400 or 413
+//   GET /api/<Entity>/:id/related/<Child>   a related table of the detail page (routes/entity.mjs), only here
 //   GET /api/me                   who the session belongs to: { user, role }
 //   GET /api/openapi.json         the contract (runtime/contract.mjs), after the sign-in gate like every other read
 import { sameOrigin, BadBody, TooBig } from './context.mjs';
-import { rowJSON } from '../render.mjs';
+import { jsonRow } from './load.mjs';
 import { openapiText } from '../contract.mjs';
 
 // Paths whose first part a route module claims before the entity routes: never read as an entity under /api.
@@ -33,7 +34,7 @@ function served(ctx) {
   if (n === 1) return get || post;
   if (n === 2) return post || (get && b !== 'new');
   if (n === 3) return post && c === 'delete';
-  return n === 4 && post && ROW_POSTS.has(c);
+  return n === 4 && (post ? ROW_POSTS.has(c) : get && c === 'related');
 }
 
 const isJsonBody = (req) => (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase() === 'application/json';
@@ -65,7 +66,7 @@ export async function handle(ctx) {
   if (req.method === 'POST') return await admit(ctx);
   if (parts[0] !== 'me') return undefined;
   const entity = graph.roles?.entity;
-  ctx.sendJson(200, { user: ctx.user ? rowJSON(store, entity, store.fields[entity], ctx.user, ctx.vc) : null, role: ctx.role });
+  ctx.sendJson(200, { user: ctx.user ? await jsonRow(ctx, entity, ctx.user) : null, role: ctx.role });
   return true;
 }
 

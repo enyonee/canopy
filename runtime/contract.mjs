@@ -3,15 +3,16 @@
 // Served at GET /api/openapi.json (routes/api.mjs) and written by `run.mjs <app.json> --openapi [--out file]` (cli.mjs).
 // It names no permission: what a role may do is decided per request, and any call may answer 403.
 import { parseField } from './spec.mjs';
+import { captioned } from './render.mjs';
 import { ref, rowSchema, writableFields, inputSchema, pageSchema, savedSchema, signedSchema, commonSchemas } from './contract/schemas.mjs';
 import { apiPaths, refusalResponses } from './contract/paths.mjs';
 
 // The schemas of one entity: its row, the body of a create or an edit, a page of rows and a write's answer.
-function entitySchemas(graph, entity, fields) {
+function entitySchemas(graph, entity, fields, all) {
   const form = graph.override?.[`${entity}.form`] || {};
   const body = writableFields(fields, { only: form.fields || null, skip: [graph.states?.[entity]?.field, ...Object.keys(form.fill || {})] });
   return {
-    [entity]: rowSchema(fields),
+    [entity]: rowSchema(fields, captioned(graph, all, entity)),
     [`${entity}.input`]: inputSchema(body),
     [`${entity}.page`]: pageSchema(ref(entity)),
     [`${entity}.saved`]: savedSchema(ref(entity)),
@@ -43,7 +44,7 @@ const canonical = (v) => (Array.isArray(v) ? v.map(canonical)
 export function openapi(graph, registry) {
   const fields = Object.fromEntries(Object.entries(graph.data).map(([e, spec]) => [e, Object.entries(spec).map(([n, s]) => parseField(n, s, registry.fields, registry.functions))]));
   const schemas = { ...commonSchemas(), ...sessionSchemas(graph, fields) };
-  for (const e of Object.keys(graph.data)) Object.assign(schemas, entitySchemas(graph, e, fields[e]));
+  for (const e of Object.keys(graph.data)) Object.assign(schemas, entitySchemas(graph, e, fields[e], fields));
   const components = { schemas, responses: refusalResponses() };
   if (graph.roles) components.securitySchemes = { session: { type: 'apiKey', in: 'cookie', name: 'ag_session' } };
   return canonical({

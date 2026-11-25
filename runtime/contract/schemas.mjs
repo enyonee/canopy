@@ -32,12 +32,21 @@ function fieldSchema(f) {
   return s;
 }
 
-/** A row as every JSON answer writes it: always every key, `id` first. */
-export function rowSchema(fields) {
+/**
+ * A row as every /api answer writes it: always every key, `id` first, and `_labels`, the caption of each reference in
+ * `captioned` that is not null (routes/load.mjs's jsonRows). An entity with its own `_labels` field has no captions.
+ */
+export function rowSchema(fields, captioned) {
   const shown = fields.filter((f) => !f.type.secret);
   const properties = { id: { type: 'integer', readOnly: true } };
   for (const f of shown) properties[f.name] = fieldSchema(f);
-  return { type: 'object', properties, required: ['id', ...shown.map((f) => f.name)], additionalProperties: false };
+  const required = ['id', ...shown.map((f) => f.name)];
+  if (!properties._labels) {
+    properties._labels = { type: 'object', readOnly: true, additionalProperties: false, description: 'the caption of each reference the row names, as the app shows it',
+      properties: Object.fromEntries(captioned.map((f) => [f.name, { type: 'string', 'x-canopy-ref': f.target }])) };
+    required.push('_labels');
+  }
+  return { type: 'object', properties, required, additionalProperties: false };
 }
 
 // One field as a JSON body may send it. A reference also takes the numeric id; null is the empty value.
@@ -84,6 +93,9 @@ export const savedSchema = (row) => obj({ ok: { const: true }, id: { type: 'inte
 /** Sign-in, registration, sign-out: the user the session now belongs to (null once signed out). */
 export const signedSchema = (user) => obj({ ok: { const: true }, flash: { type: 'string' }, user: { oneOf: [user, { type: 'null' }] }, role: { type: ['string', 'null'] } });
 
+// A dashboard group by a reference carries its caption.
+const groupCaption = { type: 'object', properties: { grp: { type: 'string' } }, additionalProperties: false, description: 'present when the group is a reference' };
+
 /** What the runtime itself answers, the same for every app. */
 export function commonSchemas() {
   return {
@@ -92,8 +104,8 @@ export function commonSchemas() {
     'canopy.Done': obj({ ok: { const: true }, created: { type: 'integer' }, flash: { type: 'string' } }, ['ok', 'flash']),
     'canopy.Dashboard': obj({
       cards: list(obj({ title: { type: 'string' }, value: { type: 'number' } })),
-      tables: list(obj({ title: { type: 'string' }, rows: list({ type: 'object' }) })),
-      charts: list(obj({ title: { type: 'string' }, type: { type: 'string' }, rows: list(obj({ grp: {}, v: { type: ['number', 'null'] } })) })),
+      tables: list(obj({ title: { type: 'string' }, rows: list({ type: 'object', properties: { _labels: groupCaption } }) })),
+      charts: list(obj({ title: { type: 'string' }, type: { type: 'string' }, rows: list(obj({ grp: {}, v: { type: ['number', 'null'] }, _labels: groupCaption }, ['grp', 'v'])) })),
     }),
     'canopy.Search': obj({ results: list(obj({ entity: { type: 'string' }, rows: list({ type: 'object' }) })) }),
   };

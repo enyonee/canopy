@@ -56,7 +56,16 @@ test('F1: contract: a row reads as the JSON answers write it — money a number,
   assert.equal(s.Order.properties.total.readOnly, true);
   assert.equal(s.User.properties.password, undefined, 'a secret is never in a row');
   assert.deepEqual(s.User.properties.discount, { type: ['integer', 'null'], 'x-canopy-kind': 'percent' }, 'a plugin kind reads by its storage');
-  assert.deepEqual(s.Product.required, ['id', 'name', 'category', 'price', 'stock', 'about', 'active']);
+  assert.deepEqual(s.Product.required, ['id', 'name', 'category', 'price', 'stock', 'about', 'active', '_labels']);
+  assert.deepEqual(s.Product.properties._labels.properties, { category: { type: 'string', 'x-canopy-ref': 'Category' } });
+  assert.deepEqual(Object.keys(s.Order.properties._labels.properties), ['customer']);
+  assert.deepEqual(Object.keys(s.OrderItem.properties._labels.properties), ['order', 'product'], 'its own detail shows both; the related table only the product');
+  assert.equal(s.Product.properties._labels.additionalProperties, false);
+  const related = doc.paths['/api/Order/{id}/related/OrderItem'].get;
+  assert.equal(related.operationId, 'Order_related_OrderItem');
+  assert.deepEqual(related.responses['200'].content['application/json'].schema, { $ref: '#/components/schemas/OrderItem.page' });
+  assert.deepEqual(related.parameters.map((x) => x.name), ['id', 'page']);
+  assert.deepEqual(s['canopy.Dashboard'].properties.tables.items.properties.rows.items.properties._labels.properties, { grp: { type: 'string' } });
   assert.equal(s.Product.additionalProperties, false);
   assert.deepEqual(s['Product.page'].properties.rows, { items: { $ref: '#/components/schemas/Product' }, type: 'array' });
 });
@@ -99,6 +108,9 @@ test('F1: contract: search, global action fields, no roles, and a plugin kind st
   assert.equal(doc.components.securitySchemes, undefined);
   assert.deepEqual(doc.components.schemas['canopy.Me'].properties.user, { oneOf: [{ type: 'null' }, { type: 'null' }] });
   assert.equal(openapi({ data: { A: { x: 'text' } } }, registry).info.title, 'app');
+  const own = openapi({ app: 'x', data: { A: { _labels: 'text', t: 'ref:A' } }, views: 'auto' }, registry).components.schemas.A;
+  assert.deepEqual(own.properties._labels, { type: ['string', 'null'], 'x-canopy-kind': 'text' }, 'a field of that name keeps it, no captions');
+  assert.deepEqual(own.required, ['id', '_labels', 't']);
 });
 
 test('F1: contract: the document is deterministic — keys sorted at every depth, the same bytes every time', async () => {
