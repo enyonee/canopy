@@ -41,8 +41,8 @@ function NavLink({ n, active, onNavigate, compact }: { n: NavItem; active: boole
   return (
     <Link to={n.to} onClick={onNavigate} aria-current={active ? 'page' : undefined} title={compact ? n.title : undefined} aria-label={compact ? n.title : undefined}
       className={cn(compact && 'justify-center px-0', 'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-        active && 'bg-primary/10 text-primary shadow-xs hover:bg-primary/15 hover:text-primary')}>
-      <span className={cn('flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:text-foreground', active && 'bg-primary text-primary-foreground group-hover:text-primary-foreground')}>
+        active && 'bg-card text-accent-text shadow-xs hover:bg-card hover:text-accent-text')}>
+      <span className={cn('flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors group-hover:text-foreground', active && 'text-accent-text group-hover:text-accent-text')}>
         <Icon className="size-4" aria-hidden="true" />
       </span>
       {!compact && n.title}

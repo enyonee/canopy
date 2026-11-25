@@ -81,6 +81,9 @@ function Lines({ parent, row, rel, product, viewer }: { parent: Entity; row: Row
   const editNames = child.form.byRole[viewer.role ?? ''] ?? child.form.fields;
   // A quantity stepper when the line's only editable field is a whole number.
   const qty = editNames.length === 1 ? child.fields.find((f) => f.name === editNames[0] && f.type === 'integer') : undefined;
+  // The quantity is a stepper while the parent is still in its first status (a cart); afterwards it reads as text.
+  const st = parent.states;
+  const draft = !st || String(row[st.field] ?? '') === (parent.fields.find((f) => f.name === st.field)?.default ?? '');
   if (!fetch) return <p className="text-sm text-muted-foreground">The contract of this app offers no way to read these lines.</p>;
   if (data.isError) return <ErrorState error={data.error} retry={() => void data.refetch()} />;
   if (data.isPending) return <div className="space-y-4" aria-busy="true">{[0, 1].map((i) => <div key={i} className="flex gap-4"><Skeleton className="size-20 rounded-lg" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-1/4" /></div></div>)}</div>;
@@ -107,7 +110,7 @@ function Lines({ parent, row, rel, product, viewer }: { parent: Entity; row: Row
                   })}
                 </div>
                 <div className="flex items-center gap-4">
-                  {qty && (edit ? (
+                  {qty && (edit && draft ? (
                     <div className="flex items-center rounded-lg border" role="group" aria-label={`${qty.label} of ${label}`}>
                       <Button variant="ghost" size="icon-sm" aria-label={`One less ${label}`} disabled={run.isPending} onClick={() => setQty(n - 1)}><Minus /></Button>
                       <span className="w-8 text-center text-sm font-medium tabular-nums" aria-live="polite">{n}</span>
@@ -152,6 +155,7 @@ export function OrderLayout({ entity, row, viewer, steps, rel, product, header, 
   const time = entity.fields.find((f) => f.kind === 'time' && entity.detail.fields.includes(f.name));
   const facts = entity.detail.fields.filter((n) => n !== st?.field && !moneyFields.some((m) => m.name === n) && n !== time?.name && n !== 'id'
     && entity.fields.find((f) => f.name === n)?.kind !== 'int'
+    && row[n] !== null && row[n] !== undefined && row[n] !== ''
     // the viewer's own name on their own order says nothing
     && !(entity.fields.find((f) => f.name === n)?.target === app.roles?.entity && viewer.user && String(row[n]) === String(viewer.user.id)));
   const [main, ...more] = steps.filter((s) => !(s.kind === 'go' && s.t.destructive));
