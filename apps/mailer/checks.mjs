@@ -2,7 +2,16 @@
 // One check per ui_instruct case; the letters themselves are read back from the outbox.
 import { colorCheck } from '../../verify/lib.mjs';
 
-let draftId = null, sentSubject = 'Spring release';
+let draftId = null, sentSubject = 'Spring release', recipientLine = null, attachmentId = null;
+
+// A JSON read as a signed-in user, on a session of its own (the check's cookie jar answers HTML).
+const jsonAs = async (base, login, password, p) => {
+  const signIn = await fetch(`${base}/login`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ login, password }).toString() });
+  const cookie = (signIn.headers.get('set-cookie') || '').split(';')[0];
+  const res = await fetch(base + p, { headers: { cookie, accept: 'application/json' } });
+  return { status: res.status, body: await res.json() };
+};
 
 export const checks = [
   { task: 'Locate and use the compose email feature to draft a new email',
@@ -42,6 +51,8 @@ export const checks = [
       await follow(`/Email/${draftId}/add/EmailRecipient`, { recipient: grace });
       const detail = await get(`/Email/${draftId}`);
       must(/<th>Recipients<\/th><td>2<\/td>/.test(detail.html), 'the recipient count did not follow the added rows');
+      recipientLine = (/\/EmailRecipient\/(\d+)\/delete/.exec(detail.html) || [])[1];
+      must(recipientLine, 'the recipient rows have no delete action');
       must(/ada@clients.test/.test(detail.html) && /grace@partners.test/.test(detail.html),
         'the recipients table does not show the addresses derived through the reference');
       const back = await get('/Recipient');
@@ -50,7 +61,7 @@ export const checks = [
     } },
 
   { task: 'Upload an attachment to an email draft',
-    run: async ({ get, upload, must }) => {
+    run: async ({ base, asGuest, login, get, post, upload, idOf, rowWith, must }) => {
       const csv = 'item,price\nmug,12.50\nposter,25.00\n';
       const up = await upload(`/Email/${draftId}/add/Attachment`, { name: 'Price list' }, { field: 'file', name: 'prices.csv', content: csv });
       must(up.status === 303, `the upload returned ${up.status}: ${up.html.slice(0, 200)}`);
@@ -61,7 +72,34 @@ export const checks = [
       const file = await get(href);
       must(file.html === csv, `the downloaded file differs: ${JSON.stringify(file.html.slice(0, 40))}`);
       must(/filename="prices.csv"/.test(file.disposition), `content-disposition: ${file.disposition}`);
-      return 'prices.csv uploaded, listed under the draft and downloaded back byte for byte';
+      attachmentId = /\/file\/Attachment\/(\d+)\//.exec(href)[1];
+      // The draft's recipients and files are Sam's: another sender reads, downloads or removes none of them.
+      asGuest();
+      must((await login('admin@mailer.test', 'admin123')).status === 303, 'the admin could not log in');
+      must((await post('/User', { email: 'bea@mailer.test', password: 'bea123', name: 'Bea Sender', role: 'sender' })).status === 303, 'the admin could not add a second sender');
+      asGuest();
+      must((await login('bea@mailer.test', 'bea123')).status === 303, 'the second sender could not log in');
+      for (const child of ['EmailRecipient', 'Attachment']) {
+        const listed = await jsonAs(base, 'bea@mailer.test', 'bea123', `/${child}`);
+        must(listed.status === 200 && listed.body.total === 0, `another sender reads Sam's ${child} rows: ${JSON.stringify(listed.body).slice(0, 200)}`);
+      }
+      must((await get(`/EmailRecipient/${recipientLine}`)).status === 403, "another sender opened Sam's recipient line");
+      must((await post(`/EmailRecipient/${recipientLine}/delete`, {})).status === 403, "another sender removed Sam's recipient");
+      must((await get(`/Attachment/${attachmentId}`)).status === 403, "another sender opened Sam's attachment");
+      must((await get(href)).status === 403, "another sender downloaded Sam's attachment");
+      must((await post(`/Attachment/${attachmentId}/delete`, {})).status === 403, "another sender deleted Sam's attachment");
+      const book = await get('/Recipient');
+      const intrusion = await post('/EmailRecipient', { email: draftId, recipient: idOf(book.html, 'alan@staff.test', 'Recipient') });
+      asGuest();
+      must((await login('sam@mailer.test', 'sam123')).status === 303, 'the sender could not log back in');
+      // A line another sender slipped in is removed before failing, so the later cases still see Sam's own two.
+      const slipped = rowWith((await get(`/Email/${draftId}`)).html, 'alan@staff.test');
+      const slippedId = (/\/EmailRecipient\/(\d+)\/delete/.exec(slipped || '') || [])[1];
+      if (slippedId) await post(`/EmailRecipient/${slippedId}/delete`, {});
+      const still = await get(`/Email/${draftId}`);
+      must(/<th>Recipients<\/th><td>2<\/td>/.test(still.html) && /<th>Files<\/th><td>1<\/td>/.test(still.html), "Sam's draft lost a recipient or a file");
+      must(!slipped && intrusion.status !== 303, `another sender added a recipient to Sam's draft: ${intrusion.status} ${intrusion.location}`);
+      return 'prices.csv uploaded, listed under the draft and downloaded back byte for byte; another sender reads and removes none of it';
     } },
 
   { task: 'Send a composed email to the selected recipients',
@@ -148,7 +186,7 @@ export const checks = [
 export const changes = [
   { title: 'second role with reduced access', patch: 'change-1-role.patch.json', checks: [
     { task: 'An assistant drafts and edits letters but cannot send them, manage the address book or see another sender\'s mail',
-      run: async ({ asGuest, login, get, post, rows, rowWith, must }) => {
+      run: async ({ base, asGuest, login, get, post, rows, rowWith, must }) => {
         must((await login('admin@mailer.test', 'admin123')).status === 303, 'the admin could not log in');
         const made = await post('/User', { email: 'kim@mailer.test', password: 'kim123', name: 'Kim', role: 'assistant' });
         must(made.status === 303, `creating the assistant returned ${made.status}: ${made.html.slice(0, 200)}`);
@@ -170,6 +208,9 @@ export const changes = [
         must((await post(`/Email/${id}/go/send`, {})).status === 403, 'the assistant sent an email');
         must((await post('/Template', { name: 'Assistant template', subject: 'x', body: 'y' })).status === 403, 'the assistant created a template');
         must((await get(`/Email/${draftId}`)).status === 403, "the assistant opened the sender's letter");
+        const lines = await jsonAs(base, 'kim@mailer.test', 'kim123', '/EmailRecipient');
+        must(lines.status === 200 && lines.body.total === 1, `the assistant reads ${lines.body.total} recipient line(s), expected only her own`);
+        must((await post(`/EmailRecipient/${recipientLine}/delete`, {})).status === 403, "the assistant removed the sender's recipient");
         must((await get('/outbox')).status === 403, 'the assistant opened the outbox');
         return 'assistant: own draft with recipients, send/templates/address-book/outbox 403, other senders invisible';
       } },
