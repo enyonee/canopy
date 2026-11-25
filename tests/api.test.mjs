@@ -175,8 +175,12 @@ test('F1: api: an admin writes rows; an absent key is absent (no unchecked-box f
   same((await s.get('/api/list/all-products')).html, (await s.get('/list/all-products', J)).html);
 });
 
-test('F1: api: GET /api/openapi.json is the --openapi document, behind the sign-in gate', async () => {
+test('F1: api: GET /api/openapi.json is the --openapi document, for a signed-in user only', async () => {
   s.asGuest();
+  const guest = await s.get('/api/openapi.json');
+  assert.equal(guest.status, 403, 'a guest role reads no contract: it names User.role, admin lists and dashboards');
+  assert.deepEqual(JSON.parse(guest.html), { ok: false, status: 403, errors: ['Sign in to read the contract.'] });
+  await s.json('/api/register', { email: 'oas@shop.test', password: 'pw', name: 'Oas' });
   const r = await s.get('/api/openapi.json');
   assert.equal(r.status, 200);
   assert.match(r.headers.get('content-type'), /^application\/json/);
@@ -231,6 +235,7 @@ test('F1: api: search and a role-free app (no session routes)', async () => {
     assert.equal((await n.json('/api/logout', {})).status, 404);
     assert.equal((await n.json('/api/register', {})).status, 404);
     assert.deepEqual(JSON.parse((await n.get('/api/me')).html), { user: null, role: null });
+    assert.equal((await n.get('/api/openapi.json')).status, 200, 'an app without roles has no one to sign in: the contract is open');
     const made = await n.json('/api/Note', { title: 'eggs' });
     assert.equal(made.body.row.done, false, 'the declared default, not an unchecked box');
     assert.equal((await n.json('/api/Note/1', { title: 'oat milk' })).body.row.done, false);

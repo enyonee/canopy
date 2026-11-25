@@ -9,7 +9,7 @@
 //                                 as an application/json body of one flat object; else 403, 415, 400 or 413
 //   GET /api/<Entity>/:id/related/<Child>   a related table of the detail page (routes/entity.mjs), only here
 //   GET /api/me                   who the session belongs to: { user, role }
-//   GET /api/openapi.json         the contract (runtime/contract.mjs), after the sign-in gate like every other read
+//   GET /api/openapi.json         the contract (runtime/contract.mjs), to a signed-in user only (never to a guest role)
 import { sameOrigin, BadBody, TooBig } from './context.mjs';
 import { jsonRow } from './load.mjs';
 import { openapiText } from '../contract.mjs';
@@ -73,9 +73,14 @@ export async function handle(ctx) {
 // The document depends on the graph and the registry only: built once per app.
 const documents = new WeakMap();
 
-/** After the sign-in gate: GET /api/openapi.json, the same bytes `run.mjs --openapi` writes. */
+/**
+ * After the sign-in gate: GET /api/openapi.json, the same bytes `run.mjs --openapi` writes, for a signed-in user only
+ * (an app with roles): the document names every entity, field, list and dashboard, more than a guest may read. A frontend
+ * does not need it at run time; its types are generated from a snapshot (`--openapi --out`).
+ */
 export function contract(ctx) {
   if (!ctx.api || ctx.parts[0] !== 'openapi.json') return undefined;
+  if (ctx.perms.enabled && !ctx.user) return fail(ctx, 403, 'Sign in to read the contract.');
   if (!documents.has(ctx.graph)) documents.set(ctx.graph, openapiText(ctx.graph, ctx.registry));
   ctx.res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', ...ctx.headers });
   ctx.res.end(documents.get(ctx.graph));
