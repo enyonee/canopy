@@ -1077,7 +1077,7 @@ export const app: AppModel = {
       "icon": "package",
       "entity": "Product",
       "roles": null,
-      "group": "Browse"
+      "group": "Store"
     },
     {
       "kind": "entity",
@@ -1086,7 +1086,7 @@ export const app: AppModel = {
       "icon": "users",
       "entity": "User",
       "roles": null,
-      "group": "Records"
+      "group": "Workspace"
     },
     {
       "kind": "entity",
@@ -1095,7 +1095,7 @@ export const app: AppModel = {
       "icon": "receipt",
       "entity": "Order",
       "roles": null,
-      "group": "Records"
+      "group": "Workspace"
     },
     {
       "kind": "list",
@@ -1106,7 +1106,7 @@ export const app: AppModel = {
       "roles": [
         "customer"
       ],
-      "group": "Lists"
+      "group": "Workspace"
     },
     {
       "kind": "list",
@@ -1117,7 +1117,7 @@ export const app: AppModel = {
       "roles": [
         "admin"
       ],
-      "group": "Lists"
+      "group": "Workspace"
     },
     {
       "kind": "dashboard",

@@ -37,6 +37,35 @@ committed. The runtime serves it at `/`, and the stand moves to `/admin`.
 | `home`, `app` | the `/` redirect and the brand name |
 | `search` | read into the model; v1 renders no search screen |
 
+## Storefront or workspace
+
+webgen picks each entity's look from the graph (`surface` in the model, `lib/model.mjs`). An entity is a
+**storefront** when all of these hold:
+
+- the visitor role (`roles.anonymous`) or the self-registration role (`roles.register`), when that role is not an
+  admin, may `view` all of its rows (no `own`, or `view` in `all`);
+- its list is in the menu;
+- it reads like something offered: it has a `longtext`, `image` or `money` field, or a declared action that this
+  role may run.
+
+Everything else is a **workspace**: own records such as orders, and admin CRUD.
+
+- **Storefront.** A hero on the home list, in the theme's gradient. Its title is the list title. Its subtitle is the
+  list's `intro`, else the first page's heading or text, else counts. The developer `note` is not shown. The first
+  reference filter becomes the hero's quick links. Cards have a cover: an `image` field, or a deterministic SVG
+  from the hash of the name with an icon from the category name. Each card shows a category badge, the price large
+  and a stock chip (an int named stock, quantity, …). The product page shows the cover, or a gallery when there
+  are several `image` fields. Shop-internal booleans are hidden from shoppers.
+- **Workspace.** Tables with avatars and subtitles, zebra rows and a sticky header. Status colours follow the order
+  of `states`, and charts of a status group use the same colours. KPI cards have an icon. A card whose entity the
+  dashboard's `period` narrows gets a 6-month sparkline: six GETs of the same dashboard, run in parallel and cached
+  by TanStack Query. The sparkline is drawn only when at least 3 months are non-zero, and the trend shows only
+  against a non-zero previous month. Charts use the theme palette with gradient fills. The menu is in groups:
+  Store, Workspace, Insights, Pages, Admin.
+
+The font is Inter, bundled from `@fontsource-variable/inter` (OFL-1.1), with no CDN. Motion respects
+`prefers-reduced-motion`.
+
 Settings that are not in the graph go in `<web>/webgen.config.json`, read on every run: `{ "currency": "EUR",
 "locale": "de-DE" }`. A currency named by a connector of the graph takes precedence.
 

@@ -54,3 +54,9 @@ export const iconWord = (...words: (string | null | undefined)[]) =>
 export const stockField = (entity: Entity) => entity.fields.find((f) => f.type === 'integer' && !f.derived && /stock|quantity|inventory|available|seats|left/i.test(f.name)) ?? null;
 
 export const appInitial = () => app.title.slice(0, 1).toUpperCase();
+
+/** A status tone as a colour an SVG fill can take (charts colour status groups like the badges). */
+export const TONE_COLOR: Record<Tone, string> = {
+  slate: 'oklch(0.6 0.03 260)', sky: 'oklch(0.68 0.14 230)', violet: 'oklch(0.6 0.2 293)', amber: 'oklch(0.77 0.16 70)',
+  teal: 'oklch(0.7 0.12 185)', indigo: 'oklch(0.55 0.2 277)', fuchsia: 'oklch(0.67 0.24 322)', emerald: 'oklch(0.7 0.15 162)', rose: 'oklch(0.65 0.21 16)',
+};

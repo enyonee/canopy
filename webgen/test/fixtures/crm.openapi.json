@@ -164,6 +164,7 @@
         "additionalProperties": false,
         "properties": {
           "done": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "boolean",
               "null"
@@ -171,6 +172,7 @@
             "x-canopy-kind": "bool"
           },
           "due": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "format": "date",
             "type": [
               "string",
@@ -179,6 +181,7 @@
             "x-canopy-kind": "date"
           },
           "kind": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "call",
               "meeting",
@@ -192,6 +195,7 @@
             "x-canopy-kind": "enum"
           },
           "lead": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -201,6 +205,7 @@
             "x-canopy-ref": "Lead"
           },
           "note": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -208,6 +213,7 @@
             "x-canopy-kind": "longtext"
           },
           "owner": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -344,6 +350,7 @@
         "additionalProperties": false,
         "properties": {
           "industry": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "software",
               "retail",
@@ -357,6 +364,7 @@
             "x-canopy-kind": "enum"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -364,6 +372,7 @@
             "x-canopy-kind": "text"
           },
           "website": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -488,6 +497,7 @@
         "additionalProperties": false,
         "properties": {
           "company": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -497,6 +507,7 @@
             "x-canopy-ref": "Company"
           },
           "email": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -504,6 +515,7 @@
             "x-canopy-kind": "text"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -511,6 +523,7 @@
             "x-canopy-kind": "text"
           },
           "phone": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -727,6 +740,7 @@
         "additionalProperties": false,
         "properties": {
           "company": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -736,6 +750,7 @@
             "x-canopy-ref": "Company"
           },
           "contact": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -745,6 +760,7 @@
             "x-canopy-ref": "Contact"
           },
           "owner": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "integer",
@@ -754,6 +770,7 @@
             "x-canopy-ref": "User"
           },
           "source": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "web",
               "referral",
@@ -767,6 +784,7 @@
             "x-canopy-kind": "enum"
           },
           "title": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -774,6 +792,7 @@
             "x-canopy-kind": "text"
           },
           "value": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "number",
               "null"
@@ -888,6 +907,7 @@
         "additionalProperties": false,
         "properties": {
           "email": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -895,6 +915,7 @@
             "x-canopy-kind": "text"
           },
           "name": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -902,6 +923,7 @@
             "x-canopy-kind": "text"
           },
           "password": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "type": [
               "string",
               "null"
@@ -910,6 +932,7 @@
             "x-canopy-kind": "password"
           },
           "role": {
+            "description": "null is the empty value: the declared default, on an edit as on a create",
             "enum": [
               "admin",
               "sales"
@@ -1724,6 +1747,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "email": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -1731,6 +1755,7 @@
                     "x-canopy-kind": "text"
                   },
                   "name": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -1738,6 +1763,7 @@
                     "x-canopy-kind": "text"
                   },
                   "phone": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -1757,125 +1783,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Contact.saved"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "413": {
-            "$ref": "#/components/responses/TooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          }
-        },
-        "tags": [
-          "Company"
-        ]
-      }
-    },
-    "/api/Company/{id}/add/Lead": {
-      "post": {
-        "operationId": "Company_add_Lead",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "closedAt": {
-                    "format": "date",
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "date"
-                  },
-                  "contact": {
-                    "type": [
-                      "string",
-                      "integer",
-                      "null"
-                    ],
-                    "x-canopy-kind": "ref",
-                    "x-canopy-ref": "Contact"
-                  },
-                  "createdAt": {
-                    "format": "date-time",
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "time"
-                  },
-                  "owner": {
-                    "type": [
-                      "string",
-                      "integer",
-                      "null"
-                    ],
-                    "x-canopy-kind": "ref",
-                    "x-canopy-ref": "User"
-                  },
-                  "source": {
-                    "enum": [
-                      "web",
-                      "referral",
-                      "event",
-                      "cold"
-                    ],
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "enum"
-                  },
-                  "title": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "x-canopy-kind": "text"
-                  },
-                  "value": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "x-canopy-kind": "money"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Lead.saved"
                 }
               }
             },
@@ -2542,6 +2449,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "due": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "format": "date",
                     "type": [
                       "string",
@@ -2550,6 +2458,7 @@
                     "x-canopy-kind": "date"
                   },
                   "kind": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "enum": [
                       "call",
                       "meeting",
@@ -2563,6 +2472,7 @@
                     "x-canopy-kind": "enum"
                   },
                   "note": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "type": [
                       "string",
                       "null"
@@ -2743,6 +2653,7 @@
                 "additionalProperties": true,
                 "properties": {
                   "closedAt": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "format": "date",
                     "type": [
                       "string",
@@ -2935,6 +2846,7 @@
                 "additionalProperties": true,
                 "properties": {
                   "closedAt": {
+                    "description": "null is the empty value: the declared default, on an edit as on a create",
                     "format": "date",
                     "type": [
                       "string",

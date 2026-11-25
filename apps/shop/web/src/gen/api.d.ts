@@ -192,22 +192,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/Order/{id}/add/OrderItem": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["Order_add_OrderItem"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/Order/{id}/delete": {
         parameters: {
             query?: never;
@@ -552,11 +536,12 @@ export type components = {
         /** @description this document */
         "canopy.OpenAPI": Record<string, never>;
         "canopy.Register": {
-            discount?: number | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             email?: string | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             name?: string | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             password?: string | null;
-            points?: number | null;
         };
         "canopy.Search": {
             results: {
@@ -578,6 +563,7 @@ export type components = {
             name: string | null;
         };
         "Category.input": {
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             name?: string | null;
         };
         "Category.page": {
@@ -613,11 +599,14 @@ export type components = {
             readonly total: number | null;
         };
         "Order.input": {
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             address?: string | null;
-            /** Format: date-time */
-            createdAt?: string | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             customer?: string | number | null;
-            /** @enum {string|null} */
+            /**
+             * @description null is the empty value: the declared default, on an edit as on a create
+             * @enum {string|null}
+             */
             paymentMethod?: "card" | "paypal" | "cash" | null;
         };
         "Order.page": {
@@ -648,6 +637,7 @@ export type components = {
             qty: number | null;
         };
         "OrderItem.input": {
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             qty?: number | null;
         };
         "OrderItem.page": {
@@ -678,11 +668,17 @@ export type components = {
             stock: number | null;
         };
         "Product.input": {
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             about?: string | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             active?: boolean | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             category?: string | number | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             name?: string | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             price?: number | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             stock?: number | null;
         };
         "Product.page": {
@@ -711,12 +707,20 @@ export type components = {
             role: "admin" | "customer" | null;
         };
         "User.input": {
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             discount?: number | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             email?: string | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             name?: string | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             password?: string | null;
+            /** @description null is the empty value: the declared default, on an edit as on a create */
             points?: number | null;
-            /** @enum {string|null} */
+            /**
+             * @description null is the empty value: the declared default, on an edit as on a create
+             * @enum {string|null}
+             */
             role?: "admin" | "customer" | null;
         };
         "User.page": {
@@ -1234,41 +1238,6 @@ export interface operations {
             415: components["responses"]["UnsupportedMediaType"];
         };
     };
-    Order_add_OrderItem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    price?: number | null;
-                    product?: string | number | null;
-                    qty?: number | null;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OrderItem.saved"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            413: components["responses"]["TooLarge"];
-            415: components["responses"]["UnsupportedMediaType"];
-        };
-    };
     deleteOrder: {
         parameters: {
             query?: never;
@@ -1414,8 +1383,12 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description null is the empty value: the declared default, on an edit as on a create */
                     address: string | null;
-                    /** @enum {string|null} */
+                    /**
+                     * @description null is the empty value: the declared default, on an edit as on a create
+                     * @enum {string|null}
+                     */
                     paymentMethod: "card" | "paypal" | "cash" | null;
                 } & {
                     [key: string]: unknown;

@@ -170,7 +170,11 @@ await scenario('A guest browses the storefront, searches and filters without sig
   must((await g.path()).includes('q=poster'), 'search not in the URL');
   await g.click('Clear');
   await g.see('Blue mug');
-  await g.choose('filter_category', 'Mugs');
+  // On the storefront the category filter is the row of quick links in the hero (the same ?category= filter).
+  await guest.evaluate(() => [...document.querySelectorAll('[aria-label^="Quick"] button')].find((b) => b.innerText.trim() === 'Mugs').setAttribute('data-e2e-target', '1'));
+  await realClick(guest);
+  await settle(guest);
+  must((await g.path()).includes('category='), `the category is not in the URL: ${await g.path()}`);
   await g.gone('Mountain poster');
   must((await g.text()).includes('Blue mug'), 'filter lost the mug');
   await g.shot('02-guest-filter-mugs');

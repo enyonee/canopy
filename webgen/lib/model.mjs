@@ -176,13 +176,14 @@ const ICONS = [
 ];
 const iconFor = (words, fallback) => ICONS.find(([re]) => words.some((w) => re.test(w)))?.[1] || fallback;
 
-// Menu groups: what a shopper browses, the records people work on, saved lists, dashboards, pages.
+// Menu groups: what a shopper browses (Store), the records and saved lists people work on (Workspace), dashboards
+// (Insights), pages.
 function navModel(graph, entities, lists, dashboards, pages) {
   const nav = [];
   for (const e of Object.values(entities)) {
-    if (!e.list.hidden) nav.push({ kind: 'entity', to: `/${e.name}`, title: e.list.title, icon: iconFor([e.name, e.list.title], 'table'), entity: e.name, roles: null, group: e.surface === 'storefront' ? 'Browse' : 'Records' });
+    if (!e.list.hidden) nav.push({ kind: 'entity', to: `/${e.name}`, title: e.list.title, icon: iconFor([e.name, e.list.title], 'table'), entity: e.name, roles: null, group: e.surface === 'storefront' ? 'Store' : 'Workspace' });
   }
-  for (const l of lists) if (!l.hidden) nav.push({ kind: 'list', to: `/list/${l.id}`, title: l.title, icon: iconFor([l.id, l.title], 'list'), entity: l.entity, roles: l.roles, group: 'Lists' });
+  for (const l of lists) if (!l.hidden) nav.push({ kind: 'list', to: `/list/${l.id}`, title: l.title, icon: iconFor([l.id, l.title], 'list'), entity: l.entity, roles: l.roles, group: 'Workspace' });
   for (const d of dashboards) nav.push({ kind: 'dashboard', to: `/dashboard/${d.id}`, title: d.title, icon: 'chart', entity: null, roles: d.roles, group: 'Insights' });
   for (const p of pages) nav.push({ kind: 'page', to: `/page/${p.id}`, title: p.title, icon: iconFor([p.id, p.title], 'file-text'), entity: null, roles: p.roles, group: 'Pages' });
   // The home screen leads the menu; the rest keep the graph's order.

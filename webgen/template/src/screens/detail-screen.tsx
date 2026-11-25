@@ -69,7 +69,7 @@ function RelatedSection({ parent, row, rel, viewer }: { parent: Entity; row: Row
   const editNames = child.form.byRole[viewer.role ?? ''] ?? child.form.fields;
   const total = data.data?.total ?? 0;
   return (
-    <Card className="gap-0 overflow-hidden pb-0">
+    <Card className="gap-0 overflow-clip pb-0">
       <CardHeader className="border-b pb-4">
         <CardTitle className="flex items-center gap-2">{rel.title}{data.data && <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">{formatNumber(total)}</span>}</CardTitle>
       </CardHeader>
@@ -198,7 +198,9 @@ function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelete, onDe
   const cat = entity.fields.find((f) => f.kind === 'ref' && entity.detail.fields.includes(f.name));
   const catLabel = cat ? refLabel(row, cat.name, cat.target!, viewer) : null;
   const stock = stockField(entity);
-  const rest = entity.detail.fields.filter((n) => ![price?.name, about?.name, cat?.name, entity.labelField, stock?.name].includes(n) && entity.fields.find((f) => f.name === n)?.kind !== 'image');
+  // A shopper is not shown the shop's own switches (a bool such as "active") unless the detail names them for display.
+  const rest = entity.detail.fields.filter((n) => ![price?.name, about?.name, entity.labelField].includes(n)
+    && !['image', 'bool'].includes(entity.fields.find((f) => f.name === n)?.kind ?? '') && n !== 'id');
   const signIn = signInSteps(entity, entity.detail.actions, viewer);
   return (
     <>
@@ -234,7 +236,6 @@ function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelete, onDe
             {price && <p className="text-3xl font-semibold tracking-tight tabular-nums"><FieldValue entity={entity} field={price} row={row} viewer={viewer} /></p>}
             {stock && <StockChip value={row[stock.name]} />}
           </div>
-          {about && row[about.name] ? <p className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">{String(row[about.name])}</p> : null}
           {(steps.length > 0 || signIn.length > 0 || mayEdit || mayDelete) && (
             <div className="flex flex-wrap items-center gap-3">
               {steps.map((s) => <StepButton key={s.kind === 'go' ? `go:${s.t.name}` : s.a.name} entity={entity} row={row} step={s} viewer={viewer} />)}
@@ -243,18 +244,27 @@ function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelete, onDe
               {mayDelete && <Button variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 />Delete</Button>}
             </div>
           )}
+          {about && row[about.name] ? (
+            <section aria-labelledby="about-title" className="border-t pt-6">
+              <h2 id="about-title" className="mb-2 text-sm font-semibold">{about.label}</h2>
+              <p className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">{String(row[about.name])}</p>
+            </section>
+          ) : null}
           {rest.length > 0 && (
-            <dl className="grid grid-cols-2 gap-4 rounded-2xl border bg-card p-5 shadow-sm">
-              {rest.map((n) => {
-                const f = columnField(entity, n);
-                return (
-                  <div key={n} className="min-w-0 space-y-1">
-                    <dt className="text-xs font-medium text-muted-foreground">{f?.label ?? n}</dt>
-                    <dd className="text-sm">{n === 'id' ? `#${row.id}` : <FieldValue entity={entity} field={f} row={row} viewer={viewer} labels={entity.detail.labels[n]} />}</dd>
-                  </div>
-                );
-              })}
-            </dl>
+            <section aria-labelledby="details-title" className="border-t pt-6">
+              <h2 id="details-title" className="mb-3 text-sm font-semibold">Details</h2>
+              <dl className="divide-y text-sm">
+                {rest.map((n) => {
+                  const f = columnField(entity, n);
+                  return (
+                    <div key={n} className="flex items-center justify-between gap-4 py-2.5">
+                      <dt className="text-muted-foreground">{f?.label ?? n}</dt>
+                      <dd className="text-right font-medium"><FieldValue entity={entity} field={f} row={row} viewer={viewer} labels={entity.detail.labels[n]} /></dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </section>
           )}
         </div>
       </div>
