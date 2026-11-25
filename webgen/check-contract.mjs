@@ -45,7 +45,9 @@ async function main() {
     if (d) problems.push(`the runtime's OpenAPI moved since the snapshot: ${d}`);
     const types = await typesOf(snapshot);
     if (fs.readFileSync(path.join(web, 'src/gen/api.d.ts'), 'utf8') !== types) problems.push('src/gen/api.d.ts is not the types of openapi.json');
-    const { files } = await generate(JSON.parse(fs.readFileSync(graphFile, 'utf8')), snapshot);
+    const cfgFile = path.join(web, 'webgen.config.json');
+    const config = fs.existsSync(cfgFile) ? JSON.parse(fs.readFileSync(cfgFile, 'utf8')) : {};
+    const { files } = await generate(JSON.parse(fs.readFileSync(graphFile, 'utf8')), snapshot, { config });
     const differ = diffProject(web, files);
     if (differ.length) problems.push(`generated files differ: ${differ.join(', ')}`);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

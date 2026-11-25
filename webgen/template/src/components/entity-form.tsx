@@ -49,7 +49,7 @@ export function EntityForm({ entity, names, row, viewer, submit, allRequired, on
       const rest: string[] = [];
       for (const msg of e.errors) {
         const f = fieldOf(fields, msg);
-        if (f) setError(f.name, { type: 'server', message: msg }, { shouldFocus: true });
+        if (f) setError(f.name, { type: 'server', message: msg[0].toUpperCase() + msg.slice(1) }, { shouldFocus: true });
         else rest.push(msg);
       }
       setProblems(rest);

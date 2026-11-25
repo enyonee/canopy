@@ -1,8 +1,9 @@
 // The buttons of one row, as `rowActions` (or `detail.actions`) name them: declared actions and transitions as
 // buttons, open/edit/delete in a menu, each offered only where the viewer may use it.
 import { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { Eye, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
+import { app } from '@/gen/app';
+import { LogIn, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { endpoints } from '@/gen/endpoints';
 import type { Entity } from '@/lib/model';
 import type { Row } from '@/lib/api';
@@ -49,26 +50,43 @@ export function DeleteDialog({ entity, row, open, onOpenChange, after }: { entit
   );
 }
 
+/**
+ * The declared actions a visitor could take once signed in (a role the visitor may become may run them): offered
+ * as a way to sign in, never as the action itself — the server would refuse it.
+ */
+export function signInSteps(entity: Entity, names: readonly string[], viewer: Viewer) {
+  if (!app.roles || viewer.user) return [];
+  const roles = app.roles.names.filter((r) => r !== app.roles!.anonymous);
+  return entity.actions.filter((a) => names.includes(a.name) && !mayRunAction(viewer, entity.name, a, { id: 0 })
+    && roles.some((r) => (a.by ? a.by.includes(r) : can({ role: r, user: null }, entity.name, `do:${a.name}`))));
+}
+
+export function SignInButton({ title, size = 'sm' }: { title: string; size?: 'sm' | 'default' }) {
+  const href = useRouterState({ select: (s) => s.location.href });
+  return <Button asChild size={size} variant="outline"><Link to="/login" search={{ next: href }}><LogIn />Sign in to {title.toLowerCase()}</Link></Button>;
+}
+
+// The row's own page is reached from its title, so the menu holds only edit and delete, and only when allowed.
 export function RowActions({ entity, row, names, viewer, onEdit }: { entity: Entity; row: Row; names: readonly string[]; viewer: Viewer; onEdit?: (row: Row) => void }) {
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState(false);
   const steps = rowSteps(entity, row, names, viewer);
-  const view = names.includes('view') && can(viewer, entity.name, 'view', row);
+  const signIn = signInSteps(entity, names, viewer);
   const edit = names.includes('edit') && can(viewer, entity.name, 'edit', row);
   const del = names.includes('delete') && can(viewer, entity.name, 'delete', row);
   const name = rowName(entity, row);
   return (
-    <div className="flex items-center justify-end gap-1.5">
+    <div className="relative z-10 flex items-center justify-end gap-1.5">
       {steps.map((s) => <StepButton key={s.kind === 'go' ? `go:${s.t.name}` : s.a.name} entity={entity} row={row} step={s} viewer={viewer} size="sm" variant={s.kind === 'do' ? 'default' : 'outline'} />)}
-      {(view || edit || del) && (
+      {signIn.map((a) => <SignInButton key={a.name} title={a.title} />)}
+      {(edit || del) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={`More for ${name}`}><MoreHorizontal /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {view && <DropdownMenuItem onSelect={() => void navigate({ to: `/${entity.name}/${row.id}` })}><Eye />Open</DropdownMenuItem>}
             {edit && <DropdownMenuItem onSelect={() => (onEdit ? onEdit(row) : void navigate({ to: `/${entity.name}/${row.id}/edit` }))}><Pencil />Edit</DropdownMenuItem>}
-            {del && (view || edit) && <DropdownMenuSeparator />}
+            {del && edit && <DropdownMenuSeparator />}
             {del && <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}><Trash2 />Delete</DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
