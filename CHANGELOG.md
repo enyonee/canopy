@@ -57,12 +57,14 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   as the text a form would post, an absent key is absent (no "unchecked box means false"), and a file field cannot be set
   from JSON. Every row under `/api` carries `_labels`, the caption of each reference the screens show in such a row (one
   `labelsFor` query per target, whatever the page size), and a dashboard group by a reference its caption.
-  `GET /api/openapi.json` and `node runtime/run.mjs app.json --openapi [--out file]` give the same OpenAPI 3.1 document,
+  `GET /api/openapi.json` (to a signed-in user only, when the app has roles) and `node runtime/run.mjs app.json --openapi
+  [--out file]` give the same OpenAPI 3.1 document,
   derived from the graph only (schemas of rows, bodies, pages and answers; one operation per route; no permissions), with
-  keys sorted at every depth so documents compare byte for byte. The old addresses and their Accept mode are unchanged
+  keys sorted at every depth so documents compare byte for byte; a body names exactly what the server writes (its form's
+  fields, never a `time`, a filled key or an upload; registration the sign-up form's fields; no add for `form: false`). The old addresses and their Accept mode are unchanged
   (`tests/renderdiff.test.mjs`). Also: `run.mjs` no longer cuts a long stdout short when it exits into a pipe. New:
   `runtime/routes/api.mjs`, `runtime/contract.mjs`, `runtime/contract/{schemas,paths}.mjs`, `tests/api.test.mjs`,
-  `tests/contract.test.mjs`, 41 `F1:` mutations.
+  `tests/contract.test.mjs`, 45 `F1:` mutations.
 
 - **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
   `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per

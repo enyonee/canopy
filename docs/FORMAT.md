@@ -607,19 +607,23 @@ Every JSON route above is also served under `/api` — `/api/Product`, `/api/Pro
 checks, own scoping, validation, events and effects. Under `/api` the answer is JSON whatever the `Accept` header says, in
 the shapes of «JSON answers», plus `_labels` (below). Nothing to declare: every app has it.
 
-- **What is under it**: an entity's list, row, create, edit, delete, `action/<name>`, `go/<transition>`, `add/<Child>`;
+- **What is under it**: an entity's list, row, create, edit, delete, `action/<name>`, `go/<transition>`, `add/<Child>` (not
+  for a related table declared `"form": false`: 404, as on the form path);
   `/list/<id>`, `/dashboard/<id>`, `/search`, a global `/action/<name>`; and only here, `GET /api/<Entity>/:id/related/<Child>`
   — one page (`?page=`) of a related table of the detail page, `{ rows, total, page, pages }`, the rows that table shows this
   viewer (403 when the page shows the viewer no such table). Form pages (`/new`, `/edit`), CSV, `/page`, `/outbox`,
   `/settings`, `/file`, `/widget`, `/hook`, `/schedule` are not: a JSON 404 `{ "ok": false, "status": 404, "errors": […] }`.
-- **The session**: `POST /api/login` `{ "login", "password" }`, `POST /api/register` (the user entity's fields; the role is
-  always the graph's `register`), `POST /api/logout` → `{ "ok": true, "flash", "user", "role" }` with the same
+- **The session**: `POST /api/login` `{ "login", "password" }`, `POST /api/register` (the fields the sign-up form asks for; the
+  role is always the graph's `register`), `POST /api/logout` → `{ "ok": true, "flash", "user", "role" }` with the same
   `ag_session` cookie the forms set (`HttpOnly; SameSite=Lax`), 401 for a wrong password, 400 for a refused registration.
   `GET /api/me` → `{ "user": <row> | null, "role": <role> | null }` (the anonymous role for a signed-out visitor).
 - **A POST** must come from this site: `Origin` (else `Referer`) must name the request's `Host` (403 otherwise, nothing is
-  read or written), with `content-type: application/json` (415 otherwise) and a body that is one JSON object of plain
-  values (400 otherwise; 413 past 1 MiB). A value arrives as the text a form would have posted (`12.5`, `true`; `null` is
-  the empty value), so the same validation reads both. Two things differ from a form on purpose: an absent key is absent
+  read or written; only the host and port are compared, not the scheme, which behind a proxy the runtime cannot know),
+  with `content-type: application/json` (415 otherwise) and a body that is one JSON object of plain
+  values (400 otherwise; 413 past 1 MiB). A value arrives as the text a form would have posted (`12.5`, `true`), so the same
+  validation reads both. `null` (like `""`) is the empty value a blank form box sends: the field's declared default, on an
+  edit exactly as on a create — for a `bool=true` field `null` is `true`, for a field without a default it is no value (a
+  required one is then a 400); to keep a stored value, leave the key out. Two things differ from a form on purpose: an absent key is absent
   (an edit keeps the stored value, a create takes the default; there is no "unchecked box means false"), and a `file` or
   `image` field cannot be set from JSON (it is dropped; upload through the form).
 - **`_labels`**: every row under `/api` carries `"_labels": { "<ref field>": "<caption>" }`, the caption the screens show for
@@ -629,15 +633,18 @@ the shapes of «JSON answers», plus `_labels` (below). Nothing to declare: ever
   entity that declares a field named `_labels` keeps its field and gets no captions. A dashboard group by a reference carries
   `"_labels": { "grp": "<caption>" }`.
 - **Errors** are `{ "ok": false, "status", "errors": [...] }` with 400, 401, 403, 404, 409, 413, 415 (and 500 for a crash).
-- **The contract**: `GET /api/openapi.json` (behind the same sign-in gate as every other read) is an OpenAPI 3.1 document
+- **The contract**: `GET /api/openapi.json` (to a signed-in user only — a guest role gets 403, since the document names
+  every entity, field, list and dashboard; an app without `roles` serves it to anyone) is an OpenAPI 3.1 document
   derived from the graph: a schema per entity (`<Entity>`: the row as the JSON answers write it — money a number, a
   reference its id with `x-canopy-ref`, `x-canopy-kind`, derived fields `readOnly`, no secret, `_labels`), its body
-  (`<Entity>.input`: the stored fields a form may set, never the status field of `states`, nor uploads), its page
+  (`<Entity>.input`: the stored fields its form may set — never the status field of `states`, a `time` or another kind
+  without an input, a key its form fills, nor an upload; `canopy.Register`: the sign-up form's fields), its page
   (`<Entity>.page`) and a write's answer (`<Entity>.saved`), and one operation per route above (`listProduct`,
   `createProduct`, `getProduct`, `updateProduct`, `deleteProduct`, `Order_go_place`, `Product_action_addToCart`,
   `Order_add_OrderItem`, `Order_related_OrderItem`, `list_<id>`, `dashboard_<id>`, `action_<name>`, `search`, `login`,
   `logout`, `register`, `me`). It names no permission: any call may answer 403. `node runtime/run.mjs app.json --openapi
-  [--out file]` writes the same bytes; keys are sorted at every depth, so two documents compare byte for byte.
+  [--out file]` writes the same bytes; keys are sorted at every depth, so two documents compare byte for byte. A frontend generates its
+  types from such a snapshot; it does not need the document at run time.
 
 ## Client widgets
 
