@@ -40,11 +40,11 @@
                     "Match": { "own": "student.user", "can": ["view"] },
                     "Application": { "own": "student", "can": ["view"] },
                     "Provider": ["view", "do:apply"],
-                    "Message": { "own": ["sender", "match.studentUser"], "can": ["view", "create"] } },
+                    "Message": { "own": "match.studentUser", "can": ["view", "create"] } },
       "provider": { "Provider": { "own": "user", "can": ["view", "create", "edit"] },
                     "Match": { "own": "provider.user", "can": ["view"] },
                     "Application": { "own": "provider.user", "can": ["view"] },
-                    "Message": { "own": ["sender", "match.providerUser"], "can": ["view", "create"] } },
+                    "Message": { "own": "match.providerUser", "can": ["view", "create"] } },
       "guest":    { "Provider": ["view"] }
     }
   },
@@ -106,6 +106,7 @@
                                 "related": [ { "entity": "Message", "via": "match", "title": "Messages", "columns": ["sender", "body", "createdAt"],
                                               "form": ["body"], "fill": { "sender": "@me" }, "submit": "Send message", "confirm": "Message sent" } ] },
     "Application.list":      { "title": "Applications", "columns": ["student", "provider", "message", "createdAt"], "create": false, "rowActions": ["view"] },
-    "Message.list":           { "hidden": true, "create": false }
+    "Message.list":           { "hidden": true, "create": false },
+    "Message.form":           { "fields": ["match", "body"], "fill": { "sender": "@me" } }
   }
 }
