@@ -251,6 +251,7 @@ export function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelet
   const signIn = signInSteps(entity, entity.detail.actions, viewer);
   const [main, ...others] = steps;
   const detailsTab = images.length > 0 ? details : [];
+  const tiles = details.filter((n) => n !== cat?.name); // the category is already the label above the title
   const name = rowName(entity, row);
   const cta = main ? <StepButton entity={entity} row={row} step={main} viewer={viewer} size="lg" variant="default" className="h-12 w-full text-base" />
     : signIn[0] ? <SignInCta title={signIn[0].title} /> : null;
@@ -270,9 +271,9 @@ export function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelet
           {images.length > 0
             ? <img src={`/file/${entity.name}/${row.id}/${images[shown].name}`} alt={`${name}: ${images[shown].label}`} className="aspect-[4/5] w-full rounded-2xl bg-muted object-cover sm:aspect-square" />
             : <ProductCover entity={entity} row={row} category={catLabel} size="lg" className="aspect-square max-h-[460px] w-full rounded-2xl" />}
-          {images.length === 0 && details.length > 0 && (
+          {images.length === 0 && tiles.length > 0 && (
             <dl className="grid grid-cols-2 gap-3 pt-3 sm:grid-cols-3">
-              {details.map((n) => {
+              {tiles.map((n) => {
                 const f: Field | undefined = columnField(entity, n);
                 return (
                   <div key={n} className="rounded-xl border bg-card px-4 py-3">
