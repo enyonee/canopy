@@ -1,0 +1,3665 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Bad Request"
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Conflict"
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Forbidden"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Not Found"
+      },
+      "TooLarge": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Too Large"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unauthorized"
+      },
+      "UnsupportedMediaType": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unsupported Media Type"
+      }
+    },
+    "schemas": {
+      "Activity": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "lead": {
+                "type": "string",
+                "x-canopy-ref": "Lead"
+              },
+              "owner": {
+                "type": "string",
+                "x-canopy-ref": "User"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "done": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "x-canopy-kind": "bool"
+          },
+          "due": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "call",
+              "meeting",
+              "email",
+              "note"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "lead": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Lead"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          }
+        },
+        "required": [
+          "id",
+          "lead",
+          "kind",
+          "note",
+          "due",
+          "done",
+          "owner",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Activity.input": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "x-canopy-kind": "bool"
+          },
+          "due": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "kind": {
+            "enum": [
+              "call",
+              "meeting",
+              "email",
+              "note"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "lead": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Lead"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          }
+        },
+        "type": "object"
+      },
+      "Activity.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Activity.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Activity"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Company": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "industry": {
+            "enum": [
+              "software",
+              "retail",
+              "finance",
+              "other"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "leads": {
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "pipeline": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "website": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "industry",
+          "website",
+          "leads",
+          "pipeline",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Company.input": {
+        "additionalProperties": false,
+        "properties": {
+          "industry": {
+            "enum": [
+              "software",
+              "retail",
+              "finance",
+              "other"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "website": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "type": "object"
+      },
+      "Company.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Company"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Company.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Company"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Contact": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "company": {
+                "type": "string",
+                "x-canopy-ref": "Company"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "company": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Company"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "phone",
+          "company",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Contact.input": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Company"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "type": "object"
+      },
+      "Contact.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Contact"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Contact.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Contact"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Lead": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "company": {
+                "type": "string",
+                "x-canopy-ref": "Company"
+              },
+              "contact": {
+                "type": "string",
+                "x-canopy-ref": "Contact"
+              },
+              "owner": {
+                "type": "string",
+                "x-canopy-ref": "User"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "activities": {
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "age": {
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "closedAt": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "company": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Company"
+          },
+          "contact": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Contact"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "time"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "open": {
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          },
+          "source": {
+            "enum": [
+              "web",
+              "referral",
+              "event",
+              "cold"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "status": {
+            "enum": [
+              "new",
+              "contacted",
+              "qualified",
+              "won",
+              "lost"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "company",
+          "contact",
+          "owner",
+          "value",
+          "source",
+          "status",
+          "createdAt",
+          "closedAt",
+          "activities",
+          "open",
+          "age",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Lead.input": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Company"
+          },
+          "contact": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Contact"
+          },
+          "owner": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          },
+          "source": {
+            "enum": [
+              "web",
+              "referral",
+              "event",
+              "cold"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          }
+        },
+        "type": "object"
+      },
+      "Lead.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Lead"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Lead.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Lead"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "sales"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "User.input": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true,
+            "x-canopy-kind": "password"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "sales"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "type": "object"
+      },
+      "User.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "User.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "canopy.Dashboard": {
+        "properties": {
+          "cards": {
+            "items": {
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "title",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "charts": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "grp": {},
+                      "v": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "grp",
+                      "v"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "type",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tables": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cards",
+          "tables",
+          "charts"
+        ],
+        "type": "object"
+      },
+      "canopy.Deleted": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Done": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Error": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "const": false
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "status",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "canopy.Me": {
+        "properties": {
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user",
+          "role"
+        ],
+        "type": "object"
+      },
+      "canopy.OpenAPI": {
+        "description": "this document",
+        "type": "object"
+      },
+      "canopy.Search": {
+        "properties": {
+          "results": {
+            "items": {
+              "properties": {
+                "entity": {
+                  "type": "string"
+                },
+                "rows": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "entity",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "canopy.Signed": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "flash",
+          "user",
+          "role"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "in": "cookie",
+        "name": "ag_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Derived from app.json by the Canopy runtime. Every route answers JSON; a POST needs a JSON body and the Origin of this site.",
+    "title": "crm",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/Activity": {
+      "get": {
+        "operationId": "listActivity",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "lead",
+                "kind",
+                "note",
+                "due",
+                "done",
+                "owner"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "done",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      },
+      "post": {
+        "operationId": "createActivity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Activity.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/Activity/{id}": {
+      "get": {
+        "operationId": "getActivity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      },
+      "post": {
+        "operationId": "updateActivity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Activity.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/Activity/{id}/delete": {
+      "post": {
+        "operationId": "deleteActivity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/Company": {
+      "get": {
+        "operationId": "listCompany",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "name",
+                "industry",
+                "website",
+                "leads",
+                "pipeline"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      },
+      "post": {
+        "operationId": "createCompany",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Company.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      }
+    },
+    "/api/Company/{id}": {
+      "get": {
+        "operationId": "getCompany",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      },
+      "post": {
+        "operationId": "updateCompany",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Company.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      }
+    },
+    "/api/Company/{id}/add/Contact": {
+      "post": {
+        "operationId": "Company_add_Contact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "email": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  },
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  },
+                  "phone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contact.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      }
+    },
+    "/api/Company/{id}/add/Lead": {
+      "post": {
+        "operationId": "Company_add_Lead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "closedAt": {
+                    "format": "date",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "date"
+                  },
+                  "contact": {
+                    "type": [
+                      "string",
+                      "integer",
+                      "null"
+                    ],
+                    "x-canopy-kind": "ref",
+                    "x-canopy-ref": "Contact"
+                  },
+                  "createdAt": {
+                    "format": "date-time",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "time"
+                  },
+                  "owner": {
+                    "type": [
+                      "string",
+                      "integer",
+                      "null"
+                    ],
+                    "x-canopy-kind": "ref",
+                    "x-canopy-ref": "User"
+                  },
+                  "source": {
+                    "enum": [
+                      "web",
+                      "referral",
+                      "event",
+                      "cold"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "enum"
+                  },
+                  "title": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  },
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "x-canopy-kind": "money"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      }
+    },
+    "/api/Company/{id}/delete": {
+      "post": {
+        "operationId": "deleteCompany",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      }
+    },
+    "/api/Company/{id}/related/Contact": {
+      "get": {
+        "operationId": "Company_related_Contact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contact.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      }
+    },
+    "/api/Company/{id}/related/Lead": {
+      "get": {
+        "operationId": "Company_related_Lead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Company"
+        ]
+      }
+    },
+    "/api/Contact": {
+      "get": {
+        "operationId": "listContact",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "name",
+                "email",
+                "phone",
+                "company"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contact.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Contact"
+        ]
+      },
+      "post": {
+        "operationId": "createContact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Contact.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contact.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Contact"
+        ]
+      }
+    },
+    "/api/Contact/{id}": {
+      "get": {
+        "operationId": "getContact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contact"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Contact"
+        ]
+      },
+      "post": {
+        "operationId": "updateContact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Contact.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contact.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Contact"
+        ]
+      }
+    },
+    "/api/Contact/{id}/delete": {
+      "post": {
+        "operationId": "deleteContact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Contact"
+        ]
+      }
+    },
+    "/api/Lead": {
+      "get": {
+        "operationId": "listLead",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "title",
+                "company",
+                "contact",
+                "owner",
+                "value",
+                "source",
+                "status",
+                "createdAt",
+                "closedAt",
+                "activities",
+                "open",
+                "age"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "owner",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      },
+      "post": {
+        "operationId": "createLead",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Lead.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}": {
+      "get": {
+        "operationId": "getLead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      },
+      "post": {
+        "operationId": "updateLead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Lead.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}/add/Activity": {
+      "post": {
+        "operationId": "Lead_add_Activity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "due": {
+                    "format": "date",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "date"
+                  },
+                  "kind": {
+                    "enum": [
+                      "call",
+                      "meeting",
+                      "email",
+                      "note"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "enum"
+                  },
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "longtext"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}/delete": {
+      "post": {
+        "operationId": "deleteLead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}/go/contact": {
+      "post": {
+        "operationId": "Lead_go_contact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}/go/lose": {
+      "post": {
+        "operationId": "Lead_go_lose",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {
+                  "closedAt": {
+                    "format": "date",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "date"
+                  }
+                },
+                "required": [
+                  "closedAt"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}/go/qualify": {
+      "post": {
+        "operationId": "Lead_go_qualify",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}/go/reopen": {
+      "post": {
+        "operationId": "Lead_go_reopen",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}/go/win": {
+      "post": {
+        "operationId": "Lead_go_win",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {
+                  "closedAt": {
+                    "format": "date",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "date"
+                  }
+                },
+                "required": [
+                  "closedAt"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/Lead/{id}/related/Activity": {
+      "get": {
+        "operationId": "Lead_related_Activity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Lead"
+        ]
+      }
+    },
+    "/api/User": {
+      "get": {
+        "operationId": "listUser",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "email",
+                "password",
+                "name",
+                "role"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      },
+      "post": {
+        "operationId": "createUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/User/{id}": {
+      "get": {
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      },
+      "post": {
+        "operationId": "updateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/User/{id}/delete": {
+      "post": {
+        "operationId": "deleteUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/dashboard/mine": {
+      "get": {
+        "operationId": "dashboard_mine",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Dashboard"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/dashboard/pipeline": {
+      "get": {
+        "operationId": "dashboard_pipeline",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Dashboard"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/list/due": {
+      "get": {
+        "operationId": "list_due",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "lead",
+                "kind",
+                "note",
+                "due",
+                "done",
+                "owner"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "lists"
+        ]
+      }
+    },
+    "/api/list/my-leads": {
+      "get": {
+        "operationId": "list_my-leads",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "title",
+                "company",
+                "contact",
+                "owner",
+                "value",
+                "source",
+                "status",
+                "createdAt",
+                "closedAt",
+                "activities",
+                "open",
+                "age"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "lists"
+        ]
+      }
+    },
+    "/api/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "login",
+                  "password"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "operationId": "logout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Me"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.OpenAPI"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "contract"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,2811 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Bad Request"
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Conflict"
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Forbidden"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Not Found"
+      },
+      "TooLarge": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Too Large"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unauthorized"
+      },
+      "UnsupportedMediaType": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unsupported Media Type"
+      }
+    },
+    "schemas": {
+      "Account": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "trader": {
+                "type": "string",
+                "x-canopy-ref": "Trader"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "currency": {
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "riskLimit": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "trader": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Trader"
+          }
+        },
+        "required": [
+          "id",
+          "trader",
+          "name",
+          "currency",
+          "phone",
+          "riskLimit",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Account.input": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "riskLimit": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          }
+        },
+        "type": "object"
+      },
+      "Account.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Account.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Account"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Bid": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "opportunity": {
+                "type": "string",
+                "x-canopy-ref": "Opportunity"
+              },
+              "trader": {
+                "type": "string",
+                "x-canopy-ref": "Trader"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "opportunity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Opportunity"
+          },
+          "placedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "time"
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "quantity": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "status": {
+            "enum": [
+              "placed",
+              "accepted",
+              "rejected",
+              "withdrawn"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "total": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "trader": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Trader"
+          }
+        },
+        "required": [
+          "id",
+          "opportunity",
+          "trader",
+          "price",
+          "quantity",
+          "total",
+          "status",
+          "placedAt",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Bid.input": {
+        "additionalProperties": false,
+        "properties": {
+          "opportunity": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Opportunity"
+          },
+          "placedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "time"
+          },
+          "price": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "quantity": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "trader": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Trader"
+          }
+        },
+        "type": "object"
+      },
+      "Bid.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Bid"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Bid.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Bid"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Opportunity": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "askPrice": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "bestBid": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "bids": {
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "closesAt": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "stock",
+              "bond",
+              "commodity",
+              "crypto"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "quantity": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "askPrice",
+          "quantity",
+          "closesAt",
+          "status",
+          "bids",
+          "bestBid",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Opportunity.input": {
+        "additionalProperties": false,
+        "properties": {
+          "askPrice": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "closesAt": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "kind": {
+            "enum": [
+              "stock",
+              "bond",
+              "commodity",
+              "crypto"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "quantity": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "type": "object"
+      },
+      "Opportunity.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Opportunity"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Opportunity.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Opportunity"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Trader": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "committed": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "limit": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "trader"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "limit",
+          "committed",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Trader.input": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true,
+            "x-canopy-kind": "password"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "trader"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "type": "object"
+      },
+      "Trader.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Trader"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Trader.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Trader"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "canopy.Dashboard": {
+        "properties": {
+          "cards": {
+            "items": {
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "title",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "charts": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "grp": {},
+                      "v": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "grp",
+                      "v"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "type",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tables": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cards",
+          "tables",
+          "charts"
+        ],
+        "type": "object"
+      },
+      "canopy.Deleted": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Done": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Error": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "const": false
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "status",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "canopy.Me": {
+        "properties": {
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Trader"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user",
+          "role"
+        ],
+        "type": "object"
+      },
+      "canopy.OpenAPI": {
+        "description": "this document",
+        "type": "object"
+      },
+      "canopy.Register": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true,
+            "x-canopy-kind": "password"
+          }
+        },
+        "type": "object"
+      },
+      "canopy.Search": {
+        "properties": {
+          "results": {
+            "items": {
+              "properties": {
+                "entity": {
+                  "type": "string"
+                },
+                "rows": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "entity",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "canopy.Signed": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Trader"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "flash",
+          "user",
+          "role"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "in": "cookie",
+        "name": "ag_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Derived from app.json by the Canopy runtime. Every route answers JSON; a POST needs a JSON body and the Origin of this site.",
+    "title": "trading",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/Account": {
+      "get": {
+        "operationId": "listAccount",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "trader",
+                "name",
+                "currency",
+                "phone",
+                "riskLimit"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      },
+      "post": {
+        "operationId": "createAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Account.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/api/Account/{id}": {
+      "get": {
+        "operationId": "getAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      },
+      "post": {
+        "operationId": "updateAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Account.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/api/Account/{id}/delete": {
+      "post": {
+        "operationId": "deleteAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/api/Bid": {
+      "get": {
+        "operationId": "listBid",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "opportunity",
+                "trader",
+                "price",
+                "quantity",
+                "total",
+                "status",
+                "placedAt"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Bid"
+        ]
+      },
+      "post": {
+        "operationId": "createBid",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Bid.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Bid"
+        ]
+      }
+    },
+    "/api/Bid/{id}": {
+      "get": {
+        "operationId": "getBid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Bid"
+        ]
+      },
+      "post": {
+        "operationId": "updateBid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Bid.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Bid"
+        ]
+      }
+    },
+    "/api/Bid/{id}/delete": {
+      "post": {
+        "operationId": "deleteBid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Bid"
+        ]
+      }
+    },
+    "/api/Bid/{id}/go/accept": {
+      "post": {
+        "operationId": "Bid_go_accept",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Bid"
+        ]
+      }
+    },
+    "/api/Bid/{id}/go/reject": {
+      "post": {
+        "operationId": "Bid_go_reject",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Bid"
+        ]
+      }
+    },
+    "/api/Bid/{id}/go/withdraw": {
+      "post": {
+        "operationId": "Bid_go_withdraw",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Bid"
+        ]
+      }
+    },
+    "/api/Opportunity": {
+      "get": {
+        "operationId": "listOpportunity",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "title",
+                "kind",
+                "askPrice",
+                "quantity",
+                "closesAt",
+                "status",
+                "bids",
+                "bestBid"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opportunity.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Opportunity"
+        ]
+      },
+      "post": {
+        "operationId": "createOpportunity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Opportunity.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opportunity.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Opportunity"
+        ]
+      }
+    },
+    "/api/Opportunity/{id}": {
+      "get": {
+        "operationId": "getOpportunity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opportunity"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Opportunity"
+        ]
+      },
+      "post": {
+        "operationId": "updateOpportunity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Opportunity.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opportunity.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Opportunity"
+        ]
+      }
+    },
+    "/api/Opportunity/{id}/add/Bid": {
+      "post": {
+        "operationId": "Opportunity_add_Bid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "price": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "x-canopy-kind": "money"
+                  },
+                  "quantity": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "x-canopy-kind": "int"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Opportunity"
+        ]
+      }
+    },
+    "/api/Opportunity/{id}/delete": {
+      "post": {
+        "operationId": "deleteOpportunity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Opportunity"
+        ]
+      }
+    },
+    "/api/Opportunity/{id}/go/close": {
+      "post": {
+        "operationId": "Opportunity_go_close",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opportunity.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Opportunity"
+        ]
+      }
+    },
+    "/api/Opportunity/{id}/related/Bid": {
+      "get": {
+        "operationId": "Opportunity_related_Bid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Opportunity"
+        ]
+      }
+    },
+    "/api/Trader": {
+      "get": {
+        "operationId": "listTrader",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "email",
+                "password",
+                "name",
+                "role",
+                "limit",
+                "committed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trader.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      },
+      "post": {
+        "operationId": "createTrader",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Trader.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trader.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/api/Trader/{id}": {
+      "get": {
+        "operationId": "getTrader",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trader"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      },
+      "post": {
+        "operationId": "updateTrader",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Trader.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trader.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/api/Trader/{id}/delete": {
+      "post": {
+        "operationId": "deleteTrader",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Trader"
+        ]
+      }
+    },
+    "/api/dashboard/account": {
+      "get": {
+        "operationId": "dashboard_account",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Dashboard"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/dashboard/market": {
+      "get": {
+        "operationId": "dashboard_market",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Dashboard"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/list/history": {
+      "get": {
+        "operationId": "list_history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "opportunity",
+                "trader",
+                "price",
+                "quantity",
+                "total",
+                "status",
+                "placedAt"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bid.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "lists"
+        ]
+      }
+    },
+    "/api/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "login",
+                  "password"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "operationId": "logout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Me"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.OpenAPI"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "contract"
+        ]
+      }
+    },
+    "/api/register": {
+      "post": {
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/canopy.Register"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    }
+  }
+}
