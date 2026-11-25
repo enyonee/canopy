@@ -161,18 +161,25 @@ const kpiIcon = (title: string) => KPI_ICONS.find(([re]) => re.test(title))?.[1]
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 // Monthly history of the cards whose entity the dashboard's period narrows: eight GETs of the same dashboard, one per
-// calendar month, run in parallel and cached (useQueries, staleTime 60 s).
+// calendar month, plus one for the same days of the previous month (the honest base of the delta: the current month
+// is not over), run in parallel and cached (useQueries, staleTime 60 s). Not fetched while a period is chosen, when
+// no card shows them.
 const MONTHS = 8;
-function useSeries(spec: Spec) {
+function useSeries(spec: Spec, on: boolean) {
   const now = new Date();
   const periods = Array.from({ length: MONTHS }, (_, k) => {
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (MONTHS - 1) + k, 1));
     return { from: iso(start), to: iso(new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0))) };
   });
-  const on = spec.period && spec.cards.some((c) => spec.periodEntities.includes(c.entity));
-  const qs = useQueries({ queries: on ? periods.map((p) => ({ queryKey: ['dashboard', spec.id, p], queryFn: () => endpoints.dashboards[spec.id](p), staleTime: 60_000 })) : [] });
+  const prevStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const prevEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, Math.min(now.getUTCDate(), new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).getUTCDate())));
+  const sameDays = { from: iso(prevStart), to: iso(prevEnd) };
+  const wanted = on && spec.period && spec.cards.some((c) => spec.periodEntities.includes(c.entity));
+  const qs = useQueries({ queries: wanted ? [...periods, sameDays].map((p) => ({ queryKey: ['dashboard', spec.id, p], queryFn: () => endpoints.dashboards[spec.id](p), staleTime: 60_000 })) : [] });
   if (!qs.length || qs.some((q) => !q.data)) return null;
-  return spec.cards.map((c, i) => (spec.periodEntities.includes(c.entity) ? qs.map((q) => Number(q.data!.cards[i]?.value ?? 0)) : null));
+  const months = qs.slice(0, MONTHS), base = qs[MONTHS];
+  return spec.cards.map((c, i) => (spec.periodEntities.includes(c.entity)
+    ? { line: months.map((q) => Number(q.data!.cards[i]?.value ?? 0)), sameDaysBefore: Number(base.data!.cards[i]?.value ?? 0) } : null));
 }
 
 // The history a card can draw: from its first non-zero month to now, at least 7 months, else none.
@@ -182,11 +189,13 @@ const history = (line: number[] | null) => {
   return start >= 0 && line.length - start >= 7 ? line.slice(start) : null;
 };
 
-function Kpi({ card, value: v, pending, line, ranged }: { card: Spec['cards'][number]; value: number | undefined; pending: boolean; line: number[] | null; ranged: boolean }) {
+function Kpi({ card, value: v, pending, series, ranged }: { card: Spec['cards'][number]; value: number | undefined; pending: boolean; series: { line: number[]; sameDaysBefore: number } | null; ranged: boolean }) {
   const Icon = kpiIcon(`${card.title} ${card.entity}`);
+  const line = series?.line ?? null;
   const shown = history(line);
-  const [prev, last] = line ? line.slice(-2) : [0, 0];
-  const delta = line && prev !== 0 ? ((last - prev) / Math.abs(prev)) * 100 : null;
+  // This month so far against the same days of last month: both incomplete in the same way.
+  const now = line ? line[line.length - 1] : 0, before = series?.sameDaysBefore ?? 0;
+  const delta = series && before !== 0 ? ((now - before) / Math.abs(before)) * 100 : null;
   return (
     <Card className="gap-0 py-5">
       <CardContent className="flex flex-col gap-3 px-5">
@@ -206,7 +215,7 @@ function Kpi({ card, value: v, pending, line, ranged }: { card: Spec['cards'][nu
               {`${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`}
             </span>
           )}
-          <span>{delta !== null ? 'vs last month' : ranged ? 'In the selected period' : card.fn === 'count' ? 'All records' : 'All time'}</span>
+          <span>{delta !== null ? 'month to date vs same days last month' : ranged ? 'In the selected period' : card.fn === 'count' ? 'All records' : 'All time'}</span>
         </div>
       </CardContent>
     </Card>
@@ -214,10 +223,10 @@ function Kpi({ card, value: v, pending, line, ranged }: { card: Spec['cards'][nu
 }
 
 function DashboardBody({ spec }: { spec: Spec }) {
-  const series = useSeries(spec);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { from?: string; to?: string };
   const from = search.from ?? '', to = search.to ?? '';
+  const series = useSeries(spec, !from && !to);
   const query = { from: from || undefined, to: to || undefined };
   const data = useQuery({ queryKey: ['dashboard', spec.id, query], queryFn: () => endpoints.dashboards[spec.id](query), placeholderData: keepPreviousData,
     refetchInterval: spec.refresh ? spec.refresh * 1000 : false });
@@ -232,7 +241,7 @@ function DashboardBody({ spec }: { spec: Spec }) {
             {spec.cards.length > 0 && (
               <section aria-label="Key figures" className={cn('grid gap-4 sm:grid-cols-2', spec.cards.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4')}>
                 {spec.cards.map((c, i) => <Kpi key={c.title} card={c} value={data.data?.cards[i]?.value} pending={data.isPending}
-                  line={!from && !to ? series?.[i] ?? null : null} ranged={Boolean(from || to) && spec.periodEntities.includes(c.entity)} />)}
+                  series={series?.[i] ?? null} ranged={Boolean(from || to) && spec.periodEntities.includes(c.entity)} />)}
               </section>
             )}
             <div className="grid gap-6 xl:grid-cols-2">
