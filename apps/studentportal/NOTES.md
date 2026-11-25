@@ -31,6 +31,19 @@
   needed the plugin. Matching on it is the one place this app couldn't have stayed inside plain
   expressions.
 
+- `composition` (own in two hops): a message belongs to the two users of its match, but they sit two hops away
+  (`Message.match → Match.student → StudentProfile.user`, likewise through `provider`), and `own` takes a
+  direct field or one hop only. Worked around by keeping the two owners on the match itself: `Match.studentUser`
+  and `Match.providerUser` are stored `ref:User` copies, written only by the server (seed, the `values` of the
+  `db.ensure` that makes every match, and a `Match.updated` event that re-derives them after an admin edit;
+  `StudentProfile.user`/`Provider.user` are on no form, so they never change over HTTP). Students and providers
+  may not create or edit a Match at all. A two-hop `own` ("match.student.user") would make the copies
+  unnecessary — a candidate for the format.
+- Runtime, not the format: a student or provider may still `POST /Message` with `match` set to a match that is
+  not theirs — the one-hop part of `own` scopes reads, but create does not check the parent of the new row.
+  Closed by the runtime fix SEC3; until it lands, check 7 fails on exactly this ("another student posted into
+  Maria's conversation").
+
 ## New for this app
 
 - Two events, each walking the *other* entity with `db.each` + `db.ensure`, so the join table
@@ -50,3 +63,8 @@
   duplicating what the display column already names. `Application` drops its `providerUser`
   the same way (`provider.user`); `student` there was already a direct `ref:User`, unaffected.
   Two real fields instead of four, one meaning each.
+- Messages are private to their match: `Message` is granted with `own: ["sender", "match.studentUser"]` to
+  students and `["sender", "match.providerUser"]` to providers. Before, it was granted without `own`, so any
+  student or provider listed and opened every conversation through `/Message` (JSON), and a direct
+  `POST /Message` could name anyone as `sender`; now `sender` is filled from the session. Check 7 asserts that
+  Alice and HealthBridge read none of Maria's thread with TechForward and that a posted `sender` is ignored.
