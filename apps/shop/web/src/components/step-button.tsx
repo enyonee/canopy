@@ -13,10 +13,11 @@ import { rowName } from '@/lib/rows';
 import { useRun } from '@/lib/run';
 import type { Viewer } from '@/lib/perms';
 import { enumLabel } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export type Step = { kind: 'go'; t: Transition } | { kind: 'do'; a: Action };
 
-export function StepButton({ entity, row, step, viewer, size = 'default', variant }: { entity: Entity; row: Row; step: Step; viewer: Viewer; size?: 'default' | 'sm'; variant?: 'default' | 'outline' | 'secondary' | 'destructive' }) {
+export function StepButton({ entity, row, step, viewer, size = 'default', variant, className }: { entity: Entity; row: Row; step: Step; viewer: Viewer; size?: 'default' | 'sm' | 'lg'; variant?: 'default' | 'outline' | 'secondary' | 'destructive'; className?: string }) {
   const run = useRun();
   const [open, setOpen] = useState(false);
   const name = step.kind === 'go' ? step.t.name : step.a.name;
@@ -31,7 +32,7 @@ export function StepButton({ entity, row, step, viewer, size = 'default', varian
   const busy = run.isPending;
   const name_ = rowName(entity, row);
   const button = (onClick?: () => void) => (
-    <Button size={size} variant={v} onClick={onClick} disabled={busy} className={destructive ? 'text-destructive hover:text-destructive' : undefined} data-step={name}>
+    <Button size={size} variant={v} onClick={onClick} disabled={busy} className={cn(destructive && 'text-destructive hover:text-destructive', className)} data-step={name}>
       {busy && <Loader2 className="animate-spin" aria-hidden="true" />}
       {label}
     </Button>

@@ -11,33 +11,32 @@ export function hash(s: string) {
   return h >>> 0;
 }
 
-/** A hue (0–359) for a name, kept off the muddy greens and yellows that read badly as a background. */
-export const hueOf = (s: string) => [210, 235, 260, 285, 310, 335, 15, 175, 195][hash(s) % 9];
+/** An avatar's colours for a name: one of the theme's ordinal tones, picked by hash (contrast-checked). */
+export const avatarStyle = (s: string) => {
+  const t = `var(--tone-${(hash(s) % 6) + 1}`;
+  return { background: `${t}-bg)`, color: `${t}-fg)` };
+};
 
-/** An avatar's colours for a name: a tinted circle in light and dark. */
-export const avatarStyle = (s: string) => ({
-  background: `color-mix(in oklab, oklch(0.72 0.12 ${hueOf(s)}) 28%, var(--card))`,
-  color: `color-mix(in oklab, oklch(0.45 0.14 ${hueOf(s)}) 85%, var(--foreground))`,
-});
-
-// The tone of each status, by its place in the state machine: the start is neutral, statuses along the way take
-// distinct hues in order, the end of the happy path is green, a status only a cancel-like step reaches is red.
-const WAY = ['sky', 'violet', 'amber', 'teal', 'indigo', 'fuchsia'] as const;
-export type Tone = 'slate' | 'emerald' | 'rose' | (typeof WAY)[number];
+// The tone of each status, by its place in the state machine: the start is neutral (0), the statuses along the way
+// take the theme's ordinal tones 1–6 in order, the end of the happy path is success, a status only a cancel-like step
+// reaches is danger. The colours are generated per theme and checked for contrast (src/gen/theme.css).
+export type Tone = 'tone-0' | 'tone-1' | 'tone-2' | 'tone-3' | 'tone-4' | 'tone-5' | 'tone-6' | 'success' | 'danger' | 'warning';
 
 export function statusTone(entity: Entity, value: string): Tone {
   const st = entity.states;
   const field = entity.fields.find((f) => f.name === st?.field);
-  const options = field?.options ?? [];
-  if (!st) return 'slate';
+  if (!st) return 'tone-0';
   const bad = new Set(st.transitions.filter((t) => t.destructive).map((t) => t.to));
-  if (bad.has(value) || /cancel|reject|fail|declin|refund|lost/i.test(value)) return 'rose';
-  if (value === field?.default) return 'slate';
-  const way = options.filter((o) => !bad.has(o) && o !== field?.default);
+  if (bad.has(value)) return 'danger';
+  if (value === field?.default) return 'tone-0';
+  const way = (field?.options ?? []).filter((o) => !bad.has(o) && o !== field?.default);
   const at = way.indexOf(value);
-  if (at === way.length - 1 || /deliver|done|complete|won|resolv/i.test(value)) return 'emerald';
-  return WAY[Math.max(0, at) % WAY.length];
+  if (at === way.length - 1) return 'success';
+  return `tone-${(Math.max(0, at) % 6) + 1}` as Tone;
 }
+
+/** A tone's badge background, text and dot as CSS colours. */
+export const toneVars = (t: Tone) => ({ bg: `var(--${t}-bg)`, fg: `var(--${t}-fg)`, dot: `var(--${t}-dot)` });
 
 // lucide icon names for what a category or an entity is called; the cover and the badges use them.
 const ICON_WORDS: [RegExp, string][] = [
@@ -55,8 +54,3 @@ export const stockField = (entity: Entity) => entity.fields.find((f) => f.type =
 
 export const appInitial = () => app.title.slice(0, 1).toUpperCase();
 
-/** A status tone as a colour an SVG fill can take (charts colour status groups like the badges). */
-export const TONE_COLOR: Record<Tone, string> = {
-  slate: 'oklch(0.6 0.03 260)', sky: 'oklch(0.68 0.14 230)', violet: 'oklch(0.6 0.2 293)', amber: 'oklch(0.77 0.16 70)',
-  teal: 'oklch(0.7 0.12 185)', indigo: 'oklch(0.55 0.2 277)', fuchsia: 'oklch(0.67 0.24 322)', emerald: 'oklch(0.7 0.15 162)', rose: 'oklch(0.65 0.21 16)',
-};

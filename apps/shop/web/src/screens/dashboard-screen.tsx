@@ -6,7 +6,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Activity, BarChart3, CalendarRange, Inbox, Package, ShoppingBag, Table2, Target, TrendingDown, TrendingUp, Trophy, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { Sparkline } from '@/components/sparkline';
-import { statusTone, TONE_COLOR } from '@/lib/visual';
+import { statusTone, toneVars } from '@/lib/visual';
 import { app } from '@/gen/app';
 import { endpoints } from '@/gen/endpoints';
 import type { Dashboard as Spec, Group } from '@/lib/model';
@@ -132,7 +132,7 @@ function GroupedTable({ spec, rows }: { spec: Spec['tables'][number]; rows: Grou
   const owner = app.entities[spec.entity];
   const byStatus = Boolean(spec.group && owner?.states?.field === spec.group.field);
   const series = rows.map((r) => ({ name: groupText(spec.group, r), v: Number(r[first?.as] ?? 0),
-    color: byStatus ? TONE_COLOR[statusTone(owner, String(r.grp ?? ''))] : undefined }));
+    color: byStatus ? toneVars(statusTone(owner, String(r.grp ?? ''))).dot : undefined }));
   const overTime = spec.group?.kind === 'date' || spec.group?.kind === 'time';
   const subtitle = first ? `${first.title} by ${(spec.groupTitle ?? 'group').toLowerCase()}` : '';
   const table = (
