@@ -578,7 +578,7 @@ the `/search` page itself.
 
 ## Routes the runtime serves
 
-`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `POST /hook/<connector>` (a signed webhook, no session) · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/settings`, `POST /settings/secret`, `POST /settings/secret/remove`, `POST /settings/test` (the connector settings screen, admin only) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout`.
+`/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `POST /hook/<connector>` (a signed webhook, no session) · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/settings`, `POST /settings/secret`, `POST /settings/secret/remove`, `POST /settings/test` (the connector settings screen, admin only) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout` · `/api/*` (the JSON routes for a frontend of the app's own, below).
 
 Every successful POST answers 303 to a page with `?ok=<flash>`; validation failures answer 400 with the form and the messages; refusals 403; a transition from the wrong status 409.
 
@@ -599,6 +599,45 @@ effects); the Accept header only picks the last step, how the same result is wri
   HTML path's redirect target and confirmation would name them — a delete or a global action has no `row`) or
   `{ "ok": false, "status", "errors": [...] }` on failure, with the exact status code the HTML path uses (400
   validation, 403 refusal, 404 unknown, 409 wrong status).
+
+## `/api`: the JSON routes for a frontend, and their OpenAPI contract
+
+Every JSON route above is also served under `/api` — `/api/Product`, `/api/Product/:id`, `POST /api/Order/:id/go/place`,
+`/api/dashboard/sales`, `/api/search?q=`, `POST /api/action/<name>` — and runs **the same route**: the same permission
+checks, own scoping, validation, events and effects. Under `/api` the answer is JSON whatever the `Accept` header says, in
+the shapes of «JSON answers», plus `_labels` (below). Nothing to declare: every app has it.
+
+- **What is under it**: an entity's list, row, create, edit, delete, `action/<name>`, `go/<transition>`, `add/<Child>`;
+  `/list/<id>`, `/dashboard/<id>`, `/search`, a global `/action/<name>`; and only here, `GET /api/<Entity>/:id/related/<Child>`
+  — one page (`?page=`) of a related table of the detail page, `{ rows, total, page, pages }`, the rows that table shows this
+  viewer (403 when the page shows the viewer no such table). Form pages (`/new`, `/edit`), CSV, `/page`, `/outbox`,
+  `/settings`, `/file`, `/widget`, `/hook`, `/schedule` are not: a JSON 404 `{ "ok": false, "status": 404, "errors": […] }`.
+- **The session**: `POST /api/login` `{ "login", "password" }`, `POST /api/register` (the user entity's fields; the role is
+  always the graph's `register`), `POST /api/logout` → `{ "ok": true, "flash", "user", "role" }` with the same
+  `ag_session` cookie the forms set (`HttpOnly; SameSite=Lax`), 401 for a wrong password, 400 for a refused registration.
+  `GET /api/me` → `{ "user": <row> | null, "role": <role> | null }` (the anonymous role for a signed-out visitor).
+- **A POST** must come from this site: `Origin` (else `Referer`) must name the request's `Host` (403 otherwise, nothing is
+  read or written), with `content-type: application/json` (415 otherwise) and a body that is one JSON object of plain
+  values (400 otherwise; 413 past 1 MiB). A value arrives as the text a form would have posted (`12.5`, `true`; `null` is
+  the empty value), so the same validation reads both. Two things differ from a form on purpose: an absent key is absent
+  (an edit keeps the stored value, a create takes the default; there is no "unchecked box means false"), and a `file` or
+  `image` field cannot be set from JSON (it is dropped; upload through the form).
+- **`_labels`**: every row under `/api` carries `"_labels": { "<ref field>": "<caption>" }`, the caption the screens show for
+  that reference (the target's label), for each reference the screens show in such a row (its detail, its list, a saved
+  list, a related table) that is not `null` — also when the viewer may not open the target (a customer sees their order's
+  `customer` caption, not the user row). A `private` reference the viewer may not read is `null` and has no caption. An
+  entity that declares a field named `_labels` keeps its field and gets no captions. A dashboard group by a reference carries
+  `"_labels": { "grp": "<caption>" }`.
+- **Errors** are `{ "ok": false, "status", "errors": [...] }` with 400, 401, 403, 404, 409, 413, 415 (and 500 for a crash).
+- **The contract**: `GET /api/openapi.json` (behind the same sign-in gate as every other read) is an OpenAPI 3.1 document
+  derived from the graph: a schema per entity (`<Entity>`: the row as the JSON answers write it — money a number, a
+  reference its id with `x-canopy-ref`, `x-canopy-kind`, derived fields `readOnly`, no secret, `_labels`), its body
+  (`<Entity>.input`: the stored fields a form may set, never the status field of `states`, nor uploads), its page
+  (`<Entity>.page`) and a write's answer (`<Entity>.saved`), and one operation per route above (`listProduct`,
+  `createProduct`, `getProduct`, `updateProduct`, `deleteProduct`, `Order_go_place`, `Product_action_addToCart`,
+  `Order_add_OrderItem`, `Order_related_OrderItem`, `list_<id>`, `dashboard_<id>`, `action_<name>`, `search`, `login`,
+  `logout`, `register`, `me`). It names no permission: any call may answer 403. `node runtime/run.mjs app.json --openapi
+  [--out file]` writes the same bytes; keys are sorted at every depth, so two documents compare byte for byte.
 
 ## Client widgets
 

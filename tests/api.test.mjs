@@ -266,19 +266,22 @@ test('F1: api: captions — a customer reads the label of a user it may not view
   const units = dash.tables.find((t) => t.title === 'Units by product').rows;
   assert.ok(units.length && units.every((r) => typeof r._labels.grp === 'string' && r._labels.grp.length), JSON.stringify(units));
   assert.ok(dash.tables.find((t) => t.title === 'Orders by status').rows.every((r) => r._labels === undefined), 'an enum group has no caption');
+  assert.ok(!(await s.get('/dashboard/sales', J)).html.includes('_labels'), 'the Accept-mode dashboard has no captions');
 });
 
 const CARDS = {
   app: 'cards', views: 'auto',
   data: { User: { email: 'text!', password: 'password!', role: 'enum[admin,member]=member' }, Tag: { name: 'text!' },
     Card: { title: 'text!', owner: 'ref:User', tag: 'ref:Tag', extra: 'ref:Tag' }, Odd: { _labels: 'text', tag: 'ref:Tag' },
-    Note: { card: 'ref:Card!', body: 'text', tag: 'ref:Tag' } },
+    Note: { card: 'ref:Card!', body: 'text', tag: 'ref:Tag', topic: 'ref:Tag' }, Page: { title: 'text!' } },
   roles: { entity: 'User', login: 'email', password: 'password', role: 'role',
     can: { admin: '*', member: { Card: ['view'], Tag: ['view'], Odd: ['view'] } } },
   override: { 'Card.detail': { fields: ['title', 'owner', 'tag'], private: { tag: 'owner' }, related: [{ entity: 'Note', via: 'card', columns: ['body'] }] },
     'Card.list': { columns: ['title', 'tag'] }, 'Note.detail': { fields: ['body'] }, 'Note.list': { columns: ['body'] } },
-  seed: { User: [{ email: 'a@x', password: 'a', role: 'member' }, { email: 'b@x', password: 'b', role: 'member' }], Tag: [{ name: 'red' }],
-    Card: [{ title: 'one', owner: 1, tag: 1, extra: 1 }], Odd: [{ _labels: 'mine', tag: 1 }], Note: [{ card: 1, body: 'hi', tag: 1 }] },
+  lists: [{ id: 'notes', entity: 'Note', title: 'Notes', columns: ['body', 'topic'] }],
+  pages: [{ id: 'about', title: 'About', text: 'hi' }],
+  seed: { User: [{ email: 'a@x', password: 'a', role: 'member' }, { email: 'b@x', password: 'b', role: 'member' }, { email: 'c@x', password: 'c', role: 'admin' }], Tag: [{ name: 'red' }],
+    Card: [{ title: 'one', owner: 1, tag: 1, extra: 1 }], Odd: [{ _labels: 'mine', tag: 1 }], Note: [{ card: 1, body: 'hi', tag: 1, topic: 1 }], Page: [{ title: 'p' }] },
 };
 
 test('F1: api: a caption is never more than the stand shows — a private reference, a field it never shows, an own _labels field', async () => {
@@ -295,6 +298,13 @@ test('F1: api: a caption is never more than the stand shows — a private refere
     const odd = JSON.parse((await c.get('/api/Odd/1')).html);
     assert.equal(odd._labels, 'mine', 'the field wins; no captions are added');
     assert.deepEqual(JSON.parse((await c.get('/Odd/1', J)).html), odd);
+    await c.json('/api/login', { login: 'c@x', password: 'c' });
+    const note = JSON.parse((await c.get('/api/list/notes')).html).rows[0];
+    assert.deepEqual(note._labels, { topic: 'red' }, 'the saved list shows topic; no screen shows tag, the related table only the body');
+    const page = await c.get('/api/page/1');
+    assert.equal(page.status, 404, 'a path a route module claims is never read as the entity of the same name');
+    assert.equal(JSON.parse(page.html).ok, false);
+    assert.equal(JSON.parse((await c.get('/api/Page/1')).html).title, 'p', 'the entity itself, by its name');
   } finally { c.close(); }
 });
 
@@ -302,7 +312,7 @@ test('F1: api: captions and a related page cost the same number of queries for 6
   const graph = { app: 'q', views: 'auto', data: { Owner: { name: 'text!' }, Box: { owner: 'ref:Owner!', label: 'text!' }, Item: { box: 'ref:Box!', owner: 'ref:Owner', note: 'text' } },
     override: { 'Box.detail': { related: [{ entity: 'Item', via: 'box' }] } } };
   const count = async (n) => {
-    const q = await boot(tmpGraph(graph));
+    const q = await boot(tmpGraph(graph), { noTimers: true }); // a flusher tick would be counted too
     try {
       const { store } = q.app;
       const box = await store.insert('Box', { owner: await store.insert('Owner', { name: 'o0' }), label: 'b' });
