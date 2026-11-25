@@ -181,7 +181,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
     <div className="flex min-h-dvh">
       <a href="#main" className="sr-only z-50 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-3 focus:left-3">Skip to content</a>
       {sidebar && (
-        <aside className={cn('hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-snappy lg:block', compact ? 'w-16' : 'w-64')} aria-label="Sidebar">
+        <aside id="app-sidebar" className={cn('hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-snappy lg:block', compact ? 'w-16' : 'w-64')} aria-label="Sidebar">
           <div className={cn('sticky top-0 flex h-dvh flex-col gap-6 overflow-y-auto py-4', compact ? 'px-2' : 'px-3')}>
             <div className={cn('flex h-8 items-center', compact && 'justify-center')}><Brand compact={compact} /></div>
             <NavLinks viewer={viewer} compact={compact} />
@@ -212,7 +212,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           </Sheet>
           {sidebar && (
             <>
-              <Button variant="ghost" size="icon-sm" className="hidden lg:inline-flex" aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={compact} onClick={fold}><PanelLeft /></Button>
+              <Button variant="ghost" size="icon-sm" className="hidden lg:inline-flex" aria-label="Sidebar labels" aria-controls="app-sidebar" aria-expanded={!compact} onClick={fold}><PanelLeft /></Button>
               <span className="hidden h-5 w-px bg-border lg:block" aria-hidden="true" />
             </>
           )}
