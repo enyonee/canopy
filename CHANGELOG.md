@@ -37,6 +37,16 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   `view`/`edit`/`delete` with no `own`; it is now `"own": "order.customer"`, and check 8 proves another customer sees
   none of the lines (HTML and JSON) and gets 403 on reading, editing and deleting one.
 
+- **Fix: a one-hop `own` did not scope writes.** `"own": "order.customer"` closed reading, editing and deleting
+  another user's rows, but a create was never judged on its row (`canOp` let `create` through) and a one-hop grant
+  fills nothing, so a customer could `POST /OrderItem {order: <someone else's order>}`, add one through
+  `POST /Order/<theirs>/add/OrderItem`, or edit their own item onto another order (HTML and JSON). Now
+  `perms.mayWrite(user, entity, op, row)` judges the row a create, an edit or a related add is about to leave, with
+  the same `own` paths as a read, after validation: not owned is a 403 through the usual denial. One query per
+  one-hop path, none for a direct `own`; `/api` routes reuse the same handlers. A direct `own` keeps filling its
+  field; an edit that would give the row away to someone else is now refused too. New: `tests/ownwrite.test.mjs`,
+  `tests/fixtures/ownhop.json`, 5 `SEC3:` mutations.
+
 - **The connector settings screen (connector library, stage C7, the last).** `GET /settings`, for an admin (`vc.settings`, like
   `/outbox`; a customer, a guest and a signed-out request get 403 on every method), linked next to Outbox: one card per
   connector with its kind, its mode (`deploy.json`), the breaker of each mode, the last 24 hours of its outbox (sent, failed,

@@ -314,6 +314,14 @@ entirely — `verify/run.mjs` sets it, so an app's checks control every schedule
   - **the fillable field**: create only ever silently fills the *first* name in `own`, and only when it is a
     direct field (not a one-hop) — `["sender", "recipient"]` fills `sender`; a bare one-hop `own` fills nothing
     (the graph must collect it some other way, e.g. through `Entity.form`'s `fill`).
+  - **writes stay owned**: an owned `create` or `edit`, and a related add (`POST /X/:id/add/<Child>`), is judged on
+    the row it leaves — the stored row with the submitted values, `fill` and the fillable field applied — by the
+    same paths as a read: it must be a row the writer owns, else 403 (HTML and JSON alike). So a one-hop child
+    (`"own": "order.customer"`) cannot be created under, added to or moved onto another user's parent, even when
+    that parent is visible to everyone through `all`; a child with no parent is owned by nobody, so it is refused
+    too. With several paths any one of them is enough (`["order.customer", "helper"]` lets you write under any
+    order if `helper` is you), and an edit that would hand the row to someone else is refused. Checking costs one
+    query per one-hop path; an operation in `all` is not checked.
   - `all`: operations that apply to **every** row regardless of `own` — `{"own": "customer", "can": ["create",
     "go:pay"], "all": ["view"]}` means a customer only creates and pays for their own orders, but may `view`
     any order. Without `all`, every operation in `can` is owned-only (the old all-or-nothing behaviour is
