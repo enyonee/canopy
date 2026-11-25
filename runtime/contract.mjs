@@ -4,6 +4,7 @@
 // It names no permission: what a role may do is decided per request, and any call may answer 403.
 import { parseField } from './spec.mjs';
 import { captioned } from './render.mjs';
+import { registerFields } from './render/pages.mjs';
 import { ref, rowSchema, writableFields, inputSchema, pageSchema, savedSchema, signedSchema, commonSchemas } from './contract/schemas.mjs';
 import { apiPaths, refusalResponses } from './contract/paths.mjs';
 
@@ -29,7 +30,8 @@ function sessionSchemas(graph, fields) {
   };
   if (!r) return out;
   out['canopy.Signed'] = signedSchema(user);
-  if (r.register) out['canopy.Register'] = inputSchema(writableFields(fields[r.entity], { skip: [r.role] }));
+  // The fields the sign-up form asks for (the same registerFields routes/session.mjs writes through), less any upload.
+  if (r.register) out['canopy.Register'] = inputSchema(writableFields(fields[r.entity], { only: registerFields(graph, { graph, fields }) }));
   return out;
 }
 

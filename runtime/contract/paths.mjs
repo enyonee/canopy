@@ -60,9 +60,13 @@ function entityPaths(graph, fields, entity) {
     paths[`${at}/action/${a.name}`] = post(`${entity}_action_${a.name}`, entity, `${entity}.saved`, [404], inputSchema(pick(own, a.fields), { required: a.fields || [], open: true }), [idParam]);
   }
   for (const rel of graph.override?.[`${entity}.detail`]?.related || []) {
-    const kid = fields[rel.entity];
-    const body = inputSchema(writableFields(kid, { only: Array.isArray(rel.form) ? rel.form : null, skip: [rel.via, ...Object.keys(rel.fill || {}), graph.states?.[rel.entity]?.field] }));
-    paths[`${at}/add/${rel.entity}`] = post(`${entity}_add_${rel.entity}`, entity, `${rel.entity}.saved`, [404], body, [idParam]);
+    // A table declared with `form: false` has no add (routes/rows.mjs answers 404), so the contract offers none.
+    if (rel.form !== false) {
+      const kidForm = graph.override?.[`${rel.entity}.form`] || {};
+      const skip = [rel.via, ...Object.keys(rel.fill || {}), ...Object.keys(kidForm.fill || {}), graph.states?.[rel.entity]?.field];
+      const body = inputSchema(writableFields(fields[rel.entity], { only: Array.isArray(rel.form) ? rel.form : null, skip }));
+      paths[`${at}/add/${rel.entity}`] = post(`${entity}_add_${rel.entity}`, entity, `${rel.entity}.saved`, [404], body, [idParam]);
+    }
     paths[`${at}/related/${rel.entity}`] = get(`${entity}_related_${rel.entity}`, entity, `${rel.entity}.page`, [404], [idParam, query('page', { type: 'integer', minimum: 1 })]);
   }
   return paths;
