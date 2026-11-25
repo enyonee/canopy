@@ -22,7 +22,7 @@
     "register": "user", "anonymous": "guest",
     "can": {
       "admin": "*",
-      "user":  { "Exercise": { "own": "user", "can": ["edit", "delete"], "all": ["view", "create"] }, "DiaryEntry": ["view", "create"] },
+      "user":  { "Exercise": { "own": "user", "can": ["edit", "delete"], "all": ["view", "create"] }, "DiaryEntry": { "own": "user", "can": ["view", "create"] } },
       "guest": { "Exercise": ["view"] }
     }
   },

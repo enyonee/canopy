@@ -1,6 +1,15 @@
 // webgen-bench/000076 — fitness tracker: leaderboard, exercises, diary, personal stats.
 import { colorCheck } from '../../verify/lib.mjs';
 
+// A JSON read as a signed-in user, on a session of its own (the check's cookie jar answers HTML).
+const jsonAs = async (base, login, password, p) => {
+  const signIn = await fetch(`${base}/login`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ login, password }).toString() });
+  const cookie = (signIn.headers.get('set-cookie') || '').split(';')[0];
+  const res = await fetch(base + p, { headers: { cookie, accept: 'application/json' } });
+  return { status: res.status, body: await res.json() };
+};
+
 export const checks = [
   { task: 'Navigate to the fitness leaderboard page',
     run: async ({ asGuest, get, must }) => {
@@ -37,12 +46,19 @@ export const checks = [
       return 'a 25-minute run recorded and shown under My Exercises without discrepancies; only Sam may edit it';
     } },
   { task: 'Write and save a new entry in the fitness diary',
-    run: async ({ follow, rows, must, flashOf }) => {
+    run: async ({ base, follow, rows, must, flashOf }) => {
       const r = await follow('/DiaryEntry', { title: 'Feeling strong today', body: 'Finished a 25 minute run and felt great.', mood: 'great', date: '2026-09-25' });
       must(/Diary entry saved/.test(flashOf(r.html)), `flash: ${flashOf(r.html)}`);
       const mine = rows(r.html);
       must(mine.length === 1 && /Feeling strong today/.test(mine[0]) && /great/.test(mine[0]), `diary row: ${mine[0]}`);
-      return 'diary entry saved and retrievable from My Fitness Diary';
+      // The diary is personal: another user (Kai) reads none of it, neither listed nor by id.
+      const id = (/\/DiaryEntry\/(\d+)/.exec(mine[0]) || [])[1];
+      must(id, 'the diary row has no link to the entry');
+      const listed = await jsonAs(base, 'kai@fitness.test', 'kai123', '/DiaryEntry');
+      must(listed.status === 200 && listed.body.total === 0, `another user reads ${listed.body.total} diary entr(ies) that are not theirs`);
+      const one = await jsonAs(base, 'kai@fitness.test', 'kai123', `/DiaryEntry/${id}`);
+      must(one.status === 403, `another user opened this diary entry: ${one.status}`);
+      return 'diary entry saved and retrievable from My Fitness Diary; another user reads none of it';
     } },
   { task: 'View personal fitness statistics on the homepage',
     run: async ({ get, must }) => {
