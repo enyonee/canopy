@@ -1106,6 +1106,9 @@ test в live, запрос на коннектор (брейкер, счётчи
   действие, `/outbox`, `/settings`, регистрация, выход, 403 — в ответах нет ни одной ссылки, формы или скрипта вне `/admin/`;
   ссылка, написанная в графе (`pages[].links`), тоже получает базу. **Равенство с приложением без `web`**: та же фикстура
   без ключа, те же запросы — HTML под `/admin` равен `rebase(HTML без web)`, JSON байт в байт (GET и POST).
+- **`/api` рядом со стендом.** В приложении с `web` и без него `/api/Product`, `/api/Product/1`, `/api/me`, `/api/openapi.json`,
+  `/api/Ghost`, `/api/outbox` и POST `/api/Product` отвечают байт в байт одинаково; `/api/login` — JSON без редиректа; Accept-JSON
+  `/admin/Product` равен `/Product` приложения без `web`; одна сессия на `/api` и `/admin`; чужой Origin на `/api` — 403.
 - **Файлы и виджеты.** Загрузка через `/admin`, ссылка и `<img>` на `/admin/file/…`, сам файл по `/file/…` и `/admin/file/…`;
   `/widget/_api.mjs` и `/admin/widget/_api.mjs` с `BASE = "/admin"`; копия `apps/tictactoe` с `web`: скрипт виджета с
   `/admin/widget/ttt.mjs`, его `api` ходит на `/admin/Game/1/…`, а `//host`, `https://…` и относительный путь не трогает.
