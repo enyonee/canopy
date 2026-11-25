@@ -484,7 +484,18 @@ await scenario('Keyboard: skip link, focus ring and labelled controls', async ()
     return e.offsetParent !== null && !name;
   }).length);
   must(unlabelled === 0, `${unlabelled} unlabelled control(s)`);
-  return 'skip link first, every visible control named';
+  // The card's link (stretched over the card) shows a focus ring when reached by keyboard (WCAG 2.4.7).
+  let ring = null;
+  for (let i = 0; i < 30 && ring === null; i++) {
+    await guest.keyboard.press('Tab');
+    ring = await guest.evaluate(() => {
+      const a = document.activeElement;
+      if (!a?.matches('article a[href^="/Product/"]')) return null;
+      return getComputedStyle(a, '::after').outlineStyle;
+    });
+  }
+  must(ring && ring !== 'none', `no focus ring on a catalogue card: ${ring}`);
+  return 'skip link first, every visible control named, catalogue card focus ring';
 });
 
 await browser.close();

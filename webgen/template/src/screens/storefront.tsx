@@ -91,7 +91,7 @@ function ProductCard({ spec, row, viewer }: { spec: Spec; row: Row; viewer: View
       <div className="mt-3 space-y-1">
         {catLabel && <p className="text-xs font-medium" style={{ color: `var(--tone-${categoryTone(catLabel)}-fg)` }}>{catLabel}</p>}
         <h3 className="line-clamp-2 text-[15px] leading-snug font-medium">
-          {open ? <Link to={`/${e.name}/${row.id}`} className="after:absolute after:inset-0 focus-visible:outline-none">{name}</Link> : name}
+          {open ? <Link to={`/${e.name}/${row.id}`} className="outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:outline-2 focus-visible:after:outline-offset-4 focus-visible:after:outline-ring">{name}</Link> : name}
         </h3>
         {about && row[about.name] ? <p className="line-clamp-1 hidden text-sm text-muted-foreground sm:block">{String(row[about.name])}</p> : null}
         {price && <p className="text-base font-semibold tabular-nums"><FieldValue entity={e} field={price} row={row} viewer={viewer} /></p>}
