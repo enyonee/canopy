@@ -92,7 +92,9 @@ test('the permission matrix: wildcards, per-entity operations, ownership and the
   assert.equal(p.can(sales, 'Lead', 'view', { owner: 2 }), true);
   assert.equal(p.can(sales, 'Lead', 'view', { owner: '2' }), true, 'ids compare as strings');
   assert.equal(p.can(sales, 'Lead', 'edit', { owner: 9 }), false, 'own rows only');
-  assert.equal(p.can(sales, 'Lead', 'create', { owner: 9 }), true, 'create is not scoped by a row');
+  assert.equal(p.can(sales, 'Lead', 'create'), true, 'without a row, create is the bare grant (the "new" button, the form)');
+  assert.equal(p.can(sales, 'Lead', 'create', { owner: 2 }), true);
+  assert.equal(p.can(sales, 'Lead', 'create', { owner: 9 }), false, 'SEC3: the row a create is about to insert must be one you own');
   assert.equal(p.ownField(sales, 'Lead'), 'owner');
   assert.equal(p.ownField(sales, 'Activity'), null);
   assert.equal(p.ownField(admin, 'Lead'), null);

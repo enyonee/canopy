@@ -1,0 +1,25 @@
+{
+  "app": "ownhop",
+  "data": {
+    "User": { "email": "text!", "password": "password!", "role": "enum[admin,customer]" },
+    "Order": { "title": "text!", "customer": "ref:User" },
+    "OrderItem": { "name": "text!", "order": "ref:Order" },
+    "Note": { "text": "text!", "order": "ref:Order", "helper": "ref:User" }
+  },
+  "seed": {
+    "User": [
+      { "email": "a@x.test", "password": "pw-a", "role": "customer" },
+      { "email": "b@x.test", "password": "pw-b", "role": "customer" }
+    ],
+    "Order": [ { "title": "order of A", "customer": 1 }, { "title": "order of B", "customer": 2 } ],
+    "OrderItem": [ { "name": "item of A", "order": 1 }, { "name": "item of B", "order": 2 } ]
+  },
+  "override": {
+    "Order.detail": { "related": [ { "entity": "OrderItem", "via": "order", "title": "Items", "form": ["name"] } ] }
+  },
+  "roles": { "entity": "User", "login": "email", "password": "password", "role": "role",
+    "can": { "admin": "*",
+             "customer": { "Order": { "own": "customer", "can": ["view", "create", "edit"], "all": ["view"] },
+                           "OrderItem": { "own": "order.customer", "can": ["view", "create", "edit", "delete"] },
+                           "Note": { "own": ["order.customer", "helper"], "can": ["view", "create", "edit"] } } } }
+}

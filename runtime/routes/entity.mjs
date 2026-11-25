@@ -61,6 +61,7 @@ async function createRoute(ctx, entity, fields, formOv) {
     ctx.answer(400, await renderForm(ctx, entity, fields, submitted, 'new', problems), { ok: false, status: 400, errors: problems });
     return true;
   }
+  if (!await perms.mayWrite(user, entity, 'create', values)) { ctx.deny(); return true; } // an owned create leaves a row you own
   let id;
   try {
     id = await interp.attempt(async (tx) => {
@@ -84,7 +85,7 @@ async function createRoute(ctx, entity, fields, formOv) {
 }
 
 async function updateRoute(ctx, entity, fields, formOv, id, row) {
-  const { store, vc, role, user, interp, trace, ok, graph } = ctx;
+  const { store, vc, role, user, perms, interp, trace, ok, graph } = ctx;
   if (!vc.can(entity, 'edit', row)) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(entity, user, await ctx.body(), formFieldsFor(formOv, role));
   interp.checkboxes(entity, submitted);
@@ -94,6 +95,7 @@ async function updateRoute(ctx, entity, fields, formOv, id, row) {
     ctx.answer(400, await renderForm(ctx, entity, fields, { ...row, ...submitted }, 'edit', problems), { ok: false, status: 400, errors: problems });
     return true;
   }
+  if (!await perms.mayWrite(user, entity, 'edit', { ...row, ...submitted })) { ctx.deny(); return true; } // nor moves it onto someone else's parent
   try {
     await interp.attempt(async (tx) => {
       await tx.update(entity, id, submitted);
