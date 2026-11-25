@@ -99,21 +99,24 @@ function endpointsTs(model, openapi) {
   const lists = model.lists.map((l) => `\n    ${lit(l.id)}: (query) => call(client.GET(${lit(`/api/list/${l.id}`)}, { params: { query: query as Q<${lit(`/api/list/${l.id}`)}> } })) as Promise<Page>,`).join('');
   const dashboards = model.dashboards.map((d) => `\n    ${lit(d.id)}: (query) => call(client.GET(${lit(`/api/dashboard/${d.id}`)}, { params: { query: query as Q<${lit(`/api/dashboard/${d.id}`)}> } })) as Promise<Dashboard>,`).join('');
   const actions = model.globalActions.filter((a) => has(`/api/action/${a.name}`, 'post')).map((a) => `\n    ${lit(a.name)}: (body) => call(client.POST(${lit(`/api/action/${a.name}`)}, { body: body as B<${lit(`/api/action/${a.name}`)}> })) as Promise<{ ok: true; flash: string; created?: number }>,`).join('');
+  const canRegister = Boolean(model.roles) && has('/api/register', 'post');
+  const needsError = !canRegister;
   const session = model.roles ? `
   login: (body) => call(client.POST('/api/login', { body })) as Promise<Signed>,
   logout: () => call(client.POST('/api/logout', { body: {} })) as Promise<Signed>,
-  register: (body) => ${has('/api/register', 'post') ? `call(client.POST('/api/register', { body: body as B<'/api/register'> })) as Promise<Signed>` : `Promise.reject(new ApiError(404, ['Registration is closed.']))`},` : `
+  register: ${canRegister ? `(body) => call(client.POST('/api/register', { body: body as B<'/api/register'> })) as Promise<Signed>` : `() => Promise.reject(new ApiError(404, ['Registration is closed.']))`},` : `
   login: () => Promise.reject(new ApiError(404, ['This app has no sign-in.'])),
   logout: () => Promise.reject(new ApiError(404, ['This app has no sign-in.'])),
   register: () => Promise.reject(new ApiError(404, ['This app has no sign-in.'])),`;
+  // Only what this app's endpoints use is imported: the project compiles with noUnusedLocals.
+  const names = [...(needsError ? ['ApiError'] : []), 'call', 'client', 'type AppEndpoints', ...(model.dashboards.length ? ['type Dashboard'] : []),
+    'type Page', 'type Row', 'type Saved', ...(model.roles ? ['type Signed'] : [])];
   return `${HEADER}import type { paths } from '@/gen/api';
-import { ApiError, call, client, type AppEndpoints, type Dashboard, type Page, type Row, type Saved, type Signed } from '@/lib/api';
+import { ${names.join(', ')} } from '@/lib/api';
 
 // The query of a GET and the JSON body of a POST, as the contract declares them.
 type Q<P extends keyof paths> = paths[P] extends { get: { parameters: { query?: infer T } } } ? T : never;
 type B<P extends keyof paths> = paths[P] extends { post: { requestBody: { content: { 'application/json': infer T } } } } ? T : never;
-
-void ApiError;
 
 export const endpoints: AppEndpoints = {
   entities: {
@@ -152,7 +155,7 @@ function routesTsx(model) {
     `import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';`,
     `import { AppShell } from '@/components/app-shell';`,
     `import { NotFound } from '@/components/states';`,
-    `import { EntityListScreen, SavedListScreen } from '@/screens/list-screen';`,
+    `import { EntityListScreen${model.lists.length ? ', SavedListScreen' : ''} } from '@/screens/list-screen';`,
     `import { DetailScreen } from '@/screens/detail-screen';`,
     `import { FormScreen } from '@/screens/form-screen';`,
     // The charts library only loads with the first dashboard opened.

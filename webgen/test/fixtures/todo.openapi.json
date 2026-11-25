@@ -1,0 +1,997 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Bad Request"
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Conflict"
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Forbidden"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Not Found"
+      },
+      "TooLarge": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Too Large"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unauthorized"
+      },
+      "UnsupportedMediaType": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unsupported Media Type"
+      }
+    },
+    "schemas": {
+      "Task": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "time"
+          },
+          "done": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "x-canopy-kind": "bool"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "priority": {
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "notes",
+          "done",
+          "createdAt",
+          "priority",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Task.input": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "time"
+          },
+          "done": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "x-canopy-kind": "bool"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "priority": {
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "type": "object"
+      },
+      "Task.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Task.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Task"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "canopy.Dashboard": {
+        "properties": {
+          "cards": {
+            "items": {
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "title",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "charts": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "grp": {},
+                      "v": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "grp",
+                      "v"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "type",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tables": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cards",
+          "tables",
+          "charts"
+        ],
+        "type": "object"
+      },
+      "canopy.Deleted": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Done": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Error": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "const": false
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "status",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "canopy.Me": {
+        "properties": {
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user",
+          "role"
+        ],
+        "type": "object"
+      },
+      "canopy.OpenAPI": {
+        "description": "this document",
+        "type": "object"
+      },
+      "canopy.Search": {
+        "properties": {
+          "results": {
+            "items": {
+              "properties": {
+                "entity": {
+                  "type": "string"
+                },
+                "rows": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "entity",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Derived from app.json by the Canopy runtime. Every route answers JSON; a POST needs a JSON body and the Origin of this site.",
+    "title": "todo",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/Task": {
+      "get": {
+        "operationId": "listTask",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "title",
+                "notes",
+                "done",
+                "createdAt",
+                "priority"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "done",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "priority",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Task"
+        ]
+      },
+      "post": {
+        "operationId": "createTask",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Task"
+        ]
+      }
+    },
+    "/api/Task/{id}": {
+      "get": {
+        "operationId": "getTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Task"
+        ]
+      },
+      "post": {
+        "operationId": "updateTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Task"
+        ]
+      }
+    },
+    "/api/Task/{id}/action/toggle": {
+      "post": {
+        "operationId": "Task_action_toggle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Task"
+        ]
+      }
+    },
+    "/api/Task/{id}/delete": {
+      "post": {
+        "operationId": "deleteTask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Task"
+        ]
+      }
+    },
+    "/api/list/active": {
+      "get": {
+        "operationId": "list_active",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "title",
+                "notes",
+                "done",
+                "createdAt",
+                "priority"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "lists"
+        ]
+      }
+    },
+    "/api/list/completed": {
+      "get": {
+        "operationId": "list_completed",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "title",
+                "notes",
+                "done",
+                "createdAt",
+                "priority"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "lists"
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Me"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.OpenAPI"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "contract"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,5861 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Bad Request"
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Conflict"
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Forbidden"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Not Found"
+      },
+      "TooLarge": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Too Large"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unauthorized"
+      },
+      "UnsupportedMediaType": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/canopy.Error"
+            }
+          }
+        },
+        "description": "Unsupported Media Type"
+      }
+    },
+    "schemas": {
+      "Claim": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "patient": {
+                "type": "string",
+                "x-canopy-ref": "Patient"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "filedAt": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "insurer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          },
+          "status": {
+            "enum": [
+              "submitted",
+              "approved",
+              "rejected"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "required": [
+          "id",
+          "patient",
+          "insurer",
+          "amount",
+          "status",
+          "filedAt",
+          "note",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Claim.input": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "filedAt": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "insurer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          }
+        },
+        "type": "object"
+      },
+      "Claim.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Claim"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Claim.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Claim"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "DailyReport": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "author": {
+                "type": "string",
+                "x-canopy-ref": "User"
+              },
+              "superior": {
+                "type": "string",
+                "x-canopy-ref": "User"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "activities": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "hours": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "superior": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "superior",
+          "date",
+          "activities",
+          "hours",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "DailyReport.input": {
+        "additionalProperties": false,
+        "properties": {
+          "activities": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "hours": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "superior": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          }
+        },
+        "type": "object"
+      },
+      "DailyReport.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DailyReport"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "DailyReport.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/DailyReport"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Fee": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "patient": {
+                "type": "string",
+                "x-canopy-ref": "Patient"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "card",
+              "insurance"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          },
+          "service": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "status": {
+            "enum": [
+              "unpaid",
+              "paid"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "required": [
+          "id",
+          "patient",
+          "service",
+          "amount",
+          "status",
+          "date",
+          "method",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Fee.input": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "card",
+              "insurance"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          },
+          "service": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "type": "object"
+      },
+      "Fee.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Fee"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Fee.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Fee"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "LabTest": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "patient": {
+                "type": "string",
+                "x-canopy-ref": "Patient"
+              },
+              "technician": {
+                "type": "string",
+                "x-canopy-ref": "User"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          },
+          "result": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "technician": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          },
+          "test": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "required": [
+          "id",
+          "patient",
+          "test",
+          "result",
+          "date",
+          "technician",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "LabTest.input": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          },
+          "result": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "test": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          }
+        },
+        "type": "object"
+      },
+      "LabTest.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LabTest"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "LabTest.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/LabTest"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Medicine": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "dosageForm": {
+            "enum": [
+              "tablet",
+              "capsule",
+              "syrup",
+              "injection"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "expiry": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "reorderLevel": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "stock": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "dosageForm",
+          "stock",
+          "reorderLevel",
+          "expiry",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Medicine.input": {
+        "additionalProperties": false,
+        "properties": {
+          "dosageForm": {
+            "enum": [
+              "tablet",
+              "capsule",
+              "syrup",
+              "injection"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "expiry": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "reorderLevel": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "stock": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          }
+        },
+        "type": "object"
+      },
+      "Medicine.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Medicine"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Medicine.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Medicine"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Patient": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "comments": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "diagnosis": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "due": {
+            "readOnly": true,
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "tests": {
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "visitDate": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "visitDate",
+          "diagnosis",
+          "comments",
+          "phone",
+          "due",
+          "tests",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Patient.input": {
+        "additionalProperties": false,
+        "properties": {
+          "comments": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "longtext"
+          },
+          "diagnosis": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "visitDate": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          }
+        },
+        "type": "object"
+      },
+      "Patient.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Patient"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Patient.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Patient"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "StockMovement": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "medicine": {
+                "type": "string",
+                "x-canopy-ref": "Medicine"
+              },
+              "recordedBy": {
+                "type": "string",
+                "x-canopy-ref": "User"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "in",
+              "out"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "medicine": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Medicine"
+          },
+          "quantity": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "recordedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          }
+        },
+        "required": [
+          "id",
+          "medicine",
+          "kind",
+          "quantity",
+          "date",
+          "reason",
+          "recordedBy",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "StockMovement.input": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "kind": {
+            "enum": [
+              "in",
+              "out"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "medicine": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Medicine"
+          },
+          "quantity": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "int"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "recordedBy": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          }
+        },
+        "type": "object"
+      },
+      "StockMovement.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/StockMovement"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "StockMovement.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/StockMovement"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Surgery": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "patient": {
+                "type": "string",
+                "x-canopy-ref": "Patient"
+              },
+              "surgeon": {
+                "type": "string",
+                "x-canopy-ref": "User"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          },
+          "procedure": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "room": {
+            "enum": [
+              "main",
+              "minor"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "startTime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "status": {
+            "enum": [
+              "scheduled",
+              "done",
+              "cancelled"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "surgeon": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          }
+        },
+        "required": [
+          "id",
+          "patient",
+          "procedure",
+          "room",
+          "date",
+          "startTime",
+          "surgeon",
+          "status",
+          "note",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Surgery.input": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          },
+          "procedure": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "room": {
+            "enum": [
+              "main",
+              "minor"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "startTime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "surgeon": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "User"
+          }
+        },
+        "type": "object"
+      },
+      "Surgery.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Surgery"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Surgery.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Surgery"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "Transaction": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {
+              "patient": {
+                "type": "string",
+                "x-canopy-ref": "Patient"
+              }
+            },
+            "readOnly": true,
+            "type": "object"
+          },
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "income",
+              "expense"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "kind",
+          "amount",
+          "date",
+          "patient",
+          "note",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "Transaction.input": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "x-canopy-kind": "money"
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "date": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "date"
+          },
+          "kind": {
+            "enum": [
+              "income",
+              "expense"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "patient": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ],
+            "x-canopy-kind": "ref",
+            "x-canopy-ref": "Patient"
+          }
+        },
+        "type": "object"
+      },
+      "Transaction.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Transaction"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "Transaction.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/Transaction"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "additionalProperties": false,
+        "properties": {
+          "_labels": {
+            "additionalProperties": false,
+            "description": "the caption of each reference the row names, as the app shows it",
+            "properties": {},
+            "readOnly": true,
+            "type": "object"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "id": {
+            "readOnly": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "position": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "staff"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "position",
+          "_labels"
+        ],
+        "type": "object"
+      },
+      "User.input": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true,
+            "x-canopy-kind": "password"
+          },
+          "position": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "text"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "staff"
+            ],
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-canopy-kind": "enum"
+          }
+        },
+        "type": "object"
+      },
+      "User.page": {
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pages": {
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "pages"
+        ],
+        "type": "object"
+      },
+      "User.saved": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          },
+          "row": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash",
+          "row"
+        ],
+        "type": "object"
+      },
+      "canopy.Dashboard": {
+        "properties": {
+          "cards": {
+            "items": {
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "title",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "charts": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "grp": {},
+                      "v": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "grp",
+                      "v"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "type",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tables": {
+            "items": {
+              "properties": {
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "_labels": {
+                        "additionalProperties": false,
+                        "description": "present when the group is a reference",
+                        "properties": {
+                          "grp": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cards",
+          "tables",
+          "charts"
+        ],
+        "type": "object"
+      },
+      "canopy.Deleted": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "id",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Done": {
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "flash"
+        ],
+        "type": "object"
+      },
+      "canopy.Error": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "const": false
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "status",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "canopy.Me": {
+        "properties": {
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user",
+          "role"
+        ],
+        "type": "object"
+      },
+      "canopy.OpenAPI": {
+        "description": "this document",
+        "type": "object"
+      },
+      "canopy.Search": {
+        "properties": {
+          "results": {
+            "items": {
+              "properties": {
+                "entity": {
+                  "type": "string"
+                },
+                "rows": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "entity",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "canopy.Signed": {
+        "properties": {
+          "flash": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "flash",
+          "user",
+          "role"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "in": "cookie",
+        "name": "ag_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Derived from app.json by the Canopy runtime. Every route answers JSON; a POST needs a JSON body and the Origin of this site.",
+    "title": "hospital",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/Claim": {
+      "get": {
+        "operationId": "listClaim",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "patient",
+                "insurer",
+                "amount",
+                "status",
+                "filedAt",
+                "note"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Claim.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Claim"
+        ]
+      },
+      "post": {
+        "operationId": "createClaim",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Claim.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Claim.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Claim"
+        ]
+      }
+    },
+    "/api/Claim/{id}": {
+      "get": {
+        "operationId": "getClaim",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Claim"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Claim"
+        ]
+      },
+      "post": {
+        "operationId": "updateClaim",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Claim.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Claim.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Claim"
+        ]
+      }
+    },
+    "/api/Claim/{id}/delete": {
+      "post": {
+        "operationId": "deleteClaim",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Claim"
+        ]
+      }
+    },
+    "/api/Claim/{id}/go/approve": {
+      "post": {
+        "operationId": "Claim_go_approve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Claim.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Claim"
+        ]
+      }
+    },
+    "/api/Claim/{id}/go/reject": {
+      "post": {
+        "operationId": "Claim_go_reject",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  }
+                },
+                "required": [
+                  "note"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Claim.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Claim"
+        ]
+      }
+    },
+    "/api/DailyReport": {
+      "get": {
+        "operationId": "listDailyReport",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "author",
+                "superior",
+                "date",
+                "activities",
+                "hours"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyReport.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "DailyReport"
+        ]
+      },
+      "post": {
+        "operationId": "createDailyReport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyReport.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyReport.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "DailyReport"
+        ]
+      }
+    },
+    "/api/DailyReport/{id}": {
+      "get": {
+        "operationId": "getDailyReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyReport"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "DailyReport"
+        ]
+      },
+      "post": {
+        "operationId": "updateDailyReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyReport.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyReport.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "DailyReport"
+        ]
+      }
+    },
+    "/api/DailyReport/{id}/delete": {
+      "post": {
+        "operationId": "deleteDailyReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "DailyReport"
+        ]
+      }
+    },
+    "/api/Fee": {
+      "get": {
+        "operationId": "listFee",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "patient",
+                "service",
+                "amount",
+                "status",
+                "date",
+                "method"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fee.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Fee"
+        ]
+      },
+      "post": {
+        "operationId": "createFee",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Fee.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fee.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Fee"
+        ]
+      }
+    },
+    "/api/Fee/{id}": {
+      "get": {
+        "operationId": "getFee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fee"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Fee"
+        ]
+      },
+      "post": {
+        "operationId": "updateFee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Fee.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fee.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Fee"
+        ]
+      }
+    },
+    "/api/Fee/{id}/delete": {
+      "post": {
+        "operationId": "deleteFee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Fee"
+        ]
+      }
+    },
+    "/api/Fee/{id}/go/pay": {
+      "post": {
+        "operationId": "Fee_go_pay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "cash",
+                      "card",
+                      "insurance"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "enum"
+                  }
+                },
+                "required": [
+                  "method"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fee.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Fee"
+        ]
+      }
+    },
+    "/api/LabTest": {
+      "get": {
+        "operationId": "listLabTest",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "patient",
+                "test",
+                "result",
+                "date",
+                "technician"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "patient",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabTest.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "LabTest"
+        ]
+      },
+      "post": {
+        "operationId": "createLabTest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabTest.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabTest.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "LabTest"
+        ]
+      }
+    },
+    "/api/LabTest/{id}": {
+      "get": {
+        "operationId": "getLabTest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabTest"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "LabTest"
+        ]
+      },
+      "post": {
+        "operationId": "updateLabTest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabTest.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabTest.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "LabTest"
+        ]
+      }
+    },
+    "/api/LabTest/{id}/delete": {
+      "post": {
+        "operationId": "deleteLabTest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "LabTest"
+        ]
+      }
+    },
+    "/api/Medicine": {
+      "get": {
+        "operationId": "listMedicine",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "name",
+                "dosageForm",
+                "stock",
+                "reorderLevel",
+                "expiry"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Medicine.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Medicine"
+        ]
+      },
+      "post": {
+        "operationId": "createMedicine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Medicine.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Medicine.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Medicine"
+        ]
+      }
+    },
+    "/api/Medicine/{id}": {
+      "get": {
+        "operationId": "getMedicine",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Medicine"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Medicine"
+        ]
+      },
+      "post": {
+        "operationId": "updateMedicine",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Medicine.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Medicine.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Medicine"
+        ]
+      }
+    },
+    "/api/Medicine/{id}/add/StockMovement": {
+      "post": {
+        "operationId": "Medicine_add_StockMovement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "in",
+                      "out"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "enum"
+                  },
+                  "quantity": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "x-canopy-kind": "int"
+                  },
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovement.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Medicine"
+        ]
+      }
+    },
+    "/api/Medicine/{id}/delete": {
+      "post": {
+        "operationId": "deleteMedicine",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Medicine"
+        ]
+      }
+    },
+    "/api/Medicine/{id}/related/StockMovement": {
+      "get": {
+        "operationId": "Medicine_related_StockMovement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovement.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Medicine"
+        ]
+      }
+    },
+    "/api/Patient": {
+      "get": {
+        "operationId": "listPatient",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "name",
+                "visitDate",
+                "diagnosis",
+                "comments",
+                "phone",
+                "due",
+                "tests"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Patient.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      },
+      "post": {
+        "operationId": "createPatient",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Patient.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Patient.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/Patient/{id}": {
+      "get": {
+        "operationId": "getPatient",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Patient"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      },
+      "post": {
+        "operationId": "updatePatient",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Patient.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Patient.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/Patient/{id}/add/Fee": {
+      "post": {
+        "operationId": "Patient_add_Fee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "amount": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "x-canopy-kind": "money"
+                  },
+                  "service": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fee.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/Patient/{id}/add/LabTest": {
+      "post": {
+        "operationId": "Patient_add_LabTest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "result": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  },
+                  "test": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabTest.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/Patient/{id}/add/Surgery": {
+      "post": {
+        "operationId": "Patient_add_Surgery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "date": {
+                    "format": "date",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "date"
+                  },
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  },
+                  "procedure": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  },
+                  "room": {
+                    "enum": [
+                      "main",
+                      "minor"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "enum"
+                  },
+                  "startTime": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "x-canopy-kind": "text"
+                  },
+                  "surgeon": {
+                    "type": [
+                      "string",
+                      "integer",
+                      "null"
+                    ],
+                    "x-canopy-kind": "ref",
+                    "x-canopy-ref": "User"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surgery.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/Patient/{id}/delete": {
+      "post": {
+        "operationId": "deletePatient",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/Patient/{id}/related/Fee": {
+      "get": {
+        "operationId": "Patient_related_Fee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fee.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/Patient/{id}/related/LabTest": {
+      "get": {
+        "operationId": "Patient_related_LabTest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabTest.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/Patient/{id}/related/Surgery": {
+      "get": {
+        "operationId": "Patient_related_Surgery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surgery.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Patient"
+        ]
+      }
+    },
+    "/api/StockMovement": {
+      "get": {
+        "operationId": "listStockMovement",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "medicine",
+                "kind",
+                "quantity",
+                "date",
+                "reason",
+                "recordedBy"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "medicine",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovement.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "StockMovement"
+        ]
+      },
+      "post": {
+        "operationId": "createStockMovement",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockMovement.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovement.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "StockMovement"
+        ]
+      }
+    },
+    "/api/StockMovement/{id}": {
+      "get": {
+        "operationId": "getStockMovement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovement"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "StockMovement"
+        ]
+      },
+      "post": {
+        "operationId": "updateStockMovement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockMovement.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovement.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "StockMovement"
+        ]
+      }
+    },
+    "/api/StockMovement/{id}/delete": {
+      "post": {
+        "operationId": "deleteStockMovement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "StockMovement"
+        ]
+      }
+    },
+    "/api/Surgery": {
+      "get": {
+        "operationId": "listSurgery",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "patient",
+                "procedure",
+                "room",
+                "date",
+                "startTime",
+                "surgeon",
+                "status",
+                "note"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "room",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "surgeon",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surgery.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Surgery"
+        ]
+      },
+      "post": {
+        "operationId": "createSurgery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Surgery.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surgery.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Surgery"
+        ]
+      }
+    },
+    "/api/Surgery/{id}": {
+      "get": {
+        "operationId": "getSurgery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surgery"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Surgery"
+        ]
+      },
+      "post": {
+        "operationId": "updateSurgery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Surgery.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surgery.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Surgery"
+        ]
+      }
+    },
+    "/api/Surgery/{id}/delete": {
+      "post": {
+        "operationId": "deleteSurgery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Surgery"
+        ]
+      }
+    },
+    "/api/Surgery/{id}/go/cancel": {
+      "post": {
+        "operationId": "Surgery_go_cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surgery.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Surgery"
+        ]
+      }
+    },
+    "/api/Surgery/{id}/go/complete": {
+      "post": {
+        "operationId": "Surgery_go_complete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surgery.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Surgery"
+        ]
+      }
+    },
+    "/api/Transaction": {
+      "get": {
+        "operationId": "listTransaction",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "category",
+                "kind",
+                "amount",
+                "date",
+                "patient",
+                "note"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "Transaction"
+        ]
+      },
+      "post": {
+        "operationId": "createTransaction",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Transaction.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Transaction"
+        ]
+      }
+    },
+    "/api/Transaction/{id}": {
+      "get": {
+        "operationId": "getTransaction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "Transaction"
+        ]
+      },
+      "post": {
+        "operationId": "updateTransaction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Transaction.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Transaction"
+        ]
+      }
+    },
+    "/api/Transaction/{id}/delete": {
+      "post": {
+        "operationId": "deleteTransaction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "Transaction"
+        ]
+      }
+    },
+    "/api/User": {
+      "get": {
+        "operationId": "listUser",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "name",
+                "email",
+                "password",
+                "role",
+                "position"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      },
+      "post": {
+        "operationId": "createUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/User/{id}": {
+      "get": {
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      },
+      "post": {
+        "operationId": "updateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User.input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User.saved"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/User/{id}/delete": {
+      "post": {
+        "operationId": "deleteUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Deleted"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/api/dashboard/finance": {
+      "get": {
+        "operationId": "dashboard_finance",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Dashboard"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/dashboard/inventory-report": {
+      "get": {
+        "operationId": "dashboard_inventory-report",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Dashboard"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/dashboard/patient-report": {
+      "get": {
+        "operationId": "dashboard_patient-report",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Dashboard"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/api/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "login",
+                  "password"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "operationId": "logout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Signed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.Me"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/canopy.OpenAPI"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "tags": [
+          "contract"
+        ]
+      }
+    }
+  }
+}
