@@ -23,19 +23,38 @@ const TYPES = {
   avif: 'image/avif', ico: 'image/x-icon', woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf',
   wasm: 'application/wasm', mp3: 'audio/mpeg', mp4: 'video/mp4', webm: 'video/webm', pdf: 'application/pdf',
 };
-// A bundler's content-hashed output (Vite: `assets/index-BdX3k9aZ.js`) never changes under its name: cached for a year.
+// A bundler's content-hashed output never changes under its name: cached for a year. Vite names it
+// `assets/<name>-<8 characters of base64url>.<ext>` (`index-t4OmGtGK.js`, `dashboard-screen-BGaXfOAc.js`); the hash must
+// hold a capital or a digit, so a plain word (`vendor-dropdown.js`, `my.backgrounds.png`) is revalidated instead.
 // Everything else, index.html first, is revalidated on every load (its ETag answers 304 when nothing changed).
-const HASHED = /^assets\/(?:.+\/)?[^/]+[.-][A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$/;
+const HASHED = /^assets\/(?:.+\/)?[^/]+-(?=[\w-]{0,7}[A-Z0-9])[\w-]{8}\.[A-Za-z0-9]+$/;
 
 /** The front's directory: `web` resolved against the directory of app.json. */
 export const webRoot = (graphFile, graph) => path.resolve(path.dirname(graphFile), graph.web);
 
-/** What keeps the front from being served: its index.html is missing (it is built, not written). */
-export function webProblems(graphFile, graph) {
-  const index = path.join(webRoot(graphFile, graph), 'index.html');
-  if (fs.existsSync(index) && fs.statSync(index).isFile()) return [];
-  return [{ path: '/web', message: `${index} not found: "web" names the built front, and it has not been built`,
-    hint: 'build the front into that directory (it must contain index.html), or remove "web" to serve the scaffold at /' }];
+const realOf = (d) => (fs.existsSync(d) ? fs.realpathSync(d) : path.resolve(d));
+const within = (a, b) => a === b || a.startsWith(b + path.sep);
+
+/**
+ * What keeps the front from being served: its index.html is missing (it is built, not written), or the directory,
+ * resolved through symlinks, is or contains the app's own directory or the database's, or lies in the uploads.
+ * @param {string} graphFile
+ * @param {any} graph
+ * @param {{ dataDir: string, filesDir: string }} dirs where the database (and session key) and the uploads live
+ */
+export function webProblems(graphFile, graph, { dataDir, filesDir }) {
+  const root = webRoot(graphFile, graph);
+  const index = path.join(root, 'index.html');
+  if (!fs.existsSync(index) || !fs.statSync(index).isFile()) {
+    return [{ path: '/web', message: `${index} not found: "web" names the built front, and it has not been built`,
+      hint: 'build the front into that directory (it must contain index.html), or remove "web" to serve the scaffold at /' }];
+  }
+  const real = fs.realpathSync(root);
+  const hint = 'point "web" at the front\'s own build output, e.g. "web/dist"';
+  for (const [what, d] of [['the app directory', path.dirname(graphFile)], ['the database directory', dataDir]])
+    if (within(realOf(d), real)) return [{ path: '/web', message: `${real} holds ${what} (${realOf(d)}): it would be served at / to anyone`, hint }];
+  if (within(real, realOf(filesDir))) return [{ path: '/web', message: `${real} is inside the uploads (${realOf(filesDir)}): they are served only through /file`, hint }];
+  return [];
 }
 
 /**

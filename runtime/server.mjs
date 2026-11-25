@@ -158,11 +158,12 @@ async function bootData(graph, store, graphFile, filesDir) {
 export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [], noTimers = false, clock = systemClock }) {
   const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
   const errors = [...pluginErrors, ...validate(graph, registry)];
-  if (!errors.length && graph.web) errors.push(...webProblems(graphFile, graph)); // a declared front that was never built
-  if (errors.length) return invalidGraphServer(graph, errors, port, host);
-
   const dir = path.dirname(dbFile);
   filesDir = filesDir || path.join(dir, 'files');
+  // A declared front that was never built, or whose directory would expose the app's own files.
+  if (!errors.length && graph.web) errors.push(...webProblems(graphFile, graph, { dataDir: dir, filesDir }));
+  if (errors.length) return invalidGraphServer(graph, errors, port, host);
+
   const trace = (event) => {
     if (!traceFile) return;
     fs.appendFileSync(traceFile, JSON.stringify({ at: new Date().toISOString(), ...event }) + '\n');
