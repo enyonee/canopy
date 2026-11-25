@@ -1693,6 +1693,12 @@ const MUTATIONS = [
   { name: "SEC1: a field the entity's form fills is re-chosen by posting it on edit", file: "runtime/interp.mjs",
     find: "[statusField, own, ...unasked, ...fill]",
     replace: "[statusField, own, ...unasked]" },
+  { name: "SEC1: a related table with form: false still takes a POST of every field", file: "runtime/routes/rows.mjs",
+    find: "  if (!rel || rel.form === false) {",
+    replace: "  if (!rel) {" },
+  { name: "SEC1: a related table with form: true hands true to onlyWritable (a crash)", file: "runtime/routes/rows.mjs",
+    find: "rel.form === true ? null : rel.form || null",
+    replace: "rel.form || null" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run

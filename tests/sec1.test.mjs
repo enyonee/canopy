@@ -83,3 +83,25 @@ test('SEC1: a create or edit never writes a timestamp, a derived value or a fiel
     }
   } finally { s.close(); }
 });
+
+test('SEC1: a related table without a form takes no POST; `form: true` offers and takes every field', async () => {
+  const s = await boot(tmpGraph({
+    app: 'rel', data: { Trip: { name: 'text!' }, Note: { trip: 'ref:Trip!', body: 'text', secret: 'int=0' }, Seat: { trip: 'ref:Trip!', row: 'int=1', vip: 'int=0' } },
+    seed: { Trip: [{ name: 'Rome' }] },
+    override: { 'Trip.detail': { related: [{ entity: 'Note', via: 'trip', form: false }, { entity: 'Seat', via: 'trip', form: true }] } },
+  }));
+  try {
+    const detail = await s.get('/Trip/1');
+    assert.doesNotMatch(detail.html, /action="\/Trip\/1\/add\/Note"/, 'no add form is shown');
+    assert.match(detail.html, /action="\/Trip\/1\/add\/Seat"/);
+    for (const extra of [{}, json]) {
+      const r = await s.post('/Trip/1/add/Note', { body: 'x', secret: '7' }, extra);
+      assert.equal(r.status, 404, 'nothing to post to');
+    }
+    assert.equal((await s.app.store.list('Note', {})).length, 0);
+    const seat = await s.post('/Trip/1/add/Seat', { row: '4', vip: '1' }, json);
+    assert.equal(seat.status, 200, seat.html);
+    const [made] = await s.app.store.list('Seat', {});
+    assert.deepEqual([made.trip, made.row, made.vip], ['1', 4, 1], '`form: true` is every input of the child');
+  } finally { s.close(); }
+});
