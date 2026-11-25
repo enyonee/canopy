@@ -18,11 +18,6 @@
   profile fields (the same scoring the student side uses, symmetrically); "direct communication"
   is a message thread nested under the match (`apps/qna`'s answer-under-question shape, reused
   for a two-party thread instead of one-to-many).
-- Case 7 (direct communication), until the runtime fix SEC3 lands: a student or provider may still
-  `POST /Message` with `match` set to a match that is not theirs. This is a runtime defect, not a format miss:
-  `own` scopes reads by the one-hop path, but create does not check the parent of the new row. The check
-  asserts the refusal and so fails on exactly this ("another student posted into Maria's conversation").
-
 ## Misses
 
 - `block` — no conditional step, so a `StudentProfile.created`/`Provider.created` event can't
@@ -66,8 +61,12 @@
   duplicating what the display column already names. `Application` drops its `providerUser`
   the same way (`provider.user`); `student` there was already a direct `ref:User`, unaffected.
   Two real fields instead of four, one meaning each.
-- Messages are private to their match: `Message` is granted with `own: ["sender", "match.studentUser"]` to
-  students and `["sender", "match.providerUser"]` to providers. Before, it was granted without `own`, so any
-  student or provider listed and opened every conversation through `/Message` (JSON), and a direct
-  `POST /Message` could name anyone as `sender`; now `sender` is filled from the session. Check 7 asserts that
+- Messages are private to their match: `Message` is granted with the single path `own: "match.studentUser"` to
+  students and `own: "match.providerUser"` to providers. Before, it was granted without `own`, so any student or
+  provider listed and opened every conversation through `/Message` (JSON), and a direct `POST /Message` could
+  name anyone as `sender`. `sender` is not an own path on purpose: the runtime accepts a write when *any* own
+  path matches, and a sender filled from the session always matches, so a student could post into a match that
+  is not theirs. The sender is set by `fill: {"sender": "@me"}` instead — on the match page's related form and on
+  `Message.form` (fields `match`, `body`) for a direct `POST /Message`; with SEC3 the runtime also checks that
+  the new message's match is the poster's. Check 7 asserts that
   Alice and HealthBridge read none of Maria's thread with TechForward and that a posted `sender` is ignored.
