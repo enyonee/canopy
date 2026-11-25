@@ -1,4 +1,5 @@
-@import "tailwindcss";
+/* Classes are read from src/ only: the committed dist/ must not feed the next build (the CSS would drift). */
+@import "tailwindcss" source("../src");
 @import "tw-animate-css";
 @import "./gen/theme.css";
 
