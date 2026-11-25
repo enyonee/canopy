@@ -50,8 +50,7 @@ async function createRoute(ctx, entity, fields, formOv) {
   const { store, vc, role, user, perms, interp, trace, ok, graph } = ctx;
   if (!vc.can(entity, 'create')) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(entity, user, await ctx.body(), formFieldsFor(formOv, role));
-  interp.checkboxes(entity, submitted);
-  interp.dropEmptyUploads(entity, submitted);
+  ctx.submitted(entity, submitted);
   const values = { ...submitted, ...await ctx.resolveTop(formOv.fill || {}) };
   const own = perms.ownField(user, entity);
   if (own) values[own] = user.id;
@@ -88,8 +87,7 @@ async function updateRoute(ctx, entity, fields, formOv, id, row) {
   const { store, vc, role, user, perms, interp, trace, ok, graph } = ctx;
   if (!vc.can(entity, 'edit', row)) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(entity, user, await ctx.body(), formFieldsFor(formOv, role));
-  interp.checkboxes(entity, submitted);
-  interp.dropEmptyUploads(entity, submitted);
+  ctx.submitted(entity, submitted);
   const problems = await interp.validateValues(entity, submitted, { partial: true, existing: await store.raw(entity, id) });
   if (problems.length) {
     ctx.answer(400, await renderForm(ctx, entity, fields, { ...row, ...submitted }, 'edit', problems), { ok: false, status: 400, errors: problems });

@@ -25,6 +25,7 @@ import * as widgets from './routes/widgets.mjs';
 import * as schedule from './routes/schedule.mjs';
 import * as hooks from './routes/hooks.mjs';
 import * as settings from './routes/settings.mjs';
+import * as api from './routes/api.mjs';
 import { everyMs } from './schedule.mjs';
 import { flush } from './outbox.mjs';
 import { systemClock } from './clock.mjs';
@@ -48,10 +49,12 @@ function invalidGraphServer(graph, errors, port, host) {
 }
 
 async function dispatch(ctx) {
+  if (await api.handle(ctx)) return; // /api/*: its refusals and "who am I"; a route it serves goes on below, prefix gone
   if (widgets.handle(ctx)) return;
   if (await hooks.handle(ctx)) return; // a provider's webhook: signed, never a session — before the gate below
   if (await session.handle(ctx)) return;
   if (ctx.perms.enabled && !ctx.role) { ctx.deny('Please sign in.'); return; }
+  if (api.contract(ctx)) return;
   if (await views.handle(ctx)) return;
   if (await settings.handle(ctx)) return;
   if (await system.handle(ctx)) return;
@@ -124,7 +127,8 @@ function requestHandler({ graph, store, perms, sess, interp, trace, registry, fi
       if (e instanceof TooBig) { trace({ kind: 'refused', message: e.message }); ctx.send(413, noticePage(graph, ctx.vc, 'Too large', e.message)); return; }
       trace({ kind: 'error', message: String(e && e.message), stack: String(e && e.stack) });
       console.error(e && e.stack);
-      ctx.send(500, errorPage(graph, String(e && e.message)));
+      if (ctx.api) ctx.sendJson(500, { ok: false, status: 500, errors: [String(e && e.message)] });
+      else ctx.send(500, errorPage(graph, String(e && e.message)));
     }
   };
 }

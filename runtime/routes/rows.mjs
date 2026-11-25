@@ -73,8 +73,7 @@ async function addRelated(ctx, entity, fields, id, row) {
   if (!rel || rel.form === false) { ctx.answer(404, errorPage(graph, `no related ${parts[3]} on ${entity}`), { ok: false, status: 404, errors: [`no related ${parts[3]} on ${entity}`] }); return true; }
   if (!vc.can(entity, 'view', row) || !vc.can(child, 'create')) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(child, user, await ctx.body(), rel.form === true ? null : rel.form || null);
-  interp.checkboxes(child, submitted);
-  interp.dropEmptyUploads(child, submitted);
+  ctx.submitted(child, submitted);
   // "@row.*" in a related fill is the parent row (item 3): the child's own values
   // never had one, unlike a plain Entity.form's top-level "fill", which runs before
   // any row of this new entity exists.
