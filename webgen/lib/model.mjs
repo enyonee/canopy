@@ -228,6 +228,24 @@ function surfaceOf(graph, entity, e) {
   }) ? 'storefront' : 'workspace';
 }
 
+// The field a storefront card shows as stock ("Only 3 left", "Out of stock"): a stored integer named like the quantity on
+// hand (stock, inventory, inStock, onHand, available, remaining, seatsLeft). A bare quantity or qty is not one: in a
+// trading or an escrow app it is the size of the lot on offer, and "Only 1 left" would be untrue.
+const STOCK = /stock|inventory|on_?hand|available|remaining|left$/i;
+export const stockOf = (e) => e.fields.find((f) => f.type === 'integer' && !f.derived && STOCK.test(f.name))?.name ?? null;
+
+// The field that sorts a storefront's rows into categories (the chips, the cover's tone and icon, the label above the
+// name): a reference to a lookup entity, the first one among the list's columns. A reference to the users entity (a
+// seller, an author) or to whoever owns the row (`own` in roles.can) is a person, not a category; without a lookup
+// reference there is no category, and each row gets its own tone.
+export function categoryOf(graph, entity, e) {
+  const r = graph.roles || {};
+  const owners = new Set(Object.values(r.can || {}).map((g) => g?.[entity]?.own).filter(Boolean));
+  const lookup = (f) => f.kind === 'ref' && f.target && f.target !== r.entity && !owners.has(f.name) && graph.data[f.target];
+  const byName = (n) => e.fields.find((f) => f.name === n);
+  return (e.list.columns.map(byName).find((f) => f && lookup(f)) ?? e.fields.find(lookup))?.name ?? null;
+}
+
 // The storefront's front page: the list's own intro, else the first page's words; the developer `note` is not used.
 function heroOf(graph, entities) {
   const home = Object.values(entities).find((e) => `/${e.name}` === graph.home && e.surface === 'storefront');
@@ -240,7 +258,7 @@ function heroOf(graph, entities) {
 /** The model of an app: what src/gen/app.ts of the generated project holds. */
 export function buildModel(graph, openapi, config = {}) {
   const entities = Object.fromEntries(Object.keys(graph.data).map((e) => [e, entityModel(graph, openapi, e)]));
-  for (const [name, e] of Object.entries(entities)) e.surface = surfaceOf(graph, name, e);
+  for (const [name, e] of Object.entries(entities)) Object.assign(e, { surface: surfaceOf(graph, name, e), stock: stockOf(e), category: categoryOf(graph, name, e) });
   const lists = listsModel(graph, entities);
   const dashboards = (graph.dashboards || []).map((d) => dashboardModel(graph, openapi, entities, d));
   const pages = pagesModel(graph);
