@@ -46,7 +46,7 @@ never work around the checker.
 | `int=0` | integer |
 | `money=9.99` | money: written and read as `12.34`, stored as integer minor units, rendered `12.34` |
 | `date=today` | calendar date `YYYY-MM-DD`; `today` is a default |
-| `time=now` | ISO timestamp; never on forms; `now` is a default |
+| `time=now` | ISO timestamp; never on forms, and never written by a form's POST either; `now` is a default. A `time!` without a default can only be set by a step (`db.createRow`/`db.update` values), an event or a seed: a create form of that entity answers 400 "… is required" |
 | `enum[a,b,c]=a` | closed set with a default; renders as a select and as a filter |
 | `ref:Entity!` | reference; renders as a select of the target's label (its first text field) |
 | `file` | an uploaded file; forms become multipart; the value renders as a download link. An empty upload leaves an optional field unset (or unchanged on edit, exactly like a blank password); a **required** file/image field with an empty upload is a validation error ("… is required"), including on edit — leaving it blank never silently keeps a required file |

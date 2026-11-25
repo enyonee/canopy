@@ -105,3 +105,18 @@ test('SEC1: a related table without a form takes no POST; `form: true` offers an
     assert.deepEqual([made.trip, made.row, made.vip], ['1', 4, 1], '`form: true` is every input of the child');
   } finally { s.close(); }
 });
+
+test('SEC1: a `time!` without a default is set by an action, never by a create form (FORMAT.md, field kinds)', async () => {
+  const s = await boot(tmpGraph({
+    app: 't', data: { Task: { name: 'text!', at: 'time!' } },
+    actions: [{ name: 'plan', title: 'Plan', do: [{ block: 'db.createRow', entity: 'Task', values: { name: '= values.name', at: '@now' } }] }],
+  }));
+  try {
+    const viaForm = await s.post('/Task', { name: 'x', at: '2026-01-01T00:00:00.000Z' }, json);
+    assert.equal(viaForm.status, 400); assert.match(viaForm.html, /at is required/);
+    const viaAction = await s.post('/action/plan', { name: 'y' }, json);
+    assert.equal(viaAction.status, 200, viaAction.html);
+    const [task] = await s.app.store.list('Task', {});
+    assert.equal(task.name, 'y'); assert.match(String(task.at), /^\d{4}-\d\d-\d\dT/);
+  } finally { s.close(); }
+});
