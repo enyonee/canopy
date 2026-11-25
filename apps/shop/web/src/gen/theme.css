@@ -50,9 +50,9 @@
   --tone-3-bg: oklch(0.940 0.037 226.0);
   --tone-3-fg: oklch(0.420 0.080 226.0);
   --tone-3-dot: oklch(0.580 0.111 226.0);
-  --tone-4-bg: oklch(0.940 0.037 106.0);
-  --tone-4-fg: oklch(0.420 0.088 106.0);
-  --tone-4-dot: oklch(0.580 0.123 106.0);
+  --tone-4-bg: oklch(0.940 0.037 151.0);
+  --tone-4-fg: oklch(0.420 0.100 151.0);
+  --tone-4-dot: oklch(0.580 0.125 151.0);
   --tone-5-bg: oklch(0.940 0.029 16.0);
   --tone-5-fg: oklch(0.420 0.100 16.0);
   --tone-5-dot: oklch(0.580 0.125 16.0);
@@ -110,9 +110,9 @@
   --tone-3-bg: oklch(0.300 0.044 226.0);
   --tone-3-fg: oklch(0.850 0.098 226.0);
   --tone-3-dot: oklch(0.720 0.125 226.0);
-  --tone-4-bg: oklch(0.300 0.044 106.0);
-  --tone-4-fg: oklch(0.850 0.100 106.0);
-  --tone-4-dot: oklch(0.720 0.125 106.0);
+  --tone-4-bg: oklch(0.300 0.044 151.0);
+  --tone-4-fg: oklch(0.850 0.100 151.0);
+  --tone-4-dot: oklch(0.720 0.125 151.0);
   --tone-5-bg: oklch(0.300 0.044 16.0);
   --tone-5-fg: oklch(0.850 0.082 16.0);
   --tone-5-dot: oklch(0.720 0.125 16.0);

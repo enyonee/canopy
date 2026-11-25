@@ -33,7 +33,10 @@ test('routes: list, new, detail and edit per entity; saved lists, dashboards, si
 });
 
 test('the theme of the graph is the palette of the front end', () => {
-  assert.match(files.get('src/gen/theme.css'), /--brand-bg: seashell;\n  --brand: darkslateblue;/);
+  const css = files.get('src/gen/theme.css');
+  assert.match(css, /theme \(background: seashell, accent: darkslateblue\)/);
+  assert.match(css, /^:root \{\n[^}]*--primary: oklch\(0\.414 /m, 'the accent darkslateblue is the solid colour (L 0.414 in OKLCH)');
+  assert.match(css, /^\.dark \{/m);
   assert.match(files.get('index.html'), /<meta name="theme-color" content="darkslateblue" \/>/);
   assert.match(files.get('index.html'), /<title>Shop<\/title>/);
 });

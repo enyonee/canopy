@@ -92,12 +92,12 @@ const ui = (page) => ({
     await settle(page);
   },
   rowText: (name) => page.evaluate((n) => {
-    const r = [...document.querySelectorAll('main tr, main li[data-row-id]')].find((e) => e.offsetParent !== null && e.innerText.includes(n));
+    const r = [...document.querySelectorAll('main tr, main [data-row-id]')].find((e) => e.offsetParent !== null && e.innerText.includes(n));
     return r ? r.innerText.replace(/\s+/g, ' ') : null;
   }, name),
   rowAction: async (name, label) => {
     const ok = await page.evaluate((n, l) => {
-      const r = [...document.querySelectorAll('main tr, main li[data-row-id]')].find((e) => e.offsetParent !== null && e.innerText.includes(n));
+      const r = [...document.querySelectorAll('main tr, main [data-row-id]')].find((e) => e.offsetParent !== null && e.innerText.includes(n));
       const b = r && [...r.querySelectorAll('button')].find((x) => (x.getAttribute('aria-label') || x.innerText).trim().startsWith(l));
       if (b) { b.scrollIntoView({ block: 'center' }); b.setAttribute('data-e2e-target', '1'); }
       return Boolean(b);

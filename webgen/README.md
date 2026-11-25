@@ -50,18 +50,28 @@ webgen picks each entity's look from the graph (`surface` in the model, `lib/mod
 
 Everything else is a **workspace**: own records such as orders, and admin CRUD.
 
-- **Storefront.** A hero on the home list, in the theme's gradient. Its title is the list title. Its subtitle is the
-  list's `intro`, else the first page's heading or text, else counts. The developer `note` is not shown. The first
-  reference filter becomes the hero's quick links. Cards have a cover: an `image` field, or a deterministic SVG
-  from the hash of the name with an icon from the category name. Each card shows a category badge, the price large
-  and a stock chip (an int named stock, quantity, …). The product page shows the cover, or a gallery when there
-  are several `image` fields. Shop-internal booleans are hidden from shoppers.
-- **Workspace.** Tables with avatars and subtitles, zebra rows and a sticky header. Status colours follow the order
-  of `states`, and charts of a status group use the same colours. KPI cards have an icon. A card whose entity the
-  dashboard's `period` narrows gets a 6-month sparkline: six GETs of the same dashboard, run in parallel and cached
-  by TanStack Query. The sparkline is drawn only when at least 3 months are non-zero, and the trend shows only
-  against a non-zero previous month. Charts use the theme palette with gradient fills. The menu is in groups:
-  Store, Workspace, Insights, Pages, Admin.
+- **Storefront.** The catalogue opens with a title and a count, then category chips (more than six become a select),
+  search and sort, and a grid of 2/3/4 columns. Cards keep the name and the price on two lines. The only badges are
+  the exceptions (few left, sold out), and a quick "+" appears for an action the viewer may run. Pictures use a 4:5
+  frame. Without an `image` field the card gets a lower 4:3 cover in the category's tone, with its icon. A hero shows
+  only for a large catalogue (12 or more rows and 4 or more categories). The product page has the picture on 7/12
+  (without photos, a square cover of at most 460 px plus the details as tiles) and a sticky buy box on 5/12: price,
+  stock, one filled 48 px button, and tabs for the description and the details. On phones the buy box is a sticky
+  bar. A guest gets "Sign in to …" only there. A record whose related rows point at storefront rows (an order, a
+  cart) is shown as lines on 8/12 and a sticky summary on 4/12. The status stepper drops the initial status once the
+  record has left it.
+- **Workspace.** Tables have 48 px rows, a sticky header, an avatar with a subtitle in the first column, status
+  badges with a dot, a row menu, and "1–10 of N". The search and the filters sit above the table in the same card.
+  KPI cards show the value large, a delta badge against the previous month (only when that month is not zero) and a
+  sparkline (only with 7 or more months of history). The history is eight monthly GETs of the same dashboard, run in
+  parallel and cached. Charts: an area for time, bars for categories, status groups in their status colours, and a
+  big number or a table when there are fewer than 3 groups. Each chart has a "Show table" button. The period is a
+  range picker in a popover. The sidebar runs the full height, folds to icons, and groups its items as Store,
+  Workspace, Insights and Admin. One or two items go in the header instead.
+
+**Colours.** `lib/theme.mjs` builds 12-step OKLCH scales from the graph's two theme colours, in light and dark. It
+checks every pair the screens draw against WCAG 2.2 (68 per theme: text 4.5:1, UI parts and chart marks 3:1) and
+moves the lightness until each pair passes. `test/theme.test.mjs` checks every app in `apps/`.
 
 The font is Inter, bundled from `@fontsource-variable/inter` (OFL-1.1), with no CDN. Motion respects
 `prefers-reduced-motion`.

@@ -77,7 +77,9 @@ function palette(bgBase, accent, dark) {
   const neutral = { bg: n[3], fg: ensure(n[11], n[3], 4.5, dark ? 1 : -1), dot: ensure(n[9], card, 3, dark ? 1 : -1) };
   t['tone-0-bg'] = neutral.bg; t['tone-0-fg'] = neutral.fg; t['tone-0-dot'] = neutral.dot;
   TONE_TURNS.forEach((turn, i) => {
-    const s = tone((accent.h + turn) % 360, chroma, card, dark);
+    // Yellow-greens (85–135°) turn muddy as pale backgrounds: such a tone moves on to green.
+    const h0 = (accent.h + turn) % 360;
+    const s = tone(h0 > 85 && h0 < 135 ? (h0 + 45) % 360 : h0, chroma, card, dark);
     t[`tone-${i + 1}-bg`] = s.bg; t[`tone-${i + 1}-fg`] = s.fg; t[`tone-${i + 1}-dot`] = s.dot;
   });
   return t;
