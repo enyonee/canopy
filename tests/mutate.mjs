@@ -117,7 +117,7 @@ const MUTATIONS = [
   { name: 'every password hashes with the same salt', file: 'runtime/auth.mjs',
     find: "  const salt = crypto.randomBytes(8).toString('hex');", replace: "  const salt = 'abcd';" },
   { name: '"own" rows are not enforced', file: 'runtime/auth.mjs',
-    find: "  if (unscoped || !e.own || !row || op === 'create') return true;\n  return user ? ownedMatch(parents, store, entity, row, e.own, user.id) : false;\n}",
+    find: "  if (unscoped || !e.own || !row) return true;\n  return user ? ownedMatch(parents, store, entity, row, e.own, user.id) : false;\n}",
     replace: "  return true;\n}" },
   { name: 'the go:* and do:* wildcards stop matching', file: 'runtime/auth.mjs',
     find: "  || (op.includes(':') && ops.includes(`${op.split(':')[0]}:*`));", replace: "  || false;" },
