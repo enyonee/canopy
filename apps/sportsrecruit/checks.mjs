@@ -5,6 +5,15 @@ let athleteEmail = 'ann.sprinter@sportsrecruit.test';
 let athletePassword = 'sprint123';
 let postedJobId = null;
 
+// A JSON read as a signed-in user, on a session of its own (the check's cookie jar answers HTML).
+const jsonAs = async (base, login, password, p) => {
+  const signIn = await fetch(`${base}/login`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ login, password }).toString() });
+  const cookie = (signIn.headers.get('set-cookie') || '').split(';')[0];
+  const res = await fetch(base + p, { headers: { cookie, accept: 'application/json' } });
+  return { status: res.status, body: await res.json() };
+};
+
 export const checks = [
   { task: 'Attempt to register as an athlete on the platform using the provided registration form',
     run: async ({ post, get, must, flashOf }) => {
@@ -66,9 +75,17 @@ export const checks = [
     } },
 
   { task: 'Send a message from a sports organization to a registered athlete through the platform\'s communication feature',
-    run: async ({ asGuest, login, get, post, follow, idOf, must, flashOf }) => {
+    run: async ({ base, asGuest, login, get, post, follow, idOf, must, flashOf }) => {
       asGuest();
       must((await login('falcons@sportsrecruit.test', 'falcons123')).status === 303, 'organization could not sign back in');
+      // Ann's application is to a Falcons job: the Falcons see it, another organization sees none of it.
+      const theirs = await jsonAs(base, 'falcons@sportsrecruit.test', 'falcons123', '/Application');
+      must(theirs.status === 200 && theirs.body.total === 1 && String(theirs.body.rows[0].job) === String(postedJobId),
+        `the Falcons do not see exactly the application to their job: ${JSON.stringify(theirs.body).slice(0, 200)}`);
+      const other = await jsonAs(base, 'harborhawks@sportsrecruit.test', 'hawks123', '/Application');
+      must(other.status === 200 && other.body.total === 0, `another organization reads ${other.body.total} application(s) to the Falcons' jobs`);
+      const one = await jsonAs(base, 'harborhawks@sportsrecruit.test', 'hawks123', `/Application/${theirs.body.rows[0].id}`);
+      must(one.status === 403, `another organization opened an application to the Falcons' job: ${one.status}`);
       const athletes = await get('/User?role=athlete');
       const athleteId = idOf(athletes.html, athleteEmail, 'User');
       const sent = await follow(`/User/${athleteId}/action/contact`, { body: 'Congratulations on your application — are you available for a trial next week?' });
@@ -79,7 +96,7 @@ export const checks = [
       must(/<td>1<\/td>/.test(profile.html), `the athlete's unread notification did not increase: ${profile.html}`);
       const inbox = await get('/Message');
       must(/available for a trial next week/.test(inbox.html) && />New</.test(inbox.html), 'the message did not reach the athlete\'s inbox as unread');
-      return 'organization message reached the athlete\'s inbox with an unread notification (0 → 1)';
+      return 'organization message reached the athlete\'s inbox with an unread notification (0 → 1); another organization sees none of the applications';
     } },
 
   colorCheck('ghostwhite', 'slategray'),
