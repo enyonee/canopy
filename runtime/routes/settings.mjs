@@ -12,17 +12,11 @@ import { settingsView } from '../render/settings.mjs';
 import { secretSlots, secretName, prepare, deliverRow } from '../connectors/engine.mjs';
 import { redact } from '../connectors/redact.mjs';
 import { CLOSED } from '../connectors/backoff.mjs';
+import { sameOrigin } from './context.mjs';
 
 const DAY_MS = 24 * 3600 * 1000;
 const MAX_SECRET = 4096;
 const NONE = { sent: 0, failed: 0, unknown: 0, drift: 0 };
-
-/** Is this POST from the page's own site? The Origin (else the Referer) names the same host the request was sent to. */
-function sameOrigin(req) {
-  const from = req.headers.origin ?? req.headers.referer;
-  if (!from) return false;
-  try { return new URL(from).host === req.headers.host; } catch { return false; } // allow-swallow: a header that is not a URL is a cross-site request, refused
-}
 
 // Every value the store holds, for masking an error; an unreadable store holds nothing that could leak.
 function held(secrets) {

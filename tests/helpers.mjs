@@ -62,13 +62,22 @@ export async function boot(graphFile = 'tests/fixtures/kitchen.json', opts = {})
     keep(r);
     return { status: r.status, location: r.headers.get('location') || '', html: await r.text() };
   };
+  // An /api POST as a frontend on this site sends it: a JSON body and the Origin of the page. `raw` sends text as is.
+  // A header given as undefined is not sent at all.
+  const json = async (p, body = {}, extra = {}, { raw = null } = {}) => {
+    const sent = Object.fromEntries(Object.entries({ 'content-type': 'application/json', origin: base, ...headers(), ...extra }).filter(([, v]) => v !== undefined));
+    const r = await fetch(base + p, { method: 'POST', redirect: 'manual', headers: sent, body: raw ?? JSON.stringify(body) });
+    keep(r);
+    const text = await r.text();
+    return { status: r.status, headers: r.headers, text, body: text ? JSON.parse(text) : null };
+  };
   const follow = async (p, body) => { const r = await post(p, body); return get(r.location || p); };
   const login = (user, password) => post('/login', { login: user, password });
   const asGuest = () => { cookie = ''; };
   const trace = () => fs.readFileSync(traceFile, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
   // fetch keeps connections alive; without dropping them close() never resolves.
   const close = () => { app.server.closeAllConnections(); app.server.close(); drop(dir); };
-  return { app, base, get, post, upload, follow, login, asGuest, trace, dir, close, net };
+  return { app, base, get, post, json, upload, follow, login, asGuest, trace, dir, close, net };
 }
 
 export const rows = (html) => [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]).filter((r) => r.includes('<td>'));

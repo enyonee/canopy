@@ -14,6 +14,8 @@ const readText = (req) => new Promise((resolve) => {
 });
 
 export class TooBig extends Error {}
+// A JSON body (/api) that is not one flat object of plain values: the answer is a 400, never a guess.
+export class BadBody extends Error {}
 
 // The largest body a webhook may send.
 const MAX_RAW = 1024 * 1024;
@@ -63,6 +65,31 @@ function parseBody(req, filesDir) {
   return readText(req).then((text) => Object.fromEntries(new URLSearchParams(text)));
 }
 
+/** Is this POST from the page's own site? The Origin (else the Referer) names the same host the request was sent to. */
+export function sameOrigin(req) {
+  const from = req.headers.origin ?? req.headers.referer;
+  if (!from) return false;
+  try { return new URL(from).host === req.headers.host; } catch { return false; } // allow-swallow: a header that is not a URL is a cross-site request, refused
+}
+
+// The largest JSON body /api reads.
+const MAX_JSON = 1024 * 1024;
+
+// A JSON body as the values a form would have posted: every value a string, as on the form path, so one validation path
+// reads both. A number or a boolean is its text ("12.5", "true"), null is the empty value; an array or an object is refused.
+async function jsonBody(req) {
+  const text = (await rawBody(req, MAX_JSON)).toString('utf8');
+  let data;
+  try { data = JSON.parse(text); } catch { throw new BadBody('the body is not JSON'); }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new BadBody('the body must be a JSON object');
+  const out = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v !== null && typeof v === 'object') throw new BadBody(`"${k}" must be a string, a number, a boolean or null`);
+    out[k] = v === null ? '' : String(v);
+  }
+  return out;
+}
+
 // "//evil.test" and "/\evil.test" are links off this site; only a single-slash path stays.
 const safeNext = (to) => (typeof to === 'string' && /^\/(?![/\\])[^\s\x00-\x1f]*$/.test(to) ? to : '/');
 
@@ -91,11 +118,23 @@ function createListHelpers(url, store, sendCsv, vc) {
   return { paged, sortOf, exportRows };
 }
 
+// What a submitted body says about an entity's fields. A form's unchecked box sends nothing and means false, and its empty
+// upload means "unchanged"; a JSON body (/api) says what it means (an absent key is absent, the default or the stored value
+// stays) and cannot carry a file, so a file field it names is dropped rather than pointed at a file already on disk.
+const submittedOf = (api, store, interp) => (entity, values) => {
+  if (!api) return interp.dropEmptyUploads(entity, interp.checkboxes(entity, values));
+  for (const f of store.fields[entity]) if (f.type.upload) delete values[f.name];
+  return values;
+};
+
 export async function createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
   const parts = url.pathname.split('/').filter(Boolean);
   const wantsCsv = parts.length > 0 && parts[parts.length - 1].endsWith('.csv');
   if (wantsCsv) parts[parts.length - 1] = parts[parts.length - 1].slice(0, -4);
-  const wantsJSON = (req.headers.accept || '').includes('application/json');
+  // /api/<path> is <path> answered in JSON whatever the Accept header says: the prefix goes before any route reads `parts`.
+  const api = parts[0] === 'api';
+  if (api) parts.shift();
+  const wantsJSON = api || (req.headers.accept || '').includes('application/json');
   const flash = url.searchParams.get('ok') || '';
   const headers = {};
 
@@ -131,15 +170,15 @@ export async function createContext({ req, res, url, graph, store, perms, sess, 
   };
 
   let bodyOnce = null;
-  const body = () => (bodyOnce ??= parseBody(req, filesDir));
+  const body = () => (bodyOnce ??= api ? jsonBody(req) : parseBody(req, filesDir));
   const resolveTop = interp.resolve({ user, values: {} });
   const { paged, sortOf, exportRows } = createListHelpers(url, store, sendCsv, vc);
 
   return {
-    req, res, url, parts, flash, wantsCsv, wantsJSON, headers,
+    req, res, url, parts, api, flash, wantsCsv, wantsJSON, headers,
     graph, store, perms, sess, registry, interp, trace, filesDir, fetchImpl, clock, env, graphFile,
     user, role, vc, ownWhere, deny,
     send, redirect, ok, sendCsv, exportRows, sendJson, answer,
-    body, rawBody: () => rawBody(req), resolveTop, paged, sortOf, safeNext,
+    body, rawBody: () => rawBody(req), resolveTop, paged, sortOf, safeNext, submitted: submittedOf(api, store, interp),
   };
 }
