@@ -59,10 +59,19 @@ function palette(bgBase, accent, dark) {
   t.ring = ensure(a[8], background, 3, dark ? 1 : -1);
   t.sidebar = dark ? n[1] : n[3];
   t.brand = fixed; // the accent itself, for gradients and marks
+  // The far end of the accent gradient (logo mark, hero): the accent turned 30°, kept readable under the same text.
+  t['brand-end'] = ensure({ ...fixed, h: (fixed.h + 30) % 360 }, onIt, 4.5, onIt.l > 0.5 ? -1 : 1);
   t['brand-soft'] = a[4];
   t['sidebar-border'] = n[6];
-  t['accent-text'] = ensure(a[11], card, 4.5, dark ? 1 : -1); // accent-coloured text: links
+  // Accent-coloured text (links, the active menu item, the current step, initials on a tinted circle): readable on
+  // every surface it sits on, not only the card.
+  const d = dark ? 1 : -1;
+  t['accent-text'] = [card, background, a[3], a[4], n[3]].reduce((o, on) => ensure(o, on, 4.5, d), a[11]);
   t.destructive = ensure({ l: dark ? 0.68 : 0.55, c: 0.19, h: 25 }, card, 4.5, dark ? 1 : -1);
+  // A destructive button: the red as a solid, with its text by the same rule as the primary's.
+  const redOn = onSolid(t.destructive, 25);
+  t['destructive-solid'] = ensure(t.destructive, redOn, 4.5, redOn.l > 0.5 ? -1 : 1);
+  t['destructive-foreground'] = redOn;
   // Charts: one hue (the accent) at three depths plus two neutrals, each readable on a card (3:1, WCAG 1.4.11).
   t['chart-1'] = ensure(fixed, card, 3, dark ? 1 : -1);
   t['chart-2'] = ensure(inGamut({ l: dark ? 0.75 : 0.7, c: accent.c * 0.7, h: accent.h }), card, 3, dark ? 1 : -1);
@@ -88,10 +97,12 @@ function palette(bgBase, accent, dark) {
 // The pairs the screens draw, with the WCAG minimum each needs: text 4.5:1, UI parts and chart marks 3:1.
 const PAIRS = [
   ['foreground', 'background', 4.5], ['foreground', 'card', 4.5], ['muted-foreground', 'background', 4.5], ['muted-foreground', 'card', 4.5],
-  ['muted-foreground', 'muted', 4.5], ['primary-foreground', 'primary', 4.5], ['secondary-foreground', 'secondary', 4.5], ['accent-text', 'card', 4.5],
+  ['muted-foreground', 'muted', 4.5], ['primary-foreground', 'primary', 4.5], ['secondary-foreground', 'secondary', 4.5], ['accent-text', 'card', 4.5], ['accent-text', 'background', 4.5],
+  ['accent-text', 'secondary', 4.5], ['accent-text', 'brand-soft', 4.5], ['accent-text', 'muted', 4.5], ['accent-text', 'sidebar', 4.5],
+  ['primary-foreground', 'brand-end', 4.5], ['destructive-foreground', 'destructive-solid', 4.5],
   ['destructive', 'card', 4.5], ['primary', 'background', 3], ['input', 'background', 3], ['ring', 'background', 3],
   ['chart-1', 'card', 3], ['chart-2', 'card', 3], ['chart-3', 'card', 3], ['chart-4', 'card', 3], ['chart-5', 'card', 3],
-  ...['success', 'warning', 'danger'].map((s) => [`${s}-fg`, `${s}-bg`, 4.5]),
+  ...['success', 'warning', 'danger'].flatMap((s) => [[`${s}-fg`, `${s}-bg`, 4.5], [`${s}-fg`, 'card', 4.5]]),
   ...[0, 1, 2, 3, 4, 5, 6].flatMap((i) => [[`tone-${i}-fg`, `tone-${i}-bg`, 4.5], [`tone-${i}-dot`, 'card', 3]]),
 ];
 

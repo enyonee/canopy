@@ -25,7 +25,7 @@ function ListSection({ id, limit, viewer }: { id: string; limit?: number; viewer
   if (!canSee(viewer, l.roles)) return null;
   return (
     <Card className="gap-0 overflow-clip pb-0">
-      <CardHeader className="border-b pb-4"><CardTitle><Link to={`/list/${id}`} className="hover:text-primary">{l.title}</Link></CardTitle></CardHeader>
+      <CardHeader className="border-b pb-4"><CardTitle><Link to={`/list/${id}`} className="hover:text-accent-text">{l.title}</Link></CardTitle></CardHeader>
       {data.isError ? <div className="p-4"><ErrorState error={data.error} /></div>
         : <DataTable entity={e} rows={(data.data?.rows ?? []).slice(0, limit ?? Infinity)} columns={l.columns} rowActions={[]} viewer={viewer} caption={l.title} loading={data.isPending} />}
     </Card>

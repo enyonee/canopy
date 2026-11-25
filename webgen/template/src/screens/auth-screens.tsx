@@ -57,7 +57,7 @@ export function LoginScreen() {
   const type = /email/i.test(roles.login) ? 'email' : 'text';
   return (
     <AuthFrame title={`Sign in to ${app.title}`} description="Welcome back. Enter your details to continue."
-      footer={roles.register ? <>New here? <Link to="/register" className="font-medium text-primary underline-offset-4 hover:underline">Create an account</Link></> : null}>
+      footer={roles.register ? <>New here? <Link to="/register" className="font-medium text-accent-text underline-offset-4 hover:underline">Create an account</Link></> : null}>
       <form onSubmit={submit} noValidate className="grid gap-5">
         {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
         <div className="grid gap-2">
@@ -82,7 +82,7 @@ export function RegisterScreen() {
   const entity = app.entities[roles.entity];
   return (
     <AuthFrame title="Create your account" description={`Join ${app.title} in a minute.`}
-      footer={<>Already have an account? <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">Sign in</Link></>}>
+      footer={<>Already have an account? <Link to="/login" className="font-medium text-accent-text underline-offset-4 hover:underline">Sign in</Link></>}>
       <EntityForm entity={entity} names={roles.registerFields} viewer={viewer} submit="Create account" compact
         onSubmit={async (body) => {
           const r = await endpoints.register(body);
