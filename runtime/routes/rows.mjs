@@ -84,6 +84,7 @@ async function addRelated(ctx, entity, fields, id, row) {
   if (own) values[own] = user.id;
   const problems = await interp.validateValues(child, values);
   if (problems.length) { ctx.answer(400, await renderDetail(ctx, entity, fields, row, problems.join('; ')), { ok: false, status: 400, errors: problems }); return true; }
+  if (!await perms.mayWrite(user, child, 'create', values)) { ctx.deny(); return true; } // the parent comes from the path: it must be one you own
   let kid;
   try {
     await interp.attempt(async (tx) => {

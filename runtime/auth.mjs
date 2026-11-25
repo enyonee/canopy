@@ -153,7 +153,8 @@ function entitySpecFor(spec, role, entity) {
 
 const ownedMatch = (parents, store, entity, row, paths, userId) => paths.some((p) => matchesPath(parents, store, entity, row, p, userId));
 
-// May this user do `op` on `entity`, and on this particular row if one is given?
+// May this user do `op` on `entity`, and on this particular row if one is given? For `create` the row is
+// the one about to be inserted (`mayWrite`, below): an owned create must leave a row its writer owns.
 function canOp(spec, parents, store, roleOf, user, entity, op, row) {
   if (!spec) return true;
   const role = roleOf(user);
@@ -162,7 +163,7 @@ function canOp(spec, parents, store, roleOf, user, entity, op, row) {
   if (!e) return false;
   const unscoped = opAllowed(e.all, op);
   if (!unscoped && !opAllowed(e.ops, op)) return false;
-  if (unscoped || !e.own || !row || op === 'create') return true;
+  if (unscoped || !e.own || !row) return true;
   return user ? ownedMatch(parents, store, entity, row, e.own, user.id) : false;
 }
 
@@ -206,19 +207,28 @@ export function permissions(graph, store = null) {
   const spec = graph.roles;
   const roleOf = (user) => (user ? String(user[spec.role]) : spec.anonymous || null);
   const parents = new Parents();
+  // Before `can`/`ownOk` judge rows of `entity` for `user`: the load phase of their ownership checks.
+  // A one-hop `own` path reads the row's parent, so the parents of all `rows` are loaded here, in one
+  // query per path; a row that was not primed makes the check throw `not primed`.
+  const prime = async (user, entity, rows) => {
+    if (!spec || !store) return;
+    const e = entitySpecFor(spec, roleOf(user), entity);
+    for (const p of e?.own || []) if (p.length === 2) await primePath(parents, store, entity, rows, p[0]);
+  };
   return {
     enabled: Boolean(spec),
     roleOf,
     isAdmin: (user) => Boolean(spec) && spec.can?.[roleOf(user)] === '*',
-    // Before `can`/`ownOk` judge rows of `entity` for `user`: the load phase of their ownership checks.
-    // A one-hop `own` path reads the row's parent, so the parents of all `rows` are loaded here, in one
-    // query per path; a row that was not primed makes the check throw `not primed`.
-    async prime(user, entity, rows) {
-      if (!spec || !store) return;
-      const e = entitySpecFor(spec, roleOf(user), entity);
-      for (const p of e?.own || []) if (p.length === 2) await primePath(parents, store, entity, rows, p[0]);
-    },
+    prime,
     can: (user, entity, op, row = null) => canOp(spec, parents, store, roleOf, user, entity, op, row),
+    // The write side of `own`: may `user` leave `row` — the values a create, an edit or a related add is about
+    // to store, after its input is applied — in place? Owned reads already stop at rows of others; without
+    // this a one-hop row ("order.customer") could be written under, or moved onto, another user's parent.
+    // A loader: one query per one-hop reference, for the one fresh row it judges.
+    async mayWrite(user, entity, op, row) {
+      await prime(user, entity, [row]);
+      return canOp(spec, parents, store, roleOf, user, entity, op, row);
+    },
     ownOk: (user, entity, row, op = null) => ownOkFor(spec, parents, store, roleOf, user, entity, row, op),
     ownField: (user, entity) => ownFieldFor(spec, roleOf, user, entity),
     // The explicit loader of "which rows does this viewer own": queries when `own` is a one-hop or
