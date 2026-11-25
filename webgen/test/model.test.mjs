@@ -124,3 +124,19 @@ test('undoing transitions are found by whole words: close, closed and avoid are 
   for (const n of ['cancel', 'reject', 'lose', 'markLost', 'void', 'decline_offer', 'refundOrder']) assert.equal(undoes(n), true, n);
   for (const n of ['close', 'closed', 'closeDeal', 'avoid', 'avoidance', 'place', 'pay', 'ship', 'deliver', 'win', 'reopen', 'qualify']) assert.equal(undoes(n), false, n);
 });
+
+test('stock and category: a quantity on hand and a lookup reference, not a lot size or a person', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const app = (n) => buildModel(JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'apps', n, 'app.json'), 'utf8')), null);
+  const shop = app('shop').entities.Product;
+  assert.deepEqual([shop.stock, shop.category], ['stock', 'category'], 'the shop keeps its stock chip and its categories');
+  // trading: an opportunity's quantity is the number of lots offered; "Only 1 left" on a Bitcoin block would be untrue.
+  const trading = app('trading').entities;
+  assert.equal(trading.Opportunity.stock, null);
+  assert.equal(trading.Bid.stock, null);
+  // escrow: the product's only reference is its seller (the users entity, and the owner in roles.can): no category.
+  const escrow = app('escrow').entities;
+  assert.equal(escrow.Product.category, null);
+  assert.equal(escrow.Product.stock, null, 'quantity is text there');
+});

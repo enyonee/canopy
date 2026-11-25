@@ -28,14 +28,14 @@ import { categoryTone, iconWord, stockField } from '@/lib/visual';
 import { cn } from '@/lib/utils';
 import { Pager, useFilterChoices, useListState, type Spec } from '@/screens/list-screen';
 
-const categoryOf = (entity: Entity, columns: readonly string[]) =>
-  columns.map((c) => entity.fields.find((f) => f.name === c)).find((f) => f?.kind === 'ref') ?? entity.fields.find((f) => f.kind === 'ref') ?? null;
+/** The model's category field (a reference to a lookup entity, never a person), or null. */
+const categoryOf = (entity: Entity) => entity.fields.find((f) => f.name === entity.category) ?? null;
 
-/** The picture of a row: its first image field, else a neutral cover with the icon of its category. */
+/** The picture of a row: its first image field, else a cover in its category's tone (its own tone without categories). */
 export function ProductCover({ entity, row, category, className, size }: { entity: Entity; row: Row; category: string | null; className?: string; size?: 'sm' | 'md' | 'lg' }) {
   const image = entity.fields.find((f) => f.kind === 'image');
   if (image && row[image.name]) return <img src={`/file/${entity.name}/${row.id}/${image.name}`} alt="" loading="lazy" className={cn('bg-muted object-cover', className)} />;
-  return <Cover name={rowName(entity, row)} icon={iconWord(category, rowName(entity, row), entity.name)} tone={categoryTone(category)} className={className} size={size} />;
+  return <Cover name={rowName(entity, row)} icon={iconWord(category, rowName(entity, row), entity.name)} tone={categoryTone(entity.category ? category : rowName(entity, row))} className={className} size={size} />;
 }
 
 /** Only the exceptions are badges: few left (amber), none left (grey). Being in stock is the normal case. */
@@ -71,7 +71,7 @@ function ProductCard({ spec, row, viewer }: { spec: Spec; row: Row; viewer: View
   const e = spec.entity;
   const refLabel = useRefLabel();
   const name = rowName(e, row);
-  const cat = categoryOf(e, spec.columns);
+  const cat = categoryOf(e);
   const catLabel = cat ? refLabel(row, cat.name, cat.target!, viewer) : null;
   const price = spec.columns.map((c) => e.fields.find((f) => f.name === c)).find((f) => f?.kind === 'money');
   const about = e.fields.find((f) => f.kind === 'longtext');
@@ -167,7 +167,7 @@ function Hero({ spec, total, categories }: { spec: Spec; total: number; categori
 export function StorefrontList({ spec }: { spec: Spec }) {
   const s = useListState(spec);
   const { viewer, data, set } = s;
-  const cat = categoryOf(spec.entity, spec.columns);
+  const cat = categoryOf(spec.entity);
   const catFilter = spec.filters.find((f) => !f.range && f.field === cat?.name)?.field ?? null;
   const catChoices = useFilterChoices(spec.entity, catFilter ?? '', viewer);
   const staff = can(viewer, spec.entity.name, 'edit') || can(viewer, spec.entity.name, 'create');
@@ -242,7 +242,7 @@ export function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelet
   const [shown, setShown] = useState(0);
   const price = entity.fields.find((f) => f.kind === 'money' && entity.detail.fields.includes(f.name));
   const about = entity.fields.find((f) => f.kind === 'longtext');
-  const cat = entity.fields.find((f) => f.kind === 'ref' && entity.detail.fields.includes(f.name));
+  const cat = entity.category && entity.detail.fields.includes(entity.category) ? categoryOf(entity) : null;
   const catLabel = cat ? refLabel(row, cat.name, cat.target!, viewer) : null;
   const stock = stockField(entity);
   // Details a shopper reads: not the name, price, description or picture shown above, not the shop's own switches.
