@@ -51,11 +51,14 @@ export const app: AppModel = {
             "go:cancel"
           ]
         },
-        "OrderItem": [
-          "view",
-          "edit",
-          "delete"
-        ]
+        "OrderItem": {
+          "own": "order.customer",
+          "can": [
+            "view",
+            "edit",
+            "delete"
+          ]
+        }
       },
       "guest": {
         "Product": [
