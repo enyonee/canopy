@@ -21,6 +21,9 @@ import { DataTable, columnField } from '@/components/data-table';
 import { EntityForm } from '@/components/entity-form';
 import { StepButton, type Step } from '@/components/step-button';
 import { DeleteDialog, rowSteps, signInSteps, SignInButton } from '@/components/row-actions';
+import { ProductCover, StockChip } from '@/screens/list-screen';
+import { stockField } from '@/lib/visual';
+import { useRefLabel } from '@/lib/refs';
 import { rowName } from '@/lib/rows';
 import { can, ownField, transitionsFor, type Viewer } from '@/lib/perms';
 import { useViewer } from '@/lib/session';
@@ -130,6 +133,10 @@ function DetailBody({ entity }: { entity: Entity }) {
   const mayEdit = can(viewer, entity.name, 'edit', row);
   const mayDelete = can(viewer, entity.name, 'delete', row);
   const fields = entity.detail.fields.filter((n) => n !== st?.field);
+  if (entity.surface === 'storefront') {
+    return <StorefrontDetail entity={entity} row={row} viewer={viewer} steps={steps} mayEdit={mayEdit} mayDelete={mayDelete} onDelete={() => setDeleting(true)} crumbs={crumbs}
+      deleting={<>{mayDelete && <DeleteDialog entity={entity} row={row} open={deleting} onOpenChange={setDeleting} after={listVisible ? `/${entity.name}` : '/'} />}</>} />;
+  }
   return (
     <>
       <PageHeader
@@ -172,6 +179,87 @@ function DetailBody({ entity }: { entity: Entity }) {
         </Card>
         {entity.detail.related.filter((r) => can(viewer, r.entity, 'view')).map((r) => <RelatedSection key={r.entity + r.via} parent={entity} row={row} rel={r} viewer={viewer} />)}
         {listVisible && <div><Button asChild variant="ghost"><Link to={`/${entity.name}`}><ArrowLeft />Back to {entity.list.title.toLowerCase()}</Link></Button></div>}
+      </div>
+    </>
+  );
+}
+
+// A storefront record (a product): its picture or generated cover (a gallery when it has several pictures), the
+// price and the action up front, the description, then the remaining details.
+function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelete, onDelete, crumbs, deleting }: {
+  entity: Entity; row: Row; viewer: Viewer; steps: Step[]; mayEdit: boolean; mayDelete: boolean; onDelete: () => void;
+  crumbs: { label: string; to?: string }[]; deleting: React.ReactNode;
+}) {
+  const refLabel = useRefLabel();
+  const images = entity.fields.filter((f) => f.kind === 'image' && row[f.name]);
+  const [shown, setShown] = useState(0);
+  const price = entity.detail.fields.map((n) => entity.fields.find((f) => f.name === n)).find((f) => f?.kind === 'money');
+  const about = entity.fields.find((f) => f.kind === 'longtext');
+  const cat = entity.fields.find((f) => f.kind === 'ref' && entity.detail.fields.includes(f.name));
+  const catLabel = cat ? refLabel(row, cat.name, cat.target!, viewer) : null;
+  const stock = stockField(entity);
+  const rest = entity.detail.fields.filter((n) => ![price?.name, about?.name, cat?.name, entity.labelField, stock?.name].includes(n) && entity.fields.find((f) => f.name === n)?.kind !== 'image');
+  const signIn = signInSteps(entity, entity.detail.actions, viewer);
+  return (
+    <>
+      <nav aria-label="Breadcrumb" className="mb-6 text-sm text-muted-foreground">
+        <ol className="flex items-center gap-1">
+          {crumbs.map((c, i) => <li key={i}>{c.to ? <Link to={c.to} className="hover:text-foreground">{c.label}</Link> : c.label}<span aria-hidden="true" className="px-1">/</span></li>)}
+          <li aria-current="page" className="text-foreground">{rowName(entity, row)}</li>
+        </ol>
+      </nav>
+      {deleting}
+      <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+        <div className="space-y-3">
+          {images.length > 0 ? (
+            <>
+              <img src={`/file/${entity.name}/${row.id}/${images[shown].name}`} alt={`${rowName(entity, row)}: ${images[shown].label}`} className="aspect-[4/3] w-full rounded-3xl border object-cover shadow-md" />
+              {images.length > 1 && (
+                <div className="flex gap-3" role="group" aria-label="Pictures">
+                  {images.map((f, i) => (
+                    <button key={f.name} type="button" aria-pressed={i === shown} aria-label={f.label} onClick={() => setShown(i)}
+                      className={cn('overflow-hidden rounded-xl border-2', i === shown ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100')}>
+                      <img src={`/file/${entity.name}/${row.id}/${f.name}`} alt="" className="size-20 object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : <ProductCover entity={entity} row={row} category={catLabel} size="lg" className="aspect-[4/3] w-full rounded-3xl shadow-md" />}
+        </div>
+        <div className="flex flex-col gap-6">
+          <div className="space-y-3">
+            {catLabel && <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{catLabel}</span>}
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{rowName(entity, row)}</h1>
+            {price && <p className="text-3xl font-semibold tracking-tight tabular-nums"><FieldValue entity={entity} field={price} row={row} viewer={viewer} /></p>}
+            {stock && <StockChip value={row[stock.name]} />}
+          </div>
+          {about && row[about.name] ? <p className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">{String(row[about.name])}</p> : null}
+          {(steps.length > 0 || signIn.length > 0 || mayEdit || mayDelete) && (
+            <div className="flex flex-wrap items-center gap-3">
+              {steps.map((s) => <StepButton key={s.kind === 'go' ? `go:${s.t.name}` : s.a.name} entity={entity} row={row} step={s} viewer={viewer} />)}
+              {signIn.map((a) => <SignInButton key={a.name} title={a.title} size="default" />)}
+              {mayEdit && <Button asChild variant="outline"><Link to={`/${entity.name}/${row.id}/edit`}><Pencil />Edit</Link></Button>}
+              {mayDelete && <Button variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 />Delete</Button>}
+            </div>
+          )}
+          {rest.length > 0 && (
+            <dl className="grid grid-cols-2 gap-4 rounded-2xl border bg-card p-5 shadow-sm">
+              {rest.map((n) => {
+                const f = columnField(entity, n);
+                return (
+                  <div key={n} className="min-w-0 space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground">{f?.label ?? n}</dt>
+                    <dd className="text-sm">{n === 'id' ? `#${row.id}` : <FieldValue entity={entity} field={f} row={row} viewer={viewer} labels={entity.detail.labels[n]} />}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+          )}
+        </div>
+      </div>
+      <div className="mt-10 grid gap-6">
+        {entity.detail.related.filter((r) => can(viewer, r.entity, 'view')).map((r) => <RelatedSection key={r.entity + r.via} parent={entity} row={row} rel={r} viewer={viewer} />)}
       </div>
     </>
   );

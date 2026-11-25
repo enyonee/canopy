@@ -31,6 +31,8 @@ export type Related = {
 
 export type Entity = {
   name: string; label: string; plural: string; labelField: string | null;
+  /** storefront: offered to visitors and customers (cards, covers); workspace: records people work on (tables). */
+  surface: 'storefront' | 'workspace';
   fields: readonly Field[];
   states: { field: string; transitions: readonly Transition[] } | null;
   actions: readonly Action[];
@@ -55,6 +57,7 @@ export type Group = { field: string; kind: string; target: string | null; option
 
 export type Dashboard = {
   id: string; title: string; intro: string | null; roles: readonly string[] | null; refresh: number | null; period: boolean;
+  periodEntities: readonly string[];
   cards: readonly { title: string; entity: string; fn: string; money: boolean }[];
   tables: readonly { title: string; entity: string; groupTitle: string | null; group: Group | null; metrics: readonly { as: string; title: string; money: boolean }[] }[];
   charts: readonly { title: string; entity: string; type: string; group: Group | null; money: boolean }[];
@@ -76,7 +79,7 @@ export type Roles = {
   can: Readonly<Record<string, '*' | Readonly<Record<string, Grant>>>>;
 };
 
-export type NavItem = { kind: 'entity' | 'list' | 'dashboard' | 'page'; to: string; title: string; icon: string; entity: string | null; roles: readonly string[] | null };
+export type NavItem = { kind: 'entity' | 'list' | 'dashboard' | 'page'; to: string; title: string; icon: string; entity: string | null; roles: readonly string[] | null; group: string };
 
 export type AppModel = {
   name: string; title: string; note: string | null; home: string | null;
@@ -85,6 +88,7 @@ export type AppModel = {
   roles: Roles | null;
   entities: Readonly<Record<string, Entity>>;
   lists: readonly SavedList[]; dashboards: readonly Dashboard[]; pages: readonly Page[];
+  hero: { entity: string; title: string; eyebrow: string; subtitle: string | null } | null;
   search: { entities: readonly string[]; title: string } | null;
   nav: readonly NavItem[];
   globalActions: readonly Action[];

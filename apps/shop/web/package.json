@@ -12,6 +12,7 @@
     "check:contract": "node ../../../webgen/check-contract.mjs ../app.json"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
     "@tanstack/react-query": "5.108.4",
     "@tanstack/react-router": "1.170.46",
     "class-variance-authority": "0.7.1",

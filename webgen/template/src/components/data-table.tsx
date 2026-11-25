@@ -11,6 +11,7 @@ import { RowActions } from '@/components/row-actions';
 import { rowName } from '@/lib/rows';
 import { can, type Viewer } from '@/lib/perms';
 import { cn } from '@/lib/utils';
+import { Avatar } from '@/components/avatar';
 
 export type Sort = { field: string; dir: 'asc' | 'desc' } | null;
 
@@ -52,14 +53,19 @@ export function DataTable({ entity, rows, columns, rowActions, viewer, labels = 
       </div>
     );
   }
+  // The label column leads with an avatar, and the next text column becomes its subtitle.
+  const lead = cols[0]?.f && cols[0].f.name === entity.labelField && cols[0].f.kind === 'text';
+  const sub = lead && cols[1]?.f?.kind === 'text' ? cols[1].name : null;
+  const shown = sub ? cols.filter((c) => c.name !== sub) : cols;
+  const sticky = shown.length <= 7;
   return (
     <>
       <div className="hidden md:block">
-        <Table>
+        <Table sticky={sticky}>
           <caption className="sr-only">{caption}</caption>
-          <TableHeader>
+          <TableHeader className={cn(sticky && 'sticky top-14 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80')}>
             <TableRow className="hover:bg-transparent">
-              {cols.map(({ name, f }) => (
+              {shown.map(({ name, f }) => (
                 <TableHead key={name} className={cn(numeric(f) && 'text-right')} aria-sort={sort?.field === name ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                   {f ? <SortHeader f={f} sort={sort} onSort={onSort} /> : name}
                 </TableHead>
@@ -69,10 +75,18 @@ export function DataTable({ entity, rows, columns, rowActions, viewer, labels = 
           </TableHeader>
           <TableBody>
             {rows.map((r) => (
-              <TableRow key={r.id} data-row-id={r.id}>
-                {cols.map(({ name, f }, i) => (
+              <TableRow key={r.id} data-row-id={r.id} className="even:bg-muted/35">
+                {shown.map(({ name, f }, i) => (
                   <TableCell key={name} className={cn(numeric(f) && 'text-right')}>
-                    {first(r, i, name === 'id' ? <span className="tabular-nums text-muted-foreground">#{r.id}</span> : <FieldValue entity={entity} field={f} row={r} viewer={viewer} labels={labels[name]} />)}
+                    {i === 0 && lead ? (
+                      <div className="flex items-center gap-3">
+                        <Avatar name={String(r[name] ?? r.id)} />
+                        <div className="min-w-0">
+                          {first(r, i, <span className="font-medium">{String(r[name] ?? '')}</span>)}
+                          {sub && r[sub] ? <div className="truncate text-xs text-muted-foreground">{String(r[sub])}</div> : null}
+                        </div>
+                      </div>
+                    ) : first(r, i, name === 'id' ? <span className="tabular-nums text-muted-foreground">#{r.id}</span> : <FieldValue entity={entity} field={f} row={r} viewer={viewer} labels={labels[name]} />)}
                   </TableCell>
                 ))}
                 {hasActions && <TableCell className="w-0"><RowActions entity={entity} row={r} names={rowActions} viewer={viewer} onEdit={onEdit} /></TableCell>}

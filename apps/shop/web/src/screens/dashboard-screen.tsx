@@ -1,9 +1,11 @@
 // A dashboard (`/dashboard/<id>`): stat cards, grouped tables and charts, all numbers the server aggregated for the
 // viewer and the period. A grouped table also reads as a chart of its first metric (Chart / Table tabs: the same rows).
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useId } from 'react';
+import { useQueries, useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { BarChart3, CalendarRange, Table2 } from 'lucide-react';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Activity, BarChart3, CalendarRange, Inbox, Package, ShoppingBag, Table2, Target, TrendingDown, TrendingUp, Trophy, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { Sparkline } from '@/components/sparkline';
 import { app } from '@/gen/app';
 import { endpoints } from '@/gen/endpoints';
 import type { Dashboard as Spec, Group } from '@/lib/model';
@@ -73,6 +75,7 @@ function ChartTip({ active, payload, label, money, metric }: { active?: boolean;
 
 // One series in the theme's accent: bars for categories, a line over time, slices for a share.
 function SeriesChart({ type, data, money, metric, title }: { type: string; data: { name: string; v: number }[]; money: boolean; metric: string; title: string }) {
+  const gid = `ch${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const axis = { stroke: 'var(--muted-foreground)', fontSize: 12, tickLine: false, axisLine: false } as const;
   const tip = <Tooltip cursor={{ fill: 'var(--muted)', opacity: 0.6 }} content={<ChartTip money={money} metric={metric} />} />;
   const fmt = (v: number) => (money ? formatMoney(v) : formatNumber(v));
@@ -87,20 +90,32 @@ function SeriesChart({ type, data, money, metric, title }: { type: string; data:
             </Pie>
           </PieChart>
         ) : type === 'line' ? (
-          <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id={`${gid}-area`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="var(--chart-1)" stopOpacity={0.35} />
+                <stop offset="1" stopColor="var(--chart-1)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis dataKey="name" {...axis} />
             <YAxis {...axis} width={56} tickFormatter={fmt} />
             <Tooltip content={<ChartTip money={money} metric={metric} />} />
-            <Line type="monotone" dataKey="v" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 4, fill: 'var(--chart-1)', stroke: 'var(--card)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
-          </LineChart>
+            <Area type="monotone" dataKey="v" stroke="var(--chart-1)" strokeWidth={2} fill={`url(#${gid}-area)`} dot={{ r: 4, fill: 'var(--chart-1)', stroke: 'var(--card)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+          </AreaChart>
         ) : (
           <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} barCategoryGap="30%">
+            <defs>
+              <linearGradient id={`${gid}-bar`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="var(--chart-1)" stopOpacity={1} />
+                <stop offset="1" stopColor="var(--chart-1)" stopOpacity={0.55} />
+              </linearGradient>
+            </defs>
             <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis dataKey="name" {...axis} interval={0} />
             <YAxis {...axis} width={56} tickFormatter={fmt} allowDecimals={money} />
             {tip}
-            <Bar dataKey="v" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={48} />
+            <Bar dataKey="v" fill={`url(#${gid}-bar)`} radius={[6, 6, 0, 0]} maxBarSize={48} />
           </BarChart>
         )}
       </ResponsiveContainer>
@@ -157,7 +172,61 @@ function GroupedTable({ spec, rows }: { spec: Spec['tables'][number]; rows: Grou
   );
 }
 
+const KPI_ICONS: [RegExp, LucideIcon][] = [[/revenue|sales|income|paid|amount|value|price|spent|balance/i, Wallet], [/order|purchase|cart/i, ShoppingBag],
+  [/product|item|stock|inventory/i, Package], [/lead|deal|opportunit/i, Target], [/won|win|success|closed/i, Trophy],
+  [/user|customer|client|patient|member|people/i, Users], [/open|pending|due|task/i, Inbox]];
+const kpiIcon = (title: string) => KPI_ICONS.find(([re]) => re.test(title))?.[1] ?? Activity;
+
+// The last six calendar months, oldest first, as the period each card is computed over: the sparkline of a card
+// whose entity the dashboard's `period` narrows. Six more GETs of the same dashboard, computed by the server.
+function months() {
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, k) => {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5 + k, 1));
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
+    return { from: iso(start), to: iso(end) };
+  });
+}
+
+function useSeries(spec: Spec) {
+  const periods = months();
+  const qs = useQueries({ queries: spec.period && spec.cards.some((c) => spec.periodEntities.includes(c.entity))
+    ? periods.map((p) => ({ queryKey: ['dashboard', spec.id, p], queryFn: () => endpoints.dashboards[spec.id](p), staleTime: 60_000 })) : [] });
+  if (!qs.length || qs.some((q) => !q.data)) return null;
+  return spec.cards.map((c, i) => (spec.periodEntities.includes(c.entity) ? qs.map((q) => Number(q.data!.cards[i]?.value ?? 0)) : null));
+}
+
+function Kpi({ spec, card, index, value: v, pending, series }: { spec: Spec; card: Spec['cards'][number]; index: number; value: number | undefined; pending: boolean; series: (number[] | null)[] | null }) {
+  const Icon = kpiIcon(`${card.title} ${card.entity}`);
+  const line = series?.[index] ?? null;
+  const [prev, last] = line ? line.slice(-2) : [0, 0];
+  const delta = line && prev !== 0 ? ((last - prev) / Math.abs(prev)) * 100 : null;
+  void spec;
+  return (
+    <Card className="relative gap-3 overflow-hidden py-5 shadow-sm">
+      <CardContent className="space-y-3 px-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-muted-foreground">{card.title}</p>
+          <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary" aria-hidden="true"><Icon className="size-[18px]" /></span>
+        </div>
+        {pending ? <Skeleton className="h-9 w-28" />
+          : <p className="text-3xl font-semibold tracking-tight tabular-nums" data-metric={card.title}>{value(card.money, v ?? 0)}</p>}
+        <div className="flex h-8 items-end justify-between gap-3">
+          {delta !== null ? (
+            <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', delta >= 0 ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/12 text-rose-700 dark:text-rose-300')}>
+              {delta >= 0 ? <TrendingUp className="size-3.5" aria-hidden="true" /> : <TrendingDown className="size-3.5" aria-hidden="true" />}
+              {`${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`}<span className="sr-only"> compared with the month before</span>
+            </span>
+          ) : line ? <span className="text-xs text-muted-foreground">Last 6 months</span> : <span />}
+          {line && line.some((x) => x !== 0) && <Sparkline values={line} className="h-8 w-28" />}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function DashboardBody({ spec }: { spec: Spec }) {
+  const series = useSeries(spec);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { from?: string; to?: string };
   const from = search.from ?? '', to = search.to ?? '';
@@ -174,15 +243,7 @@ function DashboardBody({ spec }: { spec: Spec }) {
           <>
             {spec.cards.length > 0 && (
               <section aria-label="Key figures" className={cn('grid gap-4 sm:grid-cols-2', spec.cards.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4')}>
-                {spec.cards.map((c, i) => (
-                  <Card key={c.title} className="gap-2 py-5">
-                    <CardContent className="space-y-2 px-5">
-                      <p className="text-sm font-medium text-muted-foreground">{c.title}</p>
-                      {data.isPending ? <Skeleton className="h-8 w-24" />
-                        : <p className="text-3xl font-semibold tracking-tight tabular-nums" data-metric={c.title}>{value(c.money, data.data.cards[i]?.value ?? 0)}</p>}
-                    </CardContent>
-                  </Card>
-                ))}
+                {spec.cards.map((c, i) => <Kpi key={c.title} spec={spec} card={c} index={i} value={data.data?.cards[i]?.value} pending={data.isPending} series={series} />)}
               </section>
             )}
             <div className="grid gap-6 xl:grid-cols-2">

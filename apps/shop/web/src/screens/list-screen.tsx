@@ -23,8 +23,10 @@ import { RowActions } from '@/components/row-actions';
 import { rowName } from '@/lib/rows';
 import { can, canSee, type Viewer } from '@/lib/perms';
 import { useViewer } from '@/lib/session';
-import { useOptions } from '@/lib/refs';
+import { useOptions, useRefLabel } from '@/lib/refs';
 import { enumLabel, formatNumber } from '@/lib/format';
+import { Cover } from '@/components/cover';
+import { iconWord, stockField } from '@/lib/visual';
 import { cn } from '@/lib/utils';
 
 type Spec = {
@@ -58,53 +60,122 @@ function FilterSelect({ entity, filter, value, onChange, viewer }: { entity: Ent
 }
 
 // A catalogue reads better as cards: a list whose rows carry a declared action and a description.
-const catalogue = (spec: Spec) => spec.rowActions.some((a) => spec.entity.actions.some((x) => x.name === a)) && spec.entity.fields.some((f) => f.kind === 'longtext');
+// A storefront entity (webgen's heuristic, README) reads as cards with covers; its saved lists stay tables.
+const catalogue = (spec: Spec) => spec.entity.surface === 'storefront' && !spec.key.startsWith('list:');
+
+// The first reference column (a category) names the card's badge and its cover icon.
+function useCategory(spec: Spec) {
+  const e = spec.entity;
+  return spec.columns.map((c) => e.fields.find((f) => f.name === c)).find((f) => f?.kind === 'ref') ?? null;
+}
+
+export function StockChip({ value }: { value: unknown }) {
+  const n = Number(value);
+  if (value === null || value === undefined || Number.isNaN(n)) return null;
+  const tone = n <= 0 ? 'bg-rose-500/12 text-rose-700 ring-rose-500/25 dark:text-rose-300'
+    : n <= 3 ? 'bg-amber-500/15 text-amber-800 ring-amber-500/30 dark:text-amber-300' : 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300';
+  return <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset', tone)}>{n <= 0 ? 'Out of stock' : n <= 3 ? `Only ${n} left` : `${formatNumber(n)} in stock`}</span>;
+}
+
+export function ProductCover({ entity, row, category, className, size }: { entity: Entity; row: Row; category: string | null; className?: string; size?: 'md' | 'lg' }) {
+  const image = entity.fields.find((f) => f.kind === 'image');
+  if (image && row[image.name]) return <img src={`/file/${entity.name}/${row.id}/${image.name}`} alt="" loading="lazy" className={cn('object-cover', className)} />;
+  return <Cover name={rowName(entity, row)} icon={iconWord(category, rowName(entity, row), entity.name)} className={className} size={size} />;
+}
 
 function CatalogueGrid({ spec, rows, viewer }: { spec: Spec; rows: Row[]; viewer: Viewer }) {
   const e = spec.entity;
   const about = e.fields.find((f) => f.kind === 'longtext');
-  const image = e.fields.find((f) => f.kind === 'image');
   const price = spec.columns.map((c) => e.fields.find((f) => f.name === c)).find((f) => f?.kind === 'money');
-  const meta = spec.columns.map((c) => e.fields.find((f) => f.name === c)).filter((f): f is Field => Boolean(f) && f!.name !== e.labelField && f !== price && f !== image);
+  const category = useCategory(spec);
+  const stock = stockField(e);
+  const refLabel = useRefLabel();
+  const meta = spec.columns.map((c) => e.fields.find((f) => f.name === c))
+    .filter((f): f is Field => Boolean(f) && f!.name !== e.labelField && f !== price && f !== category && f !== stock && f!.kind !== 'image');
   return (
-    <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label={spec.title}>
+    <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" aria-label={spec.title}>
       {rows.map((r) => {
         const name = rowName(e, r);
         const open = can(viewer, e.name, 'view', r);
+        const cat = category ? refLabel(r, category.name, category.target!, viewer) : null;
         return (
           <li key={r.id} data-row-id={r.id}>
-            <Card className="group relative h-full gap-3 overflow-hidden py-5 transition-[box-shadow,border-color] hover:border-primary/30 hover:shadow-md">
-              {image && r[image.name] ? (
-                <img src={`/file/${e.name}/${r.id}/${image.name}`} alt="" loading="lazy" className="-mt-5 mb-1 aspect-[4/3] w-full object-cover" />
-              ) : null}
-              <div className="flex items-start gap-3 px-5">
-                {!image && (
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
-                )}
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <h3 className="truncate font-semibold leading-snug">
-                    {open ? <Link to={`/${e.name}/${r.id}`} className="after:absolute after:inset-0 hover:text-primary focus-visible:outline-none">{name}</Link> : name}
-                  </h3>
-                  {about && r[about.name] ? <p className="line-clamp-2 text-sm text-muted-foreground">{String(r[about.name])}</p> : null}
-                </div>
-                {price && <p className="shrink-0 text-base font-semibold tabular-nums"><FieldValue entity={e} field={price} row={r} viewer={viewer} /></p>}
+            <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition duration-300 ease-out hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+              <div className="relative">
+                <ProductCover entity={e} row={r} category={cat} className="aspect-[4/3] w-full transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:group-hover:scale-100" />
+                {cat && <span className="absolute top-3 left-3 rounded-full bg-white/85 px-2.5 py-1 text-xs font-medium text-slate-800 shadow-sm backdrop-blur dark:bg-black/50 dark:text-white">{cat}</span>}
               </div>
-              {meta.length > 0 && (
-                <dl className="flex flex-wrap gap-x-4 gap-y-1 px-5 text-sm">
+              <div className="flex flex-1 flex-col gap-3 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-lg leading-snug font-semibold">
+                    {open ? <Link to={`/${e.name}/${r.id}`} className="after:absolute after:inset-0 focus-visible:outline-none">{name}</Link> : name}
+                  </h3>
+                  {price && <p className="shrink-0 text-xl font-semibold tracking-tight tabular-nums"><FieldValue entity={e} field={price} row={r} viewer={viewer} /></p>}
+                </div>
+                {about && r[about.name] ? <p className="line-clamp-2 text-sm text-muted-foreground">{String(r[about.name])}</p> : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  {stock && spec.columns.includes(stock.name) && <span data-stock={String(r[stock.name])}><StockChip value={r[stock.name]} /><span className="sr-only">{stock.label} {String(r[stock.name])}</span></span>}
                   {meta.map((f) => (
-                    <div key={f.name} className="flex items-center gap-1.5">
-                      <dt className="text-muted-foreground">{f.label}</dt>
-                      <dd className="relative z-10"><FieldValue entity={e} field={f} row={r} viewer={viewer} labels={spec.labels[f.name]} /></dd>
-                    </div>
+                    <span key={f.name} className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs">
+                      <span className="text-muted-foreground">{f.label}</span>
+                      <span className="relative z-10 font-medium"><FieldValue entity={e} field={f} row={r} viewer={viewer} labels={spec.labels[f.name]} /></span>
+                    </span>
                   ))}
-                </dl>
-              )}
-              <div className="mt-auto flex justify-end px-5 pt-1"><RowActions entity={e} row={r} names={spec.rowActions} viewer={viewer} /></div>
-            </Card>
+                </div>
+                <div className="mt-auto flex justify-end pt-1"><RowActions entity={e} row={r} names={spec.rowActions} viewer={viewer} /></div>
+              </div>
+            </article>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+function CardSkeletons() {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="overflow-hidden rounded-2xl border bg-card">
+          <Skeleton className="aspect-[4/3] w-full rounded-none" />
+          <div className="space-y-3 p-5"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-4 w-full" /><Skeleton className="h-6 w-24 rounded-full" /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// The storefront's front page: a panel in the theme's gradient, the list's title and words from the graph, and the
+// first reference filter (categories) as quick links.
+function Hero({ spec, total, viewer, filter, onFilter }: { spec: Spec; total: number | null; viewer: Viewer; filter: string; onFilter: (v: string) => void }) {
+  const hero = app.hero!;
+  const cat = spec.filters.find((f) => spec.entity.fields.find((x) => x.name === f.field)?.kind === 'ref');
+  const target = cat ? spec.entity.fields.find((x) => x.name === cat.field)!.target : null;
+  const options = useOptions(target, viewer);
+  return (
+    <section aria-labelledby="hero-title" className="relative mb-8 overflow-hidden rounded-3xl bg-brand-gradient px-6 py-10 text-white shadow-lg sm:px-10 sm:py-14">
+      <svg className="pointer-events-none absolute -top-16 -right-10 h-80 w-80 opacity-30" viewBox="0 0 200 200" aria-hidden="true">
+        {[30, 50, 70, 90].map((r) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="white" strokeOpacity="0.5" />)}
+      </svg>
+      <div className="relative max-w-2xl space-y-4">
+        <p className="text-sm font-medium tracking-wide text-white/75 uppercase">{hero.eyebrow}</p>
+        <h1 id="hero-title" className="text-4xl font-semibold tracking-tight sm:text-5xl">{hero.title}</h1>
+        <p className="text-lg text-white/85">
+          {hero.subtitle ?? (total === null ? '\u00a0' : `${formatNumber(total)} ${total === 1 ? spec.entity.label.toLowerCase() : spec.entity.plural.toLowerCase()} to explore${(options.data?.length ?? 0) > 1 ? ` across ${options.data!.length} ${cat!.name.toLowerCase()}s` : ''}.`)}
+        </p>
+        {cat && (options.data?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-2 pt-2" role="group" aria-label={`Quick ${cat.name.toLowerCase()} filter`}>
+            {[{ id: '', label: 'All' }, ...options.data!].map((o) => (
+              <button key={o.id} type="button" aria-pressed={filter === o.id} onClick={() => onFilter(o.id)}
+                className={cn('rounded-full px-4 py-1.5 text-sm font-medium ring-1 ring-white/40 transition-colors focus-visible:outline-2 focus-visible:outline-white',
+                  filter === o.id ? 'bg-white text-slate-900' : 'bg-white/10 text-white hover:bg-white/20')}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -134,6 +205,7 @@ function ListBody({ spec }: { spec: Spec }) {
   const filters = Object.fromEntries(spec.filters.flatMap((f) => (f.range ? [`${f.field}_from`, `${f.field}_to`] : [f.field])).map((k) => [k, String(search[k] ?? '')]));
   const [text, setText] = useState(q);
   const grid = catalogue(spec) && search.view !== 'table';
+  const heroFilter = spec.filters.find((f) => spec.entity.fields.find((x) => x.name === f.field)?.kind === 'ref')?.field ?? null;
 
   const set = (patch: Record<string, string | number | undefined>) =>
     void navigate({ to: '.', search: (prev: Record<string, unknown>) => {
@@ -158,7 +230,10 @@ function ListBody({ spec }: { spec: Spec }) {
 
   return (
     <>
-      <PageHeader title={spec.title} description={spec.intro ?? undefined} actions={createButton} />
+      {catalogue(spec) && app.hero?.entity === spec.entity.name
+        ? <Hero spec={spec} total={data.data?.total ?? null} viewer={viewer} filter={filters[heroFilter ?? ''] ?? ''} onFilter={(v) => heroFilter && set({ [heroFilter]: v, page: undefined })} />
+        : <PageHeader title={spec.title} description={spec.intro ?? undefined} actions={createButton} />}
+      {catalogue(spec) && app.hero?.entity === spec.entity.name && createButton && <div className="-mt-4 mb-6 flex justify-end">{createButton}</div>}
       {(spec.search.length > 0 || spec.filters.length > 0 || catalogue(spec)) && (
         <div role="search" className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           {spec.search.length > 0 && (
@@ -193,7 +268,7 @@ function ListBody({ spec }: { spec: Spec }) {
       )}
       {data.isError ? <ErrorState error={data.error} retry={() => void data.refetch()} />
         : data.isPending ? (grid
-          ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div>
+          ? <CardSkeletons />
           : <Card className="py-0"><DataTable entity={spec.entity} rows={[]} columns={spec.columns} rowActions={spec.rowActions} viewer={viewer} caption={spec.title} loading /></Card>)
         : data.data.rows.length === 0 ? (
           narrowed ? <EmptyState searching title="No matches" description="Nothing matches this search or filter. Try another word or clear the filters." />
