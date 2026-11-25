@@ -63,7 +63,9 @@
     "src/screens/detail-screen.tsx",
     "src/screens/form-screen.tsx",
     "src/screens/list-screen.tsx",
+    "src/screens/order.tsx",
     "src/screens/page-screen.tsx",
+    "src/screens/storefront.tsx",
     "src/styles.css",
     "tsconfig.json",
     "vite.config.ts"

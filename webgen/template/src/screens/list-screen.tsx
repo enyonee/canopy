@@ -1,201 +1,65 @@
 // A list: an entity's own (`/Entity`) or a saved one (`/list/<id>`). Search, filters, sorting and the page live in
 // the URL, so a list can be shared and the back button works; the server narrows, scopes and pages every query.
+// A storefront entity (webgen's heuristic, README) is drawn by screens/storefront.tsx; the rest is a workspace table.
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { ChevronLeft, ChevronRight, LayoutGrid, Plus, Rows3, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
 import { app } from '@/gen/app';
 import { endpoints } from '@/gen/endpoints';
-import type { Entity, Field } from '@/lib/model';
-import type { Query, Row } from '@/lib/api';
+import type { Entity } from '@/lib/model';
+import type { Page, Query, Row } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { DataTable, type Sort } from '@/components/data-table';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState, ErrorState } from '@/components/states';
 import { Guard } from '@/components/guard';
-import { FieldValue } from '@/components/field-value';
-import { RowActions } from '@/components/row-actions';
-import { rowName } from '@/lib/rows';
 import { can, canSee, type Viewer } from '@/lib/perms';
 import { useViewer } from '@/lib/session';
-import { useOptions, useRefLabel } from '@/lib/refs';
+import { useOptions } from '@/lib/refs';
 import { enumLabel, formatNumber } from '@/lib/format';
-import { Cover } from '@/components/cover';
-import { iconWord, stockField } from '@/lib/visual';
 import { cn } from '@/lib/utils';
+import { StorefrontList } from '@/screens/storefront';
 
-type Spec = {
+export type Spec = {
   key: string; title: string; intro: string | null; entity: Entity; columns: readonly string[]; rowActions: readonly string[];
   search: readonly string[]; filters: readonly { name: string; field: string; range: boolean }[]; create: boolean; createTitle: string;
-  labels: Readonly<Record<string, readonly string[]>>; fetch: (q: Query) => Promise<{ rows: Row[]; total: number; page: number; pages: number }>;
-  roles: readonly string[] | null;
+  labels: Readonly<Record<string, readonly string[]>>; fetch: (q: Query) => Promise<Page>;
+  roles: readonly string[] | null; pageSize: number;
 };
 
 const ALL = '__all__';
 
-function FilterSelect({ entity, filter, value, onChange, viewer }: { entity: Entity; filter: { name: string; field: string }; value: string; onChange: (v: string) => void; viewer: Viewer }) {
-  const f = entity.fields.find((x) => x.name === filter.field);
+/** The choices a filter offers: the rows of a referenced entity, an enum's values, yes/no. */
+export function useFilterChoices(entity: Entity, field: string, viewer: Viewer) {
+  const f = entity.fields.find((x) => x.name === field);
   const options = useOptions(f?.kind === 'ref' ? f.target : null, viewer);
-  const choices = f?.kind === 'ref' ? (options.data ?? []).map((o) => ({ value: o.id, label: o.label }))
-    : f?.kind === 'enum' ? (f.options ?? []).map((o) => ({ value: o, label: enumLabel(o) }))
-    : f?.kind === 'bool' ? [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }] : [];
-  const id = `filter_${filter.field}`;
+  if (f?.kind === 'ref') return (options.data ?? []).map((o) => ({ value: o.id, label: o.label }));
+  if (f?.kind === 'enum') return (f.options ?? []).map((o) => ({ value: o, label: enumLabel(o) }));
+  if (f?.kind === 'bool') return [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }];
+  return [];
+}
+
+function FilterSelect({ entity, filter, value, onChange, viewer }: { entity: Entity; filter: { name: string; field: string }; value: string; onChange: (v: string) => void; viewer: Viewer }) {
+  const choices = useFilterChoices(entity, filter.field, viewer);
   return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id} className="text-xs text-muted-foreground">{filter.name}</Label>
-      <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL ? '' : v)}>
-        <SelectTrigger id={id} className="w-full sm:w-44"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>All</SelectItem>
-          {choices.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-        </SelectContent>
-      </Select>
-    </div>
+    <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL ? '' : v)}>
+      <SelectTrigger id={`filter_${filter.field}`} aria-label={filter.name} className={cn('h-9 w-auto min-w-36 gap-2', value && 'border-primary/40 bg-accent')}>
+        <span className="text-muted-foreground">{filter.name}:</span><SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>All</SelectItem>
+        {choices.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
   );
 }
 
-// A catalogue reads better as cards: a list whose rows carry a declared action and a description.
-// A storefront entity (webgen's heuristic, README) reads as cards with covers; its saved lists stay tables.
-const catalogue = (spec: Spec) => spec.entity.surface === 'storefront' && !spec.key.startsWith('list:');
-
-// The first reference column (a category) names the card's badge and its cover icon.
-function useCategory(spec: Spec) {
-  const e = spec.entity;
-  return spec.columns.map((c) => e.fields.find((f) => f.name === c)).find((f) => f?.kind === 'ref') ?? null;
-}
-
-export function StockChip({ value }: { value: unknown }) {
-  const n = Number(value);
-  if (value === null || value === undefined || Number.isNaN(n)) return null;
-  const tone = n <= 0 ? 'bg-rose-500/12 text-rose-700 ring-rose-500/25 dark:text-rose-300'
-    : n <= 3 ? 'bg-amber-500/15 text-amber-800 ring-amber-500/30 dark:text-amber-300' : 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300';
-  return <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset', tone)}>{n <= 0 ? 'Out of stock' : n <= 3 ? `Only ${n} left` : `${formatNumber(n)} in stock`}</span>;
-}
-
-export function ProductCover({ entity, row, category, className, size }: { entity: Entity; row: Row; category: string | null; className?: string; size?: 'md' | 'lg' }) {
-  const image = entity.fields.find((f) => f.kind === 'image');
-  if (image && row[image.name]) return <img src={`/file/${entity.name}/${row.id}/${image.name}`} alt="" loading="lazy" className={cn('object-cover', className)} />;
-  return <Cover name={rowName(entity, row)} icon={iconWord(category, rowName(entity, row), entity.name)} className={className} size={size} />;
-}
-
-function CatalogueGrid({ spec, rows, viewer }: { spec: Spec; rows: Row[]; viewer: Viewer }) {
-  const e = spec.entity;
-  const about = e.fields.find((f) => f.kind === 'longtext');
-  const price = spec.columns.map((c) => e.fields.find((f) => f.name === c)).find((f) => f?.kind === 'money');
-  const category = useCategory(spec);
-  const stock = stockField(e);
-  const refLabel = useRefLabel();
-  const meta = spec.columns.map((c) => e.fields.find((f) => f.name === c))
-    .filter((f): f is Field => Boolean(f) && f!.name !== e.labelField && f !== price && f !== category && f !== stock && f!.kind !== 'image');
-  return (
-    <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" aria-label={spec.title}>
-      {rows.map((r) => {
-        const name = rowName(e, r);
-        const open = can(viewer, e.name, 'view', r);
-        const cat = category ? refLabel(r, category.name, category.target!, viewer) : null;
-        return (
-          <li key={r.id} data-row-id={r.id}>
-            <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition duration-300 ease-out hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0">
-              <div className="relative">
-                <ProductCover entity={e} row={r} category={cat} className="aspect-[4/3] w-full transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:group-hover:scale-100" />
-                {cat && <span className="absolute top-3 left-3 rounded-full bg-white/85 px-2.5 py-1 text-xs font-medium text-slate-800 shadow-sm backdrop-blur dark:bg-black/50 dark:text-white">{cat}</span>}
-              </div>
-              <div className="flex flex-1 flex-col gap-3 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-lg leading-snug font-semibold">
-                    {open ? <Link to={`/${e.name}/${r.id}`} className="after:absolute after:inset-0 focus-visible:outline-none">{name}</Link> : name}
-                  </h3>
-                  {price && <p className="shrink-0 text-xl font-semibold tracking-tight tabular-nums"><FieldValue entity={e} field={price} row={r} viewer={viewer} /></p>}
-                </div>
-                {about && r[about.name] ? <p className="line-clamp-2 text-sm text-muted-foreground">{String(r[about.name])}</p> : null}
-                <div className="flex flex-wrap items-center gap-2">
-                  {stock && spec.columns.includes(stock.name) && <span data-stock={String(r[stock.name])}><StockChip value={r[stock.name]} /><span className="sr-only">{stock.label} {String(r[stock.name])}</span></span>}
-                  {meta.map((f) => (
-                    <span key={f.name} className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs">
-                      <span className="text-muted-foreground">{f.label}</span>
-                      <span className="relative z-10 font-medium"><FieldValue entity={e} field={f} row={r} viewer={viewer} labels={spec.labels[f.name]} /></span>
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-auto flex justify-end pt-1"><RowActions entity={e} row={r} names={spec.rowActions} viewer={viewer} /></div>
-              </div>
-            </article>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function CardSkeletons() {
-  return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" aria-busy="true" aria-label="Loading">
-      {Array.from({ length: 6 }, (_, i) => (
-        <div key={i} className="overflow-hidden rounded-2xl border bg-card">
-          <Skeleton className="aspect-[4/3] w-full rounded-none" />
-          <div className="space-y-3 p-5"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-4 w-full" /><Skeleton className="h-6 w-24 rounded-full" /></div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// The storefront's front page: a panel in the theme's gradient, the list's title and words from the graph, and the
-// first reference filter (categories) as quick links.
-function Hero({ spec, total, viewer, filter, onFilter }: { spec: Spec; total: number | null; viewer: Viewer; filter: string; onFilter: (v: string) => void }) {
-  const hero = app.hero!;
-  const cat = spec.filters.find((f) => spec.entity.fields.find((x) => x.name === f.field)?.kind === 'ref');
-  const target = cat ? spec.entity.fields.find((x) => x.name === cat.field)!.target : null;
-  const options = useOptions(target, viewer);
-  return (
-    <section aria-labelledby="hero-title" className="relative mb-8 overflow-hidden rounded-3xl bg-brand-gradient px-6 py-10 text-white shadow-lg sm:px-10 sm:py-14">
-      <svg className="pointer-events-none absolute -top-16 -right-10 h-80 w-80 opacity-30" viewBox="0 0 200 200" aria-hidden="true">
-        {[30, 50, 70, 90].map((r) => <circle key={r} cx="100" cy="100" r={r} fill="none" stroke="white" strokeOpacity="0.5" />)}
-      </svg>
-      <div className="relative max-w-2xl space-y-4">
-        <p className="text-sm font-medium tracking-wide text-white/75 uppercase">{hero.eyebrow}</p>
-        <h1 id="hero-title" className="text-4xl font-semibold tracking-tight sm:text-5xl">{hero.title}</h1>
-        <p className="text-lg text-white/85">
-          {hero.subtitle ?? (total === null ? '\u00a0' : `${formatNumber(total)} ${total === 1 ? spec.entity.label.toLowerCase() : spec.entity.plural.toLowerCase()} to explore${(options.data?.length ?? 0) > 1 ? ` across ${options.data!.length} ${app.entities[target!]?.plural.toLowerCase() ?? cat!.name.toLowerCase()}` : ''}.`)}
-        </p>
-        {cat && (options.data?.length ?? 0) > 0 && (
-          <div className="flex flex-wrap gap-2 pt-2" role="group" aria-label={`Quick ${cat.name.toLowerCase()} filter`}>
-            {[{ id: '', label: 'All' }, ...options.data!].map((o) => (
-              <button key={o.id} type="button" aria-pressed={filter === o.id} onClick={() => onFilter(o.id)}
-                className={cn('rounded-full px-4 py-1.5 text-sm font-medium ring-1 ring-white/40 transition-colors focus-visible:outline-2 focus-visible:outline-white',
-                  filter === o.id ? 'bg-white text-slate-900' : 'bg-white/10 text-white hover:bg-white/20')}>
-                {o.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-// One page: a quiet count under the list. Several: the count and the page buttons.
-function Pager({ page, pages, total, onPage, framed }: { page: number; pages: number; total: number; onPage: (p: number) => void; framed?: boolean }) {
-  const count = `${formatNumber(total)} ${total === 1 ? 'record' : 'records'}${pages > 1 ? ` · page ${page} of ${pages}` : ''}`;
-  return (
-    <div className={cn('flex flex-col items-center justify-between gap-3 px-1 py-3 text-sm text-muted-foreground sm:flex-row', framed && 'border-t px-4')}>
-      <p aria-live="polite">{count}</p>
-      {pages > 1 && (
-        <nav aria-label="Pagination" className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Previous page"><ChevronLeft />Previous</Button>
-          <Button variant="outline" size="sm" onClick={() => onPage(page + 1)} disabled={page >= pages} aria-label="Next page">Next<ChevronRight /></Button>
-        </nav>
-      )}
-    </div>
-  );
-}
-
-function ListBody({ spec }: { spec: Spec }) {
+/** The state of a list in the URL, and its page from the server: shared by the workspace table and the storefront. */
+export function useListState(spec: Spec) {
   const viewer = useViewer();
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as Record<string, string | number | undefined>;
@@ -204,105 +68,120 @@ function ListBody({ spec }: { spec: Spec }) {
   const sort: Sort = search.sort ? { field: String(search.sort), dir: search.dir === 'desc' ? 'desc' : 'asc' } : null;
   const filters = Object.fromEntries(spec.filters.flatMap((f) => (f.range ? [`${f.field}_from`, `${f.field}_to`] : [f.field])).map((k) => [k, String(search[k] ?? '')]));
   const [text, setText] = useState(q);
-  const grid = catalogue(spec) && search.view !== 'table';
-  const heroShown = catalogue(spec) && app.hero?.entity === spec.entity.name;
-  const heroFilter = spec.filters.find((f) => spec.entity.fields.find((x) => x.name === f.field)?.kind === 'ref')?.field ?? null;
-
   const set = (patch: Record<string, string | number | undefined>) =>
     void navigate({ to: '.', search: (prev: Record<string, unknown>) => {
       const next: Record<string, unknown> = { ...prev, ...patch };
       for (const k of Object.keys(next)) if (next[k] === '' || next[k] === undefined) delete next[k];
       return next;
     }, replace: true });
-
   useEffect(() => setText(q), [q]);
   useEffect(() => {
     if (text === q) return;
     const t = setTimeout(() => set({ q: text, page: undefined }), 300);
     return () => clearTimeout(t);
   }); // eslint-disable-line react-hooks/exhaustive-deps
-
   const query: Query = { page, q: q || undefined, sort: sort?.field, dir: sort?.dir, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) };
   const data = useQuery({ queryKey: ['list', spec.key, query], queryFn: () => spec.fetch(query), placeholderData: keepPreviousData });
   const narrowed = Boolean(q) || Object.values(filters).some(Boolean);
   const mayCreate = spec.create && can(viewer, spec.entity.name, 'create');
-  const onSort = (field: string) => set({ sort: field, dir: sort?.field === field && sort.dir === 'asc' ? 'desc' : 'asc', page: undefined });
+  const clear = () => { setText(''); set(Object.fromEntries([...Object.keys(filters), 'q', 'page'].map((k) => [k, undefined]))); };
   const createButton = mayCreate ? <Button asChild><Link to={`/${spec.entity.name}/new`}><Plus />{spec.createTitle}</Link></Button> : null;
+  return { viewer, search, q, text, setText, page, sort, filters, set, query, data, narrowed, mayCreate, clear, createButton };
+}
 
+/** "1–10 of 128" and the page buttons; nothing to page through, only the count. */
+export function Pager({ page, pages, total, shown, size, onPage, className }: { page: number; pages: number; total: number; shown: number; size: number; onPage: (p: number) => void; className?: string }) {
+  const first = total === 0 ? 0 : (page - 1) * size + 1;
+  const range = total === 0 ? 'No records' : pages > 1 ? `${formatNumber(first)}–${formatNumber(first + shown - 1)} of ${formatNumber(total)}` : `${formatNumber(total)} ${total === 1 ? 'record' : 'records'}`;
   return (
-    <>
-      {catalogue(spec) && app.hero?.entity === spec.entity.name
-        ? <Hero spec={spec} total={data.data?.total ?? null} viewer={viewer} filter={filters[heroFilter ?? ''] ?? ''} onFilter={(v) => heroFilter && set({ [heroFilter]: v, page: undefined })} />
-        : <PageHeader title={spec.title} description={spec.intro ?? undefined} actions={createButton} />}
-      {catalogue(spec) && app.hero?.entity === spec.entity.name && createButton && <div className="-mt-4 mb-6 flex justify-end">{createButton}</div>}
-      {(spec.search.length > 0 || spec.filters.length > 0 || catalogue(spec)) && (
-        <div role="search" className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          {spec.search.length > 0 && (
-            <div className="grid flex-1 gap-1.5 sm:max-w-sm">
-              <Label htmlFor="list-search" className="text-xs text-muted-foreground">Search</Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                <Input id="list-search" type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder={`Search ${spec.title.toLowerCase()}…`} className="pl-9" />
-              </div>
-            </div>
-          )}
-          {spec.filters.filter((f) => !f.range && !(heroShown && f.field === heroFilter)).map((f) => (
-            <FilterSelect key={f.field} entity={spec.entity} filter={f} value={filters[f.field]} viewer={viewer} onChange={(v) => set({ [f.field]: v, page: undefined })} />
-          ))}
-          {spec.filters.filter((f) => f.range).map((f) => (
-            <fieldset key={f.field} className="grid gap-1.5">
-              <legend className="mb-1.5 text-xs text-muted-foreground">{f.name}</legend>
-              <div className="flex gap-2">
-                <Input aria-label={`${f.name} from`} type="date" value={filters[`${f.field}_from`]} onChange={(e) => set({ [`${f.field}_from`]: e.target.value, page: undefined })} className="w-40" />
-                <Input aria-label={`${f.name} to`} type="date" value={filters[`${f.field}_to`]} onChange={(e) => set({ [`${f.field}_to`]: e.target.value, page: undefined })} className="w-40" />
-              </div>
-            </fieldset>
-          ))}
-          {narrowed && <Button variant="ghost" onClick={() => { setText(''); set(Object.fromEntries([...Object.keys(filters), 'q', 'page'].map((k) => [k, undefined]))); }}><X />Clear</Button>}
-          {catalogue(spec) && (
-            <div className="flex w-fit items-center gap-1 self-end rounded-lg border bg-card p-0.5 sm:ml-auto" role="group" aria-label="Layout">
-              <Button variant={grid ? 'secondary' : 'ghost'} size="icon-sm" aria-pressed={grid} aria-label="Cards" onClick={() => set({ view: undefined })}><LayoutGrid /></Button>
-              <Button variant={!grid ? 'secondary' : 'ghost'} size="icon-sm" aria-pressed={!grid} aria-label="Table" onClick={() => set({ view: 'table' })}><Rows3 /></Button>
-            </div>
-          )}
+    <div className={cn('flex flex-col items-center justify-between gap-3 py-3 text-sm text-muted-foreground sm:flex-row', className)}>
+      <p aria-live="polite" className="tabular-nums">{range}</p>
+      {pages > 1 && (
+        <nav aria-label="Pagination" className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Previous page"><ChevronLeft />Previous</Button>
+          <span className="px-2 tabular-nums">{page} / {pages}</span>
+          <Button variant="outline" size="sm" onClick={() => onPage(page + 1)} disabled={page >= pages} aria-label="Next page">Next<ChevronRight /></Button>
+        </nav>
+      )}
+    </div>
+  );
+}
+
+// The toolbar of a workspace list: the search box and the filters in one row, applied filters highlighted, one "Clear".
+function Toolbar({ spec, s }: { spec: Spec; s: ReturnType<typeof useListState> }) {
+  if (!spec.search.length && !spec.filters.length) return null;
+  return (
+    <div role="search" className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:flex-wrap sm:items-center">
+      {spec.search.length > 0 && (
+        <div className="relative sm:w-72">
+          <label htmlFor="list-search" className="sr-only">Search {spec.title.toLowerCase()}</label>
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input id="list-search" type="search" value={s.text} onChange={(e) => s.setText(e.target.value)} placeholder={`Search ${spec.title.toLowerCase()}…`} className="h-9 pl-9" />
         </div>
       )}
-      {data.isError ? <ErrorState error={data.error} retry={() => void data.refetch()} />
-        : data.isPending ? (grid
-          ? <CardSkeletons />
-          : <Card className="py-0"><DataTable entity={spec.entity} rows={[]} columns={spec.columns} rowActions={spec.rowActions} viewer={viewer} caption={spec.title} loading /></Card>)
-        : data.data.rows.length === 0 ? (
-          narrowed ? <EmptyState searching title="No matches" description="Nothing matches this search or filter. Try another word or clear the filters." />
-            : <EmptyState title={`No ${spec.title.toLowerCase()} yet`} description={mayCreate ? 'Create the first one to get started.' : 'There is nothing to show here yet.'} action={createButton} />
-        ) : grid ? (
-          <div className="space-y-4" aria-busy={data.isFetching || undefined}>
-            <CatalogueGrid spec={spec} rows={data.data.rows} viewer={viewer} />
-            <Pager page={data.data.page} pages={data.data.pages} total={data.data.total} onPage={(p) => set({ page: p })} />
-          </div>
-        ) : (
-          <div aria-busy={data.isFetching || undefined}>
-            <Card className="gap-0 overflow-clip py-0">
+      {spec.filters.filter((f) => !f.range).map((f) => (
+        <FilterSelect key={f.field} entity={spec.entity} filter={f} value={s.filters[f.field]} viewer={s.viewer} onChange={(v) => s.set({ [f.field]: v, page: undefined })} />
+      ))}
+      {spec.filters.filter((f) => f.range).map((f) => (
+        <fieldset key={f.field} className="flex items-center gap-2">
+          <legend className="sr-only">{f.name}</legend>
+          <span className="text-sm text-muted-foreground">{f.name}</span>
+          <Input aria-label={`${f.name} from`} type="date" value={s.filters[`${f.field}_from`]} onChange={(e) => s.set({ [`${f.field}_from`]: e.target.value, page: undefined })} className="h-9 w-40" />
+          <Input aria-label={`${f.name} to`} type="date" value={s.filters[`${f.field}_to`]} onChange={(e) => s.set({ [`${f.field}_to`]: e.target.value, page: undefined })} className="h-9 w-40" />
+        </fieldset>
+      ))}
+      {s.narrowed && <Button variant="ghost" size="sm" onClick={s.clear}><X />Clear</Button>}
+    </div>
+  );
+}
+
+function ListBody({ spec }: { spec: Spec }) {
+  const s = useListState(spec);
+  const { viewer, data, sort, set } = s;
+  const onSort = (field: string) => set({ sort: field, dir: sort?.field === field && sort.dir === 'asc' ? 'desc' : 'asc', page: undefined });
+  return (
+    <>
+      <PageHeader title={spec.title} description={spec.intro ?? undefined} actions={s.createButton} />
+      <Card className="gap-0 overflow-clip py-0" aria-busy={data.isFetching || undefined}>
+        <Toolbar spec={spec} s={s} />
+        {data.isError ? <div className="p-4"><ErrorState error={data.error} retry={() => void data.refetch()} /></div>
+          : data.isPending ? <DataTable entity={spec.entity} rows={[]} columns={spec.columns} rowActions={spec.rowActions} viewer={viewer} caption={spec.title} loading />
+          : data.data.rows.length === 0 ? (
+            <div className="p-4">
+              {s.narrowed ? <EmptyState searching title="No matches" description="Nothing matches this search or filter." action={<Button variant="outline" onClick={s.clear}>Clear filters</Button>} />
+                : <EmptyState title={`No ${spec.title.toLowerCase()} yet`} description={s.mayCreate ? 'Create the first one to get started.' : 'There is nothing to show here yet.'} action={s.createButton} />}
+            </div>
+          ) : (
+            <>
               <DataTable entity={spec.entity} rows={data.data.rows} columns={spec.columns} rowActions={spec.rowActions} viewer={viewer} labels={spec.labels} sort={sort} onSort={onSort} caption={spec.title} />
-              {data.data.pages > 1 && <Pager framed page={data.data.page} pages={data.data.pages} total={data.data.total} onPage={(p) => set({ page: p })} />}
-            </Card>
-            {data.data.pages <= 1 && <Pager page={data.data.page} pages={data.data.pages} total={data.data.total} onPage={(p) => set({ page: p })} />}
-          </div>
-        )}
+              <Pager className="border-t px-4" page={data.data.page} pages={data.data.pages} total={data.data.total} shown={data.data.rows.length} size={spec.pageSize} onPage={(p) => set({ page: p })} />
+            </>
+          )}
+      </Card>
     </>
   );
+}
+
+// A storefront entity's own list is the catalogue; its table view (?view=table) and saved lists stay workspace tables.
+function Chooser({ spec }: { spec: Spec }) {
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  if (spec.entity.surface === 'storefront' && !spec.key.startsWith('list:') && search.view !== 'table') return <StorefrontList spec={spec} />;
+  return <ListBody spec={spec} />;
 }
 
 export function EntityListScreen({ entity }: { entity: string }) {
   const e = app.entities[entity];
   const spec: Spec = { key: entity, title: e.list.title, intro: e.list.intro, entity: e, columns: e.list.columns, rowActions: e.list.rowActions, search: e.list.search,
-    filters: e.list.filters, create: e.list.create, createTitle: e.list.createTitle, labels: e.list.labels, fetch: (q) => endpoints.entities[entity].list(q), roles: null };
-  return <Guard allow={(v) => can(v, entity, 'view')}><ListBody key={spec.key} spec={spec} /></Guard>;
+    filters: e.list.filters, create: e.list.create, createTitle: e.list.createTitle, labels: e.list.labels, fetch: (q) => endpoints.entities[entity].list(q), roles: null, pageSize: e.list.pageSize };
+  return <Guard allow={(v) => can(v, entity, 'view')}><Chooser key={spec.key} spec={spec} /></Guard>;
 }
 
 export function SavedListScreen({ id }: { id: string }) {
   const l = app.lists.find((x) => x.id === id)!;
   const e = app.entities[l.entity];
   const spec: Spec = { key: `list:${id}`, title: l.title, intro: l.intro, entity: e, columns: l.columns, rowActions: l.rowActions, search: l.search, filters: [],
-    create: l.create, createTitle: l.createTitle, labels: e.list.labels, fetch: (q) => endpoints.lists[id](q), roles: l.roles };
-  return <Guard allow={(v) => canSee(v, l.roles) && can(v, l.entity, 'view')}><ListBody key={spec.key} spec={spec} /></Guard>;
+    create: l.create, createTitle: l.createTitle, labels: e.list.labels, fetch: (q) => endpoints.lists[id](q), roles: l.roles, pageSize: 50 };
+  return <Guard allow={(v) => canSee(v, l.roles) && can(v, l.entity, 'view')}><Chooser key={spec.key} spec={spec} /></Guard>;
 }
+
+export type { Row };

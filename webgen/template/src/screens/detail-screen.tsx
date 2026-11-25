@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft, Check, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { app } from '@/gen/app';
 import { endpoints } from '@/gen/endpoints';
 import type { Entity, Related } from '@/lib/model';
@@ -21,40 +21,14 @@ import { DataTable, columnField } from '@/components/data-table';
 import { EntityForm } from '@/components/entity-form';
 import { StepButton, type Step } from '@/components/step-button';
 import { DeleteDialog, rowSteps, signInSteps, SignInButton } from '@/components/row-actions';
-import { ProductCover, StockChip } from '@/screens/list-screen';
-import { stockField } from '@/lib/visual';
-import { useRefLabel } from '@/lib/refs';
+import { StorefrontDetail } from '@/screens/storefront';
+import { lineItems, OrderLayout, Stepper } from '@/screens/order';
 import { rowName } from '@/lib/rows';
 import { can, ownField, transitionsFor, type Viewer } from '@/lib/perms';
 import { useViewer } from '@/lib/session';
 import { useRun } from '@/lib/run';
-import { enumLabel, formatNumber } from '@/lib/format';
+import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
-
-// The statuses a row passes through when nothing goes wrong, in the enum's order; where it stands among them.
-function Progress({ entity, row }: { entity: Entity; row: Row }) {
-  const st = entity.states!;
-  const field = entity.fields.find((f) => f.name === st.field);
-  const bad = new Set(st.transitions.filter((t) => t.destructive).map((t) => t.to));
-  const path = (field?.options ?? []).filter((o) => !bad.has(o));
-  const current = String(row[st.field] ?? '');
-  const at = path.indexOf(current);
-  if (path.length < 3 || at < 0) return null;
-  return (
-    <ol className="flex flex-wrap items-center gap-x-2 gap-y-3 text-sm" aria-label="Progress">
-      {path.map((s, i) => (
-        <li key={s} className="flex items-center gap-2" aria-current={i === at ? 'step' : undefined}>
-          <span className={cn('flex size-6 items-center justify-center rounded-full border text-xs font-semibold',
-            i < at && 'border-primary bg-primary text-primary-foreground', i === at && 'border-primary text-primary ring-4 ring-primary/15', i > at && 'text-muted-foreground')}>
-            {i < at ? <Check className="size-3.5" aria-hidden="true" /> : i + 1}
-          </span>
-          <span className={cn(i === at ? 'font-medium' : 'text-muted-foreground')}>{enumLabel(s)}</span>
-          {i < path.length - 1 && <span className={cn('h-px w-6 sm:w-10', i < at ? 'bg-primary' : 'bg-border')} aria-hidden="true" />}
-        </li>
-      ))}
-    </ol>
-  );
-}
 
 function RelatedSection({ parent, row, rel, viewer }: { parent: Entity; row: Row; rel: Related; viewer: Viewer }) {
   const child = app.entities[rel.entity];
@@ -133,8 +107,26 @@ function DetailBody({ entity }: { entity: Entity }) {
   const mayEdit = can(viewer, entity.name, 'edit', row);
   const mayDelete = can(viewer, entity.name, 'delete', row);
   const fields = entity.detail.fields.filter((n) => n !== st?.field);
+  const items = lineItems(entity);
+  if (items && entity.surface !== 'storefront') {
+    const others = entity.detail.related.filter((r) => r !== items.rel && can(viewer, r.entity, 'view'));
+    return (
+      <>
+        {mayDelete && <DeleteDialog entity={entity} row={row} open={deleting} onOpenChange={setDeleting} after={listVisible ? `/${entity.name}` : '/'} />}
+        <OrderLayout entity={entity} row={row} viewer={viewer} steps={steps} rel={items.rel} product={items.product}
+          header={<PageHeader crumbs={[...crumbs, { label: rowName(entity, row) }]} title={rowName(entity, row)}
+            actions={(mayEdit || mayDelete) ? <>
+              {mayEdit && <Button asChild variant="outline"><Link to={`/${entity.name}/${row.id}/edit`}><Pencil />Edit</Link></Button>}
+              {mayDelete && <Button variant="ghost" className="text-destructive" onClick={() => setDeleting(true)}><Trash2 />Delete</Button>}
+            </> : undefined} />}
+          extra={others.map((r) => <RelatedSection key={r.entity + r.via} parent={entity} row={row} rel={r} viewer={viewer} />)} />
+      </>
+    );
+  }
   if (entity.surface === 'storefront') {
+    const related = entity.detail.related.filter((r) => can(viewer, r.entity, 'view')).map((r) => <RelatedSection key={r.entity + r.via} parent={entity} row={row} rel={r} viewer={viewer} />);
     return <StorefrontDetail entity={entity} row={row} viewer={viewer} steps={steps} mayEdit={mayEdit} mayDelete={mayDelete} onDelete={() => setDeleting(true)} crumbs={crumbs}
+      related={related.length ? related : null}
       deleting={<>{mayDelete && <DeleteDialog entity={entity} row={row} open={deleting} onOpenChange={setDeleting} after={listVisible ? `/${entity.name}` : '/'} />}</>} />;
   }
   return (
@@ -159,7 +151,7 @@ function DetailBody({ entity }: { entity: Entity }) {
       />
       {mayDelete && <DeleteDialog entity={entity} row={row} open={deleting} onOpenChange={setDeleting} after={listVisible ? `/${entity.name}` : '/'} />}
       <div className="grid gap-6">
-        {st && <Progress entity={entity} row={row} />}
+        {st && <Stepper entity={entity} row={row} />}
         <Card>
           <CardHeader><CardTitle>Details</CardTitle><CardDescription>{entity.label} #{row.id}</CardDescription></CardHeader>
           <CardContent>
@@ -179,97 +171,6 @@ function DetailBody({ entity }: { entity: Entity }) {
         </Card>
         {entity.detail.related.filter((r) => can(viewer, r.entity, 'view')).map((r) => <RelatedSection key={r.entity + r.via} parent={entity} row={row} rel={r} viewer={viewer} />)}
         {listVisible && <div><Button asChild variant="ghost"><Link to={`/${entity.name}`}><ArrowLeft />Back to {entity.list.title.toLowerCase()}</Link></Button></div>}
-      </div>
-    </>
-  );
-}
-
-// A storefront record (a product): its picture or generated cover (a gallery when it has several pictures), the
-// price and the action up front, the description, then the remaining details.
-function StorefrontDetail({ entity, row, viewer, steps, mayEdit, mayDelete, onDelete, crumbs, deleting }: {
-  entity: Entity; row: Row; viewer: Viewer; steps: Step[]; mayEdit: boolean; mayDelete: boolean; onDelete: () => void;
-  crumbs: { label: string; to?: string }[]; deleting: React.ReactNode;
-}) {
-  const refLabel = useRefLabel();
-  const images = entity.fields.filter((f) => f.kind === 'image' && row[f.name]);
-  const [shown, setShown] = useState(0);
-  const price = entity.detail.fields.map((n) => entity.fields.find((f) => f.name === n)).find((f) => f?.kind === 'money');
-  const about = entity.fields.find((f) => f.kind === 'longtext');
-  const cat = entity.fields.find((f) => f.kind === 'ref' && entity.detail.fields.includes(f.name));
-  const catLabel = cat ? refLabel(row, cat.name, cat.target!, viewer) : null;
-  const stock = stockField(entity);
-  // A shopper is not shown the shop's own switches (a bool such as "active") unless the detail names them for display.
-  const rest = entity.detail.fields.filter((n) => ![price?.name, about?.name, entity.labelField].includes(n)
-    && !['image', 'bool'].includes(entity.fields.find((f) => f.name === n)?.kind ?? '') && n !== 'id');
-  const signIn = signInSteps(entity, entity.detail.actions, viewer);
-  return (
-    <>
-      <nav aria-label="Breadcrumb" className="mb-6 text-sm text-muted-foreground">
-        <ol className="flex items-center gap-1">
-          {crumbs.map((c, i) => <li key={i}>{c.to ? <Link to={c.to} className="hover:text-foreground">{c.label}</Link> : c.label}<span aria-hidden="true" className="px-1">/</span></li>)}
-          <li aria-current="page" className="text-foreground">{rowName(entity, row)}</li>
-        </ol>
-      </nav>
-      {deleting}
-      <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-        <div className="space-y-3">
-          {images.length > 0 ? (
-            <>
-              <img src={`/file/${entity.name}/${row.id}/${images[shown].name}`} alt={`${rowName(entity, row)}: ${images[shown].label}`} className="aspect-[4/3] w-full rounded-3xl border object-cover shadow-md" />
-              {images.length > 1 && (
-                <div className="flex gap-3" role="group" aria-label="Pictures">
-                  {images.map((f, i) => (
-                    <button key={f.name} type="button" aria-pressed={i === shown} aria-label={f.label} onClick={() => setShown(i)}
-                      className={cn('overflow-hidden rounded-xl border-2', i === shown ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100')}>
-                      <img src={`/file/${entity.name}/${row.id}/${f.name}`} alt="" className="size-20 object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : <ProductCover entity={entity} row={row} category={catLabel} size="lg" className="aspect-[4/3] w-full rounded-3xl shadow-md" />}
-        </div>
-        <div className="flex flex-col gap-6">
-          <div className="space-y-3">
-            {catLabel && <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{catLabel}</span>}
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{rowName(entity, row)}</h1>
-            {price && <p className="text-3xl font-semibold tracking-tight tabular-nums"><FieldValue entity={entity} field={price} row={row} viewer={viewer} /></p>}
-            {stock && <StockChip value={row[stock.name]} />}
-          </div>
-          {(steps.length > 0 || signIn.length > 0 || mayEdit || mayDelete) && (
-            <div className="flex flex-wrap items-center gap-3">
-              {steps.map((s) => <StepButton key={s.kind === 'go' ? `go:${s.t.name}` : s.a.name} entity={entity} row={row} step={s} viewer={viewer} />)}
-              {signIn.map((a) => <SignInButton key={a.name} title={a.title} size="default" />)}
-              {mayEdit && <Button asChild variant="outline"><Link to={`/${entity.name}/${row.id}/edit`}><Pencil />Edit</Link></Button>}
-              {mayDelete && <Button variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 />Delete</Button>}
-            </div>
-          )}
-          {about && row[about.name] ? (
-            <section aria-labelledby="about-title" className="border-t pt-6">
-              <h2 id="about-title" className="mb-2 text-sm font-semibold">{about.label}</h2>
-              <p className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">{String(row[about.name])}</p>
-            </section>
-          ) : null}
-          {rest.length > 0 && (
-            <section aria-labelledby="details-title" className="border-t pt-6">
-              <h2 id="details-title" className="mb-3 text-sm font-semibold">Details</h2>
-              <dl className="divide-y text-sm">
-                {rest.map((n) => {
-                  const f = columnField(entity, n);
-                  return (
-                    <div key={n} className="flex items-center justify-between gap-4 py-2.5">
-                      <dt className="text-muted-foreground">{f?.label ?? n}</dt>
-                      <dd className="text-right font-medium"><FieldValue entity={entity} field={f} row={row} viewer={viewer} labels={entity.detail.labels[n]} /></dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            </section>
-          )}
-        </div>
-      </div>
-      <div className="mt-10 grid gap-6">
-        {entity.detail.related.filter((r) => can(viewer, r.entity, 'view')).map((r) => <RelatedSection key={r.entity + r.via} parent={entity} row={row} rel={r} viewer={viewer} />)}
       </div>
     </>
   );
