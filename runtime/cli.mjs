@@ -7,6 +7,7 @@ import { serve } from './server.mjs';
 import { validate, formatErrors } from './validate.mjs';
 import { loadPlugins } from './registry.mjs';
 import { admin, importCommand } from './admin.mjs';
+import { openapiText } from './contract.mjs';
 
 export async function main(argv, { log = console.log, err = console.error, stdin = async () => '', fetchImpl = undefined, clock = undefined } = {}) {
   const imported = importCommand(argv, { log, err });
@@ -27,6 +28,15 @@ export async function main(argv, { log = console.log, err = console.error, stdin
     if (!errors.length) { log(`✓ ${graphFile} is valid${registry.plugins.length ? ` (plugins: ${registry.plugins.join(', ')})` : ''}`); return { code: 0 }; }
     err(`✗ ${graphFile}\n${formatErrors(errors)}`);
     return { code: 1 };
+  }
+
+  // The OpenAPI document of the graph's /api: the same bytes GET /api/openapi.json sends. A graph the checker refuses has none.
+  if (argv.includes('--openapi')) {
+    const errors = [...pluginErrors, ...validate(graph, registry)];
+    if (errors.length) { err(`✗ ${graphFile}\n${formatErrors(errors)}`); return { code: 1 }; }
+    const text = openapiText(graph, registry), out = flag('out', null);
+    if (out) { fs.writeFileSync(out, text); log(`✓ ${out}`); } else log(text.slice(0, -1));
+    return { code: 0 };
   }
 
   const dbFile = flag('db', path.join(dir, 'data.sqlite'));
