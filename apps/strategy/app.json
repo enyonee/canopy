@@ -41,8 +41,8 @@
         "StoreItem": ["view", "do:buy"],
         "User": ["view", "do:upgradeCity", "do:trainWorker", "do:trainSoldier", "do:upgradeSoldier",
                  "do:depositGold", "do:assignGold", "do:assignIron", "do:assignWood", "do:assignWheat", "do:attack"],
-        "Message": ["view", "create"],
-        "Report": ["view"]
+        "Message": { "own": ["fromUser", "toUser"], "can": ["view", "create"] },
+        "Report": { "own": "user", "can": ["view"] }
       }
     }
   },

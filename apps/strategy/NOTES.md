@@ -58,3 +58,9 @@
   "messages and reports rows" from the brief, real even though no `ui_instruct` case checks it.
 - Five saved `lists` over the same entity and the same `where: {"id": "@me"}`, each a different
   named "page" purely by choice of `rowActions`/`columns` — see Weakened cases.
+- Mail and battle reports are private: `Message` is granted with `own: ["fromUser", "toUser"]` and `Report`
+  with `own: "user"`. Before, both were granted without `own`: the Messages and Reports pages only filtered by
+  `@me`, while `/Message/<id>` and `/Report/<id>` gave every player anyone's mail and reports by id, and a posted `fromUser` let a player sign a message as someone else. Now `fromUser` is filled from
+  the session. No ui_instruct case covers messages or reports, so the assertions ride on the ranking check,
+  which already has two rival players: neither reads Alice's seeded message or report, and a message posted
+  with `fromUser` set to Alice arrives from its real sender.

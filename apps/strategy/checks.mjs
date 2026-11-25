@@ -104,7 +104,19 @@ export const checks = [
       const weakling = ranking.find((r) => r.id === weak.id);
       must(champ && weakling && ranking.indexOf(champ) < ranking.indexOf(weakling), 'the player with more soldiers (higher points) is not ranked above the one with fewer');
       must(champ.points === champ.cityLevel * 100 + champ.soldiers * 5 + champ.workers, `points do not match the stated formula: ${JSON.stringify(champ)}`);
-      return `Ranking lists ${ranking.length} players sorted by points descending; Champion (2 extra soldiers) outranks Weakling exactly as the points formula predicts`;
+      // Rivals on the ranking still read only their own mail and reports: Alice's seeded message #1 and report #1
+      // stay hers, and a message names its real sender whatever the form posts.
+      for (const path of ['/Message', '/Report']) {
+        const listed = await weak.client.get(path, { json: true });
+        must(listed.status === 200 && listed.body.total === 0, `a new player reads ${listed.body.total} row(s) of ${path} that are not theirs`);
+      }
+      must((await weak.client.get('/Message/1', { json: true })).status === 403, "a player opened another player's message");
+      must((await weak.client.get('/Report/1', { json: true })).status === 403, "a player opened another player's report");
+      await strong.client.post('/Message', { toUser: String(weak.id), fromUser: '2', subject: 'Truce?', body: 'Signed as Alice' });
+      const inbox = (await weak.client.get('/Message', { json: true })).body.rows;
+      must(inbox.length === 1 && inbox[0].subject === 'Truce?' && String(inbox[0].fromUser) === String(strong.id),
+        `the message does not reach its recipient from its real sender: ${JSON.stringify(inbox)}`);
+      return `Ranking lists ${ranking.length} players sorted by points descending; Champion (2 extra soldiers) outranks Weakling exactly as the points formula predicts; each reads only their own messages and reports`;
     } },
 
   { task: 'Purchasing a limited-stock store item spends resources, grants the item, and removes it from the store once sold out',
