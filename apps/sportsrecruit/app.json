@@ -29,7 +29,7 @@
       "athlete": { "Job": ["view", "do:apply"], "Application": { "own": "athlete", "can": ["view"] },
                    "Message": { "own": "to", "can": ["view", "do:markRead"] }, "User": ["view"] },
       "organization": { "Job": { "own": "organization", "can": ["view", "create", "edit"] },
-                        "Application": ["view"], "User": ["view", "do:contact"],
+                        "Application": { "own": "job.organization", "can": ["view"] }, "User": ["view", "do:contact"],
                         "Message": { "own": "from", "can": ["view", "create"] } },
       "guest": { "Job": ["view"] }
     }

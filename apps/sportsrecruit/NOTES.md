@@ -57,3 +57,8 @@
   (`{"entity": "User", "where": {"id": "@me"}}`), used as a personal profile/notification page —
   `own` cannot express "my own User row" directly (it requires a `ref:User` field, and `User`
   has none pointing at itself), so the saved list's fixed `where` is the only way to get there.
+- Applications are seen by the organization whose job they answer: the organization role is granted
+  `Application` with `own: "job.organization"`. Before, it was granted without `own`, so every organization
+  listed and opened the applications (athlete, note, status) to every other organization's jobs through
+  `/Application`. Check 5 asserts the Falcons see exactly Ann's application and the Harbor Hawks see none of
+  it, neither in the list nor by id.
