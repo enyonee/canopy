@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutGrid, Plus, Rows3, Search, X } from 'lucide-react';
 import { app } from '@/gen/app';
 import { endpoints } from '@/gen/endpoints';
 import type { Entity } from '@/lib/model';
@@ -141,7 +141,15 @@ function ListBody({ spec }: { spec: Spec }) {
   const onSort = (field: string) => set({ sort: field, dir: sort?.field === field && sort.dir === 'asc' ? 'desc' : 'asc', page: undefined });
   return (
     <>
-      <PageHeader title={spec.title} description={spec.intro ?? undefined} actions={s.createButton} />
+      <PageHeader title={spec.title} description={spec.intro ?? undefined} actions={<>
+        {s.createButton}
+        {spec.entity.surface === 'storefront' && !spec.key.startsWith('list:') && (
+          <div className="flex items-center gap-0.5 rounded-lg border bg-card p-0.5" role="group" aria-label="Layout">
+            <Button variant="ghost" size="icon-sm" aria-pressed="false" aria-label="Cards" onClick={() => set({ view: undefined })}><LayoutGrid /></Button>
+            <Button variant="secondary" size="icon-sm" aria-pressed="true" aria-label="Table"><Rows3 /></Button>
+          </div>
+        )}
+      </>} />
       <Card className="gap-0 overflow-clip py-0" aria-busy={data.isFetching || undefined}>
         <Toolbar spec={spec} s={s} />
         {data.isError ? <div className="p-4"><ErrorState error={data.error} retry={() => void data.refetch()} /></div>

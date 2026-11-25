@@ -112,7 +112,7 @@ function Lines({ parent, row, rel, product, viewer }: { parent: Entity; row: Row
                 <div className="flex items-center gap-4">
                   {qty && (edit && draft ? (
                     <div className="flex items-center rounded-lg border" role="group" aria-label={`${qty.label} of ${label}`}>
-                      <Button variant="ghost" size="icon-sm" aria-label={`One less ${label}`} disabled={run.isPending} onClick={() => setQty(n - 1)}><Minus /></Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={`One less ${label}`} disabled={run.isPending || n <= 1} onClick={() => setQty(n - 1)}><Minus /></Button>
                       <span className="w-8 text-center text-sm font-medium tabular-nums" aria-live="polite">{n}</span>
                       <Button variant="ghost" size="icon-sm" aria-label={`One more ${label}`} disabled={run.isPending} onClick={() => setQty(n + 1)}><Plus /></Button>
                     </div>
