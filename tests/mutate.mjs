@@ -1699,6 +1699,23 @@ const MUTATIONS = [
   { name: "SEC1: a related table with form: true hands true to onlyWritable (a crash)", file: "runtime/routes/rows.mjs",
     find: "rel.form === true ? null : rel.form || null",
     replace: "rel.form || null" },
+
+  // --- SEC3: create, edit and related add judge the row they leave by the same `own` as a read (auth.mjs mayWrite) ---
+  { name: "SEC3: create is not scoped by the row it inserts again (a one-hop row lands under another user's parent)", file: "runtime/auth.mjs",
+    find: "  if (unscoped || !e.own || !row) return true;",
+    replace: "  if (unscoped || !e.own || !row || op === 'create') return true;" },
+  { name: "SEC3: mayWrite allows every write without judging the row", file: "runtime/auth.mjs",
+    find: "      await prime(user, entity, [row]);\n      return canOp(spec, parents, store, roleOf, user, entity, op, row);",
+    replace: "      await prime(user, entity, [row]);\n      return true;" },
+  { name: "SEC3: create skips the write check", file: "runtime/routes/entity.mjs",
+    find: "  if (!await perms.mayWrite(user, entity, 'create', values)) { ctx.deny(); return true; }",
+    replace: "" },
+  { name: "SEC3: an edit judges the row as it was, not as the input leaves it (a row moves onto another user's parent)", file: "runtime/routes/entity.mjs",
+    find: "  if (!await perms.mayWrite(user, entity, 'edit', { ...row, ...submitted })) { ctx.deny(); return true; }",
+    replace: "  if (!await perms.mayWrite(user, entity, 'edit', row)) { ctx.deny(); return true; }" },
+  { name: "SEC3: a related add skips the write check (the parent from the path is never judged)", file: "runtime/routes/rows.mjs",
+    find: "  if (!await perms.mayWrite(user, child, 'create', values)) { ctx.deny(); return true; }",
+    replace: "" },
 ];
 
 const TEST_TIMEOUT = 60_000; // a mutation that hangs a test must still terminate, and quickly: this is not the coverage run
