@@ -8,8 +8,8 @@ import { readTemplate, project } from './files.mjs';
 export const canonical = (v) => (Array.isArray(v) ? v.map(canonical)
   : v !== null && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical(v[k])])) : v);
 
-export async function generate(graph, openapi, { template = readTemplate() } = {}) {
+export async function generate(graph, openapi, { template = readTemplate(), config = {} } = {}) {
   const doc = canonical(openapi);
-  const model = buildModel(graph, doc);
+  const model = buildModel(graph, doc, config);
   return { model, files: project(template, emit(model, doc, await typesOf(doc))) };
 }

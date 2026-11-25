@@ -25,6 +25,7 @@ import { can, canSee, type Viewer } from '@/lib/perms';
 import { useViewer } from '@/lib/session';
 import { useOptions } from '@/lib/refs';
 import { enumLabel, formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 type Spec = {
   key: string; title: string; intro: string | null; entity: Entity; columns: readonly string[]; rowActions: readonly string[];
@@ -62,47 +63,57 @@ const catalogue = (spec: Spec) => spec.rowActions.some((a) => spec.entity.action
 function CatalogueGrid({ spec, rows, viewer }: { spec: Spec; rows: Row[]; viewer: Viewer }) {
   const e = spec.entity;
   const about = e.fields.find((f) => f.kind === 'longtext');
+  const image = e.fields.find((f) => f.kind === 'image');
   const price = spec.columns.map((c) => e.fields.find((f) => f.name === c)).find((f) => f?.kind === 'money');
-  const meta = spec.columns.map((c) => e.fields.find((f) => f.name === c)).filter((f): f is Field => Boolean(f) && f!.name !== e.labelField && f !== price);
+  const meta = spec.columns.map((c) => e.fields.find((f) => f.name === c)).filter((f): f is Field => Boolean(f) && f!.name !== e.labelField && f !== price && f !== image);
   return (
     <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label={spec.title}>
-      {rows.map((r) => (
-        <li key={r.id} data-row-id={r.id}>
-          <Card className="group relative h-full gap-4 overflow-hidden pt-0 pb-5 transition-shadow hover:shadow-md">
-            <div className="flex h-28 items-center justify-center bg-gradient-to-br from-primary/15 via-primary/5 to-transparent" aria-hidden="true">
-              <span className="flex size-14 items-center justify-center rounded-2xl bg-card text-2xl font-semibold text-primary shadow-sm ring-1 ring-primary/10 transition-transform group-hover:scale-105">{rowName(e, r).slice(0, 1).toUpperCase()}</span>
-            </div>
-            <div className="flex items-start justify-between gap-3 px-5">
-              <div className="min-w-0 space-y-1">
-                <h3 className="truncate font-semibold">
-                  {can(viewer, e.name, 'view', r) ? <Link to={`/${e.name}/${r.id}`} className="after:absolute hover:text-primary">{rowName(e, r)}</Link> : rowName(e, r)}
-                </h3>
-                {about && r[about.name] ? <p className="line-clamp-2 text-sm text-muted-foreground">{String(r[about.name])}</p> : null}
+      {rows.map((r) => {
+        const name = rowName(e, r);
+        const open = can(viewer, e.name, 'view', r);
+        return (
+          <li key={r.id} data-row-id={r.id}>
+            <Card className="group relative h-full gap-3 overflow-hidden py-5 transition-[box-shadow,border-color] hover:border-primary/30 hover:shadow-md">
+              {image && r[image.name] ? (
+                <img src={`/file/${e.name}/${r.id}/${image.name}`} alt="" loading="lazy" className="-mt-5 mb-1 aspect-[4/3] w-full object-cover" />
+              ) : null}
+              <div className="flex items-start gap-3 px-5">
+                {!image && (
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+                )}
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <h3 className="truncate font-semibold leading-snug">
+                    {open ? <Link to={`/${e.name}/${r.id}`} className="after:absolute after:inset-0 hover:text-primary focus-visible:outline-none">{name}</Link> : name}
+                  </h3>
+                  {about && r[about.name] ? <p className="line-clamp-2 text-sm text-muted-foreground">{String(r[about.name])}</p> : null}
+                </div>
+                {price && <p className="shrink-0 text-base font-semibold tabular-nums"><FieldValue entity={e} field={price} row={r} viewer={viewer} /></p>}
               </div>
-              {price && <p className="shrink-0 text-lg font-semibold tabular-nums"><FieldValue entity={e} field={price} row={r} viewer={viewer} /></p>}
-            </div>
-            {meta.length > 0 && (
-              <dl className="flex flex-wrap gap-x-5 gap-y-1 px-5 text-sm">
-                {meta.map((f) => (
-                  <div key={f.name} className="flex items-center gap-1.5">
-                    <dt className="text-muted-foreground">{f.label}</dt>
-                    <dd><FieldValue entity={e} field={f} row={r} viewer={viewer} labels={spec.labels[f.name]} /></dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            <div className="mt-auto flex justify-end px-5"><RowActions entity={e} row={r} names={spec.rowActions} viewer={viewer} /></div>
-          </Card>
-        </li>
-      ))}
+              {meta.length > 0 && (
+                <dl className="flex flex-wrap gap-x-4 gap-y-1 px-5 text-sm">
+                  {meta.map((f) => (
+                    <div key={f.name} className="flex items-center gap-1.5">
+                      <dt className="text-muted-foreground">{f.label}</dt>
+                      <dd className="relative z-10"><FieldValue entity={e} field={f} row={r} viewer={viewer} labels={spec.labels[f.name]} /></dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              <div className="mt-auto flex justify-end px-5 pt-1"><RowActions entity={e} row={r} names={spec.rowActions} viewer={viewer} /></div>
+            </Card>
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-function Pager({ page, pages, total, shown, onPage }: { page: number; pages: number; total: number; shown: number; onPage: (p: number) => void }) {
+// One page: a quiet count under the list. Several: the count and the page buttons.
+function Pager({ page, pages, total, onPage, framed }: { page: number; pages: number; total: number; onPage: (p: number) => void; framed?: boolean }) {
+  const count = `${formatNumber(total)} ${total === 1 ? 'record' : 'records'}${pages > 1 ? ` · page ${page} of ${pages}` : ''}`;
   return (
-    <div className="flex flex-col items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:flex-row">
-      <p aria-live="polite">{total === 0 ? 'No records' : `${formatNumber(total)} ${total === 1 ? 'record' : 'records'}${pages > 1 ? ` · page ${page} of ${pages}` : ''}`}<span className="sr-only">, {shown} shown</span></p>
+    <div className={cn('flex flex-col items-center justify-between gap-3 px-1 py-3 text-sm text-muted-foreground sm:flex-row', framed && 'border-t px-4')}>
+      <p aria-live="polite">{count}</p>
       {pages > 1 && (
         <nav aria-label="Pagination" className="flex items-center gap-1">
           <Button variant="outline" size="sm" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Previous page"><ChevronLeft />Previous</Button>
@@ -173,7 +184,7 @@ function ListBody({ spec }: { spec: Spec }) {
           ))}
           {narrowed && <Button variant="ghost" onClick={() => { setText(''); set(Object.fromEntries([...Object.keys(filters), 'q', 'page'].map((k) => [k, undefined]))); }}><X />Clear</Button>}
           {catalogue(spec) && (
-            <div className="flex items-center gap-1 rounded-lg border bg-card p-0.5 sm:ml-auto" role="group" aria-label="Layout">
+            <div className="flex w-fit items-center gap-1 self-end rounded-lg border bg-card p-0.5 sm:ml-auto" role="group" aria-label="Layout">
               <Button variant={grid ? 'secondary' : 'ghost'} size="icon-sm" aria-pressed={grid} aria-label="Cards" onClick={() => set({ view: undefined })}><LayoutGrid /></Button>
               <Button variant={!grid ? 'secondary' : 'ghost'} size="icon-sm" aria-pressed={!grid} aria-label="Table" onClick={() => set({ view: 'table' })}><Rows3 /></Button>
             </div>
@@ -190,13 +201,16 @@ function ListBody({ spec }: { spec: Spec }) {
         ) : grid ? (
           <div className="space-y-4" aria-busy={data.isFetching || undefined}>
             <CatalogueGrid spec={spec} rows={data.data.rows} viewer={viewer} />
-            <Card className="py-0"><Pager page={data.data.page} pages={data.data.pages} total={data.data.total} shown={data.data.rows.length} onPage={(p) => set({ page: p })} /></Card>
+            <Pager page={data.data.page} pages={data.data.pages} total={data.data.total} onPage={(p) => set({ page: p })} />
           </div>
         ) : (
-          <Card className="gap-0 overflow-hidden py-0" aria-busy={data.isFetching || undefined}>
-            <DataTable entity={spec.entity} rows={data.data.rows} columns={spec.columns} rowActions={spec.rowActions} viewer={viewer} labels={spec.labels} sort={sort} onSort={onSort} caption={spec.title} />
-            <Pager page={data.data.page} pages={data.data.pages} total={data.data.total} shown={data.data.rows.length} onPage={(p) => set({ page: p })} />
-          </Card>
+          <div aria-busy={data.isFetching || undefined}>
+            <Card className="gap-0 overflow-hidden py-0">
+              <DataTable entity={spec.entity} rows={data.data.rows} columns={spec.columns} rowActions={spec.rowActions} viewer={viewer} labels={spec.labels} sort={sort} onSort={onSort} caption={spec.title} />
+              {data.data.pages > 1 && <Pager framed page={data.data.page} pages={data.data.pages} total={data.data.total} onPage={(p) => set({ page: p })} />}
+            </Card>
+            {data.data.pages <= 1 && <Pager page={data.data.page} pages={data.data.pages} total={data.data.total} onPage={(p) => set({ page: p })} />}
+          </div>
         )}
     </>
   );

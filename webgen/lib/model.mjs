@@ -189,8 +189,17 @@ function navModel(graph, entities, lists, dashboards, pages) {
   return nav;
 }
 
+// The currency money is shown in: a connector of the graph that names one (the payment plugin's `currency`), else the
+// front end's own setting (`<web>/webgen.config.json` → { "currency": "EUR" }); without either, plain amounts.
+function currencyOf(graph, config) {
+  const named = Object.values(graph.connectors || {}).map((c) => c.currency).find((c) => typeof c === 'string' && /^[A-Z]{3}$/.test(c));
+  if (named) return { code: named, source: 'graph' };
+  if (config?.currency && /^[A-Z]{3}$/.test(config.currency)) return { code: config.currency, source: 'config' };
+  return null;
+}
+
 /** The model of an app: what src/gen/app.ts of the generated project holds. */
-export function buildModel(graph, openapi) {
+export function buildModel(graph, openapi, config = {}) {
   const entities = Object.fromEntries(Object.keys(graph.data).map((e) => [e, entityModel(graph, openapi, e)]));
   const lists = listsModel(graph, entities);
   const dashboards = (graph.dashboards || []).map((d) => dashboardModel(graph, openapi, entities, d));
@@ -201,6 +210,8 @@ export function buildModel(graph, openapi) {
     note: graph.note || null,
     home: graph.home || null,
     theme: { background: graph.theme?.background || null, accent: graph.theme?.accent || null },
+    currency: currencyOf(graph, config)?.code ?? null,
+    locale: config.locale || 'en-US',
     roles: rolesModel(graph),
     entities, lists, dashboards, pages,
     search: graph.search ? { entities: graph.search.entities, title: graph.search.title || 'Search' } : null,

@@ -21,9 +21,11 @@ export function useViewer(): Viewer & { loading: boolean } {
 /** After the session changed: everything cached was read as somebody else. */
 export function useSessionChanged() {
   const qc = useQueryClient();
+  // The mounted screens keep observing their queries, so these are reset in place (clear() would orphan them and
+  // leave the old viewer on screen); "me" takes the answer of the sign-in itself.
   return async (me: Me) => {
-    qc.clear();
     qc.setQueryData(meKey, me);
+    await qc.resetQueries({ predicate: (q) => q.queryKey[0] !== meKey[0] });
   };
 }
 

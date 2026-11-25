@@ -140,7 +140,7 @@ function routesTsx(model) {
     add(`${n}Edit`, `/${e.name}/$id/edit`, `<FormScreen entity=${lit(e.name)} mode="edit" />`);
   }
   for (const l of model.lists) add(`list_${ident(l.id)}`, `/list/${l.id}`, `<SavedListScreen id=${lit(l.id)} />`, true);
-  for (const d of model.dashboards) add(`dashboard_${ident(d.id)}`, `/dashboard/${d.id}`, `<DashboardScreen id=${lit(d.id)} />`, true);
+  for (const d of model.dashboards) add(`dashboard_${ident(d.id)}`, `/dashboard/${d.id}`, `<Suspense fallback={<Skeleton className="h-96 w-full" />}><DashboardScreen id=${lit(d.id)} /></Suspense>`, true);
   for (const p of model.pages) add(`page_${ident(p.id)}`, `/page/${p.id}`, `<PageScreen id=${lit(p.id)} />`);
   if (model.roles) {
     add('login', '/login', '<LoginScreen />', true);
@@ -148,20 +148,23 @@ function routesTsx(model) {
   }
   const home = model.home || model.nav[0]?.to || null;
   const imports = [
-    `import { createRootRoute, createRoute, createRouter, ${model.dashboards.length ? 'lazyRouteComponent, ' : ''}redirect } from '@tanstack/react-router';`,
+    model.dashboards.length ? `import { lazy, Suspense } from 'react';` : null,
+    `import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';`,
     `import { AppShell } from '@/components/app-shell';`,
     `import { NotFound } from '@/components/states';`,
     `import { EntityListScreen, SavedListScreen } from '@/screens/list-screen';`,
     `import { DetailScreen } from '@/screens/detail-screen';`,
     `import { FormScreen } from '@/screens/form-screen';`,
     // The charts library only loads with the first dashboard opened.
-    model.dashboards.length ? `const DashboardScreen = lazyRouteComponent(() => import('@/screens/dashboard-screen'), 'DashboardScreen');` : null,
+    model.dashboards.length ? `import { Skeleton } from '@/components/ui/skeleton';` : null,
     model.pages.length ? `import { PageScreen } from '@/screens/page-screen';` : null,
     model.roles ? `import { LoginScreen${model.roles.register ? ', RegisterScreen' : ''} } from '@/screens/auth-screens';` : null,
   ].filter(Boolean);
+  // The charts library loads with the first dashboard opened, not with the app.
+  const lazies = model.dashboards.length ? ["const DashboardScreen = lazy(() => import('@/screens/dashboard-screen').then((m) => ({ default: m.DashboardScreen })));"] : [];
   const body = routes.map((r) => `const ${r.name} = createRoute({ getParentRoute: () => root, path: ${lit(r.path)},${r.search ? ' validateSearch: keep,' : ''} component: () => ${r.element} });`);
   return `${HEADER}${imports.join('\n')}
-
+${lazies.length ? `\n${lazies.join('\n')}\n` : ''}
 // Search parameters stay as the URL has them; each screen reads the ones it knows.
 const keep = (s: Record<string, unknown>) => s;
 

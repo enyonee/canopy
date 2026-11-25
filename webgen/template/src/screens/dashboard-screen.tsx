@@ -19,6 +19,7 @@ import { EmptyState, ErrorState } from '@/components/states';
 import { Guard } from '@/components/guard';
 import { canSee } from '@/lib/perms';
 import { enumLabel, formatDate, formatMoney, formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 type GroupRow = Record<string, unknown> & { grp?: unknown; _labels?: { grp?: string } };
 
@@ -111,6 +112,7 @@ function GroupedTable({ spec, rows }: { spec: Spec['tables'][number]; rows: Grou
   const first = spec.metrics[0];
   const series = rows.map((r) => ({ name: groupText(spec.group, r), v: Number(r[first?.as] ?? 0) }));
   const overTime = spec.group?.kind === 'date' || spec.group?.kind === 'time';
+  const subtitle = first ? `${first.title} by ${(spec.groupTitle ?? 'group').toLowerCase()}` : '';
   const table = (
     <Table>
       <caption className="sr-only">{spec.title}</caption>
@@ -134,7 +136,7 @@ function GroupedTable({ spec, rows }: { spec: Spec['tables'][number]; rows: Grou
     <Card className="gap-4">
       <Tabs defaultValue={first && rows.length > 1 ? 'chart' : 'table'}>
         <CardHeader className="grid-cols-[1fr_auto]">
-          <div className="space-y-1.5"><CardTitle>{spec.title}</CardTitle>{first && <CardDescription>{first.title} by {(spec.groupTitle ?? 'group').toLowerCase()}</CardDescription>}</div>
+          <div className="space-y-1.5"><CardTitle>{spec.title}</CardTitle>{first && subtitle.toLowerCase() !== spec.title.toLowerCase() && <CardDescription>{subtitle}</CardDescription>}</div>
           {first && rows.length > 0 && (
             <TabsList aria-label={`${spec.title} view`}>
               <TabsTrigger value="chart"><BarChart3 />Chart</TabsTrigger>
@@ -171,7 +173,7 @@ function DashboardBody({ spec }: { spec: Spec }) {
         {data.isError ? <ErrorState error={data.error} retry={() => void data.refetch()} /> : (
           <>
             {spec.cards.length > 0 && (
-              <section aria-label="Key figures" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <section aria-label="Key figures" className={cn('grid gap-4 sm:grid-cols-2', spec.cards.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4')}>
                 {spec.cards.map((c, i) => (
                   <Card key={c.title} className="gap-2 py-5">
                     <CardContent className="space-y-2 px-5">

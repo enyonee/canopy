@@ -130,17 +130,42 @@ function UserMenu({ viewer }: { viewer: Viewer & { loading: boolean } }) {
   );
 }
 
+// With one or two places to go a sidebar is mostly empty: those go in the header. More than that get a sidebar.
+const TOP_NAV_MAX = 2;
+
+function TopLinks({ viewer }: { viewer: Viewer }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  return (
+    <nav aria-label="Main" className="hidden items-center gap-1 lg:flex">
+      {visibleNav(viewer).map((n) => {
+        const active = path === n.to || path.startsWith(`${n.to}/`);
+        return (
+          <Link key={n.to} to={n.to} aria-current={active ? 'page' : undefined}
+            className={cn('rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground', active && 'bg-primary/10 text-primary')}>
+            {n.title}
+          </Link>
+        );
+      })}
+      {isAdmin(viewer) && app.roles && <a href="/admin" className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">Admin console</a>}
+    </nav>
+  );
+}
+
 export function AppShell({ children }: { children?: ReactNode }) {
   const viewer = useViewer();
   const [open, setOpen] = useState(false);
+  const count = viewer.loading ? 0 : visibleNav(viewer).length + (isAdmin(viewer) && app.roles ? 1 : 0);
+  const sidebar = viewer.loading || count > TOP_NAV_MAX;
   return (
     <div className="min-h-dvh">
       <a href="#main" className="sr-only z-50 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-3 focus:left-3">Skip to content</a>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-6 border-r bg-sidebar px-4 py-5 lg:flex">
-        <Brand />
-        <NavLinks viewer={viewer} />
-      </aside>
-      <div className="lg:pl-64">
+      {sidebar && (
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-6 border-r bg-sidebar px-4 py-5 lg:flex">
+          <Brand />
+          <NavLinks viewer={viewer} />
+        </aside>
+      )}
+      <div className={cn(sidebar && 'lg:pl-64')}>
         <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-6">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -153,7 +178,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
               <NavLinks viewer={viewer} onNavigate={() => setOpen(false)} />
             </SheetContent>
           </Sheet>
-          <div className="lg:hidden"><Brand /></div>
+          <div className={cn(sidebar && 'lg:hidden')}><Brand /></div>
+          {!sidebar && <TopLinks viewer={viewer} />}
           <div className="ml-auto flex items-center gap-1.5">
             <ThemeToggle />
             <UserMenu viewer={viewer} />

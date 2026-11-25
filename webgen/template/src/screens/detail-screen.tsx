@@ -20,7 +20,7 @@ import { FieldValue, StatusBadge } from '@/components/field-value';
 import { DataTable, columnField } from '@/components/data-table';
 import { EntityForm } from '@/components/entity-form';
 import { StepButton, type Step } from '@/components/step-button';
-import { DeleteDialog, rowSteps } from '@/components/row-actions';
+import { DeleteDialog, rowSteps, signInSteps, SignInButton } from '@/components/row-actions';
 import { rowName } from '@/lib/rows';
 import { can, ownField, transitionsFor, type Viewer } from '@/lib/perms';
 import { useViewer } from '@/lib/session';
@@ -139,6 +139,7 @@ function DetailBody({ entity }: { entity: Entity }) {
         actions={
           <>
             {steps.map((s) => <StepButton key={s.kind === 'go' ? `go:${s.t.name}` : s.a.name} entity={entity} row={row} step={s} viewer={viewer} />)}
+            {signInSteps(entity, entity.detail.actions, viewer).map((a) => <SignInButton key={a.name} title={a.title} size="default" />)}
             {mayEdit && <Button asChild variant="outline"><Link to={`/${entity.name}/${row.id}/edit`}><Pencil />Edit</Link></Button>}
             {mayDelete && (
               <DropdownMenu>

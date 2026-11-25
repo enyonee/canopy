@@ -1,12 +1,15 @@
-// How a value of each field kind reads on screen. Money is a major-unit number in every JSON answer and reads
-// with two decimals, like the runtime's own screens; the graph names no currency, so none is invented.
+// How a value of each field kind reads on screen. Money is a major-unit number in every JSON answer; it reads in
+// the app's currency when one is known (app.currency), else as a plain amount with two decimals: none is invented.
+import { app } from '@/gen/app';
 import type { Field } from '@/lib/model';
 
-const money = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const number = new Intl.NumberFormat('en-US');
-const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-const timeFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-const monthFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short' });
+const L = app.locale;
+// With a currency (from the graph or the front end's settings) money reads "$12.50"; without one, "12.50".
+const money = new Intl.NumberFormat(L, app.currency ? { style: 'currency', currency: app.currency } : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const number = new Intl.NumberFormat(L);
+const dateFmt = new Intl.DateTimeFormat(L, { year: 'numeric', month: 'short', day: 'numeric' });
+const timeFmt = new Intl.DateTimeFormat(L, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const monthFmt = new Intl.DateTimeFormat(L, { year: 'numeric', month: 'short' });
 
 export const formatMoney = (v: unknown) => (v === null || v === undefined || v === '' ? '' : money.format(Number(v)));
 export const formatNumber = (v: unknown) => (v === null || v === undefined || v === '' ? '' : number.format(Number(v)));

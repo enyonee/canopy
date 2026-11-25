@@ -81,6 +81,7 @@ export type NavItem = { kind: 'entity' | 'list' | 'dashboard' | 'page'; to: stri
 export type AppModel = {
   name: string; title: string; note: string | null; home: string | null;
   theme: { background: string | null; accent: string | null };
+  currency: string | null; locale: string;
   roles: Roles | null;
   entities: Readonly<Record<string, Entity>>;
   lists: readonly SavedList[]; dashboards: readonly Dashboard[]; pages: readonly Page[];
