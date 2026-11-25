@@ -20,6 +20,7 @@
                         "minQualification": "enum[highschool,associate,bachelor,master,phd]=associate",
                         "description": "longtext!" },
     "Match":          { "student": "ref:StudentProfile!", "provider": "ref:Provider!",
+                        "studentUser": "ref:User", "providerUser": "ref:User",
                         "score": "int := matchScore(student.location, student.fieldOfStudy, student.careerInterest, student.qualification, provider.location, provider.fieldOfStudy, provider.careerFocus, provider.minQualification)",
                         "isMatch": "bool := score >= 60" },
     "Application":    { "student": "ref:User!", "provider": "ref:Provider!", "message": "longtext", "createdAt": "time=now" },
@@ -38,11 +39,12 @@
       "student":  { "StudentProfile": { "own": "user", "can": ["view", "create", "edit"] },
                     "Match": { "own": "student.user", "can": ["view"] },
                     "Application": { "own": "student", "can": ["view"] },
-                    "Provider": ["view", "do:apply"], "Message": ["view", "create"] },
+                    "Provider": ["view", "do:apply"],
+                    "Message": { "own": ["sender", "match.studentUser"], "can": ["view", "create"] } },
       "provider": { "Provider": { "own": "user", "can": ["view", "create", "edit"] },
                     "Match": { "own": "provider.user", "can": ["view"] },
                     "Application": { "own": "provider.user", "can": ["view"] },
-                    "Message": ["view", "create"] },
+                    "Message": { "own": ["sender", "match.providerUser"], "can": ["view", "create"] } },
       "guest":    { "Provider": ["view"] }
     }
   },
@@ -61,15 +63,18 @@
     "StudentProfile": [ { "user": 4, "name": "Alice Kim", "location": "Springfield", "fieldOfStudy": "data-science",
                           "careerInterest": "industry", "qualification": "bachelor", "qualificationDetails": "BSc Computer Science, Springfield University",
                           "bio": "Looking to move from a general software role into data science." } ],
-    "Match":          [ { "student": 1, "provider": 1 },
-                        { "student": 1, "provider": 2 } ]
+    "Match":          [ { "student": 1, "provider": 1, "studentUser": 4, "providerUser": 2 },
+                        { "student": 1, "provider": 2, "studentUser": 4, "providerUser": 3 } ]
   },
 
   "events": [
     { "on": "StudentProfile.created", "do": [ { "block": "db.each", "from": "Provider",
-        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "student": "@row.id", "provider": "@each.id" } } ] } ] },
+        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "student": "@row.id", "provider": "@each.id" },
+                  "values": { "studentUser": "@row.user", "providerUser": "@each.user" } } ] } ] },
     { "on": "Provider.created", "do": [ { "block": "db.each", "from": "StudentProfile",
-        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "student": "@each.id", "provider": "@row.id" } } ] } ] }
+        "do": [ { "block": "db.ensure", "entity": "Match", "where": { "student": "@each.id", "provider": "@row.id" },
+                  "values": { "studentUser": "@each.user", "providerUser": "@row.user" } } ] } ] },
+    { "on": "Match.updated", "do": [ { "block": "db.update", "set": { "studentUser": "= student.user", "providerUser": "= provider.user" } } ] }
   ],
 
   "actions": [

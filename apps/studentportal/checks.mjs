@@ -4,6 +4,15 @@ import { colorCheck, navCheck } from '../../verify/lib.mjs';
 
 let profileId = null, matchId = null;
 
+// A JSON read as a signed-in user, on a session of its own (the check's cookie jar answers HTML).
+const jsonAs = async (base, login, password, p) => {
+  const signIn = await fetch(`${base}/login`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ login, password }).toString() });
+  const cookie = (signIn.headers.get('set-cookie') || '').split(';')[0];
+  const res = await fetch(base + p, { headers: { cookie, accept: 'application/json' } });
+  return { status: res.status, body: await res.json() };
+};
+
 export const checks = [
   { task: 'Test the student registration functionality',
     run: async ({ post, follow, get, rows, must, flashOf }) => {
@@ -73,7 +82,7 @@ export const checks = [
   { task: "Inspect the website's navigation functionality",
     run: async (ctx) => navCheck(3).run(ctx) },
   { task: 'Review the direct communication feature between training providers and students',
-    run: async ({ asGuest, login, get, follow, must, flashOf }) => {
+    run: async ({ base, asGuest, login, get, post, follow, must, flashOf }) => {
       asGuest();
       must((await login('maria@portal.test', 'maria123')).status === 303, 'maria could not sign back in');
       const detail = await get(`/Match/${matchId}`);
@@ -83,7 +92,30 @@ export const checks = [
       must(/Message sent/.test(flashOf(r.html)), `flash: ${flashOf(r.html)}`);
       must(/love to visit next week/.test(r.html) && /maria@portal\.test/.test(r.html), 'the reply is not shown under the match');
       must((r.html.match(/<h3>Messages<\/h3>/g) || []).length === 1, 'the messages section should list both sides of the conversation once');
-      return "a two-way conversation under the match: the provider's message and Maria's reply both appear";
+      // The conversation is Maria's and TechForward's only: another student and another provider read none of it.
+      const thread = await jsonAs(base, 'maria@portal.test', 'maria123', '/Message');
+      must(thread.status === 200 && thread.body.total === 2, `Maria's thread has ${thread.body.total} message(s), expected 2`);
+      const ids = thread.body.rows.map((m) => m.id);
+      for (const [who, password] of [['alice@portal.test', 'alice123'], ['health@portal.test', 'health123']]) {
+        const listed = await jsonAs(base, who, password, '/Message');
+        must(listed.status === 200 && listed.body.total === 0, `${who} reads ${listed.body.total} message(s) of Maria's conversation`);
+        for (const id of ids) {
+          const one = await jsonAs(base, who, password, `/Message/${id}`);
+          must(one.status === 403, `${who} opened message #${id} of Maria's conversation: ${one.status}`);
+        }
+      }
+      // Writing outside the form names nobody else as the sender.
+      await post('/Message', { match: matchId, sender: '2', body: 'Signed as the provider' });
+      const maria = String(thread.body.rows.find((m) => /visit next week/.test(m.body)).sender);
+      const signed = (await jsonAs(base, 'maria@portal.test', 'maria123', '/Message')).body.rows.find((m) => m.body === 'Signed as the provider');
+      must(!signed || String(signed.sender) === maria, `a student posted a message signed as user #${signed?.sender}`);
+      asGuest();
+      must((await login('alice@portal.test', 'alice123')).status === 303, 'alice could not sign in');
+      const intrusion = await post('/Message', { match: matchId, body: 'Alice slips into the thread' });
+      const seen = await jsonAs(base, 'maria@portal.test', 'maria123', '/Message');
+      must(intrusion.status !== 303 && !seen.body.rows.some((m) => /Alice slips/.test(m.body)),
+        `another student posted into Maria's conversation: ${intrusion.status} ${intrusion.location}`);
+      return "a two-way conversation under the match: the provider's message and Maria's reply both appear; another student and provider read none of it";
     } },
   colorCheck('azure', 'midnightblue'),
 ];
