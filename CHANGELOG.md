@@ -43,7 +43,8 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   `POST /Order/<theirs>/add/OrderItem`, or edit their own item onto another order (HTML and JSON). Now
   `perms.mayWrite(user, entity, op, row)` judges the row a create, an edit or a related add is about to leave, with
   the same `own` paths as a read, after validation: not owned is a 403 through the usual denial. One query per
-  one-hop path, none for a direct `own`; `/api` routes reuse the same handlers. A direct `own` keeps filling its
+  one-hop path, none for a direct `own`. The check lives in `perms` and the create, edit and related-add handlers,
+  so every request through them gets it, the `accept: application/json` one included. A direct `own` keeps filling its
   field; an edit that would give the row away to someone else is now refused too. New: `tests/ownwrite.test.mjs`,
   `tests/fixtures/ownhop.json`, 5 `SEC3:` mutations.
 
