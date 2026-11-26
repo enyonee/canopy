@@ -33,6 +33,10 @@ export type Entity = {
   name: string; label: string; plural: string; labelField: string | null;
   /** storefront: offered to visitors and customers (cards, covers); workspace: records people work on (tables). */
   surface: 'storefront' | 'workspace';
+  /** The integer field shown as stock on a storefront card (few left, sold out), or null. */
+  stock: string | null;
+  /** The reference to a lookup entity that groups rows into categories (chips, cover tone, label), or null. */
+  category: string | null;
   fields: readonly Field[];
   states: { field: string; transitions: readonly Transition[] } | null;
   actions: readonly Action[];

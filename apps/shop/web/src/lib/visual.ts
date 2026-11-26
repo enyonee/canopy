@@ -49,8 +49,8 @@ const ICON_WORDS: [RegExp, string][] = [
 export const iconWord = (...words: (string | null | undefined)[]) =>
   ICON_WORDS.find(([re]) => words.some((w) => w && re.test(w)))?.[1] ?? 'package';
 
-/** The field a storefront card shows as a stock chip: an integer named like a quantity on hand. */
-export const stockField = (entity: Entity) => entity.fields.find((f) => f.type === 'integer' && !f.derived && /stock|quantity|inventory|available|seats|left/i.test(f.name)) ?? null;
+/** The field a storefront card shows as a stock chip (the model's `stock`: a quantity on hand, not a lot size). */
+export const stockField = (entity: Entity) => entity.fields.find((f) => f.name === entity.stock) ?? null;
 
 export const appInitial = () => app.title.slice(0, 1).toUpperCase();
 
