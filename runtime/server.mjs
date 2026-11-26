@@ -117,20 +117,34 @@ export function startFlusher({ store, graph, server, trace, noTimers, clock = sy
   return { stop, arm };
 }
 
+// `--base /a/b`: the app answers only under that path, for a reverse proxy that keeps the prefix. The prefix goes
+// before any route or the front reads the path, and every link and redirect leaves with it again (routes/context.mjs).
+function unmount(url, mount) {
+  if (url.pathname !== mount && !url.pathname.startsWith(`${mount}/`)) return null;
+  const inner = new URL(url);
+  inner.pathname = url.pathname.slice(mount.length) || '/';
+  return inner;
+}
+
 // The request handler of a booted app: one request context per request, the route modules in order.
 // With "web" (runtime/web.mjs) the front answers first: its own files and the SPA fallback never open a session or
 // ask the store; what it hands back is the scaffold, under its base.
-function requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
+function requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile, mount }) {
   const front = graph.web ? openFront(webRoot(graphFile, graph)) : null;
   return async (req, res) => {
     let url = new URL(req.url, `http://${req.headers.host}`), base = '';
+    if (mount) {
+      const inner = unmount(url, mount);
+      if (!inner) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); res.end(`the app answers under ${mount}`); return; }
+      url = inner;
+    }
     if (front) {
       let to;
       try { to = front(req, res, url); } catch (e) { trace({ kind: 'error', message: String(e && e.message) }); res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }); res.end('the front could not be read'); return; }
       if (!to) return;
       ({ url, base } = to);
     }
-    const ctx = await createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile, base });
+    const ctx = await createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile, base: mount + base });
     try {
       await dispatch(ctx);
     } catch (e) {
@@ -155,7 +169,7 @@ async function bootData(graph, store, graphFile, filesDir) {
 // `serve()` answers at once with `{ server, ready, ... }`; the server starts listening only after `ready`, i.e. after the
 // store is migrated and the seed is in, so the first request finds a finished database. `ready` resolves to the app
 // itself (`invalid` is then final: a seed or deploy-file error is served as the errors, on the same server).
-export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [], noTimers = false, clock = systemClock }) {
+export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', filesDir = undefined, keyFile = undefined, fetchImpl = undefined, registry = DEFAULT, pluginErrors = [], noTimers = false, clock = systemClock, base: mount = '' }) {
   const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
   const errors = [...pluginErrors, ...validate(graph, registry)];
   const dir = path.dirname(dbFile);
@@ -185,7 +199,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     const env = connectorEnv(dir, graph.app);
     try { env.deploy(); } catch (e) { return refuse([{ path: '/deploy.json', message: e.message }]); }
     const interp = createInterpreter({ graph, store, registry, perms, meId, trace, fetchImpl, clock, env });
-    handle = requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile });
+    handle = requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile, mount });
     startTimers(graph, interp, trace, server, noTimers);
     app.flusher = startFlusher({ store, graph, server, trace, noTimers, clock, registry, fetchImpl, env });
     server.listen(port, host);

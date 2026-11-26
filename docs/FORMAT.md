@@ -614,6 +614,10 @@ With `web`:
 
 `/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `POST /hook/<connector>` (a signed webhook, no session) · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/settings`, `POST /settings/secret`, `POST /settings/secret/remove`, `POST /settings/test` (the connector settings screen, admin only) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout` · `/api/*` (the JSON routes for a frontend of the app's own, below).
 
+Behind a reverse proxy that keeps a path prefix, `--base /apps/crm` serves every route above under that prefix: a path
+outside it is a 404, and every link, form target and redirect the app sends carries the prefix. An app with a built
+front (`web`) cannot take a base.
+
 Every successful POST answers 303 to a page with `?ok=<flash>`; validation failures answer 400 with the form and the messages; refusals 403; a transition from the wrong status 409.
 
 ## JSON answers

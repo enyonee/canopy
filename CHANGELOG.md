@@ -5,6 +5,9 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **`--base`: an app under a path prefix.** A reverse proxy that keeps a prefix (`/apps/crm/…`) could not front an
+  app: every link and redirect pointed at the root. `run.mjs app.json --base /apps/crm` answers only under the prefix
+  and writes it into links, form targets and redirects, the way the scaffold of a built front already moves under `/admin`.
 - **Fixes (FILES): stored files.** A form could point a `file`/`image` field at another row's file: a text value with its
   stored name (an urlencoded body or a text part of a multipart one) was written as is; now a field takes only the file
   that request uploaded. `?inline=1` served a `.svg` upload as `image/svg+xml`, a page of this site that runs script;
