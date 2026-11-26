@@ -1,0 +1,282 @@
+{
+  "descriptor": 1,
+  "name": "shopify",
+  "title": "Shopify Admin GraphQL",
+  "base": "http://127.0.0.1:8905",
+  "timeoutMs": 10500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "listOrders": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "after": {
+            "type": "string",
+            "maxLength": 1024,
+            "default": ""
+          }
+        },
+        "required": []
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/shopify/orders",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "limit": {
+            "$": "input.limit"
+          },
+          "after": {
+            "$": "input.after"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 65,
+                  "pattern": "^gid://shopify/Order/[1-9][0-9]{0,24}$"
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "financialStatus": {
+                  "type": "string",
+                  "maxLength": 48,
+                  "pattern": "^[A-Z_]+$"
+                },
+                "fulfillmentStatus": {
+                  "type": "string",
+                  "maxLength": 48,
+                  "pattern": "^[A-Z_]+$"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "financialStatus",
+                "fulfillmentStatus"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "next": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "rows",
+          "next"
+        ]
+      },
+      "result": {
+        "rows": "$.rows",
+        "next": "$.next"
+      },
+      "resultOnly": true
+    },
+    "getOrder": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 65,
+            "pattern": "^gid://shopify/Order/[1-9][0-9]{0,24}$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/shopify/order",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 65,
+            "pattern": "^gid://shopify/Order/[1-9][0-9]{0,24}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "financialStatus": {
+            "type": "string",
+            "maxLength": 48,
+            "pattern": "^[A-Z_]+$"
+          },
+          "fulfillmentStatus": {
+            "type": "string",
+            "maxLength": 48,
+            "pattern": "^[A-Z_]+$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "financialStatus",
+          "fulfillmentStatus"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "name": "$.name",
+        "financialStatus": "$.financialStatus",
+        "fulfillmentStatus": "$.fulfillmentStatus"
+      },
+      "resultOnly": true
+    },
+    "getStock": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "maxLength": 65,
+            "pattern": "^gid://shopify/InventoryItem/[1-9][0-9]{0,24}$"
+          },
+          "locationId": {
+            "type": "string",
+            "maxLength": 65,
+            "pattern": "^gid://shopify/Location/[1-9][0-9]{0,24}$"
+          }
+        },
+        "required": [
+          "itemId",
+          "locationId"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/shopify/inventory",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "itemId": {
+            "$": "input.itemId"
+          },
+          "locationId": {
+            "$": "input.locationId"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "maxLength": 65,
+            "pattern": "^gid://shopify/InventoryItem/[1-9][0-9]{0,24}$"
+          },
+          "locationId": {
+            "type": "string",
+            "maxLength": 65,
+            "pattern": "^gid://shopify/Location/[1-9][0-9]{0,24}$"
+          },
+          "available": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "itemId",
+          "locationId",
+          "available"
+        ]
+      },
+      "result": {
+        "itemId": "$.itemId",
+        "locationId": "$.locationId",
+        "available": "$.available"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "listOrders": [
+        {
+          "body": {
+            "rows": [
+              {
+                "id": "gid://shopify/Order/41",
+                "name": "#1041",
+                "financialStatus": "PAID",
+                "fulfillmentStatus": "UNFULFILLED"
+              }
+            ],
+            "next": ""
+          }
+        }
+      ],
+      "getOrder": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "name": "#1041",
+            "financialStatus": "PAID",
+            "fulfillmentStatus": "UNFULFILLED"
+          }
+        }
+      ],
+      "getStock": [
+        {
+          "body": {
+            "itemId": {
+              "$": "input.itemId"
+            },
+            "locationId": {
+              "$": "input.locationId"
+            },
+            "available": 12
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "listOrders",
+      "input": {}
+    }
+  }
+}
