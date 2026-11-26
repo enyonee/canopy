@@ -5,6 +5,17 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Fixes (FILES): stored files.** A form could point a `file`/`image` field at another row's file: a text value with its
+  stored name (an urlencoded body or a text part of a multipart one) was written as is; now a field takes only the file
+  that request uploaded. `?inline=1` served a `.svg` upload as `image/svg+xml`, a page of this site that runs script;
+  now it shows inline only a raster image by its first bytes (`FieldType#sniff`: PNG, JPEG, WebP, GIF, with that type
+  whatever the name), a PDF, a text or a CSV file, and every file answer sends `nosniff`. A seeded `{ "from": … }` could
+  leave the app directory (`..`, an absolute path, a symlink); the checker and the boot now refuse it. New:
+  `tests/files.test.mjs`, 14 `FILES:` mutations; `item 11` and an F1 mutation re-pointed.
+- **webgen: stock and category in the model.** A storefront card shows stock only for a quantity on hand (`stock`,
+  `inventory`, `available`, …), not a lot size (`quantity` in trading or escrow), and groups by a reference to a lookup
+  entity, never the users entity or a row's owner. The fronts of `shop` and `crm` are regenerated.
+
 ## 0.4.0 (2026-11-26)
 
 - **webgen.** A React front end generated from an app's graph and its OpenAPI contract (`webgen/`,
