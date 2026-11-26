@@ -17,7 +17,7 @@ never work around the checker.
 | `theme` | `{ "background": <css colour>, "accent": <css colour> }` — all components use the accent |
 | `home` | path the root redirects to, e.g. `"/Product"`, `"/page/about"`, `"/dashboard/sales"` |
 | `data` | entities and their fields (below) |
-| `seed` | starting rows, inserted once while the table is empty: `{ "Entity": [ {field: value} ] }`; a `file`/`image` field may be `{ "from": "seed/photo.jpg" }` (path relative to the app directory) — the runtime copies it into `files/` at boot |
+| `seed` | starting rows, inserted once while the table is empty: `{ "Entity": [ {field: value} ] }`; a `file`/`image` field may be `{ "from": "seed/photo.jpg" }` — a path relative to the app directory, with `/` and without `..`, that stays inside it also after symlinks (else `--check` or the boot refuses it, naming the row); the runtime copies it into `files/` at boot |
 | `identity` | one fake current user, no login: `{ "entity": "Profile", "defaults": {…} }` — cannot be combined with `roles` |
 | `roles` | real login, sessions and a permission matrix (below) |
 | `views` | must be `"auto"`: list, form and detail of every entity are derived |
@@ -51,7 +51,7 @@ never work around the checker.
 | `enum[a,b,c]=a` | closed set with a default; renders as a select and as a filter |
 | `ref:Entity!` | reference; renders as a select of the target's label (its first text field) |
 | `file` | an uploaded file; forms become multipart; the value renders as a download link. An empty upload leaves an optional field unset (or unchanged on edit, exactly like a blank password); a **required** file/image field with an empty upload is a validation error ("… is required"), including on edit — leaving it blank never silently keeps a required file |
-| `image` | an uploaded image; rendered inline as a thumbnail linking to the file |
+| `image` | an uploaded image; rendered inline as a thumbnail linking to the file. A form's `file`/`image` field takes only the file that request uploaded: a text value naming a stored file is dropped. `/file/<Entity>/<id>/<field>` is always a download with `x-content-type-options: nosniff`; `?inline=1` shows inline only a PNG, JPEG, WebP or GIF recognised by its first bytes (with that type, whatever the name), a PDF, a text or a CSV file — never an SVG |
 | `password!` | secret; stored as a salted hash, never rendered, blank on edit keeps the old one |
 | `money := <expression>` | derived field: computed on every read, never stored, never on forms |
 
