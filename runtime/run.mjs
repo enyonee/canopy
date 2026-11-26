@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// run.mjs <graph.json> [--port 8901] [--db file] [--trace file] [--check]
+// run.mjs <graph.json> [--port 8901] [--base /path] [--db file] [--trace file] [--check]
 //        run.mjs <graph.json> --openapi [--out FILE]
 //        run.mjs --import-openapi spec.json --name NAME [--out FILE]
 //        run.mjs <graph.json> --connectors status|live NAME --confirm|sandbox NAME | --secrets set NAME|list|rm NAME

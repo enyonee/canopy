@@ -9,6 +9,14 @@ import { loadPlugins } from './registry.mjs';
 import { admin, importCommand } from './admin.mjs';
 import { openapiText } from './contract.mjs';
 
+// A base path is one or more plain segments ("/apps/crm"): no trailing slash, nothing to escape in a link. A built front
+// links its own files from the root, so it cannot move under a base.
+function baseError(base, graph) {
+  if (base === '') return null;
+  if (!/^(?:\/[A-Za-z0-9._~-]+)+$/.test(base) || base.split('/').some((s) => s === '.' || s === '..')) return 'a base path is /segment[/segment…] of letters, digits and ._~-';
+  return graph.web ? 'an app with a built front ("web") answers at the root' : null;
+}
+
 export async function main(argv, { log = console.log, err = console.error, stdin = async () => '', fetchImpl = undefined, clock = undefined } = {}) {
   const imported = importCommand(argv, { log, err });
   if (imported !== null) return { code: imported };
@@ -17,7 +25,7 @@ export async function main(argv, { log = console.log, err = console.error, stdin
     const i = argv.indexOf(`--${name}`);
     return i === -1 ? def : argv[i + 1];
   };
-  if (!graphFile) { err('usage: run.mjs <graph.json> [--port N] [--check]'); return { code: 2 }; }
+  if (!graphFile) { err('usage: run.mjs <graph.json> [--port N] [--base /path] [--check]'); return { code: 2 }; }
 
   const dir = path.dirname(path.resolve(graphFile));
   const graph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
@@ -43,12 +51,15 @@ export async function main(argv, { log = console.log, err = console.error, stdin
   const code = await admin(argv, { graph, registry, dir: path.dirname(dbFile), log, err, stdin, fetchImpl, clock });
   if (code !== null) return { code };
 
+  const base = flag('base', '');
+  const baseProblem = baseError(base, graph);
+  if (baseProblem) { err(`--base ${base}: ${baseProblem}`); return { code: 2 }; }
   const port = Number(flag('port', 8901));
   const app = serve({
     graphFile,
     dbFile,
     traceFile: flag('trace', path.join(dir, 'trace.jsonl')),
-    port, registry, pluginErrors,
+    port, registry, pluginErrors, base,
     noTimers: Boolean(process.env.AG_NO_TIMERS),
   });
   await app.ready; // the store is migrated and seeded, and the server starts listening
