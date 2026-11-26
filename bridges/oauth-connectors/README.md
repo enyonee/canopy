@@ -90,3 +90,19 @@ References: [QuickBooks PHP SDK, Apache-2.0](https://github.com/intuit/QuickBook
 [Invoice API](https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/invoice),
 [Xero SDK, MIT](https://github.com/XeroAPI/xero-node/tree/538aa659d723055cb4485ba4513e2f080ac85076)
 and [Xero Invoices API](https://developer.xero.com/documentation/api/accounting/invoices).
+
+## Kontur Diadoc
+
+Register a web application with Authorization Code access in the Kontur
+integrator account. Set `DIADOC_BOX_ID` to the GUID of one document box and
+`DIADOC_CLIENT_ID`, `DIADOC_CLIENT_SECRET`, and
+`DIADOC_REDIRECT_URI` from its registration. Authorize with a user who
+has permission to read incoming documents in that box.
+
+`listDocuments` uses the [V4 list method](https://developer.kontur.ru/doc/diadoc-api/http/GetDocuments_V4)
+and returns a cursor when the page is full. `getDocument` uses V3 by
+message ID and entity ID. The bridge returns identifiers, type, number
+and display status for incoming documents, but no document content,
+signature, sender identity or binary payload. It does not send or sign
+documents. See the [official SDK, MIT](https://github.com/diadoc/diadocsdk-java/tree/9141ec2a87bbac069e97d3c740d82c6e285e91b0)
+and [OAuth documentation](https://developer.kontur.ru/doc/diadoc-api/authentication).

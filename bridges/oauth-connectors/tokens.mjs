@@ -85,6 +85,7 @@ export function tokenBroker(secrets, provider, fetchImpl = fetch, now = Date.now
       url.search = new URLSearchParams({ ...provider.authorizeParams, client_id: clientId, state,
         ...(!provider.customAuthorize && { redirect_uri: redirect.href, response_type: 'code' }),
         ...(scopes.length && { scope: scopes.join(separator) }),
+        ...(provider.nonce && { nonce: random() }),
         ...(verifier && { code_challenge: hash(verifier), code_challenge_method: 'S256' }) }).toString();
       return url.href;
     },

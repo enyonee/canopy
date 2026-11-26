@@ -8,7 +8,7 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 - **Business connectors.** Yandex Market, WooCommerce, HubSpot, Telegram Bot,
   WhatsApp Business, PayPal, Mollie, Mercado Pago, Adyen, T-Bank, Robokassa
   Ameriabank, Epoint, Paynet, Uzum Bank, 1C OData, Shopify, Google Sheets and
-  amoCRM, QuickBooks Online and Xero. Each defaults to the offline sandbox.
+  amoCRM, QuickBooks Online, Xero and Diadoc. Each defaults to the offline sandbox.
   See [the catalog and SDK references](docs/BUSINESS-CONNECTORS.md).
 - **Payments.** PayPal separates approval from capture, supports reconciliation
   after an ambiguous capture, and exposes refund status. Mollie reads payment

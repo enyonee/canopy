@@ -1,0 +1,226 @@
+{
+  "descriptor": 1,
+  "name": "diadoc",
+  "title": "Kontur Diadoc incoming documents",
+  "base": "http://127.0.0.1:8905",
+  "timeoutMs": 10500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "listDocuments": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "after": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 1024,
+            "default": ""
+          }
+        },
+        "required": []
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/diadoc/documents",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "limit": {
+            "$": "input.limit"
+          },
+          "after": {
+            "$": "input.after"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "type": "string",
+                  "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+                },
+                "entityId": {
+                  "type": "string",
+                  "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+                },
+                "type": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "number": {
+                  "type": "string",
+                  "minLength": 0,
+                  "maxLength": 128
+                },
+                "status": {
+                  "type": "string",
+                  "minLength": 0,
+                  "maxLength": 512
+                }
+              },
+              "required": [
+                "messageId",
+                "entityId",
+                "type",
+                "number",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "next": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "documents",
+          "next"
+        ]
+      },
+      "result": {
+        "documents": "$.documents",
+        "next": "$.next"
+      },
+      "resultOnly": true
+    },
+    "getDocument": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "entityId": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          }
+        },
+        "required": [
+          "messageId",
+          "entityId"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/diadoc/document",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "messageId": {
+            "$": "input.messageId"
+          },
+          "entityId": {
+            "$": "input.entityId"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "entityId": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "number": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 128
+          },
+          "status": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "messageId",
+          "entityId",
+          "type",
+          "number",
+          "status"
+        ]
+      },
+      "result": {
+        "messageId": "$.messageId",
+        "entityId": "$.entityId",
+        "type": "$.type",
+        "number": "$.number",
+        "status": "$.status"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "listDocuments": [
+        {
+          "body": {
+            "documents": [
+              {
+                "messageId": "01234567-89ab-4cde-8f01-23456789abcd",
+                "entityId": "11234567-89ab-4cde-8f01-23456789abcd",
+                "type": "UniversalTransferDocument",
+                "number": "INV-41",
+                "status": "Awaiting signature"
+              }
+            ],
+            "next": ""
+          }
+        }
+      ],
+      "getDocument": [
+        {
+          "body": {
+            "messageId": {
+              "$": "input.messageId"
+            },
+            "entityId": {
+              "$": "input.entityId"
+            },
+            "type": "UniversalTransferDocument",
+            "number": "INV-41",
+            "status": "Awaiting signature"
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "listDocuments",
+      "input": {}
+    }
+  }
+}

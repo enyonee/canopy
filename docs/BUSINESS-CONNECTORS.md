@@ -20,6 +20,7 @@ are not runtime dependencies.
 | `amocrm` | Create/read contacts and deals and set a deal stage with OAuth for one portal. | [amoCRM SDK and bridge setup](../bridges/oauth-connectors/README.md) |
 | `quickbooks` | Read bounded invoice pages or one invoice from the configured QuickBooks Online company. | [Intuit SDK and bridge setup](../bridges/oauth-connectors/README.md) |
 | `xero` | Read bounded invoice pages or one invoice from the configured Xero organization. | [Xero SDK and bridge setup](../bridges/oauth-connectors/README.md) |
+| `diadoc` | List incoming documents and retrieve document status by message and entity ID. OAuth is limited to the configured box. | [Diadoc SDK and bridge setup](../bridges/oauth-connectors/README.md) |
 | `telegram-bot` | Send plain text to a chat ID. Store the whole `bot<token>` path segment in `botPath`; the outbox target is masked. | [Activepieces implementation, MIT](../connectors/telegram-bot/SOURCES.md) |
 | `whatsapp-business` | Send an approved template with no parameters. Configure `phoneNumberId` and a scoped `accessToken`. | [Activepieces implementation, MIT](../connectors/whatsapp-business/SOURCES.md) |
 | `paypal` | Create a hosted order, read approval, capture, reconcile by order or capture ID, and request/read a refund. Configure `clientId` and `clientSecret`. | [Orders and Payments v2; Server SDK reference](../connectors/paypal/SOURCES.md) |

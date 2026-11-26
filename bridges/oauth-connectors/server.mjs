@@ -5,6 +5,7 @@ import { openSecrets } from '../../runtime/secrets.mjs';
 import { merchantServer } from '../merchant-http.mjs';
 import { quickbooksProvider, xeroProvider } from './accounting.mjs';
 import { amoProvider } from './amocrm.mjs';
+import { diadocProvider } from './diadoc.mjs';
 import { googleSheetsProvider } from './google-sheets.mjs';
 import { shopifyProvider } from './shopify.mjs';
 import { tokenBroker } from './tokens.mjs';
@@ -60,6 +61,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     clientId: env.QUICKBOOKS_CLIENT_ID, clientSecret: env.QUICKBOOKS_CLIENT_SECRET, redirectUri: env.QUICKBOOKS_REDIRECT_URI }));
   if (env.XERO_TENANT_ID) providers.push(xeroProvider({ tenantId: env.XERO_TENANT_ID,
     clientId: env.XERO_CLIENT_ID, clientSecret: env.XERO_CLIENT_SECRET, redirectUri: env.XERO_REDIRECT_URI }));
+  if (env.DIADOC_BOX_ID) providers.push(diadocProvider({ boxId: env.DIADOC_BOX_ID,
+    clientId: env.DIADOC_CLIENT_ID, clientSecret: env.DIADOC_CLIENT_SECRET, redirectUri: env.DIADOC_REDIRECT_URI }));
   const { data, admin } = createBridge({ providers, dataToken: env.CANOPY_OAUTH_DATA_TOKEN,
     adminToken: env.CANOPY_OAUTH_ADMIN_TOKEN, secrets: privateStore(env.CANOPY_OAUTH_SECRETS_DIR) });
   data.listen(8905, '127.0.0.1');
