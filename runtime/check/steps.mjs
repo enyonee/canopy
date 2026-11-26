@@ -7,6 +7,15 @@ import { near } from './util.mjs';
 export function createStepsChecker(h) {
   const { err, graph, fields, checkEntity, checkField, checkWhere, checkValues, CATALOG } = h;
 
+  // A file field is set by an upload (its form) or a seed, never by a step from the submitted values: a text value there
+  // could name a file another row owns, and nothing on the step's path checks that the request uploaded it.
+  const SUBMITTED = /^@values\.|^=.*\bvalues\./;
+  function noSubmittedFile(entity, values, path) {
+    for (const [f, v] of Object.entries(values)) {
+      if (fields[entity]?.[f]?.type.upload && typeof v === 'string' && SUBMITTED.test(v)) err(`${path}/${f}`, `"${f}" is a file field: a step cannot set it from the submitted values`, 'a file is set by its upload form or by /seed');
+    }
+  }
+
   /** @param {Record<string, string>} [ctxIn] */
   function checkSteps(steps, path, entity, ctxIn = {}) {
     /** @type {Record<string, string>} */
@@ -29,6 +38,7 @@ export function createStepsChecker(h) {
       if (step.via && step.entity) checkField(step.entity, step.via, `${p}/via`);
       if (step.set && target) Object.keys(step.set).forEach((f) => checkField(target, f, `${p}/set/${f}`, { stored: true }));
       if (step.values && step.entity) Object.keys(step.values).forEach((f) => checkField(step.entity, f, `${p}/values/${f}`, { stored: true }));
+      for (const [key, into] of [['set', target], ['values', step.entity]]) if (step[key] && into) noSubmittedFile(into, step[key], `${p}/${key}`);
       if (step.where && step.entity) checkWhere(step.entity, step.where, `${p}/where`);
       if (step.where && step.block === 'db.each' && step.from) checkWhere(step.from, step.where, `${p}/where`);
       if (step.into && entity) checkField(entity, step.into, `${p}/into`, { stored: true });

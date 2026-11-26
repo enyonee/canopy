@@ -276,6 +276,8 @@ export interface RequestContext {
   exportRows: (name: string, entity: string, rows: any[], cols: string[], labels: Record<string, any>) => void;
   sendJson: (code: number, data: any) => void; answer: (code: number, html: string, json: any) => void;
   body: () => Promise<Record<string, any>>; resolveTop: (obj: any) => any;
+  /** Drops every upload field of `entity` in `values` that is not a file this request uploaded under its name. */
+  ownFiles: (entity: string, values: Record<string, any>) => Record<string, any>;
   paged: (entity: string, opts: Record<string, any>, ov: any) => { rows: any[]; total: number; page: number; pages: number };
   sortOf: (entity: string, ov: any) => { field: string; dir: 'asc' | 'desc' } | null;
   safeNext: (to: any) => string;

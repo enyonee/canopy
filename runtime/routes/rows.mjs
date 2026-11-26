@@ -9,7 +9,7 @@ async function runAction(ctx, entity, fields, id, row) {
   const action = graph.actions?.find((a) => a.name === parts[3] && a.in === entity);
   if (!action) { ctx.answer(404, errorPage(graph, `no action ${parts[3]} on ${entity}`), { ok: false, status: 404, errors: [`no action ${parts[3]} on ${entity}`] }); return true; }
   if (!mayRunAction(vc, entity, action, row)) { ctx.deny(); return true; }
-  const submitted = await ctx.body();
+  const submitted = ctx.ownFiles(entity, await ctx.body());
   if (action.fields?.length) {
     // Item 19: a row action's declared fields are typed and required, exactly
     // like a transition's own `fields`.
@@ -41,7 +41,7 @@ async function runTransition(ctx, entity, fields, id, row) {
     ctx.answer(409, forbiddenPage(graph, vc, message), { ok: false, status: 409, errors: [message] });
     return true;
   }
-  const submitted = await ctx.body();
+  const submitted = ctx.ownFiles(entity, await ctx.body());
   const values = {};
   for (const f of t.fields || []) if (submitted[f] !== undefined) values[f] = submitted[f];
   const problems = await interp.validateValues(entity, { ...values, [st.field]: t.to }, { partial: true, existing: row });

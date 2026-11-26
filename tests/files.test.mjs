@@ -20,8 +20,10 @@ const graph = (seed = { Product: [{ name: 'Mug', photo: { from: 'seed/mug.png' }
   app: 'files',
   data: {
     User: { email: 'text!', password: 'password!', role: 'enum[admin,member]=member' },
-    Product: { name: 'text!', photo: 'image', manual: 'file' },
+    Product: { name: 'text!', photo: 'image', manual: 'file', status: 'enum[draft,live]=draft' },
   },
+  states: { Product: { field: 'status', transitions: [{ name: 'publish', from: 'draft', to: 'live', fields: ['photo'] }] } },
+  actions: [{ name: 'copy', in: 'Product', fields: ['name'], do: [{ block: 'db.create' }] }],
   roles: { entity: 'User', login: 'email', password: 'password', role: 'role', register: 'member', anonymous: 'guest',
     can: { admin: '*', member: { Product: ['view', 'create', 'edit'] }, guest: { Product: ['view'] } } },
   seed: { User: [{ email: 'root@files', password: 'root', role: 'admin' }], ...seed },
@@ -68,6 +70,30 @@ test('FILES: a text value naming a stored file is dropped, urlencoded or as a te
   const json = await s.post('/Product', { name: 'Thief4', photo: theirs }, { accept: 'application/json' });
   assert.equal(json.status, 200);
   assert.equal((await created('Thief4')).photo, null, 'the form path answering JSON is the form path');
+});
+
+test('FILES: a transition and a row action take no text value naming a stored file either', async () => {
+  const theirs = (await s.app.store.get('Product', 1)).photo;
+  assert.equal((await s.post('/Product', { name: 'Draft' })).status, 303);
+  const draft = await created('Draft');
+  const go = await s.post(`/Product/${draft.id}/go/publish`, { photo: theirs });
+  assert.equal(go.status, 400, 'the transition asks for its file, and a text value is none');
+  assert.match(go.html, /photo is required/);
+  assert.equal((await s.app.store.get('Product', draft.id)).photo, null);
+  const up = await s.upload(`/Product/${draft.id}/go/publish`, {}, { field: 'photo', name: 'p.png', content: PNG });
+  assert.equal(up.status, 303, 'a real upload is the file');
+  assert.match((await s.app.store.get('Product', draft.id)).photo, /-p\.png$/);
+  assert.equal((await s.post(`/Product/${draft.id}/action/copy`, { name: 'Copied', photo: theirs })).status, 303);
+  assert.equal((await created('Copied')).photo, null, 'db.create writes the submitted values, less the file it was not sent');
+});
+
+test('FILES: a step cannot set a file field from the submitted values', () => {
+  const at = (set) => validate({ ...graph(), actions: [{ name: 'a', in: 'Product', do: [{ block: 'db.update', set }] },
+    { name: 'b', do: [{ block: 'db.createRow', entity: 'Product', values: { name: 'x', ...set } }] }] }, DEFAULT).filter((e) => /is a file field/.test(e.message)).map((e) => e.path);
+  for (const v of ['@values.photo', '= values.photo']) {
+    assert.deepEqual(at({ photo: v }), ['/actions/0/do/0/set/photo', '/actions/1/do/0/values/photo'], v);
+  }
+  assert.deepEqual(at({ photo: '@row.photo', name: '@values.name' }).filter((p) => p.endsWith('photo')), [], 'a stored file and a text field are fine');
 });
 
 test('FILES: inline is only a raster image by its bytes, a PDF, text or CSV; every file answer says nosniff', async () => {
@@ -122,10 +148,18 @@ test('FILES: a seeded file must stay inside the app directory', async (t) => {
     [{}, 'seed/gone.png', /seed Product\[0\] "photo": no file seed\/gone\.png in the app directory/],
     [{ 'seed/dir/x': 'x' }, 'seed/dir', /seed Product\[0\] "photo": seed\/dir is not a file inside the app directory/],
     ['link', 'seed/link.png', /seed\/link\.png is not a file inside the app directory/],
+    ['sibling', 'seed/link.png', /seed\/link\.png is not a file inside the app directory/],
   ];
   for (const [files, from, message] of cases) {
-    const file = appWith(seeded(from), files === 'link' ? {} : files);
-    if (files === 'link') { fs.mkdirSync(path.join(path.dirname(file), 'seed')); fs.symlinkSync(path.join(outside, 'x.png'), path.join(path.dirname(file), 'seed/link.png')); }
+    const file = appWith(seeded(from), typeof files === 'string' ? {} : files);
+    const dir = path.dirname(file);
+    if (files === 'sibling') {
+      // A directory whose name starts with the app's (app → app-evil) is still outside it.
+      fs.mkdirSync(`${dir}-evil`);
+      t.after(() => fs.rmSync(`${dir}-evil`, { recursive: true, force: true }));
+      fs.writeFileSync(`${dir}-evil/x.png`, PNG);
+    }
+    if (typeof files === 'string') { fs.mkdirSync(path.join(dir, 'seed')); fs.symlinkSync(files === 'link' ? path.join(outside, 'x.png') : `${dir}-evil/x.png`, path.join(dir, 'seed/link.png')); }
     const app = await boot(file);
     try {
       assert.equal(app.app.invalid, true, from);
