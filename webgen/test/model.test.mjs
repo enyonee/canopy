@@ -140,3 +140,16 @@ test('stock and category: a quantity on hand and a lookup reference, not a lot s
   assert.equal(escrow.Product.category, null);
   assert.equal(escrow.Product.stock, null, 'quantity is text there');
 });
+
+test('stock and category on a made-up graph: a stored integer; a lookup in the columns first, never a person or the owner', () => {
+  const g = { app: 'syn', data: {
+    User: { email: 'text!', role: 'enum[seller]=seller' }, Shop: { name: 'text!' }, Brand: { name: 'text!' }, Kind: { name: 'text!' },
+    Item: { name: 'text!', remaining: 'int := 1', available: 'text', inStock: 'int', author: 'ref:User', shop: 'ref:Shop', brand: 'ref:Brand', kind: 'ref:Kind' } },
+    roles: { entity: 'User', role: 'role', can: { seller: { Item: { own: 'shop', can: ['view'] } } } },
+    override: { 'Item.list': { columns: ['name', 'author', 'shop', 'kind'] } } };
+  const e = buildModel(g, null).entities.Item;
+  assert.equal(e.stock, 'inStock', 'not the derived "remaining", not the text "available"');
+  assert.equal(e.category, 'kind', 'the columns\' lookup, past the users entity (author) and the owner (shop), before "brand"');
+  g.override['Item.list'].columns = ['name', 'author'];
+  assert.equal(buildModel(g, null).entities.Item.category, 'brand', 'without a lookup among the columns, the first lookup field');
+});
