@@ -1,0 +1,423 @@
+{
+  "descriptor": 1,
+  "name": "adyen",
+  "title": "Adyen Pay by Link",
+  "base": "https://{config.endpointPrefix}-checkout-live.adyenpayments.com",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "config": {
+    "type": "object",
+    "properties": {
+      "endpointPrefix": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9-]*$"
+      },
+      "merchantAccount": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80,
+        "pattern": "^[A-Za-z0-9_-]+$"
+      },
+      "countryCode": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2,
+        "pattern": "^[A-Z]{2}$"
+      }
+    },
+    "required": [
+      "endpointPrefix",
+      "merchantAccount",
+      "countryCode"
+    ]
+  },
+  "idempotency": {
+    "header": "idempotency-key"
+  },
+  "operations": {
+    "createCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          },
+          "returnUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]*$"
+          }
+        },
+        "required": [
+          "orderId",
+          "amountMinor",
+          "currency",
+          "returnUrl"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/checkout/v71/paymentLinks",
+        "headers": {
+          "X-API-Key": "{secret.apiKey}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "merchantAccount": "{config.merchantAccount}",
+          "reference": {
+            "$": "input.orderId"
+          },
+          "countryCode": "{config.countryCode}",
+          "amount": {
+            "value": {
+              "$": "input.amountMinor"
+            },
+            "currency": {
+              "$": "input.currency"
+            }
+          },
+          "returnUrl": {
+            "$": "input.returnUrl"
+          },
+          "reusable": false
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "completed",
+              "expired",
+              "paymentPending"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "currency": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              }
+            },
+            "required": [
+              "value",
+              "currency"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^https://(?:[A-Za-z0-9-]+\\.)?(?:adyen\\.link|adyenpayments\\.com)/"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount",
+          "reference",
+          "url"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amountMinor": "$.amount.value",
+        "currency": "$.amount.currency",
+        "orderId": "$.reference",
+        "checkoutUrl": "$.url"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/checkout/v71/paymentLinks/{input.id}",
+        "headers": {
+          "X-API-Key": "{secret.apiKey}",
+          "content-type": "application/json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "completed",
+              "expired",
+              "paymentPending"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "currency": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              }
+            },
+            "required": [
+              "value",
+              "currency"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount",
+          "reference"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amountMinor": "$.amount.value",
+        "currency": "$.amount.currency",
+        "orderId": "$.reference"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "paymentPspReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9]+$"
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          }
+        },
+        "required": [
+          "paymentPspReference",
+          "reference",
+          "amountMinor",
+          "currency"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/checkout/v71/payments/{input.paymentPspReference}/refunds",
+        "headers": {
+          "X-API-Key": "{secret.apiKey}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "merchantAccount": "{config.merchantAccount}",
+          "reference": {
+            "$": "input.reference"
+          },
+          "amount": {
+            "value": {
+              "$": "input.amountMinor"
+            },
+            "currency": {
+              "$": "input.currency"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "pspReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9]+$"
+          },
+          "paymentPspReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "received"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          }
+        },
+        "required": [
+          "pspReference",
+          "paymentPspReference",
+          "status",
+          "reference"
+        ]
+      },
+      "result": {
+        "id": "$.pspReference",
+        "paymentId": "$.paymentPspReference",
+        "status": "$.status",
+        "reference": "$.reference"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "PL12345",
+            "url": "https://eu.adyen.link/PL12345",
+            "status": "active",
+            "reference": {
+              "$": "input.orderId"
+            },
+            "amount": {
+              "value": {
+                "$": "input.amountMinor"
+              },
+              "currency": {
+                "$": "input.currency"
+              }
+            }
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "completed",
+            "reference": "order-41",
+            "amount": {
+              "value": 1250,
+              "currency": "EUR"
+            }
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "pspReference": "987654321",
+            "paymentPspReference": {
+              "$": "input.paymentPspReference"
+            },
+            "status": "received",
+            "reference": {
+              "$": "input.reference"
+            }
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "orderId": "order-41",
+        "amountMinor": 1250,
+        "currency": "EUR",
+        "returnUrl": "https://example.test/return"
+      }
+    }
+  }
+}

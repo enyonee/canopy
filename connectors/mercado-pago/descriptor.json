@@ -1,0 +1,410 @@
+{
+  "descriptor": 1,
+  "name": "mercado-pago",
+  "title": "Mercado Pago Checkout Pro",
+  "base": "https://api.mercadopago.com",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "idempotency": {
+    "header": "X-Idempotency-Key"
+  },
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 10000000
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 127
+          },
+          "returnUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]*$"
+          }
+        },
+        "required": [
+          "orderId",
+          "amount",
+          "currency",
+          "title",
+          "returnUrl"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/checkout/preferences",
+        "headers": {
+          "authorization": "Bearer {secret.accessToken}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "items": [
+            {
+              "id": {
+                "$": "input.orderId"
+              },
+              "title": {
+                "$": "input.title"
+              },
+              "quantity": 1,
+              "currency_id": {
+                "$": "input.currency"
+              },
+              "unit_price": {
+                "$": "input.amount"
+              }
+            }
+          ],
+          "external_reference": {
+            "$": "input.orderId"
+          },
+          "back_urls": {
+            "success": {
+              "$": "input.returnUrl"
+            },
+            "pending": {
+              "$": "input.returnUrl"
+            },
+            "failure": {
+              "$": "input.returnUrl"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[0-9A-Za-z_-]+$"
+          },
+          "init_point": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^https://(?:www\\.)?mercadopago\\.(?:com(?:\\.(?:ar|br|mx|co|pe|uy))?|cl)/checkout/"
+          }
+        },
+        "required": [
+          "id",
+          "init_point"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "checkoutUrl": "$.init_point"
+      },
+      "resultOnly": true
+    },
+    "getPayment": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/payments/{input.id}",
+        "headers": {
+          "authorization": "Bearer {secret.accessToken}",
+          "content-type": "application/json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "authorized",
+              "in_process",
+              "in_mediation",
+              "rejected",
+              "cancelled",
+              "refunded",
+              "charged_back"
+            ]
+          },
+          "transaction_amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 10000000
+          },
+          "currency_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          },
+          "external_reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "transaction_amount",
+          "currency_id",
+          "external_reference"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amount": "$.transaction_amount",
+        "currency": "$.currency_id",
+        "orderId": "$.external_reference"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 10000000
+          }
+        },
+        "required": [
+          "paymentId",
+          "amount"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v1/payments/{input.paymentId}/refunds",
+        "headers": {
+          "authorization": "Bearer {secret.accessToken}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "amount": {
+            "$": "input.amount"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "payment_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 10000000
+          }
+        },
+        "required": [
+          "id",
+          "payment_id",
+          "status",
+          "amount"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "paymentId": "$.payment_id",
+        "status": "$.status",
+        "amount": "$.amount"
+      },
+      "resultOnly": true
+    },
+    "getRefund": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "paymentId",
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/payments/{input.paymentId}/refunds/{input.id}",
+        "headers": {
+          "authorization": "Bearer {secret.accessToken}",
+          "content-type": "application/json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "payment_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 10000000
+          }
+        },
+        "required": [
+          "id",
+          "payment_id",
+          "status",
+          "amount"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "paymentId": "$.payment_id",
+        "status": "$.status",
+        "amount": "$.amount"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "123-demo",
+            "init_point": "https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=123-demo"
+          }
+        }
+      ],
+      "getPayment": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "approved",
+            "transaction_amount": 12.5,
+            "currency_id": "BRL",
+            "external_reference": "order-41"
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "id": 123,
+            "payment_id": {
+              "$": "input.paymentId"
+            },
+            "status": "approved",
+            "amount": {
+              "$": "input.amount"
+            }
+          }
+        }
+      ],
+      "getRefund": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "payment_id": {
+              "$": "input.paymentId"
+            },
+            "status": "approved",
+            "amount": 12.5
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "orderId": "order-41",
+        "amount": 12.5,
+        "currency": "BRL",
+        "title": "Order",
+        "returnUrl": "https://example.test/return"
+      }
+    }
+  }
+}

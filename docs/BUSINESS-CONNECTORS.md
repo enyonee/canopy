@@ -19,6 +19,8 @@ are not runtime dependencies.
 | `whatsapp-business` | Send an approved template with no parameters. Configure `phoneNumberId` and a scoped `accessToken`. | [Activepieces implementation, MIT](../connectors/whatsapp-business/SOURCES.md) |
 | `paypal` | Create a hosted order, read approval, capture, reconcile by order or capture ID, and request/read a refund. Configure `clientId` and `clientSecret`. | [Orders and Payments v2; Server SDK reference](../connectors/paypal/SOURCES.md) |
 | `mollie` | Hosted checkout, payment status and refunds with a scoped `apiKey`. The descriptor uses decimal strings with two digits after the decimal point. | [Official Node client, BSD-3-Clause](../connectors/mollie/SOURCES.md) |
+| `mercado-pago` | Checkout Pro preferences, authenticated payment lookup, and refunds. Use the merchant `accessToken`. A preference ID is not a payment ID. | [Official Node client, MIT](../connectors/mercado-pago/SOURCES.md) |
+| `adyen` | Create/read single-use payment links and request refunds by payment PSP reference. Configure `endpointPrefix`, `merchantAccount`, `countryCode` and `apiKey`; capture and refund confirmation are separate. | [Official Node API library, MIT](../connectors/adyen/SOURCES.md) |
 
 ## Regional catalog
 
