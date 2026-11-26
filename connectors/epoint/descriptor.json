@@ -1,0 +1,322 @@
+{
+  "descriptor": 1,
+  "name": "epoint",
+  "title": "Epoint Azerbaijan bridge",
+  "base": "http://127.0.0.1:8903",
+  "timeoutMs": 6500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "orderId",
+          "amountMinor",
+          "description"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/epoint/checkout",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "orderId": {
+            "$": "input.orderId"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          },
+          "description": {
+            "$": "input.description"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "registered"
+            ]
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]+$"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "checkoutUrl"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "status": "$.status",
+        "checkoutUrl": "$.checkoutUrl"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/epoint/status",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AZN"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "success",
+              "returned",
+              "error",
+              "server_error",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "amountMinor",
+          "currency",
+          "status"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "amountMinor": "$.amountMinor",
+        "currency": "$.currency",
+        "status": "$.status"
+      },
+      "resultOnly": true
+    },
+    "findCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "orderId"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/epoint/find",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "orderId": {
+            "$": "input.orderId"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AZN"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "success",
+              "returned",
+              "error",
+              "server_error",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "amountMinor",
+          "currency",
+          "status"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "amountMinor": "$.amountMinor",
+        "currency": "$.currency",
+        "status": "$.status"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "te000000001",
+            "orderId": {
+              "$": "input.orderId"
+            },
+            "status": "registered",
+            "checkoutUrl": "https://epoint.az/checkout?fixture=1"
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "orderId": "order-41",
+            "amountMinor": 1250,
+            "currency": "AZN",
+            "status": "success"
+          }
+        }
+      ],
+      "findCheckout": [
+        {
+          "body": {
+            "id": "te000000001",
+            "orderId": {
+              "$": "input.orderId"
+            },
+            "amountMinor": 1250,
+            "currency": "AZN",
+            "status": "success"
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "orderId": "order-41",
+        "amountMinor": 1250,
+        "description": "Example order"
+      }
+    }
+  }
+}

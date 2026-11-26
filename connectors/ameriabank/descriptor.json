@@ -1,0 +1,415 @@
+{
+  "descriptor": 1,
+  "name": "ameriabank",
+  "title": "Ameriabank vPOS bridge",
+  "base": "http://127.0.0.1:8903",
+  "timeoutMs": 6500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AMD",
+              "EUR",
+              "USD",
+              "RUB"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "am",
+              "en",
+              "ru"
+            ],
+            "default": "am"
+          }
+        },
+        "required": [
+          "orderId",
+          "amountMinor",
+          "currency",
+          "description",
+          "language"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/ameriabank/checkout",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "orderId": {
+            "$": "input.orderId"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          },
+          "currency": {
+            "$": "input.currency"
+          },
+          "description": {
+            "$": "input.description"
+          },
+          "language": {
+            "$": "input.language"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "orderId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "registered"
+            ]
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]+$"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "checkoutUrl"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "status": "$.status",
+        "checkoutUrl": "$.checkoutUrl"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/ameriabank/status",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "orderId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          },
+          "depositedMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99999999999
+          },
+          "refundedMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99999999999
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AMD",
+              "EUR",
+              "USD",
+              "RUB"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "paid",
+              "not_paid",
+              "refunded"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "amountMinor",
+          "depositedMinor",
+          "refundedMinor",
+          "currency",
+          "status"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "amountMinor": "$.amountMinor",
+        "depositedMinor": "$.depositedMinor",
+        "refundedMinor": "$.refundedMinor",
+        "currency": "$.currency",
+        "status": "$.status"
+      },
+      "resultOnly": true
+    },
+    "findCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "orderId"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/ameriabank/find",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "orderId": {
+            "$": "input.orderId"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "orderId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "id",
+          "orderId"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          }
+        },
+        "required": [
+          "id",
+          "amountMinor"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/ameriabank/refund",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "amountMinor",
+          "status"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "amountMinor": "$.amountMinor",
+        "status": "$.status"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "fixture-payment",
+            "orderId": {
+              "$": "input.orderId"
+            },
+            "status": "registered",
+            "checkoutUrl": "https://servicestest.ameriabank.am/VPOS/Payments/Pay?id=fixture-payment&lang=am"
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "orderId": 41,
+            "status": "paid",
+            "amountMinor": 1250,
+            "depositedMinor": 1250,
+            "refundedMinor": 0,
+            "currency": "AMD"
+          }
+        }
+      ],
+      "findCheckout": [
+        {
+          "body": {
+            "id": "fixture-payment",
+            "orderId": {
+              "$": "input.orderId"
+            }
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "amountMinor": {
+              "$": "input.amountMinor"
+            },
+            "status": "accepted"
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "orderId": 41,
+        "amountMinor": 1250,
+        "currency": "AMD",
+        "description": "Example order"
+      }
+    }
+  }
+}
