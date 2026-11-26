@@ -5,14 +5,19 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.6.0 (2026-11-27)
+
 - **Business connectors.** Yandex Market, WooCommerce, HubSpot, Telegram Bot,
-  WhatsApp Business, PayPal, Mollie, Mercado Pago, Adyen, T-Bank, Robokassa
+  WhatsApp Business, PayPal, Mollie, Mercado Pago, Adyen, T-Bank, Robokassa,
   Ameriabank, Epoint, Paynet, Uzum Bank, 1C OData, Shopify, Google Sheets and
   amoCRM, QuickBooks Online, Xero and Diadoc. Each defaults to the offline sandbox.
   See [the catalog and SDK references](docs/BUSINESS-CONNECTORS.md).
 - **Payments.** PayPal separates approval from capture, supports reconciliation
   after an ambiguous capture, and exposes refund status. Mollie reads payment
   and refund status without relying on the customer redirect.
+- **OAuth bridge.** The bridge stores rotating grants in the encrypted
+  Canopy secret store, separates administrator consent from data operations,
+  and limits each provider to the configured business account.
 
 ## 0.5.0 (2026-11-26)
 
