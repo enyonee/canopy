@@ -1,0 +1,195 @@
+{
+  "descriptor": 1,
+  "name": "xero",
+  "title": "Xero Accounting invoices",
+  "base": "http://127.0.0.1:8905",
+  "timeoutMs": 10500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "listInvoices": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1
+          }
+        },
+        "required": []
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/xero/invoices",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "page": {
+            "$": "input.page"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "invoices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+                },
+                "number": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                "total": {
+                  "type": "number"
+                },
+                "due": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "number",
+                "currency",
+                "total",
+                "due"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "invoices",
+          "hasMore"
+        ]
+      },
+      "result": {
+        "invoices": "$.invoices",
+        "hasMore": "$.hasMore"
+      },
+      "resultOnly": true
+    },
+    "getInvoice": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/xero/invoice",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "total": {
+            "type": "number"
+          },
+          "due": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "currency",
+          "total",
+          "due"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "number": "$.number",
+        "currency": "$.currency",
+        "total": "$.total",
+        "due": "$.due"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "listInvoices": [
+        {
+          "body": {
+            "invoices": [
+              {
+                "id": "01234567-89ab-4cde-8f01-23456789abcd",
+                "number": "INV-41",
+                "currency": "NZD",
+                "total": 125.5,
+                "due": 55.5
+              }
+            ],
+            "hasMore": false
+          }
+        }
+      ],
+      "getInvoice": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "number": "INV-41",
+            "currency": "NZD",
+            "total": 125.5,
+            "due": 55.5
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "listInvoices",
+      "input": {}
+    }
+  }
+}

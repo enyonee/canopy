@@ -3,6 +3,7 @@ import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openSecrets } from '../../runtime/secrets.mjs';
 import { merchantServer } from '../merchant-http.mjs';
+import { quickbooksProvider, xeroProvider } from './accounting.mjs';
 import { amoProvider } from './amocrm.mjs';
 import { googleSheetsProvider } from './google-sheets.mjs';
 import { shopifyProvider } from './shopify.mjs';
@@ -54,6 +55,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }));
   if (env.AMOCRM_PORTAL) providers.push(amoProvider({ portal: env.AMOCRM_PORTAL,
     clientId: env.AMOCRM_CLIENT_ID, clientSecret: env.AMOCRM_CLIENT_SECRET, redirectUri: env.AMOCRM_REDIRECT_URI }));
+  if (env.QUICKBOOKS_REALM_ID) providers.push(quickbooksProvider({ realmId: env.QUICKBOOKS_REALM_ID,
+    homeCurrency: env.QUICKBOOKS_HOME_CURRENCY, sandbox: env.QUICKBOOKS_SANDBOX === '1',
+    clientId: env.QUICKBOOKS_CLIENT_ID, clientSecret: env.QUICKBOOKS_CLIENT_SECRET, redirectUri: env.QUICKBOOKS_REDIRECT_URI }));
+  if (env.XERO_TENANT_ID) providers.push(xeroProvider({ tenantId: env.XERO_TENANT_ID,
+    clientId: env.XERO_CLIENT_ID, clientSecret: env.XERO_CLIENT_SECRET, redirectUri: env.XERO_REDIRECT_URI }));
   const { data, admin } = createBridge({ providers, dataToken: env.CANOPY_OAUTH_DATA_TOKEN,
     adminToken: env.CANOPY_OAUTH_ADMIN_TOKEN, secrets: privateStore(env.CANOPY_OAUTH_SECRETS_DIR) });
   data.listen(8905, '127.0.0.1');

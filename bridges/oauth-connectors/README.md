@@ -65,3 +65,28 @@ access to contacts and their queued inputs. See the
 [official PHP client, MIT](https://github.com/amocrm/amocrm-api-php/tree/a0072fec651b84500c6767f98bbab6d1c8df9ce4),
 [onboarding](https://www.amocrm.ru/developers/content/oauth/step-by-step),
 and [API v4](https://www.amocrm.ru/developers/content/crm_platform/api-reference).
+
+## QuickBooks Online and Xero
+
+For QuickBooks configure `QUICKBOOKS_REALM_ID` to the company ID and
+`QUICKBOOKS_HOME_CURRENCY` to the company's actual home currency. It is
+used only when a single-currency invoice has no currency field.
+Set `QUICKBOOKS_CLIENT_ID`, `QUICKBOOKS_CLIENT_SECRET` and
+`QUICKBOOKS_REDIRECT_URI`. For a development company and credentials set
+`QUICKBOOKS_SANDBOX=1`. Consent requires the accounting scope and the
+callback's realm ID must match.
+
+For Xero set `XERO_TENANT_ID` to the authorized organisation's UUID,
+`XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` and `XERO_REDIRECT_URI`. Register an
+OAuth Authorization Code web app and grant read-only invoices plus offline
+access. The bridge does not accept an organization ID from graph input.
+
+Both connectors list up to 20 invoices per page or fetch one by ID.
+They expose number, currency, total and amount due, not contact details or
+line items. Amounts are the provider's JSON numbers in currency units.
+These reads do not create invoices or record payments.
+
+References: [QuickBooks PHP SDK, Apache-2.0](https://github.com/intuit/QuickBooks-V3-PHP-SDK/tree/8bf471f08c39dffc4851f4d0714d43366a1ae857),
+[Invoice API](https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/invoice),
+[Xero SDK, MIT](https://github.com/XeroAPI/xero-node/tree/538aa659d723055cb4485ba4513e2f080ac85076)
+and [Xero Invoices API](https://developer.xero.com/documentation/api/accounting/invoices).

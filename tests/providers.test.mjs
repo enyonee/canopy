@@ -33,7 +33,8 @@ const rowOf = (op, payload) => ({ id: 1, kind: 'x', connector: 'c', op, payload 
 const BRIDGE_BASE = { click: 'http://127.0.0.1:8899', payme: 'http://127.0.0.1:8899',
   paynet: 'http://127.0.0.1:8899', tbank: 'http://127.0.0.1:8900', robokassa: 'http://127.0.0.1:8902',
   ameriabank: 'http://127.0.0.1:8903', epoint: 'http://127.0.0.1:8903', 'uzum-bank': 'http://127.0.0.1:8904',
-  shopify: 'http://127.0.0.1:8905', 'google-sheets': 'http://127.0.0.1:8905', amocrm: 'http://127.0.0.1:8905' };
+  shopify: 'http://127.0.0.1:8905', 'google-sheets': 'http://127.0.0.1:8905', amocrm: 'http://127.0.0.1:8905',
+  quickbooks: 'http://127.0.0.1:8905', xero: 'http://127.0.0.1:8905' };
 
 test('the connector catalog is valid, with sandbox first and explicit idempotency policies', () => {
   const names = connectorNames();
