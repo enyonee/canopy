@@ -1,0 +1,1 @@
+Reference: [official OpenAPI and SDK generator (BSD-3-Clause)](https://github.com/yandex-market/yandex-market-partner-api/tree/fbf491ab9461699bf242d21dd029a83a98010ee8). Canopy uses the business orders endpoint, not the deprecated campaign orders endpoint. Stock reads target partner warehouses outside warehouse groups.

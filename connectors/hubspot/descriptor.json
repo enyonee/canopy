@@ -1,0 +1,330 @@
+{
+  "descriptor": 1,
+  "name": "hubspot",
+  "title": "HubSpot CRM",
+  "base": "https://api.hubapi.com",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createContact": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 254,
+            "format": "email"
+          },
+          "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "email",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/crm/v3/objects/contacts",
+        "headers": {
+          "authorization": "Bearer {secret.accessToken}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "properties": {
+            "email": {
+              "$": "input.email"
+            },
+            "firstname": {
+              "$": "input.firstName"
+            },
+            "lastname": {
+              "$": "input.lastName"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "result": {
+        "id": "$.id"
+      },
+      "resultOnly": true
+    },
+    "getContact": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/crm/v3/objects/contacts/{input.id}?properties=email,firstname,lastname",
+        "headers": {
+          "authorization": "Bearer {secret.accessToken}",
+          "content-type": "application/json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[0-9]+$"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 254,
+                "format": "email"
+              }
+            },
+            "required": [
+              "email"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "properties"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "email": "$.properties.email"
+      },
+      "resultOnly": true
+    },
+    "createDeal": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "pipeline": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "stage": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "name",
+          "pipeline",
+          "stage"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/crm/v3/objects/deals",
+        "headers": {
+          "authorization": "Bearer {secret.accessToken}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "properties": {
+            "dealname": {
+              "$": "input.name"
+            },
+            "pipeline": {
+              "$": "input.pipeline"
+            },
+            "dealstage": {
+              "$": "input.stage"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "result": {
+        "id": "$.id"
+      },
+      "resultOnly": true
+    },
+    "setDealStage": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[0-9]+$"
+          },
+          "stage": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "id",
+          "stage"
+        ]
+      },
+      "request": {
+        "method": "PATCH",
+        "url": "{base}/crm/v3/objects/deals/{input.id}",
+        "headers": {
+          "authorization": "Bearer {secret.accessToken}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "properties": {
+            "dealstage": {
+              "$": "input.stage"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[0-9]+$"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "dealstage": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "dealstage"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "properties"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "stage": "$.properties.dealstage"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createContact": [
+        {
+          "body": {
+            "id": "101"
+          }
+        }
+      ],
+      "getContact": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "properties": {
+              "email": "buyer@example.test"
+            }
+          }
+        }
+      ],
+      "createDeal": [
+        {
+          "body": {
+            "id": "201"
+          }
+        }
+      ],
+      "setDealStage": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "properties": {
+              "dealstage": {
+                "$": "input.stage"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "getContact",
+      "input": {
+        "id": "101"
+      }
+    }
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "descriptor": 1,
+  "name": "whatsapp-business",
+  "title": "WhatsApp Business Cloud",
+  "base": "https://graph.facebook.com",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "config": {
+    "type": "object",
+    "properties": {
+      "phoneNumberId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 24,
+        "pattern": "^[0-9]+$"
+      }
+    },
+    "required": [
+      "phoneNumberId"
+    ]
+  },
+  "operations": {
+    "sendTemplate": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15,
+            "pattern": "^[1-9][0-9]{6,14}$"
+          },
+          "template": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "language": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12,
+            "pattern": "^[a-z]{2,3}(?:_[A-Z]{2})?$"
+          }
+        },
+        "required": [
+          "to",
+          "template",
+          "language"
+        ]
+      },
+      "idempotent": false,
+      "noReplay": true,
+      "request": {
+        "method": "POST",
+        "url": "{base}/v23.0/{config.phoneNumberId}/messages",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.accessToken}"
+        },
+        "body": {
+          "messaging_product": "whatsapp",
+          "recipient_type": "individual",
+          "to": {
+            "$": "input.to"
+          },
+          "type": "template",
+          "template": {
+            "name": {
+              "$": "input.template"
+            },
+            "language": {
+              "code": {
+                "$": "input.language"
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^wamid\\.[A-Za-z0-9_+/=-]+$"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ]
+      },
+      "result": {
+        "messageId": "$.messages[0].id"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "sendTemplate": [
+        {
+          "body": {
+            "messages": [
+              {
+                "id": "wamid.fixture"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "sendTemplate",
+      "input": {
+        "to": "12025550134",
+        "template": "order_ready",
+        "language": "en_US"
+      }
+    }
+  }
+}

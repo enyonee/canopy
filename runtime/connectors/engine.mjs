@@ -36,7 +36,7 @@ function requestUrl(op, scopes) {
 }
 
 function privateUrl(op, scopes, credential) {
-  if (typeof credential !== 'string' || !/^[A-Za-z0-9_-]{1,256}$/.test(credential)) throw new Error('invalid path credential');
+  if (typeof credential !== 'string' || !/^(?:[A-Za-z0-9_-]{1,256}|bot[0-9]{1,20}:[A-Za-z0-9_-]{1,232})$/.test(credential)) throw new Error('invalid path credential');
   const segment = `{secret.${op.request.pathSecret}}`;
   const url = new URL(expandUrl(op.request.url.replace(segment, credential), scopes));
   if (url.protocol !== 'https:' || url.username || url.password || url.origin !== new URL(scopes.base).origin)

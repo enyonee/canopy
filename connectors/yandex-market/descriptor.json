@@ -1,0 +1,253 @@
+{
+  "descriptor": 1,
+  "name": "yandex-market",
+  "title": "Yandex Market Partner",
+  "base": "https://api.partner.market.yandex.ru",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "config": {
+    "type": "object",
+    "properties": {
+      "businessId": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+      }
+    },
+    "required": [
+      "businessId"
+    ]
+  },
+  "operations": {
+    "getOrder": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v1/businesses/{config.businessId}/orders?limit=1",
+        "headers": {
+          "Api-Key": "{secret.apiKey}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "orderIds": [
+            {
+              "$": "input.id"
+            }
+          ]
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "status": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "id",
+                "status"
+              ]
+            }
+          }
+        },
+        "required": [
+          "orders"
+        ]
+      },
+      "result": {
+        "id": "$.orders[0].id",
+        "status": "$.orders[0].status"
+      },
+      "resultOnly": true
+    },
+    "getStock": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "warehouseId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "sku": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "warehouseId",
+          "sku"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v3/businesses/{config.businessId}/offers/stocks",
+        "headers": {
+          "Api-Key": "{secret.apiKey}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "partnerWarehouseId": {
+            "$": "input.warehouseId"
+          },
+          "offerIds": [
+            {
+              "$": "input.sku"
+            }
+          ]
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "OK"
+            ]
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "partnerWarehouseId": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "offers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "offerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "stocks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "count"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "offerId",
+                    "stocks"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "partnerWarehouseId",
+              "offers"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "result"
+        ]
+      },
+      "result": {
+        "warehouseId": "$.result.partnerWarehouseId",
+        "offers": "$.result.offers"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "getOrder": [
+        {
+          "body": {
+            "orders": [
+              {
+                "id": {
+                  "$": "input.id"
+                },
+                "status": "PROCESSING"
+              }
+            ]
+          }
+        }
+      ],
+      "getStock": [
+        {
+          "body": {
+            "status": "OK",
+            "result": {
+              "partnerWarehouseId": {
+                "$": "input.warehouseId"
+              },
+              "offers": [
+                {
+                  "offerId": {
+                    "$": "input.sku"
+                  },
+                  "stocks": [
+                    {
+                      "type": "AVAILABLE",
+                      "count": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "getOrder",
+      "input": {
+        "id": 101
+      }
+    }
+  }
+}

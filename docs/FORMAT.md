@@ -392,7 +392,9 @@ may declare `pathSecret: "slotName"` and a single whole `{secret.slotName}`
 segment after `{base}/`. It requires a `resultOnly` operation. The public
 delivery target keeps the segment as `redacted`; HTTPS, same-origin delivery
 and no redirects are required. Keep the base provider allowlisted in the
-descriptor configuration. Secrets remain forbidden in other URL positions.
+descriptor configuration. Store Telegram Bot API credentials as the whole
+`bot<token>` segment; only that format may contain a colon. Secrets remain
+forbidden in other URL positions.
 
 A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed like a plugin
 (`"plugins": ["../../connectors/stripe/descriptor.json"]`); its `name` becomes the connector `kind`.

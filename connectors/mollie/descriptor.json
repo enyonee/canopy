@@ -1,0 +1,581 @@
+{
+  "descriptor": 1,
+  "name": "mollie",
+  "title": "Mollie Payments",
+  "base": "https://api.mollie.com",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "idempotency": {
+    "header": "Idempotency-Key"
+  },
+  "operations": {
+    "createCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_.:-]+$"
+          },
+          "amount": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16,
+            "pattern": "^(?:[1-9][0-9]{0,8}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          },
+          "returnUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "orderId",
+          "amount",
+          "currency",
+          "returnUrl",
+          "description"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v2/payments",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.apiKey}"
+        },
+        "body": {
+          "amount": {
+            "value": {
+              "$": "input.amount"
+            },
+            "currency": {
+              "$": "input.currency"
+            }
+          },
+          "description": {
+            "$": "input.description"
+          },
+          "redirectUrl": {
+            "$": "input.returnUrl"
+          },
+          "metadata": {
+            "orderId": {
+              "$": "input.orderId"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^tr_[A-Za-z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "canceled",
+              "pending",
+              "authorized",
+              "expired",
+              "failed",
+              "paid"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16,
+                "pattern": "^(?:[1-9][0-9]{0,8}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+              }
+            },
+            "required": [
+              "currency",
+              "value"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "orderId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[A-Za-z0-9_.:-]+$"
+              }
+            },
+            "required": [
+              "orderId"
+            ]
+          },
+          "_links": {
+            "type": "object",
+            "properties": {
+              "checkout": {
+                "type": "object",
+                "properties": {
+                  "href": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048,
+                    "pattern": "^https://(?:www|checkout)\\.mollie\\.com/"
+                  }
+                },
+                "required": [
+                  "href"
+                ]
+              }
+            },
+            "required": [
+              "checkout"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount",
+          "metadata",
+          "_links"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amount": "$.amount.value",
+        "currency": "$.amount.currency",
+        "orderId": "$.metadata.orderId",
+        "checkoutUrl": "$._links.checkout.href"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^tr_[A-Za-z0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v2/payments/{input.id}",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.apiKey}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^tr_[A-Za-z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "canceled",
+              "pending",
+              "authorized",
+              "expired",
+              "failed",
+              "paid"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16,
+                "pattern": "^(?:[1-9][0-9]{0,8}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+              }
+            },
+            "required": [
+              "currency",
+              "value"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "orderId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[A-Za-z0-9_.:-]+$"
+              }
+            },
+            "required": [
+              "orderId"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount",
+          "metadata"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amount": "$.amount.value",
+        "currency": "$.amount.currency",
+        "orderId": "$.metadata.orderId"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^tr_[A-Za-z0-9]+$"
+          },
+          "amount": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16,
+            "pattern": "^(?:[1-9][0-9]{0,8}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          }
+        },
+        "required": [
+          "paymentId",
+          "amount",
+          "currency"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v2/payments/{input.paymentId}/refunds",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.apiKey}"
+        },
+        "body": {
+          "amount": {
+            "value": {
+              "$": "input.amount"
+            },
+            "currency": {
+              "$": "input.currency"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^re_[A-Za-z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "pending",
+              "processing",
+              "refunded",
+              "failed",
+              "canceled"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16,
+                "pattern": "^(?:[1-9][0-9]{0,8}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+              }
+            },
+            "required": [
+              "currency",
+              "value"
+            ]
+          },
+          "paymentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^tr_[A-Za-z0-9]+$"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount",
+          "paymentId"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amount": "$.amount.value",
+        "currency": "$.amount.currency",
+        "paymentId": "$.paymentId"
+      },
+      "resultOnly": true
+    },
+    "getRefund": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^tr_[A-Za-z0-9]+$"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^re_[A-Za-z0-9]+$"
+          }
+        },
+        "required": [
+          "paymentId",
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v2/payments/{input.paymentId}/refunds/{input.id}",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.apiKey}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^re_[A-Za-z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "pending",
+              "processing",
+              "refunded",
+              "failed",
+              "canceled"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16,
+                "pattern": "^(?:[1-9][0-9]{0,8}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+              }
+            },
+            "required": [
+              "currency",
+              "value"
+            ]
+          },
+          "paymentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^tr_[A-Za-z0-9]+$"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount",
+          "paymentId"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amount": "$.amount.value",
+        "currency": "$.amount.currency",
+        "paymentId": "$.paymentId"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "tr_demo1",
+            "status": "open",
+            "amount": {
+              "value": {
+                "$": "input.amount"
+              },
+              "currency": {
+                "$": "input.currency"
+              }
+            },
+            "metadata": {
+              "orderId": {
+                "$": "input.orderId"
+              }
+            },
+            "_links": {
+              "checkout": {
+                "href": "https://www.mollie.com/checkout/demo"
+              }
+            }
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "paid",
+            "amount": {
+              "value": "12.00",
+              "currency": "EUR"
+            },
+            "metadata": {
+              "orderId": "order-41"
+            }
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "id": "re_demo1",
+            "status": "pending",
+            "amount": {
+              "value": {
+                "$": "input.amount"
+              },
+              "currency": {
+                "$": "input.currency"
+              }
+            },
+            "paymentId": {
+              "$": "input.paymentId"
+            }
+          }
+        }
+      ],
+      "getRefund": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "refunded",
+            "amount": {
+              "value": "12.00",
+              "currency": "EUR"
+            },
+            "paymentId": {
+              "$": "input.paymentId"
+            }
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "orderId": "order-41",
+        "amount": "12.00",
+        "currency": "EUR",
+        "returnUrl": "https://shop.example.test/return",
+        "description": "Demo"
+      }
+    }
+  }
+}

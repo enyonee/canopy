@@ -1,0 +1,415 @@
+{
+  "descriptor": 1,
+  "name": "woocommerce",
+  "title": "WooCommerce",
+  "base": "https://{config.host}",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "config": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 253,
+        "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$"
+      }
+    },
+    "required": [
+      "host"
+    ]
+  },
+  "operations": {
+    "listOrders": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          }
+        },
+        "required": []
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/wp-json/wc/v3/orders?page={input.page}&per_page={input.limit}&_fields=id,status,currency,total",
+        "headers": {
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "status": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "currency": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 3,
+              "pattern": "^[A-Z]{3}$"
+            },
+            "total": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+            }
+          },
+          "required": [
+            "id",
+            "status",
+            "currency",
+            "total"
+          ]
+        }
+      },
+      "result": {
+        "orders": "$"
+      },
+      "resultOnly": true
+    },
+    "getOrder": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/wp-json/wc/v3/orders/{input.id}?_fields=id,status,currency,total",
+        "headers": {
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          },
+          "total": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "currency",
+          "total"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "currency": "$.currency",
+        "total": "$.total"
+      },
+      "resultOnly": true
+    },
+    "setOrderStatus": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "on-hold",
+              "completed",
+              "cancelled",
+              "refunded",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "{base}/wp-json/wc/v3/orders/{input.id}?_fields=id,status,currency,total",
+        "headers": {
+          "authorization": "Basic {secret.basicCredential}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": {
+            "$": "input.status"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          },
+          "total": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "currency",
+          "total"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "currency": "$.currency",
+        "total": "$.total"
+      },
+      "resultOnly": true
+    },
+    "getStock": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/wp-json/wc/v3/products/{input.id}?_fields=id,stock_status,manage_stock",
+        "headers": {
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "stock_status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "manage_stock": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "stock_status",
+          "manage_stock"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "stockStatus": "$.stock_status",
+        "managed": "$.manage_stock"
+      },
+      "resultOnly": true
+    },
+    "getStockQuantity": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/wp-json/wc/v3/products/{input.id}?_fields=id,stock_quantity,manage_stock",
+        "headers": {
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "stock_quantity": {
+            "type": "integer",
+            "minimum": -10000000,
+            "maximum": 9007199254740991
+          },
+          "manage_stock": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "stock_quantity",
+          "manage_stock"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "quantity": "$.stock_quantity"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "listOrders": [
+        {
+          "body": [
+            {
+              "id": 101,
+              "status": "processing",
+              "currency": "USD",
+              "total": "12.50"
+            }
+          ]
+        }
+      ],
+      "getOrder": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "processing",
+            "currency": "USD",
+            "total": "12.50"
+          }
+        }
+      ],
+      "setOrderStatus": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": {
+              "$": "input.status"
+            },
+            "currency": "USD",
+            "total": "12.50"
+          }
+        }
+      ],
+      "getStock": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "stock_status": "instock",
+            "manage_stock": true
+          }
+        }
+      ],
+      "getStockQuantity": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "stock_quantity": 12,
+            "manage_stock": true
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "listOrders",
+      "input": {}
+    }
+  }
+}

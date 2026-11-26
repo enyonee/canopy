@@ -1,0 +1,1 @@
+Reference: [official REST client (MIT)](https://github.com/woocommerce/woocommerce-rest-api-js-lib/tree/620858b825c10ed0f512a991a247a97d4fe7779d) and [WooCommerce REST API v3](https://woocommerce.github.io/woocommerce-rest-api-docs/). Supply a WooCommerce store on the root of an HTTPS host and store the base64-encoded `consumerKey:consumerSecret` as `basicCredential`.

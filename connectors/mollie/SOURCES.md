@@ -1,0 +1,3 @@
+References: [official Node SDK (BSD-3-Clause)](https://github.com/mollie/mollie-api-node/tree/b210b067c0847ad27d975f52974e81921b8bfcf8), [create payment](https://docs.mollie.com/reference/create-payment), and [create refund](https://docs.mollie.com/reference/create-refund).
+
+Use a scoped Mollie API key. Create a hosted payment, then compare the Mollie payment ID, its metadata order ID, amount and currency using the authenticated read. Only paid means paid. Refund acceptance is not settlement. Ambiguous requests must be reconciled before a replacement is attempted. The offline sandbox never uses an API key.

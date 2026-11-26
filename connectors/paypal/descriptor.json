@@ -1,0 +1,899 @@
+{
+  "descriptor": 1,
+  "name": "paypal",
+  "title": "PayPal Checkout",
+  "base": "https://api-m.paypal.com",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "idempotency": {
+    "header": "PayPal-Request-Id"
+  },
+  "token": {
+    "url": "https://api-m.paypal.com/v1/oauth2/token",
+    "scheme": "basic",
+    "clientId": "clientId",
+    "clientSecret": "clientSecret"
+  },
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_.:-]+$"
+          },
+          "amount": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15,
+            "pattern": "^(?:[1-9][0-9]{0,8}(?:\\.[0-9]{1,3})?|0\\.(?=[0-9]{1,3}$)[0-9]*[1-9][0-9]*)$"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          },
+          "returnUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]*$"
+          },
+          "cancelUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]*$"
+          }
+        },
+        "required": [
+          "orderId",
+          "amount",
+          "currency",
+          "returnUrl",
+          "cancelUrl"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v2/checkout/orders",
+        "headers": {
+          "content-type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": {
+          "intent": "CAPTURE",
+          "purchase_units": [
+            {
+              "reference_id": {
+                "$": "input.orderId"
+              },
+              "custom_id": {
+                "$": "input.orderId"
+              },
+              "amount": {
+                "currency_code": {
+                  "$": "input.currency"
+                },
+                "value": {
+                  "$": "input.amount"
+                }
+              }
+            }
+          ],
+          "payment_source": {
+            "paypal": {
+              "experience_context": {
+                "shipping_preference": "NO_SHIPPING",
+                "user_action": "PAY_NOW",
+                "return_url": {
+                  "$": "input.returnUrl"
+                },
+                "cancel_url": {
+                  "$": "input.cancelUrl"
+                }
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "SAVED",
+              "APPROVED",
+              "VOIDED",
+              "COMPLETED",
+              "PAYER_ACTION_REQUIRED"
+            ]
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rel": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                "href": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048,
+                  "pattern": "^https://(?:api-m\\.(?:sandbox\\.)?paypal\\.com/|www\\.(?:sandbox\\.)?paypal\\.com/checkoutnow\\?)"
+                }
+              },
+              "required": [
+                "rel",
+                "href"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "links"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "checkoutUrl": "$.links[rel=payer-action].href"
+      },
+      "resultOnly": true,
+      "noReplay": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v2/checkout/orders/{input.id}",
+        "headers": {
+          "content-type": "application/json",
+          "Prefer": "return=representation"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "SAVED",
+              "APPROVED",
+              "VOIDED",
+              "COMPLETED",
+              "PAYER_ACTION_REQUIRED"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status"
+      },
+      "resultOnly": true
+    },
+    "captureCheckout": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v2/checkout/orders/{input.id}/capture",
+        "headers": {
+          "content-type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": {}
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "SAVED",
+              "APPROVED",
+              "VOIDED",
+              "COMPLETED",
+              "PAYER_ACTION_REQUIRED"
+            ]
+          },
+          "purchase_units": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reference_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[A-Za-z0-9_.:-]+$"
+                },
+                "payments": {
+                  "type": "object",
+                  "properties": {
+                    "captures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 32,
+                            "pattern": "^[A-Z0-9]+$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "COMPLETED",
+                              "DECLINED",
+                              "PARTIALLY_REFUNDED",
+                              "PENDING",
+                              "REFUNDED",
+                              "FAILED"
+                            ]
+                          },
+                          "amount": {
+                            "type": "object",
+                            "properties": {
+                              "currency_code": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 3,
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "value": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 15,
+                                "pattern": "^(?:[1-9][0-9]{0,8}(?:\\.[0-9]{1,3})?|0\\.(?=[0-9]{1,3}$)[0-9]*[1-9][0-9]*)$"
+                              }
+                            },
+                            "required": [
+                              "currency_code",
+                              "value"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "amount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "captures"
+                  ]
+                }
+              },
+              "required": [
+                "reference_id",
+                "payments"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "purchase_units"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "orderId": "$.purchase_units[0].reference_id",
+        "captureId": "$.purchase_units[0].payments.captures[0].id",
+        "captureStatus": "$.purchase_units[0].payments.captures[0].status",
+        "amount": "$.purchase_units[0].payments.captures[0].amount.value",
+        "currency": "$.purchase_units[0].payments.captures[0].amount.currency_code"
+      },
+      "resultOnly": true,
+      "noReplay": true
+    },
+    "getCapture": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v2/payments/captures/{input.id}",
+        "headers": {
+          "content-type": "application/json",
+          "Prefer": "return=representation"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "COMPLETED",
+              "DECLINED",
+              "PARTIALLY_REFUNDED",
+              "PENDING",
+              "REFUNDED",
+              "FAILED"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "currency_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 15,
+                "pattern": "^(?:[1-9][0-9]{0,8}(?:\\.[0-9]{1,3})?|0\\.(?=[0-9]{1,3}$)[0-9]*[1-9][0-9]*)$"
+              }
+            },
+            "required": [
+              "currency_code",
+              "value"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amount": "$.amount.value",
+        "currency": "$.amount.currency_code"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "properties": {
+          "captureId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "amount": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15,
+            "pattern": "^(?:[1-9][0-9]{0,8}(?:\\.[0-9]{1,3})?|0\\.(?=[0-9]{1,3}$)[0-9]*[1-9][0-9]*)$"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3,
+            "pattern": "^[A-Z]{3}$"
+          }
+        },
+        "required": [
+          "captureId",
+          "amount",
+          "currency"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v2/payments/captures/{input.captureId}/refund",
+        "headers": {
+          "content-type": "application/json",
+          "Prefer": "return=representation"
+        },
+        "body": {
+          "amount": {
+            "value": {
+              "$": "input.amount"
+            },
+            "currency_code": {
+              "$": "input.currency"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "FAILED",
+              "PENDING",
+              "COMPLETED"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "currency_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 15,
+                "pattern": "^(?:[1-9][0-9]{0,8}(?:\\.[0-9]{1,3})?|0\\.(?=[0-9]{1,3}$)[0-9]*[1-9][0-9]*)$"
+              }
+            },
+            "required": [
+              "currency_code",
+              "value"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amount": "$.amount.value",
+        "currency": "$.amount.currency_code"
+      },
+      "resultOnly": true,
+      "noReplay": true
+    },
+    "getRefund": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v2/payments/refunds/{input.id}",
+        "headers": {
+          "content-type": "application/json",
+          "Prefer": "return=representation"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CANCELLED",
+              "FAILED",
+              "PENDING",
+              "COMPLETED"
+            ]
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "currency_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3,
+                "pattern": "^[A-Z]{3}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 15,
+                "pattern": "^(?:[1-9][0-9]{0,8}(?:\\.[0-9]{1,3})?|0\\.(?=[0-9]{1,3}$)[0-9]*[1-9][0-9]*)$"
+              }
+            },
+            "required": [
+              "currency_code",
+              "value"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "amount"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "amount": "$.amount.value",
+        "currency": "$.amount.currency_code"
+      },
+      "resultOnly": true
+    },
+    "getCapturedOrder": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v2/checkout/orders/{input.id}",
+        "headers": {
+          "content-type": "application/json",
+          "Prefer": "return=representation"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[A-Z0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "SAVED",
+              "APPROVED",
+              "VOIDED",
+              "COMPLETED",
+              "PAYER_ACTION_REQUIRED"
+            ]
+          },
+          "purchase_units": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reference_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[A-Za-z0-9_.:-]+$"
+                },
+                "payments": {
+                  "type": "object",
+                  "properties": {
+                    "captures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 32,
+                            "pattern": "^[A-Z0-9]+$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "COMPLETED",
+                              "DECLINED",
+                              "PARTIALLY_REFUNDED",
+                              "PENDING",
+                              "REFUNDED",
+                              "FAILED"
+                            ]
+                          },
+                          "amount": {
+                            "type": "object",
+                            "properties": {
+                              "currency_code": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 3,
+                                "pattern": "^[A-Z]{3}$"
+                              },
+                              "value": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 15,
+                                "pattern": "^(?:[1-9][0-9]{0,8}(?:\\.[0-9]{1,3})?|0\\.(?=[0-9]{1,3}$)[0-9]*[1-9][0-9]*)$"
+                              }
+                            },
+                            "required": [
+                              "currency_code",
+                              "value"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "amount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "captures"
+                  ]
+                }
+              },
+              "required": [
+                "reference_id",
+                "payments"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "purchase_units"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "orderId": "$.purchase_units[0].reference_id",
+        "captureId": "$.purchase_units[0].payments.captures[0].id",
+        "captureStatus": "$.purchase_units[0].payments.captures[0].status",
+        "amount": "$.purchase_units[0].payments.captures[0].amount.value",
+        "currency": "$.purchase_units[0].payments.captures[0].amount.currency_code"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "PAYORDER1",
+            "status": "PAYER_ACTION_REQUIRED",
+            "links": [
+              {
+                "rel": "payer-action",
+                "href": "https://www.paypal.com/checkoutnow?token=PAYORDER1"
+              }
+            ]
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "APPROVED"
+          }
+        }
+      ],
+      "captureCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "COMPLETED",
+            "purchase_units": [
+              {
+                "reference_id": "order-41",
+                "payments": {
+                  "captures": [
+                    {
+                      "id": "PAYCAPTURE1",
+                      "status": "COMPLETED",
+                      "amount": {
+                        "value": "12.00",
+                        "currency_code": "USD"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "getCapture": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "COMPLETED",
+            "amount": {
+              "value": "12.00",
+              "currency_code": "USD"
+            }
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "id": "PAYREFUND1",
+            "status": "PENDING",
+            "amount": {
+              "value": {
+                "$": "input.amount"
+              },
+              "currency_code": {
+                "$": "input.currency"
+              }
+            }
+          }
+        }
+      ],
+      "getRefund": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "COMPLETED",
+            "amount": {
+              "value": "12.00",
+              "currency_code": "USD"
+            }
+          }
+        }
+      ],
+      "getCapturedOrder": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "COMPLETED",
+            "purchase_units": [
+              {
+                "reference_id": "order-41",
+                "payments": {
+                  "captures": [
+                    {
+                      "id": "PAYCAPTURE1",
+                      "status": "COMPLETED",
+                      "amount": {
+                        "value": "12.00",
+                        "currency_code": "USD"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "amount": "12.00",
+        "currency": "USD",
+        "orderId": "order-41",
+        "returnUrl": "https://shop.example.test/return",
+        "cancelUrl": "https://shop.example.test/cancel"
+      }
+    }
+  }
+}

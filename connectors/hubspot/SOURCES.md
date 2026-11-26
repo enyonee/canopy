@@ -1,0 +1,1 @@
+Reference: [official CRM v3 client (Apache-2.0)](https://github.com/HubSpot/hubspot-api-nodejs/tree/568703577905e19a0c2708e1beb06bdc016feb9e). Map a scoped [Service Key](https://developers.hubspot.com/blog/hubspot-service-keys-the-right-api-credential-for-data-integrations) for one account to `accessToken`. No SDK is linked into the runtime.

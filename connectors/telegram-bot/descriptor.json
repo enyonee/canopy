@@ -1,0 +1,108 @@
+{
+  "descriptor": 1,
+  "name": "telegram-bot",
+  "title": "Telegram Bot",
+  "base": "https://api.telegram.org",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "sendMessage": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 21,
+            "pattern": "^-?[1-9][0-9]{0,18}$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "chatId",
+          "text"
+        ]
+      },
+      "idempotent": false,
+      "noReplay": true,
+      "request": {
+        "method": "POST",
+        "url": "{base}/{secret.botPath}/sendMessage",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "chat_id": {
+            "$": "input.chatId"
+          },
+          "text": {
+            "$": "input.text"
+          },
+          "link_preview_options": {
+            "is_disabled": true
+          }
+        },
+        "pathSecret": "botPath"
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "message_id": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "message_id"
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "result"
+        ]
+      },
+      "result": {
+        "messageId": "$.result.message_id"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "sendMessage": [
+        {
+          "body": {
+            "ok": true,
+            "result": {
+              "message_id": 123
+            }
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "sendMessage",
+      "input": {
+        "chatId": "-100123",
+        "text": "Delivery ready"
+      }
+    }
+  }
+}

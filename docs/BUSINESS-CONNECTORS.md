@@ -8,6 +8,20 @@ only with the appropriate merchant or seller account. The GitHub revisions
 below are reference implementations for the HTTP contracts; their SDKs
 are not runtime dependencies.
 
+## Commerce, messaging and CRM
+
+| Kind | Operations and configuration | Reference implementation |
+| --- | --- | --- |
+| `yandex-market` | Read order status by ID and stock by partner warehouse and SKU. Configure `businessId` and `apiKey`. | [Official OpenAPI and SDK generator, BSD-3-Clause](../connectors/yandex-market/SOURCES.md) |
+| `woocommerce` | List a bounded page of orders, get an order, set status and read stock. Configure the HTTPS `host` and base64 of the consumer key pair in `basicCredential`. | [Official REST client, MIT](../connectors/woocommerce/SOURCES.md) |
+| `hubspot` | Create/read a contact, create a deal and set its stage. A scoped Service Key in `accessToken` connects one account. | [Official CRM client, Apache-2.0](../connectors/hubspot/SOURCES.md) |
+| `telegram-bot` | Send plain text to a chat ID. Store the whole `bot<token>` path segment in `botPath`; the outbox target is masked. | [Activepieces implementation, MIT](../connectors/telegram-bot/SOURCES.md) |
+| `whatsapp-business` | Send an approved template with no parameters. Configure `phoneNumberId` and a scoped `accessToken`. | [Activepieces implementation, MIT](../connectors/whatsapp-business/SOURCES.md) |
+| `paypal` | Create a hosted order, read approval, capture, reconcile by order or capture ID, and request/read a refund. Configure `clientId` and `clientSecret`. | [Orders and Payments v2; Server SDK reference](../connectors/paypal/SOURCES.md) |
+| `mollie` | Hosted checkout, payment status and refunds with a scoped `apiKey`. The descriptor uses decimal strings with two digits after the decimal point. | [Official Node client, BSD-3-Clause](../connectors/mollie/SOURCES.md) |
+
+## Regional catalog
+
 | Kind | Operations and configuration | Reference implementation |
 | --- | --- | --- |
 | `bitrix24` | Contact create/read, deal create and stage update. Cloud portal and user ID in config, incoming webhook token in `webhookToken`. | [Official PHP SDK, MIT](https://github.com/bitrix24/b24phpsdk/tree/11b3be9a5455f5964d00f532980d1067ca7f0211) |
