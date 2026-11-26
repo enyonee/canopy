@@ -30,7 +30,8 @@ const TEST_SECRET = 'TEST_VALUE_OF_';
 const secretOf = (slot) => `${TEST_SECRET}${slot}`;
 const CONFIG = { postmark: { from: 'shop@example.test' }, slack: {}, stripe: {} };
 const rowOf = (op, payload) => ({ id: 1, kind: 'x', connector: 'c', op, payload });
-const BRIDGE_BASE = { click: 'http://127.0.0.1:8899', payme: 'http://127.0.0.1:8899', tbank: 'http://127.0.0.1:8900' };
+const BRIDGE_BASE = { click: 'http://127.0.0.1:8899', payme: 'http://127.0.0.1:8899',
+  tbank: 'http://127.0.0.1:8900', robokassa: 'http://127.0.0.1:8902' };
 
 test('the connector catalog is valid, with sandbox first and explicit idempotency policies', () => {
   const names = connectorNames();

@@ -1,0 +1,213 @@
+{
+  "descriptor": 1,
+  "name": "robokassa",
+  "title": "Robokassa Invoice bridge",
+  "base": "http://127.0.0.1:8902",
+  "timeoutMs": 6500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "invoiceId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "invoiceId",
+          "amountMinor",
+          "description"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/checkout",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "invoiceId": {
+            "$": "input.invoiceId"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          },
+          "description": {
+            "$": "input.description"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4}-){3}[a-fA-F0-9]{12}$"
+          },
+          "invoiceId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "RUB"
+            ]
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "pattern": "^https://auth\\.robokassa\\.ru/(?:Merchant/Invoice|merchant/Invoice|merchant/invoice)/[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "id",
+          "invoiceId",
+          "currency",
+          "checkoutUrl"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "invoiceId": "$.invoiceId",
+        "currency": "$.currency",
+        "checkoutUrl": "$.checkoutUrl"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "invoiceId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "invoiceId"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/status",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "invoiceId": {
+            "$": "input.invoiceId"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4}-){3}[a-fA-F0-9]{12}$"
+          },
+          "invoiceId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "RUB"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NotPaid",
+              "Paid",
+              "Expired"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "invoiceId",
+          "currency",
+          "amountMinor",
+          "status"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "invoiceId": "$.invoiceId",
+        "currency": "$.currency",
+        "amountMinor": "$.amountMinor",
+        "status": "$.status"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "01234567-89ab-4cde-8f01-23456789abcd",
+            "invoiceId": {
+              "$": "input.invoiceId"
+            },
+            "currency": "RUB",
+            "checkoutUrl": "https://auth.robokassa.ru/merchant/Invoice/example"
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": "01234567-89ab-4cde-8f01-23456789abcd",
+            "invoiceId": {
+              "$": "input.invoiceId"
+            },
+            "currency": "RUB",
+            "amountMinor": 24550,
+            "status": "Paid"
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "invoiceId": 1001,
+        "amountMinor": 24550,
+        "description": "Example invoice"
+      }
+    }
+  }
+}
