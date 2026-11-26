@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { amoProvider } from '../bridges/oauth-connectors/amocrm.mjs';
 import { createBridge } from '../bridges/oauth-connectors/server.mjs';
 import { googleSheetsProvider } from '../bridges/oauth-connectors/google-sheets.mjs';
 import { shopifyProvider } from '../bridges/oauth-connectors/shopify.mjs';
@@ -226,4 +227,67 @@ test('Google Sheets uses offline consent and bounded RAW operations for the conf
   assert.equal((await send(base + '/google-sheets/append', dataToken, { row: [{ formula: '=TEST()' }] })).status, 400);
   assert.equal((await send(base + '/google-sheets/read', dataToken, { firstRow: 1, limit: 26 })).status, 400);
   assert.equal(accesses.length, 2);
+});
+
+test('amoCRM binds consent and refresh to one portal and reconciles the actual deal stage', async (t) => {
+  const amo = amoProvider({ portal: 'fixture', clientId: 'amo-client', clientSecret: 'amo-secret', redirectUri });
+  const domain = 'https://fixture.amocrm.ru';
+  const cases = [
+    ['createContact', { name: 'Demo', email: 'demo@example.test' }, 'POST', 'contacts', [
+      { name: 'Demo', custom_fields_values: [{ field_code: 'EMAIL', values: [{ value: 'demo@example.test', enum_code: 'WORK' }] }] },
+    ], { _embedded: { contacts: [{ id: 41 }] } }, { id: 41 }],
+    ['getContact', { id: 41 }, 'GET', 'contacts/41', undefined, { id: 41, name: 'Demo', private: 'ignored' }, { id: 41, name: 'Demo' }],
+    ['createDeal', { name: 'Order', pipelineId: 6, stageId: 7 }, 'POST', 'leads', [
+      { name: 'Order', pipeline_id: 6, status_id: 7 },
+    ], { _embedded: { leads: [{ id: 42 }] } }, { id: 42 }],
+    ['setDealStage', { id: 42, stageId: 9 }, 'PATCH', 'leads', [{ id: 42, status_id: 9 }],
+      { _embedded: { leads: [{ id: 42 }] } }, { id: 42 }],
+    ['getDeal', { id: 42 }, 'GET', 'leads/42', undefined, { id: 42, pipeline_id: 6, status_id: 9 }, { id: 42, pipelineId: 6, stageId: 9 }],
+  ];
+  let time = 1_000_000, calls = 0, exchanges = 0;
+  const { data, admin } = createBridge({ dataToken, adminToken, providers: [amo], secrets: mem(), now: () => time,
+    fetchImpl: async (url, req) => {
+      assert.equal(req.redirect, 'manual');
+      const body = req.body ? JSON.parse(req.body) : undefined;
+      if (url === domain + '/oauth2/access_token') {
+        assert.equal(req.headers['content-type'], 'application/json');
+        const common = { redirect_uri: redirectUri, client_id: 'amo-client', client_secret: 'amo-secret' };
+        if (++exchanges === 1) assert.deepEqual(body, { grant_type: 'authorization_code', code: 'amo-code', ...common });
+        else assert.deepEqual(body, { grant_type: 'refresh_token', refresh_token: 'amo-refresh-1', ...common });
+        return Response.json({ access_token: 'amo-token-' + exchanges, refresh_token: 'amo-refresh-' + exchanges, expires_in: 300 });
+      }
+      const [, , method, endpoint, expected, reply] = cases[calls++];
+      assert.equal(url, domain + '/api/v4/' + endpoint);
+      assert.equal(req.method, method);
+      assert.equal(req.headers.authorization, 'Bearer amo-token-' + exchanges);
+      assert.deepEqual(body, expected);
+      return Response.json(reply);
+    } });
+  const [base, adm] = await Promise.all([onLoopback(data), onLoopback(admin)]);
+  t.after(() => Promise.all([close(data), close(admin)]));
+  const descriptor = loadDescriptor('amocrm');
+  descriptor.base = base;
+  const start = new URL((await (await send(adm + '/amocrm/begin', adminToken)).json()).url);
+  assert.equal(start.origin + start.pathname, 'https://www.amocrm.ru/oauth');
+  assert.equal(start.searchParams.get('mode'), 'post_message');
+  assert.equal(start.searchParams.has('response_type'), false);
+  const callback = redirectUri + '?code=amo-code&state=' + start.searchParams.get('state') + '&platform=1&referer=';
+  assert.equal((await send(adm + '/amocrm/finish', adminToken, { callback: callback + 'other.amocrm.ru' })).status, 400);
+  assert.equal(exchanges, 0);
+  assert.equal((await send(adm + '/amocrm/finish', adminToken, { callback: callback + 'fixture.amocrm.ru' })).status, 200);
+  for (const [op, input, method, , , , expected] of cases) {
+    const row = { kind: 'amocrm', op, payload: prepare(descriptor, {}, op, input).input };
+    const offline = await deliverRow(descriptor, row, {}, {
+      mode: 'sandbox', fetchImpl: () => assert.fail('sandbox called amoCRM'),
+    });
+    assert.equal(offline.status, 'sent', op);
+    if (op === 'getDeal') time += 250_000;
+    const result = await deliverRow(descriptor, row, {}, { secret: () => dataToken });
+    assert.equal(result.status, 'sent', op);
+    assert.deepEqual(JSON.parse(result.result), expected, op);
+    assert.equal(result.response, undefined);
+    assert.equal(noReplay({ descriptors: { amocrm: descriptor } }, row), method !== 'GET');
+  }
+  assert.equal(calls, cases.length);
+  assert.equal(exchanges, 2);
 });

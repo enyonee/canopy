@@ -82,8 +82,9 @@ export function tokenBroker(secrets, provider, fetchImpl = fetch, now = Date.now
       const state = random(), verifier = pkce ? random() : undefined;
       pending = { state, verifier, expiresAt: now() + LIFE };
       const url = new URL(authorize);
-      url.search = new URLSearchParams({ ...provider.authorizeParams, client_id: clientId, redirect_uri: redirect.href,
-        response_type: 'code', state, ...(scopes.length && { scope: scopes.join(separator) }),
+      url.search = new URLSearchParams({ ...provider.authorizeParams, client_id: clientId, state,
+        ...(!provider.customAuthorize && { redirect_uri: redirect.href, response_type: 'code' }),
+        ...(scopes.length && { scope: scopes.join(separator) }),
         ...(verifier && { code_challenge: hash(verifier), code_challenge_method: 'S256' }) }).toString();
       return url.href;
     },

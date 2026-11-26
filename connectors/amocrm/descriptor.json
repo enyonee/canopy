@@ -1,0 +1,357 @@
+{
+  "descriptor": 1,
+  "name": "amocrm",
+  "title": "amoCRM OAuth bridge",
+  "base": "http://127.0.0.1:8905",
+  "timeoutMs": 10500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createContact": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/amocrm/create-contact",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "name": {
+            "$": "input.name"
+          },
+          "email": {
+            "$": "input.email"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "result": {
+        "id": "$.id"
+      },
+      "resultOnly": true
+    },
+    "getContact": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/amocrm/contact",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "name": "$.name"
+      },
+      "resultOnly": true
+    },
+    "createDeal": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "pipelineId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "stageId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "name",
+          "pipelineId",
+          "stageId"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/amocrm/create-deal",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "name": {
+            "$": "input.name"
+          },
+          "pipelineId": {
+            "$": "input.pipelineId"
+          },
+          "stageId": {
+            "$": "input.stageId"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "result": {
+        "id": "$.id"
+      },
+      "resultOnly": true
+    },
+    "setDealStage": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "stageId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "stageId"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/amocrm/set-stage",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          },
+          "stageId": {
+            "$": "input.stageId"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "result": {
+        "id": "$.id"
+      },
+      "resultOnly": true
+    },
+    "getDeal": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/amocrm/deal",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "stageId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "pipelineId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "stageId",
+          "pipelineId"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "stageId": "$.stageId",
+        "pipelineId": "$.pipelineId"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createContact": [
+        {
+          "body": {
+            "id": 41
+          }
+        }
+      ],
+      "getContact": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "name": "Demo"
+          }
+        }
+      ],
+      "createDeal": [
+        {
+          "body": {
+            "id": 42
+          }
+        }
+      ],
+      "setDealStage": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            }
+          }
+        }
+      ],
+      "getDeal": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "stageId": 7,
+            "pipelineId": 8
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "getContact",
+      "input": {
+        "id": 41
+      }
+    }
+  }
+}

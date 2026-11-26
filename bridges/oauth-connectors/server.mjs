@@ -3,6 +3,7 @@ import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openSecrets } from '../../runtime/secrets.mjs';
 import { merchantServer } from '../merchant-http.mjs';
+import { amoProvider } from './amocrm.mjs';
 import { googleSheetsProvider } from './google-sheets.mjs';
 import { shopifyProvider } from './shopify.mjs';
 import { tokenBroker } from './tokens.mjs';
@@ -51,6 +52,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     clientId: env.GOOGLE_SHEETS_CLIENT_ID, clientSecret: env.GOOGLE_SHEETS_CLIENT_SECRET,
     redirectUri: env.GOOGLE_SHEETS_REDIRECT_URI,
   }));
+  if (env.AMOCRM_PORTAL) providers.push(amoProvider({ portal: env.AMOCRM_PORTAL,
+    clientId: env.AMOCRM_CLIENT_ID, clientSecret: env.AMOCRM_CLIENT_SECRET, redirectUri: env.AMOCRM_REDIRECT_URI }));
   const { data, admin } = createBridge({ providers, dataToken: env.CANOPY_OAUTH_DATA_TOKEN,
     adminToken: env.CANOPY_OAUTH_ADMIN_TOKEN, secrets: privateStore(env.CANOPY_OAUTH_SECRETS_DIR) });
   data.listen(8905, '127.0.0.1');

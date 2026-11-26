@@ -48,3 +48,20 @@ and should be reconciled before retrying an ambiguous result. The
 [Activepieces implementation, MIT](https://github.com/activepieces/activepieces/tree/90afd9219c93ef0aa63e08ab113831fa43fd4bf6/packages/pieces/community/google-sheets)
 and [Sheets v4 API](https://developers.google.com/workspace/sheets/api/reference/rest)
 are the references.
+
+## amoCRM
+
+Set `AMOCRM_PORTAL` to the account's subdomain under `amocrm.ru` and
+configure `AMOCRM_CLIENT_ID`, `AMOCRM_CLIENT_SECRET`, and
+`AMOCRM_REDIRECT_URI` as registered for the integration. Start consent
+for `amocrm` and select that account in the provider window. The callback's
+referer must match this account exactly. The bridge follows amoCRM's
+documented redirect and rotating JSON token exchange for this integration.
+
+Use the portal's numeric pipeline and stage IDs. `setDealStage` returns
+the accepted deal ID; confirm the updated stage through `getDeal`.
+Create and stage-change requests do not replay after ambiguity. Restrict
+access to contacts and their queued inputs. See the
+[official PHP client, MIT](https://github.com/amocrm/amocrm-api-php/tree/a0072fec651b84500c6767f98bbab6d1c8df9ce4),
+[onboarding](https://www.amocrm.ru/developers/content/oauth/step-by-step),
+and [API v4](https://www.amocrm.ru/developers/content/crm_platform/api-reference).
