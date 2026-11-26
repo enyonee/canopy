@@ -28,10 +28,10 @@ Everything an app needs comes from the platform and one small runtime:
 
 | | |
 |---|---|
-| Runtime code | ~4.9k lines, 270 KB of source |
+| Runtime code | ~9.6k lines |
 | Runtime dependencies | **0**: Node 22 built-ins only (`node:sqlite`, `node:http`, `node:crypto`) |
 | Build step | none for the runtime; optional fronts are built by `webgen` in their own project |
-| An app | one `app.json`: median **76 lines** (~5.7 KB) across the 104 apps in this repo |
+| An app | one `app.json`: median **77 lines** across the 105 apps in this repo |
 | Storage | one SQLite file per app, migrated from the graph on start |
 | Deploy unit | a directory: `app.json` + `data.sqlite` (+ plugins if the app has any) |
 | Start-up | ~0.3 s from `node runtime/run.mjs` to the first answer |
@@ -53,17 +53,17 @@ The graph is closed. You can answer statically who sees what, what happens on an
 where a request goes. A leaf (an expression, or a pure function in a plugin) has access to
 nothing, so it cannot lie about what it does. Canopy closes **access**, not arithmetic.
 
-## Status (28 September 2026)
+## Status (26 November 2026)
 
 | | |
 |---|---|
 | WebGen-Bench tasks covered | **101 / 101**: one app per task, `webgen-bench/000001` … `000101` |
-| Apps in the repo | **104**: the 101 tasks, two hand-written references (`shop`, `crm`) with three patch-based changes each, and `tictactoe` (the widget reference) |
-| Acceptance checks | **699 / 699** green (`npm run verify`) |
-| Runtime tests | **267**, 100 % line coverage across 59 modules |
-| Mutation gate | **142 / 142** mutants killed |
+| Apps in the repo | **105**: the 101 tasks, three hand-written references (`shop`, `crm`, `checkout`) with patch-based changes, and `tictactoe` (the widget reference) |
+| Acceptance checks | **711 / 711** green (`npm run verify`: 699 per app + 12 on the patch changes) |
+| Runtime tests | **659**, 100 % line coverage across 97 modules |
+| Mutation gate | **674 / 674** mutants killed |
 | Types | `tsc --checkJs`, clean |
-| Runtime size | ~4.9k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
+| Runtime size | ~9.6k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
 | Performance | indexes, page-before-hydrate, batched aggregates compiled into SQL where exact (stored and derived fields, nested aggregates, dates), prepared-statement cache; `/Order` list on a 500/2000/10000-row bench graph: 1590 ms → ~10-15 ms p50; an order with 20 000 items: 30.7 ms → 2.0 ms p50 (`npm run bench`, `TESTS.md`) |
 
 Each app ships `checks.mjs`, with one check per `ui_instruct` case of its benchmark task, and
@@ -267,7 +267,7 @@ writers, replication or online backups. Graphs never contain SQL, so apps do not
    `runtime/driver/sqlite.mjs`; still synchronous, behaviour byte-identical); S2 to S5 are next;
 2. a Postgres driver as an optional dependency, loaded only when configured (dialect: month
    bucketing, `LIKE … ESCAPE`, identity columns, stable ordering of ties);
-3. the full acceptance suite (699 checks) run against both drivers in CI, one schema per app;
+3. the full acceptance suite (711 checks) run against both drivers in CI, one schema per app;
 4. the same benchmark before and after, plus a load test.
 
 It builds on the performance round: with O(1) queries per page, a round trip to a database
