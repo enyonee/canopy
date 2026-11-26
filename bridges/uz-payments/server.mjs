@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { umask } from 'node:process';
 import { openLedger } from './ledger.mjs';
 import { checkout, click, equal, minor, orderId, payme } from './providers.mjs';
+import { paynetReply } from './paynet.mjs';
 
 const CAP = 32 * 1024;
 const goodId = (x) => typeof x === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(x);
@@ -45,11 +46,12 @@ function merchantApi(req, res, config, store, path) {
 
 async function register(req, res, config, store) {
   const p = await read(req);
-  if (!p || !orderId(p.id) || !minor(p.amountMinor) || !['payme', 'click'].includes(p.provider))
+  if (!p || !orderId(p.id) || !minor(p.amountMinor) || !['payme', 'click', 'paynet'].includes(p.provider))
     return send(res, 400, { error: 'invalid order' });
-  if ((p.provider === 'payme' && !config.paymeKey) || (p.provider === 'click' && !config.clickSecret))
+  if (!{ payme: config.paymeKey, click: config.clickSecret, paynet: config.paynetPassword }[p.provider])
     return send(res, 400, { error: 'provider not configured' });
   if (!store.tx(() => store.register(p.id, p.provider, p.amountMinor))) return send(res, 409, { error: 'order has different immutable terms' });
+  if (p.provider === 'paynet') return send(res, 200, { id: p.id, currency: 'UZS', serviceId: config.paynetService });
   return send(res, 200, { id: p.id, currency: 'UZS', checkoutUrl: checkout(config, p.provider, p.id, p.amountMinor) });
 }
 
@@ -67,11 +69,30 @@ async function paymeCallback(req, res, config, store, now) {
 
 function validateConfig(config) {
   if (typeof config.operatorToken !== 'string' || config.operatorToken.length < 24) throw new Error('operator token must be at least 24 characters');
-  const url = new URL(config.returnUrl);
-  if (url.protocol !== 'https:' || url.username || url.password || url.href.includes(';')) throw new Error('return URL must be HTTPS with no credentials or semicolon');
-  if (!config.paymeKey && !config.clickSecret) throw new Error('configure at least one provider');
+  if (config.paymeKey || config.clickSecret) {
+    const url = new URL(config.returnUrl);
+    if (url.protocol !== 'https:' || url.username || url.password || url.href.includes(';')) throw new Error('return URL must be HTTPS with no credentials or semicolon');
+  }
+  if (!config.paymeKey && !config.clickSecret && !config.paynetPassword) throw new Error('configure at least one provider');
   if (config.paymeKey && !goodId(config.paymeMerchant)) throw new Error('Payme merchant ID required');
   if (config.clickSecret && (!goodId(config.clickMerchant) || !/^\d{1,15}$/.test(config.clickService))) throw new Error('CLICK merchant and service IDs required');
+  if (config.paynetPassword && (!goodId(config.paynetUser) || typeof config.paynetPassword !== 'string' ||
+    !Number.isSafeInteger(config.paynetService) || config.paynetService < 1 ||
+    !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(config.paynetOrderField) || config.paynetOrderField === 'amount' ||
+    (config.paynetCancelMs !== undefined && (!Number.isSafeInteger(config.paynetCancelMs) ||
+      config.paynetCancelMs < 0 || config.paynetCancelMs > 86400000)))) throw new Error('invalid Paynet configuration');
+}
+
+async function paynetCallback(req, res, config, store, now) {
+  const basic = 'Basic ' + Buffer.from(config.paynetUser + ':' + config.paynetPassword).toString('base64');
+  if (!authenticated(req, basic)) return send(res, 401, { error: 'unauthorized' });
+  let body;
+  try { body = await read(req); }
+  catch (err) {
+    if (!(err instanceof SyntaxError)) throw err;
+    return send(res, 200, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Invalid JSON' } });
+  }
+  return send(res, 200, store.tx(() => paynetReply(store, body, config, now())));
 }
 
 export function createBridge({ config, file, now = Date.now }) {
@@ -86,6 +107,8 @@ export function createBridge({ config, file, now = Date.now }) {
         const form = await read(req, true);
         return send(res, 200, store.tx(() => click(store, form, config, now())));
       }
+      if (path === '/uws' && req.method === 'POST' && config.paynetPassword)
+        return await paynetCallback(req, res, config, store, now);
       if (path?.startsWith('/orders')) return await merchantApi(req, res, config, store, path);
       return send(res, 404, { error: 'not found' });
     } catch (err) {
@@ -107,6 +130,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     operatorToken: e.UZ_PAYMENTS_OPERATOR_TOKEN, returnUrl: e.UZ_PAYMENTS_RETURN_URL,
     paymeMerchant: e.PAYME_MERCHANT_ID, paymeKey: e.PAYME_KEY,
     clickMerchant: e.CLICK_MERCHANT_ID, clickService: e.CLICK_SERVICE_ID, clickSecret: e.CLICK_SECRET,
+    paynetUser: e.PAYNET_USER, paynetPassword: e.PAYNET_PASSWORD, paynetService: Number(e.PAYNET_SERVICE_ID),
+    paynetOrderField: e.PAYNET_ORDER_FIELD, paynetCancelMs: Number(e.PAYNET_CANCEL_MS || 0),
   } });
   server.listen(Number(e.UZ_PAYMENTS_PORT || 8899), '127.0.0.1');
 }

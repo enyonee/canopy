@@ -1,0 +1,178 @@
+{
+  "descriptor": 1,
+  "name": "paynet",
+  "title": "Paynet Uzbekistan UWS",
+  "base": "http://127.0.0.1:8899",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "registerOrder": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          }
+        },
+        "required": [
+          "id",
+          "amountMinor"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/orders",
+        "headers": {
+          "authorization": "Bearer {secret.operatorToken}",
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          },
+          "provider": "paynet",
+          "amountMinor": {
+            "$": "input.amountMinor"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "UZS"
+            ]
+          },
+          "serviceId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "currency",
+          "serviceId"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "currency": "$.currency",
+        "serviceId": "$.serviceId"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/orders/{input.id}",
+        "headers": {
+          "authorization": "Bearer {secret.operatorToken}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "paynet"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unpaid",
+              "paid",
+              "reversed"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "amountMinor",
+          "provider",
+          "state"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "amountMinor": "$.amountMinor",
+        "provider": "$.provider",
+        "state": "$.state"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "registerOrder": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "currency": "UZS",
+            "serviceId": 1
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "amountMinor": 1250,
+            "provider": "paynet",
+            "state": "unpaid"
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "registerOrder",
+      "input": {
+        "id": "order-41",
+        "amountMinor": 1250
+      }
+    }
+  }
+}

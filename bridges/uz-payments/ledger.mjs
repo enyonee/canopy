@@ -23,6 +23,8 @@ export function openLedger(file) {
   const pay = db.prepare('UPDATE payments SET state=2, performed=? WHERE localId=? AND state=1');
   const cancel = db.prepare('UPDATE payments SET state=?, cancelled=?, reason=? WHERE localId=? AND state IN (1,2)');
   const statement = db.prepare('SELECT * FROM payments WHERE provider=? AND providerTime BETWEEN ? AND ? ORDER BY providerTime,localId');
+  const paynetStatement = db.prepare(`SELECT * FROM payments WHERE provider='paynet' AND state=2
+    AND performed BETWEEN ? AND ? ORDER BY performed,localId LIMIT 5001`);
   const read = (r) => r ? { ...r } : null;
   return {
     close: () => db.close(),
@@ -50,5 +52,6 @@ export function openLedger(file) {
       return read(payment.get(row.provider, row.external));
     },
     statement: (from, to) => statement.all('payme', from, to).map(read),
+    paynetStatement: (from, to) => paynetStatement.all(from, to).map(read),
   };
 }
