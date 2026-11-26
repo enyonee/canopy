@@ -1,0 +1,330 @@
+{
+  "descriptor": 1,
+  "name": "onec-odata",
+  "title": "1C:Enterprise OData v3",
+  "base": "https://{config.host}/{config.publication}/odata/standard.odata",
+  "config": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "type": "string",
+        "maxLength": 253,
+        "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[1-9][0-9]{0,4})?$"
+      },
+      "publication": {
+        "type": "string",
+        "maxLength": 80,
+        "pattern": "^[A-Za-z0-9_-]+$"
+      },
+      "catalog": {
+        "type": "string",
+        "maxLength": 150,
+        "pattern": "^[A-Za-z_\\u0400-\\u052F][A-Za-z0-9_\\u0400-\\u052F]*$"
+      },
+      "document": {
+        "type": "string",
+        "maxLength": 150,
+        "pattern": "^[A-Za-z_\\u0400-\\u052F][A-Za-z0-9_\\u0400-\\u052F]*$"
+      }
+    },
+    "required": [
+      "host",
+      "publication",
+      "catalog",
+      "document"
+    ]
+  },
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "listCatalog": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000,
+            "default": 0
+          }
+        },
+        "required": []
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/Catalog_{config.catalog}?$format=json&$select=Ref_Key,Description&$top={input.limit}&$skip={input.offset}&$orderby=Ref_Key",
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "Ref_Key": {
+                  "type": "string",
+                  "maxLength": 36,
+                  "pattern": "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+                },
+                "Description": {
+                  "type": "string",
+                  "maxLength": 255
+                }
+              },
+              "required": [
+                "Ref_Key",
+                "Description"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "value"
+        ]
+      },
+      "result": {
+        "rows": "$.value"
+      },
+      "resultOnly": true
+    },
+    "getCatalogItem": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/Catalog_{config.catalog}(guid'{input.id}')?$format=json&$select=Ref_Key,Description",
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "Ref_Key": {
+            "type": "string",
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+          },
+          "Description": {
+            "type": "string",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "Ref_Key",
+          "Description"
+        ]
+      },
+      "result": {
+        "id": "$.Ref_Key",
+        "description": "$.Description"
+      },
+      "resultOnly": true
+    },
+    "listDocuments": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000,
+            "default": 0
+          }
+        },
+        "required": []
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/Document_{config.document}?$format=json&$select=Ref_Key,Number,Date&$top={input.limit}&$skip={input.offset}&$orderby=Ref_Key",
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "Ref_Key": {
+                  "type": "string",
+                  "maxLength": 36,
+                  "pattern": "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+                },
+                "Number": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "Date": {
+                  "type": "string",
+                  "maxLength": 35,
+                  "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?(?:Z|[+-]\\d\\d:\\d\\d)?$"
+                }
+              },
+              "required": [
+                "Ref_Key",
+                "Number",
+                "Date"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "value"
+        ]
+      },
+      "result": {
+        "rows": "$.value"
+      },
+      "resultOnly": true
+    },
+    "getDocument": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/Document_{config.document}(guid'{input.id}')?$format=json&$select=Ref_Key,Number,Date",
+        "headers": {
+          "accept": "application/json",
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "Ref_Key": {
+            "type": "string",
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+          },
+          "Number": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "Date": {
+            "type": "string",
+            "maxLength": 35,
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?(?:Z|[+-]\\d\\d:\\d\\d)?$"
+          }
+        },
+        "required": [
+          "Ref_Key",
+          "Number",
+          "Date"
+        ]
+      },
+      "result": {
+        "id": "$.Ref_Key",
+        "number": "$.Number",
+        "date": "$.Date"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "listCatalog": [
+        {
+          "body": {
+            "value": [
+              {
+                "Ref_Key": "01234567-89ab-4cde-8f01-23456789abcd",
+                "Description": "Example"
+              }
+            ]
+          }
+        }
+      ],
+      "getCatalogItem": [
+        {
+          "body": {
+            "Ref_Key": {
+              "$": "input.id"
+            },
+            "Description": "Example"
+          }
+        }
+      ],
+      "listDocuments": [
+        {
+          "body": {
+            "value": [
+              {
+                "Ref_Key": "01234567-89ab-4cde-8f01-23456789abcd",
+                "Number": "0000041",
+                "Date": "2026-11-01T09:30:00"
+              }
+            ]
+          }
+        }
+      ],
+      "getDocument": [
+        {
+          "body": {
+            "Ref_Key": {
+              "$": "input.id"
+            },
+            "Number": "0000041",
+            "Date": "2026-11-01T09:30:00"
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "listCatalog",
+      "input": {}
+    }
+  }
+}
