@@ -5,6 +5,9 @@
 // Anything else — an entity seed never touches — is a row the seed cannot make.
 export const NODES = ['seed'];
 
+// A seeded file's path stays below the app directory: relative, no ".." segment, "/" as the separator.
+const inside = (from) => !/^[/\\]|^[a-zA-Z]:|\\/.test(from) && !from.split('/').includes('..');
+
 export function check(graph, h) {
   const { err, checkEntity, checkField, fields } = h;
   for (const [entity, rows] of Object.entries(graph.seed || {})) {
@@ -19,6 +22,7 @@ export function check(graph, h) {
         if (v && typeof v === 'object' && !Array.isArray(v)) {
           if (!field.type.upload) err(p, `"${f}" is ${field.kind}; only a file or image field can seed { "from": <path> }`);
           else if (typeof v.from !== 'string' || !v.from) err(`${p}/from`, 'a seeded file needs "from": a path to the file, relative to the app directory');
+          else if (!inside(v.from)) err(`${p}/from`, `"${v.from}" leaves the app directory: name a file below it, like "seed/photo.webp"`);
           return;
         }
         if (field.kind !== 'ref' || v === null || v === undefined || v === '') return;

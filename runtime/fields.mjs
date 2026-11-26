@@ -20,6 +20,9 @@
 //               boolean captions), statusField (the entity's state field, or null) }
 //   input(f, v, ctx)  the form control, or null when the kind never appears on forms; ctx: { esc,
 //               options(target) every row of a target as [{ id, label }] (prefetched), entity, row }
+//   upload      the value is a file the runtime stored (an upload or a seeded file), its name the runtime chose
+//   sniff(head) an upload kind: the raster image type its first bytes are ('png' | 'jpeg' | 'webp' | 'gif'), else null;
+//               the file route shows inline only such an image, whatever the file is named (never an SVG)
 const today = () => new Date().toISOString().slice(0, 10);
 // "2026-02-31" has the shape of a date and is not one: the calendar must agree.
 const isCalendarDate = (v) => {
@@ -27,6 +30,16 @@ const isCalendarDate = (v) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const d = new Date(`${s}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
+// The raster image a file is, from its first 12 bytes: never from its name, which the sender chose.
+/** @type {Array<[string, number[]]>} */
+const SIGNATURES = [['png', [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]], ['jpeg', [0xff, 0xd8, 0xff]], ['gif', [0x47, 0x49, 0x46, 0x38]]];
+const at = (head, bytes, from = 0) => bytes.every((b, i) => head[from + i] === b);
+/** @param {Uint8Array} head @returns {string | null} */
+const imageType = (head) => {
+  const hit = SIGNATURES.find(([, bytes]) => at(head, bytes));
+  if (hit) return hit[0];
+  return at(head, [0x52, 0x49, 0x46, 0x46]) && at(head, [0x57, 0x45, 0x42, 0x50], 8) ? 'webp' : null;
 };
 const numberOrNull = (raw) => (raw === '' || raw === undefined || raw === null ? null : Number(raw));
 
@@ -92,11 +105,11 @@ export const FIELDS = {
     format: (v, f, { esc, label }) => { const lbl = label(f.target, v); return lbl ? `<a href="/${f.target}/${v}">${esc(lbl)}</a>` : '—'; },
     input: (f, v, { esc, options }) => `<select id="f_${f.name}" name="${f.name}"><option value="">—</option>` + options(f.target).map((o) =>
       `<option value="${o.id}"${String(v) === String(o.id) ? ' selected' : ''}>${esc(o.label)}</option>`).join('') + '</select>' },
-  file: { sql: 'TEXT', exprKind: 'text', derivable: false, upload: true,
+  file: { sql: 'TEXT', exprKind: 'text', derivable: false, upload: true, sniff: imageType,
     def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)), validate: () => null,
     format: (v, f, { esc, entity, row }) => (v ? `<a href="/file/${entity}/${row.id}/${f.name}">${esc(String(v).replace(/^\d+-/, ''))}</a>` : '—'),
     input: (f, v, { esc }) => `<input type="file" id="f_${f.name}" name="${f.name}">${v ? `<span class="muted"> current: ${esc(String(v).replace(/^\d+-/, ''))}</span>` : ''}` },
-  image: { sql: 'TEXT', exprKind: 'text', derivable: false, upload: true,
+  image: { sql: 'TEXT', exprKind: 'text', derivable: false, upload: true, sniff: imageType,
     def: (f) => f.def, coerce: (raw) => (raw === undefined ? null : String(raw)), validate: () => null,
     format: (v, f, { esc, entity, row }) => (v ? `<a href="/file/${entity}/${row.id}/${f.name}"><img class="thumb" src="/file/${entity}/${row.id}/${f.name}?inline=1" alt="${esc(String(v).replace(/^\d+-/, ''))}"></a>` : '—'),
     input: (f, v, { esc }) => `<input type="file" accept="image/*" id="f_${f.name}" name="${f.name}">${v ? `<span class="muted"> current: ${esc(String(v).replace(/^\d+-/, ''))}</span>` : ''}` },

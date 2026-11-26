@@ -13,18 +13,29 @@ export async function bootstrapIdentity(graph, store) {
   return rows.length ? rows[rows.length - 1].id : await store.insert(graph.identity.entity, graph.identity.defaults || {});
 }
 
+// The file a seeded `{ "from": … }` names: a regular file inside the app directory, also once symlinks are resolved
+// (the checker already refuses an absolute path and a `..`). Anything else is a boot error naming the row and the path.
+function seedFile(where, f, from, appDir) {
+  const root = fs.realpathSync(appDir);
+  let at;
+  try { at = fs.realpathSync(path.resolve(root, from)); } catch { throw new Error(`${where} "${f.name}": no file ${from} in the app directory`); }
+  if (!at.startsWith(root + path.sep) || !fs.statSync(at).isFile()) throw new Error(`${where} "${f.name}": ${from} is not a file inside the app directory`);
+  return at;
+}
+
 // A seeded file/image field may be `{ "from": "seed/photo.jpg" }` (item 11): a path
 // relative to the app directory, copied into filesDir under a fresh name — the same
 // naming shape a real multipart upload gets (routes/context.mjs), so /file/Entity/:id/
 // <field> serves it exactly the same way either source produced it.
-function materializeFiles(entity, row, store, appDir, filesDir, counter) {
+function materializeFiles(entity, row, store, appDir, filesDir, counter, where) {
   const out = { ...row };
   for (const f of store.fields[entity]) {
     const v = out[f.name];
     if (!f.type.upload || !v || typeof v !== 'object') continue;
+    const at = seedFile(where, f, v.from, appDir);
     fs.mkdirSync(filesDir, { recursive: true });
-    const name = `${Date.now()}-${counter.n++}-${path.basename(v.from)}`;
-    fs.copyFileSync(path.join(appDir, v.from), path.join(filesDir, name));
+    const name = `${Date.now()}-${counter.n++}-${path.basename(at).replace(/[^\w.-]/g, '_')}`;
+    fs.copyFileSync(at, path.join(filesDir, name));
     out[f.name] = name;
   }
   return out;
@@ -48,7 +59,7 @@ export async function bootstrapSeed(graph, store, appDir = '.', filesDir = null)
   // own message (the rule's).
   const named = async (entity, i, fn) => { try { return await fn(); } catch (e) { throw new Error(`seed ${entity}[${i}]: ${e.message}`); } };
   const seedOne = async (entity) => {
-    const rows = graph.seed[entity].map((row) => materializeFiles(entity, row, store, appDir, filesDir, counter));
+    const rows = graph.seed[entity].map((row, i) => materializeFiles(entity, row, store, appDir, filesDir, counter, `seed ${entity}[${i}]`));
     const selfFields = refFields(entity).filter((f) => f.target === entity).map((f) => f.name);
     const ids = [];
     for (const [i, row] of rows.entries()) {

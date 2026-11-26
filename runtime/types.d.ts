@@ -106,6 +106,8 @@ export interface FieldType {
   derivable?: boolean;
   structural?: boolean;
   upload?: boolean;
+  /** An upload kind: the raster image type of a file's first bytes, else null. */
+  sniff?: (head: Uint8Array) => string | null;
   def: (f: Field) => any;
   coerce: (raw: any) => any;
   validate: (v: any, f: Field) => string | null;
