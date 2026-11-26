@@ -152,8 +152,9 @@ The scaffold at `/` is server-rendered HTML. An app that wants a React front ins
 
 [webgen](webgen/README.md) generates such a front from the graph and the app's OpenAPI contract: React 19, Vite,
 TypeScript, Tailwind 4, shadcn/ui on Radix, TanStack Router and Query. Each entity gets a storefront or workspace
-look chosen from the graph, a registered `own` is honoured in the UI, and the theme is built from the app's two
-colours with WCAG-checked tokens. The generator is not part of the runtime: it has its own `package.json`, its own
+look chosen from the graph, permissions come from the graph's `can` matrix (a row `own` hides other people's
+rows and buttons in the browser, the server still decides), and the theme is built from the app's two colours
+with WCAG-checked tokens. The generator is not part of the runtime: it has its own `package.json`, its own
 tests, and leaves the runtime with zero dependencies.
 
 ```bash
