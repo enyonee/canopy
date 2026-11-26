@@ -137,15 +137,19 @@ function createListHelpers(url, store, sendCsv, vc) {
 // stays) and cannot carry a file, so a file field it names is dropped rather than pointed at a file already on disk.
 // A form's upload field likewise takes only the file this request uploaded under its name: a text value (an urlencoded
 // body, a text part) naming a stored file would point the field at a file another row owns, so it is dropped.
+// The same rule for a body a route writes without a form (a transition's or a row action's fields, db.create): every
+// upload field of the entity keeps only this request's own file.
 /** @param {Map<string, string>} uploads */
-const submittedOf = (api, store, interp, uploads) => (entity, values) => {
-  if (!api) {
-    for (const f of store.fields[entity]) {
-      const v = values[f.name];
-      if (f.type.upload && v !== undefined && v !== '' && uploads.get(f.name) !== v) delete values[f.name];
-    }
-    return interp.dropEmptyUploads(entity, interp.checkboxes(entity, values));
+const ownFilesOf = (store, uploads) => (entity, values) => {
+  for (const f of store.fields[entity]) {
+    const v = values[f.name];
+    if (f.type.upload && v !== undefined && v !== '' && uploads.get(f.name) !== v) delete values[f.name];
   }
+  return values;
+};
+
+const submittedOf = (api, store, interp, ownFiles) => (entity, values) => {
+  if (!api) return interp.dropEmptyUploads(entity, interp.checkboxes(entity, ownFiles(entity, values)));
   for (const f of store.fields[entity]) if (f.type.upload) delete values[f.name];
   return values;
 };
@@ -194,6 +198,7 @@ export async function createContext({ req, res, url, graph, store, perms, sess, 
 
   let bodyOnce = null;
   const uploads = new Map();
+  const ownFiles = ownFilesOf(store, uploads);
   const body = () => (bodyOnce ??= api ? jsonBody(req) : parseBody(req, filesDir, uploads));
   const resolveTop = interp.resolve({ user, values: {} });
   const { paged, sortOf, exportRows } = createListHelpers(url, store, sendCsv, vc);
@@ -203,6 +208,6 @@ export async function createContext({ req, res, url, graph, store, perms, sess, 
     graph, store, perms, sess, registry, interp, trace, filesDir, fetchImpl, clock, env, graphFile, base,
     user, role, vc, ownWhere, deny,
     send, redirect, ok, sendCsv, exportRows, sendJson, answer,
-    body, rawBody: () => rawBody(req), resolveTop, paged, sortOf, safeNext, submitted: submittedOf(api, store, interp, uploads),
+    body, rawBody: () => rawBody(req), resolveTop, paged, sortOf, safeNext, submitted: submittedOf(api, store, interp, ownFiles), ownFiles,
   };
 }
