@@ -169,6 +169,9 @@ node webgen/e2e/run.mjs --base http://127.0.0.1:5193                            
 `apps/shop/web` and `apps/crm/web` are generated fronts; `apps/crm` serves its front at `/`. `webgen/tailwind-plus`
 holds the Tailwind UI Plus 2025 components (v4, React) used as reference material when composing screens.
 
+The front is a second, optional presentation of the same graph: every request still goes through `/api` and the
+runtime's permissions, validation and effects, and `/admin` keeps the plain scaffold beside it.
+
 ## Architecture
 
 The runtime is built in layers, and the layers are enforced by tests, not by convention
