@@ -6,9 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { createBridge } from '../bridges/oauth-connectors/server.mjs';
+import { googleSheetsProvider } from '../bridges/oauth-connectors/google-sheets.mjs';
 import { shopifyProvider } from '../bridges/oauth-connectors/shopify.mjs';
 import { tokenBroker } from '../bridges/oauth-connectors/tokens.mjs';
 import { deliverRow, prepare } from '../runtime/connectors/engine.mjs';
+import { noReplay } from '../runtime/settle.mjs';
 import { openSecrets } from '../runtime/secrets.mjs';
 import { loadDescriptor } from './replay.mjs';
 
@@ -161,4 +163,67 @@ test('Shopify polls orders and stock using the correct GraphQL API and reuses it
   }
   assert.equal(exchanges, 1);
   assert.equal(requests, 3);
+});
+
+test('Google Sheets uses offline consent and bounded RAW operations for the configured sheet', async (t) => {
+  const spreadsheetId = 'fixture-sheet-id';
+  const google = googleSheetsProvider({ spreadsheetId, sheet: "Owner's Sheet",
+    clientId: 'sheets-fixture', clientSecret: 'sheets-secret', redirectUri });
+  const root = 'https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/';
+  const accesses = [];
+  const row = ['=NOT_A_FORMULA', 42, true];
+  let codeChallenge;
+  const { data, admin } = createBridge({ dataToken, adminToken, providers: [google], secrets: mem(), fetchImpl: async (url, req) => {
+    assert.equal(req.redirect, 'manual');
+    if (url === 'https://oauth2.googleapis.com/token') {
+      const form = new URLSearchParams(req.body);
+      assert.equal(form.get('grant_type'), 'authorization_code');
+      assert.equal(form.get('client_id'), 'sheets-fixture');
+      assert.equal(form.get('client_secret'), 'sheets-secret');
+      assert.equal(createHash('sha256').update(form.get('code_verifier')).digest('base64url'), codeChallenge);
+      return Response.json({ access_token: 'sheets-token', refresh_token: 'sheets-refresh', expires_in: 3600 });
+    }
+    assert.equal(req.headers.authorization, 'Bearer sheets-token');
+    accesses.push(url);
+    if (req.method === 'GET') {
+      assert.equal(decodeURIComponent(url), root + "'Owner''s Sheet'!A3:T4?valueRenderOption=UNFORMATTED_VALUE&majorDimension=ROWS");
+      return Response.json({ majorDimension: 'ROWS', values: [row] });
+    }
+    assert.equal(req.method, 'POST');
+    assert.equal(decodeURIComponent(url), root + "'Owner''s Sheet'!A:T:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS");
+    assert.deepEqual(JSON.parse(req.body), { majorDimension: 'ROWS', values: [row] });
+    return Response.json({ spreadsheetId, updates: { updatedRange: "'Owner''s Sheet'!A5:C5", updatedRows: 1,
+      updatedData: { values: [['not exposed']] } } });
+  } });
+  const [base, adm] = await Promise.all([onLoopback(data), onLoopback(admin)]);
+  t.after(() => Promise.all([close(data), close(admin)]));
+  const descriptor = loadDescriptor('google-sheets');
+  descriptor.base = base;
+  const url = new URL((await (await send(adm + '/google-sheets/begin', adminToken)).json()).url);
+  assert.equal(url.origin, 'https://accounts.google.com');
+  assert.equal(url.searchParams.get('scope'), 'https://www.googleapis.com/auth/spreadsheets');
+  assert.equal(url.searchParams.get('access_type'), 'offline');
+  codeChallenge = url.searchParams.get('code_challenge');
+  const callback = redirectUri + '?code=fixture-code&state=' + url.searchParams.get('state');
+  assert.equal((await send(adm + '/google-sheets/finish', adminToken, { callback })).status, 200);
+  const cases = [
+    ['readRows', { firstRow: 3, limit: 2 }, { firstRow: 3, rows: [row] }],
+    ['appendRow', { row }, { updatedRange: "'Owner''s Sheet'!A5:C5" }],
+  ];
+  for (const [op, params, expected] of cases) {
+    const prepared = prepare(descriptor, {}, op, params);
+    const delivery = { kind: 'google-sheets', op, payload: prepared.input };
+    const offline = await deliverRow(descriptor, delivery, {}, {
+      mode: 'sandbox', fetchImpl: () => assert.fail('sandbox connected to Google'),
+    });
+    assert.equal(offline.status, 'sent', op);
+    const result = await deliverRow(descriptor, delivery, {}, { secret: () => dataToken });
+    assert.equal(result.status, 'sent', op);
+    assert.equal(result.response, undefined);
+    assert.deepEqual(JSON.parse(result.result), expected);
+    assert.equal(noReplay({ descriptors: { 'google-sheets': descriptor } }, delivery), op === 'appendRow');
+  }
+  assert.equal((await send(base + '/google-sheets/append', dataToken, { row: [{ formula: '=TEST()' }] })).status, 400);
+  assert.equal((await send(base + '/google-sheets/read', dataToken, { firstRow: 1, limit: 26 })).status, 400);
+  assert.equal(accesses.length, 2);
 });

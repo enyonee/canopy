@@ -16,6 +16,7 @@ are not runtime dependencies.
 | `woocommerce` | List a bounded page of orders, get an order, set status and read stock. Configure the HTTPS `host` and base64 of the consumer key pair in `basicCredential`. | [Official REST client, MIT](../connectors/woocommerce/SOURCES.md) |
 | `hubspot` | Create/read a contact, create a deal and set its stage. A scoped Service Key in `accessToken` connects one account. | [Official CRM client, Apache-2.0](../connectors/hubspot/SOURCES.md) |
 | `shopify` | List/read orders and read available stock at a location, for a store in the app's own Shopify organization. Uses the loopback OAuth bridge. | [Admin GraphQL and bridge setup](../bridges/oauth-connectors/README.md) |
+| `google-sheets` | Read bounded rows and append one RAW row in an operator-selected sheet via user consent. | [Sheets API and bridge setup](../bridges/oauth-connectors/README.md) |
 | `telegram-bot` | Send plain text to a chat ID. Store the whole `bot<token>` path segment in `botPath`; the outbox target is masked. | [Activepieces implementation, MIT](../connectors/telegram-bot/SOURCES.md) |
 | `whatsapp-business` | Send an approved template with no parameters. Configure `phoneNumberId` and a scoped `accessToken`. | [Activepieces implementation, MIT](../connectors/whatsapp-business/SOURCES.md) |
 | `paypal` | Create a hosted order, read approval, capture, reconcile by order or capture ID, and request/read a refund. Configure `clientId` and `clientSecret`. | [Orders and Payments v2; Server SDK reference](../connectors/paypal/SOURCES.md) |

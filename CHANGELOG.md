@@ -7,7 +7,7 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 - **Business connectors.** Yandex Market, WooCommerce, HubSpot, Telegram Bot,
   WhatsApp Business, PayPal, Mollie, Mercado Pago, Adyen, T-Bank, Robokassa
-  Ameriabank, Epoint, Paynet, Uzum Bank, 1C OData and Shopify. Each defaults
+  Ameriabank, Epoint, Paynet, Uzum Bank, 1C OData, Shopify and Google Sheets. Each defaults
   to the offline sandbox.
   See [the catalog and SDK references](docs/BUSINESS-CONNECTORS.md).
 - **Payments.** PayPal separates approval from capture, supports reconciliation

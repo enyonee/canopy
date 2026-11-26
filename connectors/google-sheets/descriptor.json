@@ -1,0 +1,153 @@
+{
+  "descriptor": 1,
+  "name": "google-sheets",
+  "title": "Google Sheets OAuth bridge",
+  "base": "http://127.0.0.1:8905",
+  "timeoutMs": 10500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "readRows": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "firstRow": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "default": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25,
+            "default": 20
+          }
+        },
+        "required": []
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/google-sheets/read",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "firstRow": {
+            "$": "input.firstRow"
+          },
+          "limit": {
+            "$": "input.limit"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "firstRow": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {}
+            }
+          }
+        },
+        "required": [
+          "firstRow",
+          "rows"
+        ]
+      },
+      "result": {
+        "firstRow": "$.firstRow",
+        "rows": "$.rows"
+      },
+      "resultOnly": true
+    },
+    "appendRow": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "array",
+            "items": {}
+          }
+        },
+        "required": [
+          "row"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/google-sheets/append",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "row": {
+            "$": "input.row"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "updatedRange": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 130
+          }
+        },
+        "required": [
+          "updatedRange"
+        ]
+      },
+      "result": {
+        "updatedRange": "$.updatedRange"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "readRows": [
+        {
+          "body": {
+            "firstRow": {
+              "$": "input.firstRow"
+            },
+            "rows": [
+              [
+                "Demo",
+                true,
+                42
+              ]
+            ]
+          }
+        }
+      ],
+      "appendRow": [
+        {
+          "body": {
+            "updatedRange": "Demo!A2:C2"
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "readRows",
+      "input": {}
+    }
+  }
+}

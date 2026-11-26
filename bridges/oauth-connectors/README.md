@@ -32,3 +32,19 @@ The Shopify API is pinned to GraphQL Admin 2026-10, based on
 Use Shopify GIDs for orders, inventory items and locations. The list operation
 returns an empty next cursor at the last page. Customer contact fields and
 payment instruments are not requested or retained. This connector is read-only.
+
+## Google Sheets
+
+Enable the Sheets API in Google Cloud and register the OAuth web application.
+Set `GOOGLE_SHEETS_CLIENT_ID`, `GOOGLE_SHEETS_CLIENT_SECRET`,
+`GOOGLE_SHEETS_REDIRECT_URI`, `GOOGLE_SHEETS_SPREADSHEET_ID` and
+`GOOGLE_SHEETS_SHEET`. The bridge requests the spreadsheets scope and
+offline consent, and limits its own operations to the configured sheet
+even though OAuth grants access to the user's spreadsheets.
+
+Use `readRows` for bounded pages of columns A through T and `appendRow`
+for up to 20 scalar values. Appends use RAW input, have no automatic replay,
+and should be reconciled before retrying an ambiguous result. The
+[Activepieces implementation, MIT](https://github.com/activepieces/activepieces/tree/90afd9219c93ef0aa63e08ab113831fa43fd4bf6/packages/pieces/community/google-sheets)
+and [Sheets v4 API](https://developers.google.com/workspace/sheets/api/reference/rest)
+are the references.
