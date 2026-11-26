@@ -1,0 +1,431 @@
+{
+  "descriptor": 1,
+  "name": "uzum-bank",
+  "title": "Uzum Bank Checkout bridge",
+  "base": "http://127.0.0.1:8904",
+  "timeoutMs": 6500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "customerRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999999999999
+          }
+        },
+        "required": [
+          "orderId",
+          "customerRef",
+          "amountMinor"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/checkout",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "orderId": {
+            "$": "input.orderId"
+          },
+          "customerRef": {
+            "$": "input.customerRef"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2083,
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]*$"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "checkoutUrl"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "checkoutUrl": "$.checkoutUrl"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/status",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "UZS"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "REGISTERED",
+              "AUTHORIZED",
+              "COMPLETED",
+              "REFUNDED",
+              "REVERSED",
+              "DECLINED"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999999999999
+          },
+          "totalMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999999999999
+          },
+          "completedMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999999999999
+          },
+          "refundedMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999999999999
+          },
+          "reversedMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999999999999
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "currency",
+          "status",
+          "amountMinor",
+          "totalMinor",
+          "completedMinor",
+          "refundedMinor",
+          "reversedMinor"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "currency": "$.currency",
+        "status": "$.status",
+        "amountMinor": "$.amountMinor",
+        "totalMinor": "$.totalMinor",
+        "completedMinor": "$.completedMinor",
+        "refundedMinor": "$.refundedMinor",
+        "reversedMinor": "$.reversedMinor"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999999999999
+          }
+        },
+        "required": [
+          "id",
+          "amountMinor"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/refund",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "operationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "status"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "operationId": "$.operationId",
+        "status": "$.status"
+      },
+      "resultOnly": true
+    },
+    "getRefund": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "operationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          }
+        },
+        "required": [
+          "id",
+          "operationId"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/refund-status",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          },
+          "operationId": {
+            "$": "input.operationId"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "operationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "IN_PROGRESS",
+              "SUCCESS",
+              "FAIL"
+            ]
+          },
+          "refundedMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999999999999
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "status",
+          "refundedMinor"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "operationId": "$.operationId",
+        "status": "$.status",
+        "refundedMinor": "$.refundedMinor"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "01234567-89ab-4cde-8f01-23456789abcd",
+            "orderId": {
+              "$": "input.orderId"
+            },
+            "checkoutUrl": "https://checkout.example.test/payment/fixture"
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "orderId": "order-41",
+            "currency": "UZS",
+            "status": "COMPLETED",
+            "amountMinor": 1250,
+            "totalMinor": 1250,
+            "completedMinor": 1250,
+            "refundedMinor": 0,
+            "reversedMinor": 0
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "operationId": "11234567-89ab-4cde-8f01-23456789abcd",
+            "status": "accepted"
+          }
+        }
+      ],
+      "getRefund": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "operationId": {
+              "$": "input.operationId"
+            },
+            "status": "SUCCESS",
+            "refundedMinor": 250
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "orderId": "order-41",
+        "customerRef": "customer-1",
+        "amountMinor": 1250
+      }
+    }
+  }
+}
