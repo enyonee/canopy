@@ -10,7 +10,9 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
   that request uploaded. `?inline=1` served a `.svg` upload as `image/svg+xml`, a page of this site that runs script;
   now it shows inline only a raster image by its first bytes (`FieldType#sniff`: PNG, JPEG, WebP, GIF, with that type
   whatever the name), a PDF, a text or a CSV file, and every file answer sends `nosniff`. A seeded `{ "from": … }` could
-  leave the app directory (`..`, an absolute path, a symlink); the checker and the boot now refuse it. New:
+  leave the app directory (`..`, an absolute path, a symlink, also into a sibling such as `app-evil`); the checker and the
+  boot now refuse it. A transition and a row action filter their body the same way (`ctx.ownFiles`), and the checker
+  refuses a step that sets a file field from `@values.*` or an expression over `values`. New:
   `tests/files.test.mjs`, 14 `FILES:` mutations; `item 11` and an F1 mutation re-pointed.
 - **webgen: stock and category in the model.** A storefront card shows stock only for a quantity on hand (`stock`,
   `inventory`, `available`, …), not a lot size (`quantity` in trading or escrow), and groups by a reference to a lookup
