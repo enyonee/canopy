@@ -231,7 +231,9 @@ export const app: AppModel = {
         "private": {},
         "related": []
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": null
     },
     "Category": {
       "name": "Category",
@@ -296,7 +298,9 @@ export const app: AppModel = {
         "private": {},
         "related": []
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": null
     },
     "Product": {
       "name": "Product",
@@ -477,7 +481,9 @@ export const app: AppModel = {
         "private": {},
         "related": []
       },
-      "surface": "storefront"
+      "surface": "storefront",
+      "stock": "stock",
+      "category": "category"
     },
     "Order": {
       "name": "Order",
@@ -760,7 +766,9 @@ export const app: AppModel = {
           }
         ]
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": null
     },
     "OrderItem": {
       "name": "OrderItem",
@@ -895,7 +903,9 @@ export const app: AppModel = {
         "private": {},
         "related": []
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": "order"
     }
   },
   "lists": [

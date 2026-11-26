@@ -182,7 +182,9 @@ export const app: AppModel = {
         "private": {},
         "related": []
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": null
     },
     "Company": {
       "name": "Company",
@@ -358,7 +360,9 @@ export const app: AppModel = {
           }
         ]
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": null
     },
     "Contact": {
       "name": "Contact",
@@ -477,7 +481,9 @@ export const app: AppModel = {
         "private": {},
         "related": []
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": "company"
     },
     "Lead": {
       "name": "Lead",
@@ -842,7 +848,9 @@ export const app: AppModel = {
           }
         ]
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": "company"
     },
     "Activity": {
       "name": "Activity",
@@ -1008,7 +1016,9 @@ export const app: AppModel = {
         "private": {},
         "related": []
       },
-      "surface": "workspace"
+      "surface": "workspace",
+      "stock": null,
+      "category": "lead"
     }
   },
   "lists": [
