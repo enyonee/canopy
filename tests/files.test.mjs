@@ -81,6 +81,11 @@ test('FILES: inline is only a raster image by its bytes, a PDF, text or CSV; eve
   assert.equal(img.headers.get('x-content-type-options'), 'nosniff');
   assert.match(img.headers.get('content-disposition'), /^inline/);
   assert.deepEqual(Buffer.from(await img.arrayBuffer()), PNG);
+  for (const [name, content, type] of [['a.png', GIF, 'image/gif'], ['b.png', WEBP, 'image/webp'], ['c.gif', JPEG, 'image/jpeg']]) {
+    const r = await fetch(`${await at(name, 'photo', { name, content })}?inline=1`);
+    assert.equal(r.headers.get('content-type'), type, name);
+    await r.arrayBuffer();
+  }
   for (const [name, content, field] of [['x.svg', SVG, 'photo'], ['y.svg', SVG, 'manual'], ['fake.png', 'not a png', 'photo']]) {
     const r = await fetch(`${await at(name, field, { name, content })}?inline=1`);
     assert.equal(r.headers.get('content-type'), 'application/octet-stream', `${name} is never shown inline`);
