@@ -5,6 +5,14 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.4.0 (2026-11-26)
+
+- **webgen.** A React front end generated from an app's graph and its OpenAPI contract (`webgen/`,
+  React 19, Vite, TypeScript, Tailwind 4, shadcn/ui on Radix, TanStack Router and Query, OpenAPI types
+  and client). Storefront and workspace looks chosen per entity from the graph, an OKLCH theme built
+  from the graph's two colours with WCAG-checked tokens, and `dist/` committed. `apps/shop/web` and
+  `apps/crm/web` are generated fronts; `"web": "web/dist"` in `apps/crm/app.json` serves the generated
+  front at `/`. `webgen/tailwind-plus` carries the Tailwind UI Plus 2025 components (v4, React).
 - **Fix: a page with a wrongly typed `body` passed `--check` and answered 500.** `pages[].body` as a string (and `links`,
   `actions`, `sections` as non-arrays, or a null section) went through the checker and crashed `GET /page/<id>` in the
   renderer (`p.body.map`); `actions`, `sections` and a null section also crashed the checker itself. All are now refused
