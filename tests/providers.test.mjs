@@ -30,6 +30,7 @@ const TEST_SECRET = 'TEST_VALUE_OF_';
 const secretOf = (slot) => `${TEST_SECRET}${slot}`;
 const CONFIG = { postmark: { from: 'shop@example.test' }, slack: {}, stripe: {} };
 const rowOf = (op, payload) => ({ id: 1, kind: 'x', connector: 'c', op, payload });
+const BRIDGE_BASE = { click: 'http://127.0.0.1:8899', payme: 'http://127.0.0.1:8899', tbank: 'http://127.0.0.1:8900' };
 
 test('the connector catalog is valid, with sandbox first and explicit idempotency policies', () => {
   const names = connectorNames();
@@ -38,7 +39,7 @@ test('the connector catalog is valid, with sandbox first and explicit idempotenc
     const d = loadDescriptor(n);
     assert.deepEqual(checkDescriptor(d), [], n);
     assert.deepEqual(d.modes, ['sandbox', 'live'], `${n}: sandbox is the default mode`);
-    assert.ok(d.base.startsWith('https://') || (['click', 'payme'].includes(n) && d.base === 'http://127.0.0.1:8899'), `${n}: HTTPS or a fixed loopback bridge`);
+    assert.ok(d.base.startsWith('https://') || d.base === BRIDGE_BASE[n], `${n}: HTTPS or a fixed loopback bridge`);
     registerDescriptor(createRegistry(), d, `${n}/descriptor.json`);
   }
   assert.deepEqual(Object.keys(DESC.stripe.operations), ['createCheckout', 'getCheckout', 'refundCheckout', 'createPaymentIntent', 'retrievePaymentIntent', 'confirmPaymentIntent', 'createRefund']);

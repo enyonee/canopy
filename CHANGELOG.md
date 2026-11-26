@@ -6,7 +6,7 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 ## Unreleased
 
 - **Business connectors.** Yandex Market, WooCommerce, HubSpot, Telegram Bot,
-  WhatsApp Business, PayPal, Mollie, Mercado Pago and Adyen. Each defaults
+  WhatsApp Business, PayPal, Mollie, Mercado Pago, Adyen and T-Bank. Each defaults
   to the offline sandbox.
   See [the catalog and SDK references](docs/BUSINESS-CONNECTORS.md).
 - **Payments.** PayPal separates approval from capture, supports reconciliation

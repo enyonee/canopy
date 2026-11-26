@@ -1,0 +1,351 @@
+{
+  "descriptor": 1,
+  "name": "tbank",
+  "title": "T-Bank Acquiring bridge",
+  "base": "http://127.0.0.1:8900",
+  "timeoutMs": 6500,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999999999
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 250
+          }
+        },
+        "required": [
+          "orderId",
+          "amountMinor",
+          "description"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/checkout",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "orderId": {
+            "$": "input.orderId"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          },
+          "description": {
+            "$": "input.description"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 18,
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[A-Z_]+$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "RUB"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999999999
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^https://(?:[a-z0-9-]+\\.)*(?:tbank|tinkoff)\\.ru/[^\\s]+$"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "currency",
+          "amountMinor",
+          "checkoutUrl"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "status": "$.status",
+        "currency": "$.currency",
+        "amountMinor": "$.amountMinor",
+        "checkoutUrl": "$.checkoutUrl"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 18,
+            "pattern": "^[1-9][0-9]{0,17}$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/status",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 18,
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[A-Z_]+$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "RUB"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999999999
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "currency",
+          "amountMinor"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "status": "$.status",
+        "currency": "$.currency",
+        "amountMinor": "$.amountMinor"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 18,
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999999999
+          }
+        },
+        "required": [
+          "id",
+          "amountMinor"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/refund",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 18,
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[A-Z_]+$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "RUB"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999999999
+          },
+          "remainingMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9999999999
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "currency",
+          "amountMinor",
+          "remainingMinor"
+        ]
+      },
+      "result": {
+        "id": "$.id",
+        "orderId": "$.orderId",
+        "status": "$.status",
+        "currency": "$.currency",
+        "amountMinor": "$.amountMinor",
+        "remainingMinor": "$.remainingMinor"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "123456",
+            "orderId": {
+              "$": "input.orderId"
+            },
+            "amountMinor": {
+              "$": "input.amountMinor"
+            },
+            "currency": "RUB",
+            "status": "NEW",
+            "checkoutUrl": "https://securepay.tinkoff.ru/demo"
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "orderId": "order-41",
+            "amountMinor": 1250,
+            "currency": "RUB",
+            "status": "CONFIRMED"
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "orderId": "order-41",
+            "amountMinor": {
+              "$": "input.amountMinor"
+            },
+            "currency": "RUB",
+            "status": "REFUNDED",
+            "remainingMinor": 0
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "orderId": "order-41",
+        "amountMinor": 1250,
+        "description": "Example order"
+      }
+    }
+  }
+}
