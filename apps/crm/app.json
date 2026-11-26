@@ -1,5 +1,6 @@
 {
   "app": "crm",
+  "web": "web/dist",
   "note": "Reference app for the CRM class: companies, contacts, leads owned by sales people with a status pipeline, activities with due dates, derived counts and pipeline value, an admin dashboard by status/owner/month with a period filter, mail to the contact and a webhook to an external system on new and won leads.",
   "theme": { "background": "aliceblue", "accent": "darkslategray" },
   "home": "/Lead",
