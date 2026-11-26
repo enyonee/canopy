@@ -3,32 +3,39 @@
 // The client keeps a cookie jar, so a check can log in and act as that user.
 import http from 'node:http';
 
-export const make = (base, sink = null) => {
+export const make = (base, sink = null, mount = '') => {
   let cookie = '';
   const keep = (r) => { const c = r.headers.get('set-cookie'); if (c) cookie = c.split(';')[0]; };
   const headers = () => (cookie ? { cookie } : {});
+  const mounted = (p) => mount !== '' && (p === mount || p.startsWith(mount + '/') || p.startsWith(mount + '?'));
+  const urlOf = (p) => base + (mounted(p) ? p : mount + p);
+  const unmount = (p) => mounted(p) ? (p.slice(mount.length) || '/') : p;
+  const htmlOf = async (r) => {
+    const html = await r.text();
+    return mount ? html.replace(/\b(href|action)="(\/[^"]*)"/g, (_all, key, value) => `${key}="${unmount(value)}"`) : html;
+  };
   // GET follows redirects (a page is what the browser lands on); POST reports them.
   const get = async (p, hops = 0) => {
-    const r = await fetch(base + p, { headers: headers(), redirect: 'manual' });
+    const r = await fetch(urlOf(p), { headers: headers(), redirect: 'manual' });
     keep(r);
-    const location = r.headers.get('location') || '';
+    const location = unmount(r.headers.get('location') || '');
     if ((r.status === 303 || r.status === 302) && location && hops < 5) { await r.text(); return { ...(await get(location, hops + 1)), location }; }
-    return { status: r.status, location, html: await r.text(), type: r.headers.get('content-type') || '', disposition: r.headers.get('content-disposition') || '' };
+    return { status: r.status, location, html: await htmlOf(r), type: r.headers.get('content-type') || '', disposition: r.headers.get('content-disposition') || '' };
   };
   const post = async (p, body = {}, extra = {}) => {
-    const r = await fetch(base + p, { method: 'POST', redirect: 'manual',
+    const r = await fetch(urlOf(p), { method: 'POST', redirect: 'manual',
       headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers(), ...extra },
       body: new URLSearchParams(body).toString() });
     keep(r);
-    return { status: r.status, location: r.headers.get('location') || '', html: await r.text() };
+    return { status: r.status, location: unmount(r.headers.get('location') || ''), html: await htmlOf(r) };
   };
   const upload = async (p, fields = {}, file = null) => {
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.append(k, v);
     if (file) fd.append(file.field, new Blob([file.content]), file.name);
-    const r = await fetch(base + p, { method: 'POST', redirect: 'manual', headers: headers(), body: fd });
+    const r = await fetch(urlOf(p), { method: 'POST', redirect: 'manual', headers: headers(), body: fd });
     keep(r);
-    return { status: r.status, location: r.headers.get('location') || '', html: await r.text() };
+    return { status: r.status, location: unmount(r.headers.get('location') || ''), html: await htmlOf(r) };
   };
   const follow = async (p, body) => { const r = await post(p, body); return get(r.location || p); };
   const login = async (user, password) => { const r = await post('/login', { login: user, password }); return r; };

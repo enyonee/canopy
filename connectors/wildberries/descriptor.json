@@ -1,0 +1,241 @@
+{
+  "descriptor": 1,
+  "name": "wildberries",
+  "title": "Wildberries FBS",
+  "base": "https://marketplace-api.wildberries.ru",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "listNewOrders": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [],
+        "properties": {}
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/v3/orders/new",
+        "headers": {
+          "authorization": "{secret.apiToken}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "orders"
+        ],
+        "properties": {
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "orders": "$.orders"
+      },
+      "resultOnly": true
+    },
+    "getOrderStatuses": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "orders"
+        ],
+        "properties": {
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/api/v3/orders/status",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "{secret.apiToken}"
+        },
+        "body": {
+          "orders": {
+            "$": "input.orders"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "orders"
+        ],
+        "properties": {
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "supplierStatus",
+                "wbStatus"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "supplierStatus": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "wbStatus": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "orders": "$.orders"
+      },
+      "resultOnly": true
+    },
+    "getStocks": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "warehouseId",
+          "chrtIds"
+        ],
+        "properties": {
+          "warehouseId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "chrtIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/api/v3/stocks/{input.warehouseId}",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "{secret.apiToken}"
+        },
+        "body": {
+          "chrtIds": {
+            "$": "input.chrtIds"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "stocks"
+        ],
+        "properties": {
+          "stocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "chrtId",
+                "amount"
+              ],
+              "properties": {
+                "chrtId": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "amount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "stocks": "$.stocks"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "listNewOrders",
+      "input": {}
+    },
+    "operations": {
+      "listNewOrders": [
+        {
+          "body": {
+            "orders": [
+              {
+                "id": 12345
+              }
+            ]
+          }
+        }
+      ],
+      "getOrderStatuses": [
+        {
+          "body": {
+            "orders": [
+              {
+                "id": 12345,
+                "supplierStatus": "new",
+                "wbStatus": "waiting"
+              }
+            ]
+          }
+        }
+      ],
+      "getStocks": [
+        {
+          "body": {
+            "stocks": [
+              {
+                "chrtId": 12345,
+                "amount": 5
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

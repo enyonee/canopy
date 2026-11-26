@@ -1,0 +1,272 @@
+{
+  "descriptor": 1,
+  "name": "kaspi-shop",
+  "title": "Kaspi Shop seller API",
+  "base": "https://kaspi.kz",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "listOrders": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "fromMs"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "default": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "SIGN_REQUIRED",
+              "PICKUP",
+              "DELIVERY",
+              "KASPI_DELIVERY",
+              "ARCHIVE"
+            ],
+            "default": "NEW"
+          },
+          "fromMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/shop/api/v2/orders?page%5Bnumber%5D={input.page}&page%5Bsize%5D={input.size}&filter%5Borders%5D%5Bstate%5D={input.state}&filter%5Borders%5D%5BcreationDate%5D%5B%24ge%5D={input.fromMs}",
+        "headers": {
+          "X-Auth-Token": "{secret.apiToken}",
+          "content-type": "application/vnd.api+json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {}
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "pageCount",
+              "totalCount"
+            ],
+            "properties": {
+              "pageCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "totalCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "orders": "$.data",
+        "pages": "$.meta.pageCount",
+        "total": "$.meta.totalCount"
+      },
+      "resultOnly": true
+    },
+    "getOrder": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{1,32}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/shop/api/v2/orders?filter%5Borders%5D%5Bcode%5D={input.code}",
+        "headers": {
+          "X-Auth-Token": "{secret.apiToken}",
+          "content-type": "application/vnd.api+json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "attributes"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "attributes": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "status"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "status": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.data[0].id",
+        "code": "$.data[0].attributes.code",
+        "status": "$.data[0].attributes.status"
+      },
+      "resultOnly": true
+    },
+    "listOrderEntries": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_+/=-]{1,128}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/shop/api/v2/orders/{input.id}/entries",
+        "headers": {
+          "X-Auth-Token": "{secret.apiToken}",
+          "content-type": "application/vnd.api+json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {}
+          }
+        }
+      },
+      "result": {
+        "entries": "$.data"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "getOrder",
+      "input": {
+        "code": "100"
+      }
+    },
+    "operations": {
+      "listOrders": [
+        {
+          "body": {
+            "data": [
+              {
+                "type": "orders",
+                "id": "demo",
+                "attributes": {
+                  "code": "100",
+                  "status": "APPROVED_BY_BANK"
+                }
+              }
+            ],
+            "meta": {
+              "pageCount": 1,
+              "totalCount": 1
+            }
+          }
+        }
+      ],
+      "getOrder": [
+        {
+          "body": {
+            "data": [
+              {
+                "id": "sample-order",
+                "attributes": {
+                  "code": {
+                    "$": "input.code"
+                  },
+                  "status": "APPROVED_BY_BANK"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "listOrderEntries": [
+        {
+          "body": {
+            "data": [
+              {
+                "type": "orderentries",
+                "id": "demo-entry",
+                "attributes": {
+                  "quantity": 2
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

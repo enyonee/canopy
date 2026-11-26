@@ -1,0 +1,332 @@
+{
+  "descriptor": 1,
+  "name": "bitrix24",
+  "title": "Bitrix24 CRM",
+  "base": "https://{config.portal}",
+  "config": {
+    "type": "object",
+    "properties": {
+      "portal": {
+        "type": "string",
+        "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.bitrix24\\.(?:ru|com|kz|by|uz|am)$"
+      },
+      "userId": {
+        "type": "string",
+        "pattern": "^[0-9]{1,18}$"
+      }
+    },
+    "required": [
+      "portal",
+      "userId"
+    ]
+  },
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createContact": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "name",
+          "phone",
+          "email"
+        ]
+      },
+      "idempotent": false,
+      "request": {
+        "method": "POST",
+        "url": "{base}/rest/{config.userId}/{secret.webhookToken}/crm.contact.add.json",
+        "pathSecret": "webhookToken",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fields": {
+            "NAME": {
+              "$": "input.name"
+            },
+            "LAST_NAME": {
+              "$": "input.lastName"
+            },
+            "PHONE": [
+              {
+                "VALUE": {
+                  "$": "input.phone"
+                },
+                "VALUE_TYPE": "WORK"
+              }
+            ],
+            "EMAIL": [
+              {
+                "VALUE": {
+                  "$": "input.email"
+                },
+                "VALUE_TYPE": "WORK"
+              }
+            ]
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "result": {
+        "id": "$.result"
+      },
+      "resultOnly": true
+    },
+    "getContact": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]{1,18}$"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "idempotent": true,
+      "request": {
+        "method": "POST",
+        "url": "{base}/rest/{config.userId}/{secret.webhookToken}/crm.contact.get.json",
+        "pathSecret": "webhookToken",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "ID": {
+                "type": "string",
+                "pattern": "^[0-9]{1,18}$"
+              },
+              "NAME": {}
+            },
+            "required": [
+              "ID",
+              "NAME"
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "result": {
+        "id": "$.result.ID",
+        "name": "$.result.NAME"
+      },
+      "resultOnly": true
+    },
+    "createDeal": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contactId": {
+            "type": "string",
+            "pattern": "^[0-9]{1,18}$"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
+        },
+        "required": [
+          "title",
+          "contactId"
+        ]
+      },
+      "idempotent": false,
+      "request": {
+        "method": "POST",
+        "url": "{base}/rest/{config.userId}/{secret.webhookToken}/crm.deal.add.json",
+        "pathSecret": "webhookToken",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fields": {
+            "TITLE": {
+              "$": "input.title"
+            },
+            "CONTACT_ID": {
+              "$": "input.contactId"
+            },
+            "OPPORTUNITY": {
+              "$": "input.amount"
+            },
+            "CURRENCY_ID": {
+              "$": "input.currency"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "result": {
+        "id": "$.result"
+      },
+      "resultOnly": true
+    },
+    "updateDealStage": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]{1,18}$"
+          },
+          "stage": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_:-]{1,60}$"
+          }
+        },
+        "required": [
+          "id",
+          "stage"
+        ]
+      },
+      "idempotent": false,
+      "request": {
+        "method": "POST",
+        "url": "{base}/rest/{config.userId}/{secret.webhookToken}/crm.deal.update.json",
+        "pathSecret": "webhookToken",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          },
+          "fields": {
+            "STAGE_ID": {
+              "$": "input.stage"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "result": {
+        "updated": "$.result"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "createContact",
+      "input": {
+        "name": "Demo",
+        "email": "demo@example.test",
+        "phone": "+70000000000"
+      }
+    },
+    "operations": {
+      "createContact": [
+        {
+          "body": {
+            "result": 100
+          }
+        }
+      ],
+      "getContact": [
+        {
+          "body": {
+            "result": {
+              "ID": {
+                "$": "input.id"
+              },
+              "NAME": "Demo"
+            }
+          }
+        }
+      ],
+      "createDeal": [
+        {
+          "body": {
+            "result": 101
+          }
+        }
+      ],
+      "updateDealStage": [
+        {
+          "body": {
+            "result": true
+          }
+        }
+      ]
+    }
+  }
+}

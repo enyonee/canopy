@@ -8,15 +8,15 @@ import { refs, pathSteps, originProblem } from './template.mjs';
 import { checkPolicy } from './backoff.mjs';
 import { checkSandbox } from './sandbox.mjs';
 import { checkInbound } from './inbound.mjs';
-import { checkToken } from './token.mjs';
+import { checkToken, validTokenScope } from './token.mjs';
 
 // The longest an operation may wait: half the outbox lease (runtime/outbox.mjs LEASE_MS),
 // so a slow provider cannot outlive the claim on its row and be delivered twice.
 export const MAX_TIMEOUT_MS = 30000;
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'modes', 'sandbox', 'inbound', 'operations', 'token'];
-const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result', 'failure', 'resultOnly'];
-const REQUEST = ['method', 'url', 'headers', 'body', 'encoding'];
+const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result', 'failure', 'resultOnly', 'tokenScope', 'noReplay'];
+const REQUEST = ['method', 'url', 'headers', 'body', 'encoding', 'pathSecret'];
 const ENCODINGS = ['json', 'form'];
 const FAILURE = ['path', 'equals', 'error', 'code', 'codes'];
 const isStatus = (n) => Number.isInteger(n) && n >= 400 && n <= 599;
@@ -42,12 +42,26 @@ function checkRefs(value, path, ctx) {
   return out;
 }
 
+function checkPathSecret(req, path, ctx) {
+  if (req.pathSecret === undefined) return [];
+  if (typeof req.pathSecret !== 'string' || !NAME.test(req.pathSecret) || !ctx.resultOnly)
+    return [[`${path}/pathSecret`, 'a path secret names a slot and requires resultOnly']];
+  const segment = `{secret.${req.pathSecret}}`;
+  const url = req.url;
+  if (typeof url !== 'string' || !url.startsWith('{base}/') || url.includes('#')
+    || !url.split('?')[0].split('/').includes(segment) || url.split(segment).length !== 2)
+    return [[`${path}/pathSecret`, 'a path secret is one whole segment after {base}/']];
+  return [];
+}
+
 function checkRequest(req, path, ctx) {
   if (!isObject(req)) return [[path, 'an operation needs a "request" object']];
-  const out = unknownKeys(req, REQUEST, path);
+  const privateProblems = checkPathSecret(req, path, ctx);
+  const out = [...unknownKeys(req, REQUEST, path), ...privateProblems];
   if (typeof req.url !== 'string') out.push([`${path}/url`, 'a request needs "url" as a template string']);
   else {
-    const bad = checkRefs(req.url, `${path}/url`, { ...ctx, noSecret: true });
+    const url = req.pathSecret && !privateProblems.length ? req.url.replace(`{secret.${req.pathSecret}}`, 'redacted') : req.url;
+    const bad = checkRefs(url, `${path}/url`, { ...ctx, noSecret: true });
     out.push(...bad);
     const origin = bad.length ? null : originProblem(req.url);
     if (origin) out.push([`${path}/url`, origin, 'https://{config.host}/items/{input.id}']);
@@ -101,7 +115,10 @@ function checkOperation(op, path, top) {
   const out = unknownKeys(op, OP, path);
   if (typeof op.idempotent !== 'boolean') out.push([`${path}/idempotent`, 'every operation says whether it is idempotent, true or false', 'there is no default: a retry after a timeout must be a decision']);
   out.push(...checkInput(op, `${path}/input`));
-  out.push(...checkRequest(op.request, `${path}/request`, { input: op.input?.properties, config: top.config?.properties, base: top.base }));
+  out.push(...checkRequest(op.request, `${path}/request`, { input: op.input?.properties, config: top.config?.properties, base: top.base, resultOnly: op.resultOnly }));
+  if (top.token && op.request?.pathSecret) out.push([`${path}/request/pathSecret`, 'a path secret cannot be combined with token exchange']);
+  if (op.tokenScope !== undefined && !(top.token && validTokenScope(op.tokenScope))) out.push([`${path}/tokenScope`, 'tokenScope needs a token exchange and a fixed scope string']);
+  if (op.noReplay !== undefined && !(op.noReplay === true && op.idempotent === false)) out.push([`${path}/noReplay`, 'noReplay: true is for non-idempotent operations']);
   if (top.token && (!op.request?.url?.startsWith?.('{base}/') || Object.keys(op.request?.headers || {}).some((k) => k.toLowerCase() === 'authorization')))
     out.push([`${path}/request`, 'token operations use {base}/ and let the delivery set Authorization']);
   if (op.resultOnly !== undefined && !(op.resultOnly === true && op.output && op.result)) out.push([`${path}/resultOnly`, 'resultOnly: true needs an output schema and result projection']);

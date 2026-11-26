@@ -203,8 +203,8 @@ export interface SchemaNode {
 /** One operation of a descriptor: the input it takes, the request it makes, the answer it must give. */
 export interface OperationSpec {
   summary?: string; idempotent: boolean; input: SchemaNode;
-  request: { method?: string; url: string; headers?: Record<string, any>; body?: any };
-  output?: SchemaNode; result?: Record<string, string>; resultOnly?: true;
+  request: { method?: string; url: string; headers?: Record<string, any>; body?: any; pathSecret?: string };
+  output?: SchemaNode; result?: Record<string, string>; resultOnly?: true; tokenScope?: string; noReplay?: true;
 }
 
 /** A connector descriptor (docs/CONNECTORS.md): data, checked by runtime/connectors/descriptor.mjs. */
@@ -212,7 +212,7 @@ export interface ConnectorDescriptor {
   descriptor: 1; name: string; title?: string; version?: string; base?: string; config?: SchemaNode;
   timeoutMs?: number; legacy?: string; operations: Record<string, OperationSpec>;
   retry?: Partial<RetryPolicy>; breaker?: Partial<BreakerPolicy>; idempotency?: { header: string; format?: 'uuid' };
-  token?: { url: string; scheme: 'basic' | 'form'; clientId: string; clientSecret: string; apiKey?: string };
+  token?: { url: string; scheme: 'basic' | 'form'; clientId: string; clientSecret: string; apiKey?: string; grantType?: 'client_credentials' };
   /** The modes a connector of this kind may run in, the first is the default (runtime/deploy.mjs). */
   modes?: Array<'sandbox' | 'live'>;
   /** Per operation, the ordered rules that answer in sandbox mode (runtime/connectors/sandbox.mjs). */

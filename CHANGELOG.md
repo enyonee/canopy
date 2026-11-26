@@ -5,6 +5,18 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.5.0 (2026-11-26)
+
+- **Business connectors.** Bitrix24, MoySklad, Ozon Seller, Wildberries,
+  Kaspi Shop, CDEK, YooKassa, Halyk ePay, bePaid, Payme and CLICK.
+  Payme and CLICK use a companion merchant callback bridge with a durable
+  payment ledger. See [the catalog and SDK references](docs/BUSINESS-CONNECTORS.md).
+- **Connector credentials.** Redacted credential path for Bitrix24,
+  explicit client-credentials grants and operation-level OAuth scopes,
+  and no replay for selected non-idempotent operations.
+- **Acceptance.** CRM checks use the runtime scaffold under `/admin`
+  when the React app occupies the root.
+
 - **Testing.** Removed the mutation gate, its runner and its scheduled workflow.
   The ordinary test suite and its regression tests remain.
 

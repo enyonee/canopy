@@ -1,0 +1,216 @@
+{
+  "descriptor": 1,
+  "name": "ozon-seller",
+  "title": "Ozon Seller FBS",
+  "base": "https://api-seller.ozon.ru",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "listPostings": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "since",
+          "to"
+        ],
+        "properties": {
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "default": 0
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v3/posting/fbs/list",
+        "headers": {
+          "content-type": "application/json",
+          "Client-Id": "{secret.clientId}",
+          "Api-Key": "{secret.apiKey}"
+        },
+        "body": {
+          "dir": "ASC",
+          "filter": {
+            "since": {
+              "$": "input.since"
+            },
+            "to": {
+              "$": "input.to"
+            }
+          },
+          "limit": {
+            "$": "input.limit"
+          },
+          "offset": {
+            "$": "input.offset"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "type": "object",
+            "required": [
+              "postings",
+              "has_next"
+            ],
+            "properties": {
+              "postings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "posting_number",
+                    "status"
+                  ],
+                  "properties": {
+                    "posting_number": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "status": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                }
+              },
+              "has_next": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "postings": "$.result.postings",
+        "hasNext": "$.result.has_next"
+      },
+      "resultOnly": true
+    },
+    "getPosting": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "postingNumber"
+        ],
+        "properties": {
+          "postingNumber": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v3/posting/fbs/get",
+        "headers": {
+          "content-type": "application/json",
+          "Client-Id": "{secret.clientId}",
+          "Api-Key": "{secret.apiKey}"
+        },
+        "body": {
+          "posting_number": {
+            "$": "input.postingNumber"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "type": "object",
+            "required": [
+              "posting_number",
+              "status"
+            ],
+            "properties": {
+              "posting_number": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "status": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "number": "$.result.posting_number",
+        "status": "$.result.status"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "getPosting",
+      "input": {
+        "postingNumber": "123-1-1"
+      }
+    },
+    "operations": {
+      "listPostings": [
+        {
+          "body": {
+            "result": {
+              "postings": [
+                {
+                  "posting_number": "123-1-1",
+                  "status": "awaiting_packaging"
+                }
+              ],
+              "has_next": false
+            }
+          }
+        }
+      ],
+      "getPosting": [
+        {
+          "body": {
+            "result": {
+              "posting_number": {
+                "$": "input.postingNumber"
+              },
+              "status": "awaiting_packaging"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

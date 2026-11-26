@@ -35,6 +35,15 @@ function requestUrl(op, scopes) {
   return url;
 }
 
+function privateUrl(op, scopes, credential) {
+  if (typeof credential !== 'string' || !/^[A-Za-z0-9_-]{1,256}$/.test(credential)) throw new Error('invalid path credential');
+  const segment = `{secret.${op.request.pathSecret}}`;
+  const url = new URL(expandUrl(op.request.url.replace(segment, credential), scopes));
+  if (url.protocol !== 'https:' || url.username || url.password || url.origin !== new URL(scopes.base).origin)
+    throw new Error('path credentials require an HTTPS target on the declared origin');
+  return url.href;
+}
+
 /** The slots a descriptor reads from the secret store: `{secret.<slot>}` in live requests, and the inbound signature's. */
 export const secretSlots = (d) => [...new Set([...Object.values(d.operations).flatMap((op) => refs(op.request)).filter((r) => r.scope === 'secret').map((r) => r.path[0]),
   ...(d.inbound ? [d.inbound.secret] : []), ...(d.token ? [d.token.clientId, d.token.clientSecret, d.token.apiKey].filter(Boolean) : [])])];
@@ -69,7 +78,8 @@ export function prepare(d, connector, opName, input) {
   const whole = withDefaults(op.input, input);
   const bad = validate(op.input, whole);
   if (bad.length) throw new Error(`${d.name}.${opName}: ${problems(bad, 'input')}`);
-  return { input: whole, target: requestUrl(op, scopesOf(d, connector, whole)) };
+  const scopes = scopesOf(d, connector, whole);
+  return { input: whole, target: op.request.pathSecret ? privateUrl(op, scopes, 'redacted') : requestUrl(op, scopes) };
 }
 
 /**
@@ -94,7 +104,7 @@ export function buildRequest(d, connector, opName, input, opts = {}) {
   if (idemKey !== undefined && d.idempotency) headers[d.idempotency.header] = headerKey(d, idemKey);
   for (const [k, v] of Object.entries(headers)) if (/[\r\n]/.test(k) || /[\r\n]/.test(String(v))) throw new Error(`header "${k.replace(/[\r\n]/g, ' ')}" holds a line break`);
   return {
-    method, url: target ?? requestUrl(op, scopes), headers,
+    method, url: r.pathSecret ? privateUrl(op, scopes, secret?.(r.pathSecret)) : target ?? requestUrl(op, scopes), headers,
     body: text,
     timeout: Math.min(scopes.config.timeout || d.timeoutMs || DEFAULT_TIMEOUT_MS, timeoutCapMs),
   };
@@ -176,11 +186,19 @@ async function send(req, fetchImpl, clock, answer) {
 
 async function sendLive(d, op, req, fetchImpl, clock, secret) {
   if (op.resultOnly) req.redirect = 'manual';
+  if (op.request.pathSecret) {
+    const credential = secret(op.request.pathSecret);
+    try {
+      return redactDeep(await send(req, fetchImpl, clock, (res) => mapResponse(op, res)), [credential]);
+    } catch (e) {
+      throw Object.assign(new Error('authorized provider request failed'), { fault: e.fault });
+    }
+  }
   if (!d.token) return send(req, fetchImpl, clock, (res) => mapResponse(op, res));
   // Both requests share the delivery's time budget. A token error precedes the monetary request.
   if (new URL(req.url).origin !== new URL(d.base).origin) throw new Error('payment request left the declared origin');
   req.timeout /= 2;
-  const preflight = tokenRequest(d.token, secret, req.timeout);
+  const preflight = tokenRequest(d.token, secret, req.timeout, op.tokenScope);
   let token;
   try { token = await send(preflight, fetchImpl, clock, accessToken); }
   catch (e) { throw new Error('could not authorize provider request', { cause: e }); }

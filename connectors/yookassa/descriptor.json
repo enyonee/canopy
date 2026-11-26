@@ -1,0 +1,345 @@
+{
+  "descriptor": 1,
+  "name": "yookassa",
+  "title": "YooKassa payments",
+  "base": "https://api.yookassa.ru",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "amount",
+          "orderId",
+          "returnUrl",
+          "description"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "pattern": "^(?:[1-9][0-9]{0,7}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "returnUrl": {
+            "type": "string",
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v3/payments",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Basic {secret.basicCredential}"
+        },
+        "body": {
+          "amount": {
+            "value": {
+              "$": "input.amount"
+            },
+            "currency": "RUB"
+          },
+          "capture": true,
+          "confirmation": {
+            "type": "redirect",
+            "return_url": {
+              "$": "input.returnUrl"
+            }
+          },
+          "description": {
+            "$": "input.description"
+          },
+          "metadata": {
+            "orderId": {
+              "$": "input.orderId"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "confirmation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "confirmation": {
+            "type": "object",
+            "required": [
+              "confirmation_url"
+            ],
+            "properties": {
+              "confirmation_url": {
+                "type": "string",
+                "pattern": "^https://(?:[a-z0-9-]+\\.)?(?:yookassa|yoomoney)\\.ru/"
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "checkoutUrl": "$.confirmation.confirmation_url"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v3/payments/{input.id}",
+        "headers": {
+          "authorization": "Basic {secret.basicCredential}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "paid",
+          "amount",
+          "metadata"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "paid": {
+            "type": "boolean"
+          },
+          "amount": {
+            "type": "object",
+            "required": [
+              "value",
+              "currency"
+            ],
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^(?:[1-9][0-9]{0,7}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+              },
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "RUB"
+                ]
+              }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "required": [],
+            "properties": {
+              "orderId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.id",
+        "status": "$.status",
+        "paid": "$.paid",
+        "amount": "$.amount.value",
+        "currency": "$.amount.currency",
+        "orderId": "$.metadata.orderId"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "paymentId",
+          "amount"
+        ],
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^(?:[1-9][0-9]{0,7}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v3/refunds",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Basic {secret.basicCredential}"
+        },
+        "body": {
+          "payment_id": {
+            "$": "input.paymentId"
+          },
+          "amount": {
+            "value": {
+              "$": "input.amount"
+            },
+            "currency": "RUB"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "id",
+          "payment_id",
+          "status",
+          "amount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "payment_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "amount": {
+            "type": "object",
+            "required": [
+              "value",
+              "currency"
+            ],
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^(?:[1-9][0-9]{0,7}\\.[0-9]{2}|0\\.(?:0[1-9]|[1-9][0-9]))$"
+              },
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "RUB"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.id",
+        "paymentId": "$.payment_id",
+        "status": "$.status",
+        "amount": "$.amount.value"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "getCheckout",
+      "input": {
+        "id": "11111111-1111-4111-8111-111111111111"
+      }
+    },
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "status": "pending",
+            "confirmation": {
+              "confirmation_url": "https://yookassa.ru/checkout/test"
+            }
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "status": "pending",
+            "paid": false,
+            "amount": {
+              "value": "100.00",
+              "currency": "RUB"
+            },
+            "metadata": {
+              "orderId": "sample"
+            }
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "payment_id": {
+              "$": "input.paymentId"
+            },
+            "status": "succeeded",
+            "amount": {
+              "value": {
+                "$": "input.amount"
+              },
+              "currency": "RUB"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "idempotency": {
+    "header": "Idempotence-Key"
+  }
+}

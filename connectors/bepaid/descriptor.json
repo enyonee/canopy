@@ -1,0 +1,501 @@
+{
+  "descriptor": 1,
+  "name": "bepaid",
+  "title": "bePaid checkout",
+  "base": "https://checkout.bepaid.by",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "required": [
+          "amountMinor",
+          "currency",
+          "orderId",
+          "description",
+          "returnUrl"
+        ],
+        "properties": {
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "BYN"
+            ]
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "returnUrl": {
+            "type": "string",
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[^\\s]*$"
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/ctp/api/checkouts",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Basic {secret.basicCredential}",
+          "X-API-Version": "3",
+          "accept": "application/json"
+        },
+        "body": {
+          "checkout": {
+            "version": 2.1,
+            "test": {
+              "$": "config.test"
+            },
+            "transaction_type": "payment",
+            "settings": {
+              "success_url": {
+                "$": "input.returnUrl"
+              },
+              "decline_url": {
+                "$": "input.returnUrl"
+              },
+              "fail_url": {
+                "$": "input.returnUrl"
+              },
+              "cancel_url": {
+                "$": "input.returnUrl"
+              }
+            },
+            "order": {
+              "amount": {
+                "$": "input.amountMinor"
+              },
+              "currency": {
+                "$": "input.currency"
+              },
+              "description": {
+                "$": "input.description"
+              },
+              "tracking_id": {
+                "$": "input.orderId"
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "checkout"
+        ],
+        "properties": {
+          "checkout": {
+            "type": "object",
+            "required": [
+              "token",
+              "redirect_url"
+            ],
+            "properties": {
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "redirect_url": {
+                "type": "string",
+                "pattern": "^https://checkout\\.bepaid\\.by/"
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.checkout.token",
+        "checkoutUrl": "$.checkout.redirect_url"
+      },
+      "resultOnly": true,
+      "noReplay": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/ctp/api/checkouts/{input.id}",
+        "headers": {
+          "authorization": "Basic {secret.basicCredential}",
+          "X-API-Version": "3",
+          "accept": "application/json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "checkout"
+        ],
+        "properties": {
+          "checkout": {
+            "type": "object",
+            "required": [
+              "status",
+              "order"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "order": {
+                "type": "object",
+                "required": [
+                  "amount",
+                  "currency",
+                  "tracking_id"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "tracking_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              },
+              "gateway_response": {
+                "type": "object",
+                "properties": {
+                  "payment": {
+                    "type": "object",
+                    "properties": {
+                      "uid": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "status": "$.checkout.status",
+        "amountMinor": "$.checkout.order.amount",
+        "currency": "$.checkout.order.currency",
+        "orderId": "$.checkout.order.tracking_id"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "required": [
+          "paymentId",
+          "amountMinor"
+        ],
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "https://gateway.bepaid.by/transactions/refunds",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Basic {secret.basicCredential}",
+          "X-API-Version": "3",
+          "accept": "application/json"
+        },
+        "body": {
+          "request": {
+            "parent_uid": {
+              "$": "input.paymentId"
+            },
+            "amount": {
+              "$": "input.amountMinor"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "transaction"
+        ],
+        "properties": {
+          "transaction": {
+            "type": "object",
+            "required": [
+              "uid",
+              "status",
+              "amount",
+              "currency",
+              "parent_uid"
+            ],
+            "properties": {
+              "uid": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "status": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "amount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              "parent_uid": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.transaction.uid",
+        "status": "$.transaction.status",
+        "amountMinor": "$.transaction.amount",
+        "currency": "$.transaction.currency",
+        "paymentId": "$.transaction.parent_uid"
+      },
+      "resultOnly": true,
+      "noReplay": true
+    },
+    "getPayment": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/ctp/api/checkouts/{input.id}",
+        "headers": {
+          "authorization": "Basic {secret.basicCredential}",
+          "X-API-Version": "3",
+          "accept": "application/json"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "checkout"
+        ],
+        "properties": {
+          "checkout": {
+            "type": "object",
+            "required": [
+              "status",
+              "order"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "order": {
+                "type": "object",
+                "required": [
+                  "amount",
+                  "currency",
+                  "tracking_id"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "tracking_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              },
+              "gateway_response": {
+                "type": "object",
+                "properties": {
+                  "payment": {
+                    "type": "object",
+                    "properties": {
+                      "uid": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "status": "$.checkout.status",
+        "amountMinor": "$.checkout.order.amount",
+        "currency": "$.checkout.order.currency",
+        "orderId": "$.checkout.order.tracking_id",
+        "paymentId": "$.checkout.gateway_response.payment.uid",
+        "paymentStatus": "$.checkout.gateway_response.payment.status"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "getCheckout",
+      "input": {
+        "id": "sandbox-checkout"
+      }
+    },
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "checkout": {
+              "token": "sandbox-checkout",
+              "redirect_url": "https://checkout.bepaid.by/sandbox/sandbox-checkout"
+            }
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "checkout": {
+              "status": "successful",
+              "order": {
+                "amount": 100,
+                "currency": "BYN",
+                "tracking_id": "sample"
+              },
+              "gateway_response": {
+                "payment": {
+                  "uid": "sandbox-payment",
+                  "status": "successful"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "transaction": {
+              "uid": "sandbox-refund",
+              "status": "successful",
+              "amount": {
+                "$": "input.amountMinor"
+              },
+              "currency": "BYN",
+              "parent_uid": {
+                "$": "input.paymentId"
+              }
+            }
+          }
+        }
+      ],
+      "getPayment": [
+        {
+          "body": {
+            "checkout": {
+              "status": "successful",
+              "order": {
+                "amount": 100,
+                "currency": "BYN",
+                "tracking_id": "sample"
+              },
+              "gateway_response": {
+                "payment": {
+                  "uid": "sandbox-payment",
+                  "status": "successful"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "config": {
+    "type": "object",
+    "required": [],
+    "properties": {
+      "test": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { applyPatch } from '../runtime/patch.mjs';
 import { validate, formatErrors } from '../runtime/validate.mjs';
 import { loadPlugins } from '../runtime/registry.mjs';
 import { openSecrets } from '../runtime/secrets.mjs';
+import { SCAFFOLD } from '../runtime/web.mjs';
 
 const BOOT_DEADLINE = 10_000; // apps in this repo start in well under a second (see REPORT.md); this is generous headroom
 const CHECK_TIMEOUT = Number(process.env.AG_CHECK_TIMEOUT || 20) * 1000; // one hung fetch must not stall the whole run
@@ -143,7 +144,8 @@ for (const app of apps) {
     nextPort();
     continue;
   }
-  const ctx = make(`http://127.0.0.1:${port}`, sink);
+  const appGraph = JSON.parse(fs.readFileSync(graphFile, 'utf8'));
+  const ctx = make(`http://127.0.0.1:${port}`, sink, mod.scaffold && appGraph.web ? SCAFFOLD : '');
   sink.clear();
   await runChecks(app, mod.checks, ctx);
   if (child.log.includes('invalid')) console.log(`  ! ${child.log.trim().split('\n')[0]}`);
@@ -169,7 +171,7 @@ for (const app of apps) {
     const staged = await waitReady(child, port);
     if (!staged.ok) { reportBootFailure(name, change.checks, staged.reason, child.log); continue; }
     const migrations = child.log.split('\n').filter((l) => l.startsWith('migration:'));
-    const stageCtx = make(`http://127.0.0.1:${port}`, sink);
+    const stageCtx = make(`http://127.0.0.1:${port}`, sink, mod.scaffold && graph.web ? SCAFFOLD : '');
     stageCtx.migrations = migrations;
     stageCtx.patchBytes = Buffer.byteLength(JSON.stringify(patch));
     await runChecks(name, change.checks, stageCtx);

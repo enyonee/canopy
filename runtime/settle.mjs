@@ -13,7 +13,8 @@ export function policyOf(registry, row) {
 // Merchant APIs without an idempotency guarantee cannot replay a write after loss of the lease.
 export function noReplay(registry, row) {
   const d = registry.descriptors[row.kind];
-  return Boolean(d?.token && d.operations[row.op]?.idempotent === false);
+  const op = d?.operations[row.op];
+  return Boolean(op?.noReplay || ((d?.token || op?.request?.pathSecret) && op?.idempotent === false));
 }
 
 // null: not a provider's answer (a request that could not be built, a plugin's own failure), so it is final.

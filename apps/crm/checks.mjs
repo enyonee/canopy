@@ -4,6 +4,8 @@ import { colorCheck, navCheck } from '../../verify/lib.mjs';
 let leadId = null, acmeId = null;
 const today = () => new Date().toISOString().slice(0, 10);
 
+// These checks exercise the generated CRUD scaffold, including when a built front occupies /.
+export const scaffold = true;
 export const checks = [
   { task: 'Without an anonymous role every page asks for a login first',
     run: async ({ asGuest, get, must }) => {

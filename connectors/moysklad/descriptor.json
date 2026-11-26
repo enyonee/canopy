@@ -1,0 +1,277 @@
+{
+  "descriptor": 1,
+  "name": "moysklad",
+  "title": "MoySklad JSON API",
+  "base": "https://api.moysklad.ru",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "getOrder": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/remap/1.2/entity/customerorder/{input.id}",
+        "headers": {
+          "authorization": "Bearer {secret.apiToken}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "sum"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sum": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000000
+          }
+        }
+      },
+      "result": {
+        "id": "$.id",
+        "name": "$.name",
+        "amountMinor": "$.sum"
+      },
+      "resultOnly": true
+    },
+    "createOrder": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "required": [
+          "organizationId",
+          "agentId",
+          "externalCode",
+          "productId",
+          "quantity",
+          "unitPriceMinor"
+        ],
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "agentId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "externalCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "productId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 0.001,
+            "maximum": 1000000000000
+          },
+          "unitPriceMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/api/remap/1.2/entity/customerorder",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.apiToken}"
+        },
+        "body": {
+          "organization": {
+            "meta": {
+              "href": "{base}/api/remap/1.2/entity/organization/{input.organizationId}",
+              "type": "organization",
+              "mediaType": "application/json"
+            }
+          },
+          "agent": {
+            "meta": {
+              "href": "{base}/api/remap/1.2/entity/counterparty/{input.agentId}",
+              "type": "counterparty",
+              "mediaType": "application/json"
+            }
+          },
+          "externalCode": {
+            "$": "input.externalCode"
+          },
+          "positions": [
+            {
+              "assortment": {
+                "meta": {
+                  "href": "{base}/api/remap/1.2/entity/product/{input.productId}",
+                  "type": "product",
+                  "mediaType": "application/json"
+                }
+              },
+              "quantity": {
+                "$": "input.quantity"
+              },
+              "price": {
+                "$": "input.unitPriceMinor"
+              }
+            }
+          ]
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "result": {
+        "id": "$.id",
+        "name": "$.name"
+      },
+      "resultOnly": true
+    },
+    "listStocks": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "default": 0
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/api/remap/1.2/report/stock/all?limit={input.limit}&offset={input.offset}",
+        "headers": {
+          "authorization": "Bearer {secret.apiToken}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "stock"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "stock": {
+                  "type": "number",
+                  "minimum": -1000000000000,
+                  "maximum": 1000000000000
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "rows": "$.rows"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "getOrder",
+      "input": {
+        "id": "03000000-0000-4000-8000-000000000001"
+      }
+    },
+    "operations": {
+      "getOrder": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "name": "Order 1",
+            "sum": 1000
+          }
+        }
+      ],
+      "createOrder": [
+        {
+          "body": {
+            "id": "03000000-0000-4000-8000-000000000001",
+            "name": "Order 1"
+          }
+        }
+      ],
+      "listStocks": [
+        {
+          "body": {
+            "rows": [
+              {
+                "name": "Demo",
+                "stock": 5
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

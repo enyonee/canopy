@@ -1,0 +1,185 @@
+{
+  "descriptor": 1,
+  "name": "click",
+  "title": "CLICK Merchant bridge",
+  "base": "http://127.0.0.1:8899",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "createCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id",
+          "amountMinor"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/orders",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "id": {
+            "$": "input.id"
+          },
+          "amountMinor": {
+            "$": "input.amountMinor"
+          },
+          "provider": "click"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "id",
+          "currency",
+          "checkoutUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "UZS"
+            ]
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "pattern": "^https://my\\.click\\.uz/"
+          }
+        }
+      },
+      "result": {
+        "id": "$.id",
+        "currency": "$.currency",
+        "checkoutUrl": "$.checkoutUrl"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/orders/{input.id}",
+        "headers": {
+          "authorization": "Bearer {secret.operatorToken}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "amountMinor",
+          "state",
+          "transaction",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "click"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unpaid",
+              "pending",
+              "paid",
+              "cancelled",
+              "reversed"
+            ]
+          },
+          "transaction": {},
+          "updatedAt": {}
+        }
+      },
+      "result": {
+        "id": "$.id",
+        "state": "$.state",
+        "amountMinor": "$.amountMinor",
+        "transaction": "$.transaction",
+        "updatedAt": "$.updatedAt"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "getCheckout",
+      "input": {
+        "id": "sample"
+      }
+    },
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "currency": "UZS",
+            "checkoutUrl": "https://my.click.uz/sandbox"
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "id": {
+              "$": "input.id"
+            },
+            "provider": "click",
+            "state": "unpaid",
+            "amountMinor": 10000,
+            "transaction": null,
+            "updatedAt": null
+          }
+        }
+      ]
+    }
+  }
+}

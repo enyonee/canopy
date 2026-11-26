@@ -372,16 +372,27 @@ raw response, and an invalid or incomplete projection fails the delivery.
 Result paths can select a unique array member by a string property, for
 example `$.links[rel=approval_url].uri`.
 
-A descriptor can declare `token: {url, scheme, clientId, clientSecret, apiKey?}`.
+A descriptor can declare `token: {url, scheme, clientId, clientSecret, apiKey?, grantType?}`.
 The URL and descriptor base must be fixed HTTPS addresses. Credential values
 come from named secret slots; `scheme` is `basic` for HTTP Basic client
-credentials or `form` for form fields. The engine exchanges credentials at
+credentials or `form` for form fields. Form exchanges that require it can set
+`grantType: "client_credentials"`. The engine exchanges credentials at
 delivery, sends the bearer token only to the descriptor's origin, and follows
 no redirects. A failed exchange sends no operation. `idempotency.format:
 "uuid"` formats the stable outbox key for providers requiring UUID syntax.
+An operation can declare a fixed `tokenScope` for that exchange and
+`noReplay: true` for non-idempotent writes that require manual reconciliation
+after an expired claim or unknown outcome.
 For RSA callbacks, use `signature: {scheme: "rsa-sha256", header: "..."}`
 with a trusted PEM public key in the inbound secret slot. The signing private
 key is never installed on the merchant app.
+
+For APIs like Bitrix24 that require a credential as a path segment, the request
+may declare `pathSecret: "slotName"` and a single whole `{secret.slotName}`
+segment after `{base}/`. It requires a `resultOnly` operation. The public
+delivery target keeps the segment as `redacted`; HTTPS, same-origin delivery
+and no redirects are required. Keep the base provider allowlisted in the
+descriptor configuration. Secrets remain forbidden in other URL positions.
 
 A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed like a plugin
 (`"plugins": ["../../connectors/stripe/descriptor.json"]`); its `name` becomes the connector `kind`.

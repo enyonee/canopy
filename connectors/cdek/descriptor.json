@@ -1,0 +1,443 @@
+{
+  "descriptor": 1,
+  "name": "cdek",
+  "title": "CDEK API v2",
+  "base": "https://api.cdek.ru",
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "calculateTariffs": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "fromCode",
+          "toCode",
+          "weight",
+          "length",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "fromCode": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "toCode": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "weight": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30000
+          },
+          "length": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v2/calculator/tarifflist",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "type": 1,
+          "from_location": {
+            "code": {
+              "$": "input.fromCode"
+            }
+          },
+          "to_location": {
+            "code": {
+              "$": "input.toCode"
+            }
+          },
+          "packages": [
+            {
+              "weight": {
+                "$": "input.weight"
+              },
+              "length": {
+                "$": "input.length"
+              },
+              "width": {
+                "$": "input.width"
+              },
+              "height": {
+                "$": "input.height"
+              }
+            }
+          ]
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "tariff_codes"
+        ],
+        "properties": {
+          "tariff_codes": {
+            "type": "array",
+            "items": {}
+          }
+        }
+      },
+      "result": {
+        "tariffs": "$.tariff_codes"
+      },
+      "resultOnly": true
+    },
+    "createShipment": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "required": [
+          "number",
+          "tariffCode",
+          "from",
+          "to",
+          "recipientName",
+          "recipientPhone",
+          "package"
+        ],
+        "properties": {
+          "number": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "tariffCode": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "from": {
+            "type": "object",
+            "required": [
+              "code",
+              "address"
+            ],
+            "properties": {
+              "code": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "address": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          },
+          "to": {
+            "type": "object",
+            "required": [
+              "code",
+              "address"
+            ],
+            "properties": {
+              "code": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "address": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          },
+          "recipientName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "recipientPhone": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{7,14}$"
+          },
+          "package": {
+            "type": "object",
+            "required": [
+              "number",
+              "weight",
+              "length",
+              "width",
+              "height",
+              "items"
+            ],
+            "properties": {
+              "number": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "weight": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30000
+              },
+              "length": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "ware_key",
+                    "payment",
+                    "cost",
+                    "weight",
+                    "amount"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "ware_key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "payment": {
+                      "type": "object",
+                      "required": [
+                        "value"
+                      ],
+                      "properties": {
+                        "value": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000000000
+                        }
+                      }
+                    },
+                    "cost": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000000000
+                    },
+                    "weight": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "amount": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v2/orders",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "type": 1,
+          "number": {
+            "$": "input.number"
+          },
+          "tariff_code": {
+            "$": "input.tariffCode"
+          },
+          "from_location": {
+            "$": "input.from"
+          },
+          "to_location": {
+            "$": "input.to"
+          },
+          "recipient": {
+            "name": {
+              "$": "input.recipientName"
+            },
+            "phones": [
+              {
+                "number": {
+                  "$": "input.recipientPhone"
+                }
+              }
+            ]
+          },
+          "packages": [
+            {
+              "$": "input.package"
+            }
+          ]
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "properties": {
+          "entity": {
+            "type": "object",
+            "required": [
+              "uuid"
+            ],
+            "properties": {
+              "uuid": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.entity.uuid"
+      },
+      "resultOnly": true
+    },
+    "getShipment": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v2/orders/{input.id}",
+        "headers": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "properties": {
+          "entity": {
+            "type": "object",
+            "required": [
+              "uuid",
+              "statuses"
+            ],
+            "properties": {
+              "uuid": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              },
+              "statuses": {
+                "type": "array",
+                "items": {}
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.entity.uuid",
+        "statuses": "$.entity.statuses"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "getShipment",
+      "input": {
+        "id": "03000000-0000-4000-8000-000000000001"
+      }
+    },
+    "operations": {
+      "calculateTariffs": [
+        {
+          "body": {
+            "tariff_codes": [
+              {
+                "tariff_code": 137,
+                "delivery_sum": 380
+              }
+            ]
+          }
+        }
+      ],
+      "createShipment": [
+        {
+          "body": {
+            "entity": {
+              "uuid": "03000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      ],
+      "getShipment": [
+        {
+          "body": {
+            "entity": {
+              "uuid": {
+                "$": "input.id"
+              },
+              "statuses": [
+                {
+                  "code": "ACCEPTED"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "token": {
+    "url": "https://api.cdek.ru/v2/oauth/token",
+    "scheme": "form",
+    "grantType": "client_credentials",
+    "clientId": "clientId",
+    "clientSecret": "clientSecret"
+  }
+}
