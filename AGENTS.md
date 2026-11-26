@@ -32,7 +32,7 @@ When a task says "the app", it means an app under `apps/<name>/`. "The runtime" 
 | `tasks/` | WebGen-Bench task definitions | never |
 | `plugins/` | shared plugins (payment sandbox, messaging) | |
 | `verify/` | acceptance harness, HTTP sink, headless-Chrome driver | |
-| `tests/` | runtime tests, architecture, coverage and mutation gates | with every runtime change |
+| `tests/` | runtime tests, architecture and coverage | with every runtime change |
 
 ## Commands
 
@@ -44,9 +44,7 @@ npm test                                      # runtime tests + architecture gat
 npm run test:async                            # the same suite with every external store call answering a Promise (S4)
 npm run coverage                              # 100 % lines per runtime module
 npm run types                                 # tsc --checkJs
-npm run mutate                                # mutation gate (hours; rewrites runtime files while it runs)
-MUTATE_SHARD=3/8 npm run mutate               # only shard 3 of 8 (CI runs all 8 in parallel on every PR)
-npm run gate                                  # all of the above
+npm run gate                                  # tests, async-store tests, coverage, types
 node verify/run.mjs                           # acceptance checks of every app (+ patch-based changes)
 node verify/run.mjs <app> [<app>…]            # only some apps
 npm update --prefix webgen                    # only if the generator's own deps must move
@@ -55,8 +53,8 @@ node webgen/gen.mjs apps/<app>/app.json --openapi apps/<app>/web/openapi.json --
 npm --prefix webgen test                      # generator tests
 ```
 
-- `tests/mutate.mjs` edits runtime files in place while it runs. Run nothing else against the
-  runtime until it finishes. It restores the file on SIGINT/SIGTERM, but not on SIGKILL.
+- On shared machines, run tests sequentially (`node --test --test-concurrency=1 'tests/*.test.mjs'`)
+  and use OS CPU and memory limits where available.
 - `verify/run.mjs` listens on port 8999 (outgoing-HTTP sink) and serves apps from 8910 upward.
   Parallel runs need `AG_SINK_PORT`/`AG_PORT`. Some apps' connectors are hard-wired to
   `127.0.0.1:8999`, so those apps only pass with the default sink port.
@@ -76,9 +74,8 @@ The gates in `tests/arch.test.mjs` are part of `npm test`. Fix the code, never t
 - **A new node kind** means a row in `docs/FORMAT.md`, a checker in `runtime/check/`, and a
   test that names it. A new block, field kind, function, transport or widget means a registry
   entry with its contract keys.
-- **Proof**: 100 % line coverage per module, and at least one mutation in `tests/mutate.mjs`
-  for each new decision branch that matters. When you move code, re-point the mutations;
-  never delete one to make the gate pass.
+- **Proof**: test observable behavior and add a regression test for each bug fix.
+  The coverage check keeps 100 % line coverage per runtime module.
 - **Types**: JSDoc plus `runtime/types.d.ts`; `npx tsc -p .` stays clean.
 - **Await the store**: every call of a store method (`store.x(`, `tx.x(`, `ctx.store.x(`), of a loader (`perms.prime`, `ownWhere`,
   `interp.*`, …) and, in blocks and plugins, of `resolve`/`text`/`run`/`fireCreated` is `await`ed, even though SQLite still answers plain

@@ -61,7 +61,6 @@ nothing, so it cannot lie about what it does. Canopy closes **access**, not arit
 | Apps in the repo | **105**: the 101 tasks, three hand-written references (`shop`, `crm`, `checkout`) with patch-based changes, and `tictactoe` (the widget reference) |
 | Acceptance checks | **711 / 711** green (`npm run verify`: 699 per app + 12 on the patch changes) |
 | Runtime tests | **659**, 100 % line coverage across 97 modules |
-| Mutation gate | **674 / 674** mutants killed |
 | Types | `tsc --checkJs`, clean |
 | Runtime size | ~9.6k lines, zero runtime dependencies (Node 22 built-ins, `node:sqlite`) |
 | Performance | indexes, page-before-hydrate, batched aggregates compiled into SQL where exact (stored and derived fields, nested aggregates, dates), prepared-statement cache; `/Order` list on a 500/2000/10000-row bench graph: 1590 ms → ~10-15 ms p50; an order with 20 000 items: 30.7 ms → 2.0 ms p50 (`npm run bench`, `TESTS.md`) |
@@ -139,7 +138,7 @@ npm install              # dev-only: typescript for the type gate
 npm test                 # runtime tests, including the architecture gates
 npm run verify           # every app's acceptance checks (+ patch-based changes)
 node verify/run.mjs chess poker   # only some apps
-npm run gate             # tests + coverage + types + mutations
+npm run gate             # tests + async-store tests + coverage + types
 ```
 
 An app is a directory: `app.json`, `checks.mjs`, `NOTES.md`, optional `plugins/`, and at run
@@ -204,8 +203,8 @@ failing test in `tests/arch.test.mjs`, part of `npm test`.
 - **The format is a registry**: the node kinds in the checker must equal the node kinds
   documented in `docs/FORMAT.md`. Each needs a checker module and a test that names it. Every
   registry entry, built-in or plugin, must carry its contract keys.
-- **Proof, not coverage**: 100 % lines per module by name (`tests/coverage.mjs`), and a mutation
-  gate (`tests/mutate.mjs`) that breaks the code on purpose and requires a test to notice.
+- **Coverage and regressions**: 100 % lines per runtime module by name (`tests/coverage.mjs`)
+  and tests that assert observable behavior.
 
 ## Repository map
 
@@ -218,7 +217,7 @@ failing test in `tests/arch.test.mjs`, part of `npm test`.
 | `webgen/` | the React front generator, its tests, and the Tailwind UI Plus components it draws on |
 | `plugins/` | shared plugins: `payment.mjs` (sandbox card gateway), `messaging.mjs` (SMS, WhatsApp) |
 | `verify/` | the acceptance harness, an HTTP sink for outgoing effects, and a zero-dependency headless-Chrome driver |
-| `tests/` | runtime tests, architecture gates, coverage and mutation gates |
+| `tests/` | runtime tests, architecture gates and coverage |
 | `REPORT.md`, `TESTS.md` | round-by-round report and test inventory (Russian) |
 | `AGENTS.md`, `CONTRIBUTING.md` | how to work on the repo: layout, gates, rules for agents, pull requests, versions |
 | `CHANGELOG.md` | release notes |

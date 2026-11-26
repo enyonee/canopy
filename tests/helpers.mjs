@@ -11,8 +11,7 @@ import { staticPage } from '../runtime/render/pages.mjs';
 import { listPre, renderForm, renderDetail, dashboardPre, pagePre } from '../runtime/routes/load.mjs';
 
 // Every directory a test makes goes through here and is removed when the test file's process
-// ends, pass or fail (a leaked one costs an inode for ever; the mutation gate runs the suite
-// ~180 times). With `t` it is removed as soon as that test is done.
+// ends, pass or fail. With `t` it is removed as soon as that test is done.
 const made = new Set();
 const drop = (d) => { fs.rmSync(d, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); made.delete(d); };
 process.on('exit', () => { for (const d of made) drop(d); });

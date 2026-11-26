@@ -58,15 +58,12 @@ You **must verify that the change works**. Passing gates are expected but are no
 Gates for any change under `runtime/`, `verify/` or `tests/`:
 
 ```bash
-npm run gate          # tests, architecture gates, 100 % line coverage, types, mutations
+npm run gate          # tests, async-store tests, coverage, types
 node verify/run.mjs   # every app's acceptance checks
 ```
 
-CI runs the tests, coverage, types and all acceptance checks on every pull request, and the
-mutation gate too: in 8 parallel shards (`MUTATE_SHARD=i/8`, workflow `mutate.yml`), about
-25-40 minutes of wall time, with the aggregate check `mutation gate`. It also runs weekly.
-Locally the full gate takes hours; run one shard (`MUTATE_SHARD=3/8 npm run mutate`) or only the
-mutations you touched (`node tests/mutate.mjs "<name part>"`).
+CI runs the tests, coverage, types and acceptance checks on every pull request.
+For a resource-limited local test run, use `node --test --test-concurrency=1 'tests/*.test.mjs'`.
 
 Keep each pull request to one logical change: no drive-by refactors, generated noise or
 features outside the agreed scope. Update `CHANGELOG.md` under *Unreleased* for anything

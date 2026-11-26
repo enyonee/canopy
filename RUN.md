@@ -6,7 +6,6 @@ node runtime/run.mjs apps/shop/app.json --port 8901 # поднять прило�
 node verify/run.mjs                                 # приёмочные проверки всех приложений + изменения патчами
 node verify/run.mjs shop crm                        # только выбранные
 node --test 'tests/*.test.mjs'                      # тесты рантайма (см. TESTS.md)
-node tests/mutate.mjs                               # мутационный гейт
 node runtime/patch.mjs apps/shop/app.json apps/shop/change-1-role.patch.json  # правка патчем
 ```
 

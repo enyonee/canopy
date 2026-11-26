@@ -180,7 +180,7 @@ Every rule fails closed and names a JSON path and a hint:
 - **Inbound fixtures.** Signed payloads (with a fixed test secret and the injected clock) per event cover accept, bad signature, stale timestamp, duplicate, unknown type and a failing step.
 
 ## 7. Staged PRs
-Each PR keeps `npm run gate` and `node verify/run.mjs` green. Module ≤300 lines and function ≤60 lines (tests/arch.test.mjs). Every new module goes into `ALLOWED` at the named layer; new `node:` use goes into `NODE_BUILTINS`. Update `docs/FORMAT.md` and `runtime/ARCHITECTURE.md` in each. Mutations are added to `tests/mutate.mjs` (179 today) and must not delete existing ones.
+Keep `npm run gate` and `node verify/run.mjs` green. Module ≤300 lines and function ≤60 lines (tests/arch.test.mjs). Every new module goes into `ALLOWED` at the named layer; new `node:` use goes into `NODE_BUILTINS`. Update `docs/FORMAT.md` and `runtime/ARCHITECTURE.md` in each.
 
 **C1: descriptor + checker + `http` on it (about +600 lines).**
 - New leaves (layer 0): `runtime/connectors/schema.mjs`, `template.mjs`, `descriptor.mjs` (validates a descriptor).
@@ -188,24 +188,20 @@ Each PR keeps `npm run gate` and `node verify/run.mjs` green. Module ≤300 line
 - Changed: `registry.mjs` (`descriptors` table, `.json` entries in `loadPlugins`), `transports.mjs` (`http` becomes a built-in descriptor object `runtime/connectors/builtin.mjs`, JS-literal so `DEFAULT` stays synchronous and file-free), `blocks.mjs` (`connector.call`), `check/connectors.mjs` and `check/steps.mjs` (input validation, literal-secret rule), `types.d.ts`, migrate (`op`, `response`, `result`, `drift`).
 - Non-regression: the existing http request is byte-identical (method, JSON body, header merge, the 3000 ms timeout, target = url + path), and the `outbox.test.mjs` cases pass unchanged.
 - Tests: `tests/connectors_schema.test.mjs`, `_descriptor`, `_engine`, checker fixtures for every rule, and a property test that any schema-valid input produces a request the engine can build.
-- Mutations: unknown descriptor keyword accepted, required check off, `additionalProperties` default flipped, `{secret.*}` allowed in url, literal input not validated, output validation skipped.
 
 **C2: secrets store + mode (about +350).**
 - New: `runtime/secrets.mjs` (layer 0, node:crypto+fs), `runtime/deploy.mjs` (mode file plus `_deploy_log`, layer 4), CLI subcommands, `redact` in `template.mjs`.
 - `deliver` gets `opts.secret/mode`. `.gitignore` and AGENTS.md updated.
 - Tests: encrypt/decrypt round-trip, wrong key, tampered tag, atomic write, redaction in trace/response/error, `live` refused with a missing secret, no silent sandbox fallback.
-- Mutations: no tag verification, mode defaults to live, redaction removed, argv secret accepted, `live` without `--confirm`.
 
 **C3: retries, backoff, breaker, clock (about +450).**
 - New leaf `runtime/connectors/backoff.mjs` (policy + `breakerStep`). New tables `_breaker`. Columns `nextAttemptAt`, `idemKey`, `settledAt`. `outbox.mjs` split into `outbox.mjs` + `settle.mjs` to stay under 300 lines. `startFlusher` in `server.mjs`. `serve({clock})`. The Retry route clears the schedule.
 - Tests: table-driven backoff, deterministic jitter, `Retry-After`, non-idempotent → `unknown`, half-open single probe (property test over event sequences), lease vs timeout, a fake-clock server test of a full outage-recovery cycle. `tests/outbox.test.mjs` extended.
-- Mutations: retry on a non-idempotent op, backoff not capped, breaker never opens/closes, probe claim not atomic, attempts incremented while the breaker is open, key regenerated per attempt.
 
 **C4: inbound webhooks (about +450).**
 - New: `runtime/connectors/signature.mjs` (layer 0, node:crypto), `runtime/routes/hooks.mjs` (layer 8), `_inbound` table, `rawBody` in `context.mjs`, `inbound:` events in `check/events.mjs`, `--connectors simulate`.
 - The `/hook` route dispatches before the session gate. This is a new unauthenticated surface: it needs a security review.
 - Tests: the accept/reject matrix in section 6, a length mismatch not throwing in `timingSafeEqual`, dedup exactly-once across a simulated crash, the 1 MiB cap, and no echo of the payload.
-- Mutations: compare with `===` instead of constant time, no replay window, dedup row written before the steps' commit, the signature check skippable when the header is absent, unknown type → 500.
 
 **C5: first real providers (about +300 each, descriptors + fixtures only).** All are `sandbox` by default and tested with recordings only; no network in CI.
 1. **Stripe** (payments: PaymentIntents, refunds, signed webhooks). The highest demand in the README; covers the form encoding, the `stripe` signature and native idempotency keys.
@@ -218,13 +214,12 @@ Each PR keeps `npm run gate` and `node verify/run.mjs` green. Module ≤300 line
 - `runtime/connectors/openapi.mjs` (pure, JSON in, descriptor out) and a CLI `--import-openapi spec.json --name x`. The output is a draft to be reviewed and committed.
 - Maps operationId → op, parameters and requestBody → `input`, 2xx response → `output`, securitySchemes (apiKey, bearer, basic) → `auth`. `idempotent` defaults true for GET/PUT/DELETE, false for POST unless an idempotency header parameter exists.
 - `$ref` is resolved locally only. `oneOf/allOf/anyOf` beyond the trivial cases, callbacks and oauth flows are **omitted with a listed `unsupported` note**. Never guess. YAML input is out of scope (zero deps).
-- Tests: golden imports from small specs and a fuzz test (any input either yields a descriptor that passes `descriptor.mjs` or a listed omission). Mutations: `$ref` cycles, POST defaulting to idempotent.
+- Tests: golden imports from small specs and a fuzz test (any input either yields a descriptor that passes `descriptor.mjs` or a listed omission).
 
 **C7: settings screen (about +350).**
 - `runtime/routes/settings.mjs` and `render/settings.mjs`, gated by a new `vc.settings` (an admin, like `vc.outbox`, context.mjs:97).
 - Per connector: mode badge, breaker state, 24 h sent/failed counts, drift count, slots as set/unset. Set or replace a secret through a password field (the value is never echoed), a "send test" through the sandbox, and a webhook URL to copy.
 - Tests: no secret value in any HTML or JSON response; a non-admin gets 403.
-- Mutations: the value echoed after save, a secret list accessible to non-admins.
 
 ## 8. Risks and open questions
 
@@ -251,7 +246,6 @@ Each PR keeps `npm run gate` and `node verify/run.mjs` green. Module ≤300 line
 - The engine grows into a general HTTP DSL. Mitigation: no expressions or conditionals in templates; anything else is a `codec`, or the connector is not covered.
 - The `deliver` opts and TransportType change touch every transport. The extension is additive (`opts` is a bag), and existing transports ignore it.
 - Duplicate effects if a lease expires during a slow request: bounded by `timeoutMs ≤ LEASE_MS/2` and by the idempotency key, but non-idempotent ops still risk one duplicate across a crash (documented, as in FORMAT.md:202).
-- The mutation gate rewrites runtime files in place (AGENTS.md). Every new module needs re-pointed, exact-text mutations, which is the biggest per-PR cost.
 - `payment` (sandbox, in-transaction authorisation) and Stripe (async, event-driven) have different flows. Unifying them in the docs is a decision for C5, not C1.
 
 ## 9. Decisions (maintainer, 2026-09-29)

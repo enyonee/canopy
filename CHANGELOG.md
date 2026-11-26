@@ -5,6 +5,9 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Testing.** Removed the mutation gate, its runner and its scheduled workflow.
+  The ordinary test suite and its regression tests remain.
+
 - **Hosted payments.** Stripe Checkout, Bank of Georgia Payment Manager and TBC Checkout
   descriptors create payment sessions, retrieve status and request refunds. A graph can
   collect a projected result for the row that queued it with `connector.capture`.

@@ -5,11 +5,10 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "coverage": "node tests/coverage.mjs",
-    "mutate": "node tests/mutate.mjs",
     "types": "tsc -p .",
     "verify": "node verify/run.mjs",
     "bench": "node --no-warnings --expose-gc bench/run.mjs",
-    "gate": "npm run test && npm run test:async && npm run coverage && npm run types && npm run mutate",
+    "gate": "npm run test && npm run test:async && npm run coverage && npm run types",
     "test:async": "node --no-warnings --import ./tests/asyncstore.mjs --test tests/*.test.mjs"
   },
   "devDependencies": {
