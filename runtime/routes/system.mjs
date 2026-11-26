@@ -5,8 +5,19 @@ import path from 'node:path';
 import { errorPage, noticePage } from '../render.mjs';
 import { outboxView } from '../render/pages.mjs';
 
-const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
-  svg: 'image/svg+xml', pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv' };
+// What ?inline=1 may show in the page: a raster image by its first bytes (FieldType#sniff), whatever its name says, or
+// one of these by its extension. Never an SVG, nor anything else a browser would run as a document of this site.
+const IMAGE = { png: 'image/png', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+const MIME = { pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv' };
+
+function headOf(at) {
+  const fd = fs.openSync(at, 'r');
+  try {
+    const head = Buffer.alloc(12);
+    fs.readSync(fd, head, 0, 12, 0);
+    return head;
+  } finally { fs.closeSync(fd); }
+}
 
 // An operator's word on a delivery. Retry starts it over (attempts and schedule cleared); "mark sent" settles a
 // delivery of unknown outcome (the request may have landed) as done, and only that.
@@ -46,10 +57,10 @@ async function file(ctx) {
   if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
   const at = path.join(filesDir, path.basename(row[fieldName]));
   if (!fs.existsSync(at)) { send(404, errorPage(graph, 'file is missing on disk')); return true; }
-  const ext = path.extname(at).slice(1).toLowerCase();
-  const mime = MIME[ext];
+  const raster = f.type.sniff?.(headOf(at));
+  const mime = raster ? IMAGE[raster] : MIME[path.extname(at).slice(1).toLowerCase()];
   const inline = url.searchParams.get('inline') === '1' && mime;
-  res.writeHead(200, { 'content-type': inline ? mime : 'application/octet-stream',
+  res.writeHead(200, { 'content-type': inline ? mime : 'application/octet-stream', 'x-content-type-options': 'nosniff',
     'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${String(row[fieldName]).replace(/^\d+-/, '').replace(/"/g, '')}"`, ...headers });
   fs.createReadStream(at).pipe(res);
   return true;
