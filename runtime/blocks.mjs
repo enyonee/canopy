@@ -11,7 +11,7 @@
 //     store, graph, entity, id, values, step, resolve(obj), text(str), run(steps, extra), user
 import { toMinor } from './fields.mjs';
 import { prepare } from './connectors/engine.mjs';
-import { checkCall } from './check/calls.mjs';
+import { checkCall, checkCapture } from './check/calls.mjs';
 
 // A step's "where" is the author's own filter, so a key that resolved to undefined or '' (an empty form field) ("@values.order"
 // with no order submitted, "@me" with nobody signed in) must never fall out of it: the store reads an
@@ -175,15 +175,34 @@ export const CATALOG = {
     },
   },
   'connector.call': {
-    summary: 'call an operation "op" of a descriptor "connector" with "input" (an object, checked against the operation\'s schema before anything is queued; "ref" names the row the call is about); delivered after commit, visible in /outbox as @delivery',
+    summary: 'queue a descriptor operation after commit; ref "@row" binds it to the current row for connector.capture, and @delivery holds its id',
     effects: ['out'], requires: ['connector', 'op', 'input'],
     check: checkCall,
-    run: async ({ store, graph, registry, step, resolve }) => {
+    run: async ({ store, graph, registry, step, resolve, entity, id }) => {
       const c = graph.connectors[step.connector];
       const d = registry.descriptors[c.kind];
       if (!d) throw new Error(`connector.call: "${step.connector}" is ${c.kind}, which has no descriptor`);
       const { input, target } = prepare(d, c, step.op, await resolve(step.input));
-      return { delivery: await store.enqueue({ kind: c.kind, connector: step.connector, target, payload: input, op: step.op }) };
+      const ref = step.ref === '@row' && entity && id ? { refEntity: entity, refId: id } : {};
+      return { delivery: await store.enqueue({ kind: c.kind, connector: step.connector, target, payload: input, op: step.op, ...ref }) };
+    },
+  },
+  'connector.capture': {
+    summary: 'copy an already delivered resultOnly operation into the same row that queued it; set maps row fields to result keys',
+    effects: ['db.read', 'db.write'], requires: ['connector', 'op', 'deliveryField', 'set'],
+    check: checkCapture,
+    run: async ({ store, graph, registry, entity, id, step }) => {
+      const current = await store.get(entity, id);
+      const row = current?.[step.deliveryField] && await store.outboxGet(current[step.deliveryField]);
+      const kind = graph.connectors[step.connector].kind;
+      if (!row || row.refEntity !== entity || Number(row.refId) !== Number(id) || row.connector !== step.connector || row.kind !== kind || row.op !== step.op)
+        throw new Error('no matching delivery belongs to this row');
+      if (row.status !== 'sent' || !row.result || !registry.descriptors[kind]?.operations[step.op]?.resultOnly)
+        throw new Error('the provider result is not ready');
+      const result = JSON.parse(row.result);
+      const values = Object.fromEntries(Object.entries(step.set).map(([field, k]) => [field, result[String(k)]]));
+      await store.update(entity, id, values);
+      return {};
     },
   },
   'mail.send': {

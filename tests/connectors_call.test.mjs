@@ -306,7 +306,7 @@ test('a database made before "op", "response", "result" and "drift" is upgraded 
   old.close();
   const graph = { app: 'o', data: { A: { n: 'text' } } };
   const store = new Store(graph, file);
-  assert.deepEqual(await store.outboxGet(1), { id: 1, kind: 'http', connector: 'hook', target: 'http://sink.test/o', payload: 1, status: 'sent', code: null, error: null, attempts: 1, at: null, updatedAt: null, claimedAt: null, op: null, response: null, result: null, drift: null, nextAttemptAt: null, idemKey: null });
+  assert.deepEqual(await store.outboxGet(1), { id: 1, kind: 'http', connector: 'hook', target: 'http://sink.test/o', payload: 1, status: 'sent', code: null, error: null, attempts: 1, at: null, updatedAt: null, claimedAt: null, op: null, response: null, result: null, drift: null, nextAttemptAt: null, idemKey: null, refEntity: null, refId: null });
   const id = await store.enqueue({ kind: 'pay', connector: 'p', target: 't', payload: { a: 1 }, op: 'charge' });
   await store.outboxUpdate(id, { response: 'r', result: '{}', drift: 1 });
   assert.deepEqual([(await store.outboxGet(id)).op, (await store.outboxGet(id)).response, (await store.outboxGet(id)).result, (await store.outboxGet(id)).drift], ['charge', 'r', '{}', 1]);

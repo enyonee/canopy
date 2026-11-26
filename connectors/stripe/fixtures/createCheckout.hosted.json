@@ -1,0 +1,38 @@
+{
+  "op": "createCheckout",
+  "case": "hosted",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/checkout/sessions/create",
+  "idemKey": "idem_fixture_1",
+  "input": {
+    "amountMinor": 100,
+    "currency": "usd",
+    "attemptId": "a-1",
+    "productName": "Coffee",
+    "successUrl": "https://shop.example/orders",
+    "cancelUrl": "https://shop.example/orders"
+  },
+  "request": {
+    "method": "POST",
+    "url": "https://api.stripe.com/v1/checkout/sessions",
+    "headers": {
+      "authorization": "«redacted»",
+      "stripe-version": "2024-06-20",
+      "idempotency-key": "idem_fixture_1",
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "mode=payment&success_url=https%3A%2F%2Fshop.example%2Forders&cancel_url=https%3A%2F%2Fshop.example%2Forders&client_reference_id=a-1&line_items[0][price_data][currency]=usd&line_items[0][price_data][unit_amount]=100&line_items[0][price_data][product_data][name]=Coffee&line_items[0][quantity]=1"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "cs_fixture_1",
+      "url": "https://checkout.stripe.com/c/pay/cs_fixture_1"
+    }
+  }
+}

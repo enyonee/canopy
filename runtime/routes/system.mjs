@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { errorPage, noticePage } from '../render.mjs';
 import { outboxView } from '../render/pages.mjs';
+import { noReplay } from '../settle.mjs';
 
 // What ?inline=1 may show in the page: a raster image by its first bytes (FieldType#sniff), whatever its name says, or
 // one of these by its extension. Never an SVG, nor anything else a browser would run as a document of this site.
@@ -24,6 +25,7 @@ function headOf(at) {
 async function outboxAction(ctx, row, action) {
   const { store, ok, interp } = ctx;
   if (action === 'retry') {
+    if (noReplay(ctx.registry, row)) return ok('/outbox', 'This operation cannot be retried; reconcile with the provider');
     await store.outboxUpdate(row.id, { status: 'queued', nextAttemptAt: null, attempts: 0 });
     await interp.flushNow();
     ok('/outbox', `Delivery #${row.id} retried: ${(await store.outboxGet(row.id)).status}`);

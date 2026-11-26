@@ -9,6 +9,8 @@ import { METHODS, MAX_TIMEOUT_MS } from './descriptor.mjs';
 import { faultOf } from './backoff.mjs';
 import { systemClock } from '../clock.mjs';
 import { formEncode, FORM_TYPE } from './form.mjs';
+import { accessToken, tokenRequest } from './token.mjs';
+import { redactDeep } from './redact.mjs';
 
 export const DEFAULT_TIMEOUT_MS = 3000;
 // The most of an answer the outbox row keeps.
@@ -35,7 +37,15 @@ function requestUrl(op, scopes) {
 
 /** The slots a descriptor reads from the secret store: `{secret.<slot>}` in live requests, and the inbound signature's. */
 export const secretSlots = (d) => [...new Set([...Object.values(d.operations).flatMap((op) => refs(op.request)).filter((r) => r.scope === 'secret').map((r) => r.path[0]),
-  ...(d.inbound ? [d.inbound.secret] : [])])];
+  ...(d.inbound ? [d.inbound.secret] : []), ...(d.token ? [d.token.clientId, d.token.clientSecret, d.token.apiKey].filter(Boolean) : [])])];
+
+// The outbox supplies a stable 128-bit hex key. Banks that require UUID v4 syntax get the same key on retries.
+function headerKey(d, key) {
+  if (d.idempotency.format !== 'uuid') return key;
+  if (!/^[0-9a-f]{32}$/i.test(key)) throw new Error('UUID idempotency needs a 32-digit outbox key');
+  const variant = (8 | (parseInt(key[16], 16) & 3)).toString(16);
+  return `${key.slice(0, 8)}-${key.slice(8, 12)}-4${key.slice(13, 16)}-${variant}${key.slice(17, 20)}-${key.slice(20)}`;
+}
 
 /** The name in the secret store that a slot is: the connector's `secrets` map says, else the slot itself. */
 export const secretName = (connector, slot) => connector?.secrets?.[slot] ?? slot;
@@ -81,7 +91,7 @@ export function buildRequest(d, connector, opName, input, opts = {}) {
   // A form body is the descriptor's object flattened (runtime/connectors/form.mjs); its content type is set unless the descriptor set one.
   const text = body === undefined ? undefined : r.encoding === 'form' ? formEncode(body) : JSON.stringify(body);
   if (r.encoding === 'form' && text !== undefined && !Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')) headers['content-type'] = FORM_TYPE;
-  if (idemKey !== undefined && d.idempotency) headers[d.idempotency.header] = idemKey;
+  if (idemKey !== undefined && d.idempotency) headers[d.idempotency.header] = headerKey(d, idemKey);
   for (const [k, v] of Object.entries(headers)) if (/[\r\n]/.test(k) || /[\r\n]/.test(String(v))) throw new Error(`header "${k.replace(/[\r\n]/g, ' ')}" holds a line break`);
   return {
     method, url: target ?? requestUrl(op, scopes), headers,
@@ -92,15 +102,22 @@ export function buildRequest(d, connector, opName, input, opts = {}) {
 
 // The answer of an operation that declares "output" or "failure": its text (capped), the body, the fields "result" names, and
 // what does not fit the schema. Never throws: the effect has happened whatever the answer looks like.
+/** @returns {Promise<{ response?: string, result?: string, body?: any, drift: string[][] }>} */
 async function readAnswer(op, res) {
   let raw = '';
   let body;
   try { raw = await res.text(); body = JSON.parse(raw); } catch (e) {
+    if (op.resultOnly) return { drift: [['/', 'the answer is not JSON']] };
     return { response: raw.slice(0, RESPONSE_CAP), drift: [['/', `the answer is not JSON: ${e.message}`]] };
   }
   const drift = op.output ? validate(op.output, body, '', { extra: true }) : [];
-  const answer = { response: raw.slice(0, RESPONSE_CAP), drift, body };
-  if (op.result) answer.result = JSON.stringify(Object.fromEntries(Object.entries(op.result).map(([k, p]) => [k, pick(p, body)]).filter(([, v]) => v !== undefined)));
+  /** @type {{ response?: string, result?: string, body?: any, drift: string[][] }} */
+  const answer = { ...(op.resultOnly ? {} : { response: raw.slice(0, RESPONSE_CAP) }), drift, body };
+  if (op.result) {
+    const entries = Object.entries(op.result).map(([k, p]) => [k, pick(p, body)]);
+    if (op.resultOnly && entries.some(([, v]) => v === undefined)) drift.push(['/', 'the result is missing a projected field']);
+    answer.result = JSON.stringify(Object.fromEntries(entries.filter(([, v]) => v !== undefined)));
+  }
   return answer;
 }
 
@@ -135,6 +152,7 @@ export async function mapResponse(op, res) {
   if (!res.ok && retryAfter) patch.retryAfter = retryAfter;
   if (!res.ok || !(op.output || op.failure)) return { patch, drift: [] };
   const { drift, body, ...answer } = await readAnswer(op, res);
+  if (op.resultOnly && drift.length) return { patch: { ...patch, code: 502, status: 'failed', error: 'provider result did not match its contract', drift: 1 }, drift };
   const bad = op.failure && (body === undefined ? UNREADABLE : failureOf(op.failure, body));
   if (bad) return { patch: { ...patch, ...bad, status: 'failed', response: answer.response }, drift: [] };
   return { patch: { ...patch, ...answer, drift: drift.length ? 1 : 0 }, drift };
@@ -146,13 +164,33 @@ export async function mapResponse(op, res) {
 async function send(req, fetchImpl, clock, answer) {
   const abort = new AbortController();
   const timer = clock.setTimer(() => abort.abort(new DOMException(`no answer within ${req.timeout} ms`, 'TimeoutError')), req.timeout);
-  const init = { method: req.method, headers: req.headers, signal: abort.signal };
+  /** @type {RequestInit} */
+  const init = { method: req.method, headers: req.headers, signal: abort.signal, ...(req.redirect && { redirect: req.redirect }) };
   if (req.body !== undefined) init.body = req.body;
   try {
     let res;
     try { res = await fetchImpl(req.url, init); } catch (e) { throw Object.assign(new Error(e && e.message, { cause: e }), { fault: faultOf(e) }); }
     return await answer(res);
   } finally { clock.clear(timer); }
+}
+
+async function sendLive(d, op, req, fetchImpl, clock, secret) {
+  if (op.resultOnly) req.redirect = 'manual';
+  if (!d.token) return send(req, fetchImpl, clock, (res) => mapResponse(op, res));
+  // Both requests share the delivery's time budget. A token error precedes the monetary request.
+  if (new URL(req.url).origin !== new URL(d.base).origin) throw new Error('payment request left the declared origin');
+  req.timeout /= 2;
+  const preflight = tokenRequest(d.token, secret, req.timeout);
+  let token;
+  try { token = await send(preflight, fetchImpl, clock, accessToken); }
+  catch (e) { throw new Error('could not authorize provider request', { cause: e }); }
+  req.headers.authorization = `Bearer ${token}`;
+  req.redirect = 'manual';
+  try {
+    return redactDeep(await send(req, fetchImpl, clock, (res) => mapResponse(op, res)), [token]);
+  } catch (e) {
+    throw Object.assign(new Error('authorized provider request failed'), { fault: e.fault });
+  }
 }
 
 /**
@@ -172,7 +210,7 @@ export async function deliverRow(d, row, connector, opts = {}) {
   if (mode === 'sandbox') done = await mapResponse(op, sandboxResponse(d, opName, connector, input, idemKey));
   else {
     const req = buildRequest(d, connector, opName, input, { secret, target: legacy ? row.target : undefined, idemKey, timeoutCapMs });
-    done = await send(req, fetchImpl, clock, (res) => mapResponse(op, res));
+    done = await sendLive(d, op, req, fetchImpl, clock, secret);
   }
   if (done.drift.length) trace({ kind: 'contract_drift', id: row.id, connector: row.connector, op: opName, path: done.drift[0][0], message: done.drift[0][1] });
   return done.patch;

@@ -8,7 +8,7 @@
 import { DEFAULT } from './registry.mjs';
 import { resolveClock } from './clock.mjs';
 import { idemKeyOf } from './connectors/backoff.mjs';
-import { settle, policyOf } from './settle.mjs';
+import { settle, policyOf, noReplay } from './settle.mjs';
 import { redact, redactDeep } from './connectors/redact.mjs';
 import { modesOf, modeOf } from './deploy.mjs';
 
@@ -80,6 +80,10 @@ export async function flush(store, graph, opts = {}) {
   const deploy = env ? env.deploy() : { connectors: {} };
   const out = [];
   for (const row of await store.outboxDue(clock.now(), leaseMs)) {
+    if (row.status === 'sending' && noReplay(registry, row)) {
+      if (await store.outboxFinish(row.id, row.claimedAt, { status: 'unknown', error: 'expired delivery lease; reconcile with the provider before another request' })) out.push('unknown');
+      continue;
+    }
     const mode = modeOf(deploy, row.connector, modesOf(registry, row.kind));
     if (!await admit(store, row, { now: clock.now(), mode, registry, leaseMs })) continue;
     const claimedAt = clock.now();

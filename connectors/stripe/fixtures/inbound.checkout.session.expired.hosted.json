@@ -1,0 +1,31 @@
+{
+  "inbound": "checkout.session.expired",
+  "case": "hosted",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/checkout/fulfillment",
+  "request": {
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "evt_checkout_3",
+      "type": "checkout.session.expired",
+      "livemode": false,
+      "data": {
+        "object": {
+          "id": "cs_fixture_1",
+          "client_reference_id": "a-1",
+          "payment_status": "unpaid"
+        }
+      }
+    }
+  },
+  "values": {
+    "id": "cs_fixture_1",
+    "attemptId": "a-1",
+    "paymentStatus": "unpaid",
+    "live": false
+  }
+}

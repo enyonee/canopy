@@ -204,14 +204,15 @@ export interface SchemaNode {
 export interface OperationSpec {
   summary?: string; idempotent: boolean; input: SchemaNode;
   request: { method?: string; url: string; headers?: Record<string, any>; body?: any };
-  output?: SchemaNode; result?: Record<string, string>;
+  output?: SchemaNode; result?: Record<string, string>; resultOnly?: true;
 }
 
 /** A connector descriptor (docs/CONNECTORS.md): data, checked by runtime/connectors/descriptor.mjs. */
 export interface ConnectorDescriptor {
   descriptor: 1; name: string; title?: string; version?: string; base?: string; config?: SchemaNode;
   timeoutMs?: number; legacy?: string; operations: Record<string, OperationSpec>;
-  retry?: Partial<RetryPolicy>; breaker?: Partial<BreakerPolicy>; idempotency?: { header: string };
+  retry?: Partial<RetryPolicy>; breaker?: Partial<BreakerPolicy>; idempotency?: { header: string; format?: 'uuid' };
+  token?: { url: string; scheme: 'basic' | 'form'; clientId: string; clientSecret: string; apiKey?: string };
   /** The modes a connector of this kind may run in, the first is the default (runtime/deploy.mjs). */
   modes?: Array<'sandbox' | 'live'>;
   /** Per operation, the ordered rules that answer in sandbox mode (runtime/connectors/sandbox.mjs). */
@@ -222,7 +223,7 @@ export interface ConnectorDescriptor {
 
 /** The `inbound` block of a descriptor: `type` is a `$.path` into the body or `{ header }`, `eventId` a `$.path` into the signed body. */
 export interface InboundSpec {
-  signature: { scheme: 'stripe' | 'slack' | 'hmac' | 'basic'; header?: string; algo?: 'sha256' | 'sha1'; encoding?: 'hex' | 'base64'; prefix?: string; signed?: 'raw' | 'ts.raw'; timestampHeader?: string };
+  signature: { scheme: 'stripe' | 'slack' | 'hmac' | 'basic' | 'rsa-sha256'; header?: string; algo?: 'sha256' | 'sha1'; encoding?: 'hex' | 'base64'; prefix?: string; signed?: 'raw' | 'ts.raw'; timestampHeader?: string };
   secret: string; toleranceS?: number;
   eventId: string; type: string | { header: string };
   events: Record<string, { schema: SchemaNode; map?: Record<string, string> }>;
@@ -386,7 +387,7 @@ declare module './store.mjs' {
     hydratePage(entity: string, rows: any[]): any[];
     aggregate(entity: string, opts?: Record<string, any>): any[];
     aggregateInMemory(entity: string, opts: Record<string, any>): any[];
-    enqueue(row: { kind: string; connector: string; target: string; payload: any; op?: string | null }): number;
+    enqueue(row: { kind: string; connector: string; target: string; payload: any; op?: string | null; refEntity?: string; refId?: number }): number;
     outbox(where?: Record<string, any>): any[];
     outboxDue(now: number, leaseMs: number): any[];
     outboxNextDue(now: number): number | null;

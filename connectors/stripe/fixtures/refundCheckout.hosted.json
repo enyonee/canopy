@@ -1,0 +1,37 @@
+{
+  "op": "refundCheckout",
+  "case": "hosted",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/refunds/create",
+  "idemKey": "idem_fixture_1",
+  "input": {
+    "paymentIntent": "pi_checkout_1",
+    "amountMinor": 30
+  },
+  "request": {
+    "method": "POST",
+    "url": "https://api.stripe.com/v1/refunds",
+    "headers": {
+      "authorization": "«redacted»",
+      "stripe-version": "2024-06-20",
+      "idempotency-key": "idem_fixture_1",
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "payment_intent=pi_checkout_1&amount=30"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "re_checkout_1",
+      "status": "succeeded",
+      "amount": 30,
+      "currency": "usd",
+      "payment_intent": "pi_checkout_1"
+    }
+  }
+}

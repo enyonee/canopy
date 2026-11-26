@@ -6,11 +6,11 @@ import { idemKeyOf, breakerStep, CLOSED } from '../connectors/backoff.mjs';
 
 // "op" is the operation of a connector descriptor (connector.call); a row queued without one is a
 // legacy row, delivered by its transport's default operation.
-export function enqueue({ kind, connector, target, payload, op = null }) {
+export function enqueue({ kind, connector, target, payload, op = null, refEntity = null, refId = null }) {
   const { quote: q, ph } = this.drv.dialect;
   const at = new Date().toISOString();
-  const id = this.drv.run(this.drv.dialect.insert('_outbox', ['kind', 'connector', 'target', 'payload', 'op', 'status', 'attempts', 'at', 'updatedAt']),
-    [kind, connector, target, JSON.stringify(payload ?? null), op, 'queued', 0, at, at]).lastId;
+  const id = this.drv.run(this.drv.dialect.insert('_outbox', ['kind', 'connector', 'target', 'payload', 'op', 'status', 'attempts', 'at', 'updatedAt', 'refEntity', 'refId']),
+    [kind, connector, target, JSON.stringify(payload ?? null), op, 'queued', 0, at, at, refEntity, refId]).lastId;
   // The idempotency key is fixed here, once, and sent again on every retry and after a lease takeover.
   this.drv.run(`UPDATE ${q('_outbox')} SET ${q('idemKey')}=${ph(1)} WHERE id=${ph(2)}`, [idemKeyOf(this.graph.app, connector, id, at), id]);
   return id;

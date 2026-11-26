@@ -69,7 +69,7 @@ export function migrateIndexes(entity) {
 // existed is upgraded in place, one column at a time. "nextAttemptAt" (epoch ms) holds a queued row back until a retry is
 // due, "idemKey" is the idempotency key fixed at enqueue. `_breaker` is the circuit breaker of each connector and mode.
 const OUTBOX_LATER = [['claimedAt', 'INTEGER'], ['op', 'TEXT'], ['response', 'TEXT'], ['result', 'TEXT'], ['drift', 'INTEGER'],
-  ['nextAttemptAt', 'INTEGER'], ['idemKey', 'TEXT']];
+  ['nextAttemptAt', 'INTEGER'], ['idemKey', 'TEXT'], ['refEntity', 'TEXT'], ['refId', 'INTEGER']];
 export function migrateOutbox() {
   this.drv.createTable('_outbox', [['kind', 'TEXT'], ['connector', 'TEXT'], ['target', 'TEXT'], ['payload', 'TEXT'],
     ['status', 'TEXT'], ['code', 'INTEGER'], ['error', 'TEXT'], ['attempts', 'INTEGER DEFAULT 0'], ['at', 'TEXT'],

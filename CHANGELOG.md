@@ -5,6 +5,12 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Hosted payments.** Stripe Checkout, Bank of Georgia Payment Manager and TBC Checkout
+  descriptors create payment sessions, retrieve status and request refunds. A graph can
+  collect a projected result for the row that queued it with `connector.capture`.
+  Bank tokens are resolved at delivery, and TBC writes with an unknown outcome are
+  not replayed. See [docs/PAYMENTS.md](docs/PAYMENTS.md).
+
 - **Fixes (FILES): stored files.** A form could point a `file`/`image` field at another row's file: a text value with its
   stored name (an urlencoded body or a text part of a multipart one) was written as is; now a field takes only the file
   that request uploaded. `?inline=1` served a `.svg` upload as `image/svg+xml`, a page of this site that runs script;

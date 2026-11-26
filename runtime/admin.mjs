@@ -58,6 +58,7 @@ async function simulate(ctx, name, event, file, port) {
   const { graph, registry, secrets, fetchImpl, clock, log } = ctx;
   const c = needs(graph, registry, secrets, name).c;
   const inbound = registry.descriptors[c.kind]?.inbound ?? refuse(`"${name}" (${c.kind}) receives no webhooks: its descriptor has no "inbound"`);
+  if (inbound.signature.scheme === 'rsa-sha256') refuse('RSA callbacks cannot be simulated with the stored public key');
   if (!event || !Object.hasOwn(inbound.events, event)) refuse(`"${c.kind}" sends ${event ? `no event "${event}"` : 'events'}: ${Object.keys(inbound.events).join(', ')}`);
   if (!file) refuse('--connectors simulate needs --data FILE (the JSON payload of the event)');
   const raw = Buffer.from(fs.readFileSync(file));

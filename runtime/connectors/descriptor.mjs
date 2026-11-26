@@ -8,13 +8,14 @@ import { refs, pathSteps, originProblem } from './template.mjs';
 import { checkPolicy } from './backoff.mjs';
 import { checkSandbox } from './sandbox.mjs';
 import { checkInbound } from './inbound.mjs';
+import { checkToken } from './token.mjs';
 
 // The longest an operation may wait: half the outbox lease (runtime/outbox.mjs LEASE_MS),
 // so a slow provider cannot outlive the claim on its row and be delivered twice.
 export const MAX_TIMEOUT_MS = 30000;
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'modes', 'sandbox', 'inbound', 'operations'];
-const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result', 'failure'];
+const TOP = ['descriptor', 'name', 'title', 'version', 'base', 'config', 'timeoutMs', 'retry', 'breaker', 'idempotency', 'legacy', 'modes', 'sandbox', 'inbound', 'operations', 'token'];
+const OP = ['summary', 'idempotent', 'input', 'request', 'output', 'result', 'failure', 'resultOnly'];
 const REQUEST = ['method', 'url', 'headers', 'body', 'encoding'];
 const ENCODINGS = ['json', 'form'];
 const FAILURE = ['path', 'equals', 'error', 'code', 'codes'];
@@ -101,6 +102,9 @@ function checkOperation(op, path, top) {
   if (typeof op.idempotent !== 'boolean') out.push([`${path}/idempotent`, 'every operation says whether it is idempotent, true or false', 'there is no default: a retry after a timeout must be a decision']);
   out.push(...checkInput(op, `${path}/input`));
   out.push(...checkRequest(op.request, `${path}/request`, { input: op.input?.properties, config: top.config?.properties, base: top.base }));
+  if (top.token && (!op.request?.url?.startsWith?.('{base}/') || Object.keys(op.request?.headers || {}).some((k) => k.toLowerCase() === 'authorization')))
+    out.push([`${path}/request`, 'token operations use {base}/ and let the delivery set Authorization']);
+  if (op.resultOnly !== undefined && !(op.resultOnly === true && op.output && op.result)) out.push([`${path}/resultOnly`, 'resultOnly: true needs an output schema and result projection']);
   if (op.output !== undefined) out.push(...checkSchema(op.output, `${path}/output`));
   if (op.failure !== undefined) out.push(...checkFailure(op.failure, `${path}/failure`));
   return out.concat(checkResult(op, `${path}/result`));
@@ -109,7 +113,8 @@ function checkOperation(op, path, top) {
 // The header that carries the idempotency key (fixed at enqueue, the same on every retry).
 function checkIdempotency(v) {
   if (!isObject(v)) return [['/idempotency', '"idempotency" is an object', '{"header": "Idempotency-Key"}']];
-  const out = unknownKeys(v, ['header'], '/idempotency');
+  const out = unknownKeys(v, ['header', 'format'], '/idempotency');
+  if (v.format !== undefined && v.format !== 'uuid') out.push(['/idempotency/format', 'the optional format is uuid']);
   if (typeof v.header !== 'string' || !/^[A-Za-z0-9-]+$/.test(v.header)) out.push(['/idempotency/header', '"header" names the request header that carries the key', '"header": "Idempotency-Key"']);
   return out;
 }
@@ -129,6 +134,7 @@ function checkTop(d) {
     out.push(['/timeoutMs', `"timeoutMs" is a whole number of milliseconds, 1 to ${MAX_TIMEOUT_MS}`, 'half the delivery lease, so a slow call cannot outlive its claim']);
   for (const k of ['retry', 'breaker']) if (d[k] !== undefined) out.push(...checkPolicy(k, d[k], `/${k}`));
   if (d.idempotency !== undefined) out.push(...checkIdempotency(d.idempotency));
+  if (d.token !== undefined) out.push(...checkToken(d.token, d.base));
   if (d.modes !== undefined) out.push(...checkModes(d.modes));
   if (d.base !== undefined) out.push(...(typeof d.base === 'string' ? checkRefs(d.base, '/base', { noSecret: true, noInput: true, config: d.config?.properties }) : [['/base', '"base" is a string template']]));
   if (d.config !== undefined) out.push(...checkSchema(d.config, '/config'), ...(d.config?.type === 'object' ? [] : [['/config/type', '"config" describes an object: "type" must be "object"']]));

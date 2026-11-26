@@ -103,7 +103,7 @@ export function originProblem(template) {
   return end < 0 || first < end ? '{input.*} and {key} may only appear after the first "/" following the host: data must never choose where the request goes' : null;
 }
 
-const STEP = /\.([A-Za-z_][\w-]*)|\[(\d+)\]/y;
+const STEP = /\.([A-Za-z_][\w-]*)|\[(\d+)\]|\[([A-Za-z_]\w*)=([\w-]+)\]/y;
 
 /** The path steps of `$.a.b[0]`, or throws. */
 export function pathSteps(path) {
@@ -114,12 +114,20 @@ export function pathSteps(path) {
     const at = STEP.lastIndex;
     const m = STEP.exec(path);
     if (!m) throw new Error(`"${path}" is not a path: expected .name or [index] at ${at}`);
-    steps.push(m[1] ?? Number(m[2]));
+    steps.push(m[3] ? { field: m[3], value: m[4] } : m[1] ?? Number(m[2]));
   }
   return steps;
 }
 
 /** What `$.a.b[0]` names inside `value`; undefined when it is not there. */
 export function pick(path, value) {
-  return pathSteps(path).reduce((v, k) => (v !== null && typeof v === 'object' ? v[k] : undefined), value);
+  return pathSteps(path).reduce(stepValue, value);
+}
+
+function stepValue(value, step) {
+  if (value === null || typeof value !== 'object') return undefined;
+  if (typeof step !== 'object') return Object.hasOwn(value, step) ? value[step] : undefined;
+  if (!Array.isArray(value)) return undefined;
+  const matches = value.filter((item) => item && Object.hasOwn(item, step.field) && item[step.field] === step.value);
+  return matches.length === 1 ? matches[0] : undefined;
 }

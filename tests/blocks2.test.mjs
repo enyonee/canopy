@@ -121,6 +121,7 @@ test('the catalog search finds the new blocks by name and by what they do', () =
   assert.ok(search('outbox').some((l) => l.startsWith('http.send(')));
   assert.ok(search('letter').some((l) => l.startsWith('mail.send(')));
   assert.ok(search('each').some((l) => l.includes('[db.read]')));
-  assert.equal(Object.keys(CATALOG).length, 15);
+  assert.ok(search('capture').some((l) => l.startsWith('connector.capture(')));
+  assert.equal(Object.keys(CATALOG).length, 16);
   for (const b of Object.values(CATALOG)) { assert.ok(Array.isArray(b.effects) && b.effects.length); assert.ok(Array.isArray(b.requires)); assert.ok(b.summary); }
 });

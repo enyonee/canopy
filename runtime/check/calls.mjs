@@ -49,3 +49,15 @@ export function checkCall(step, h) {
   checkInput(step.input, op.input, `${path}/input`, h);
   if (step.ref !== undefined && !(typeof step.ref === 'string' && /^@[a-z]+$/.test(step.ref))) err(`${path}/ref`, '"ref" names the row the call is about: "@row", "@found"…');
 }
+
+export function checkCapture(step, { err, graph, registry, path, entity, fields }) {
+  const d = registry.descriptors[graph.connectors?.[step.connector]?.kind];
+  const op = d?.operations[step.op];
+  if (!entity || fields[entity]?.[step.deliveryField]?.kind !== 'int') err(`${path}/deliveryField`, 'capture needs an integer delivery field on the current row');
+  if (!op?.resultOnly) return err(`${path}/op`, 'capture needs a connector operation with resultOnly: true');
+  if (!step.set || typeof step.set !== 'object' || Array.isArray(step.set) || !Object.keys(step.set).length) return err(`${path}/set`, 'capture maps row fields to projected result keys');
+  for (const [f, k] of Object.entries(step.set)) {
+    if (typeof k !== 'string' || !Object.hasOwn(op.result, k)) err(`${path}/set/${f}`, 'unknown projected result key');
+    if (fields[entity]?.[f]?.type.upload) err(`${path}/set/${f}`, 'cannot capture a file field');
+  }
+}

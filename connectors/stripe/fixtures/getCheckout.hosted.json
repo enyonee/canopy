@@ -1,0 +1,37 @@
+{
+  "op": "getCheckout",
+  "case": "hosted",
+  "recordedAt": null,
+  "source": "docs",
+  "providerVersion": "2024-06-20",
+  "note": "written by hand from https://docs.stripe.com/api/checkout/sessions/retrieve",
+  "idemKey": "idem_fixture_1",
+  "input": {
+    "id": "cs_fixture_1"
+  },
+  "request": {
+    "method": "GET",
+    "url": "https://api.stripe.com/v1/checkout/sessions/cs_fixture_1",
+    "headers": {
+      "authorization": "«redacted»",
+      "stripe-version": "2024-06-20",
+      "idempotency-key": "idem_fixture_1"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "cs_fixture_1",
+      "status": "open",
+      "client_reference_id": "a-1",
+      "payment_status": "unpaid",
+      "amount_total": 100,
+      "currency": "usd",
+      "livemode": false,
+      "payment_intent": null
+    }
+  }
+}

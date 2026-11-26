@@ -9,7 +9,7 @@
 // exactly what verification reads.
 import crypto from 'node:crypto';
 
-const SCHEMES = ['stripe', 'slack', 'hmac', 'basic'];
+const SCHEMES = ['stripe', 'slack', 'hmac', 'basic', 'rsa-sha256'];
 const ALGOS = ['sha256', 'sha1'];
 const ENCODINGS = ['hex', 'base64'];
 const SIGNED = ['raw', 'ts.raw'];
@@ -19,6 +19,7 @@ const SHAPES = {
   stripe: ['scheme', 'header'],
   slack: ['scheme'],
   basic: ['scheme'],
+  'rsa-sha256': ['scheme', 'header'],
   hmac: ['scheme', 'header', 'algo', 'encoding', 'prefix', 'signed', 'timestampHeader'],
 };
 
@@ -29,6 +30,7 @@ export function checkRecipe(r, path) {
   const out = Object.keys(r).filter((k) => !SHAPES[r.scheme].includes(k)).map((k) => [`${path}/${k}`, `unknown key "${k}" for the ${r.scheme} scheme`, `allowed: ${SHAPES[r.scheme].join(', ')}`]);
   const bad = (k, message, hint) => out.push([`${path}/${k}`, message, hint]);
   if (r.header !== undefined && (typeof r.header !== 'string' || !HEADER.test(r.header))) bad('header', '"header" is an HTTP header name');
+  if (r.scheme === 'rsa-sha256' && r.header === undefined) bad('header', 'an RSA signature names its header');
   if (r.scheme !== 'hmac') return out;
   if (r.header === undefined) bad('header', 'an hmac signature names the "header" that carries it');
   if (!ALGOS.includes(r.algo)) bad('algo', `"algo" is one of: ${ALGOS.join(', ')}`);
@@ -94,6 +96,21 @@ function verifyBasic(headers, secrets) {
   return ok ? { ok: true } : { ok: false, reason: 'signature_mismatch' };
 }
 
+function verifyRsa(header, headers, raw, keys) {
+  const sig = headers[header.toLowerCase()];
+  if (typeof sig !== 'string') return { ok: false, reason: 'signature_missing' };
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(sig)) return { ok: false, reason: 'signature_malformed' };
+  if (!keys.length) return { ok: false, reason: 'secret_not_set' };
+  const bytes = Buffer.from(sig, 'base64');
+  const ok = keys.some((key) => {
+    try {
+      const pub = crypto.createPublicKey(key);
+      return pub.asymmetricKeyType === 'rsa' && crypto.verify('RSA-SHA256', raw, pub, bytes);
+    } catch (e) { return false; } // allow-swallow: an invalid key never authenticates a callback
+  });
+  return ok ? { ok: true } : { ok: false, reason: 'signature_mismatch' };
+}
+
 /**
  * Is this request signed by one of `secrets`? `headers` are Node's (lower case), `raw` the body bytes, `now` epoch
  * milliseconds. A scheme with a timestamp also has to be inside `toleranceS` seconds of it, and only after the
@@ -102,6 +119,7 @@ function verifyBasic(headers, secrets) {
  * @param {{ headers: Record<string, any>, raw: Buffer, secrets: string[], now: number, toleranceS?: number }} req
  */
 export function verifySignature(recipe, { headers, raw, secrets, now, toleranceS = 300 }) {
+  if (recipe.scheme === 'rsa-sha256') return verifyRsa(recipe.header, headers, raw, secrets);
   if (recipe.scheme === 'basic') return secrets.length ? verifyBasic(headers, secrets) : { ok: false, reason: 'secret_not_set' };
   const p = plan(recipe);
   const got = p.read(headers);
@@ -120,6 +138,7 @@ export function verifySignature(recipe, { headers, raw, secrets, now, toleranceS
 
 /** The headers a provider would send for `raw`, signed with `secret` at `now` (epoch ms). */
 export function signHeaders(recipe, { raw, secret, now }) {
+  if (recipe.scheme === 'rsa-sha256') return { [recipe.header.toLowerCase()]: crypto.sign('RSA-SHA256', raw, secret).toString('base64') };
   if (recipe.scheme === 'basic') return { authorization: basicOf(secret) };
   const p = plan(recipe);
   const t = String(Math.floor(now / 1000));

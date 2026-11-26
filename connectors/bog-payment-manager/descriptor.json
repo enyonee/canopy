@@ -1,0 +1,385 @@
+{
+  "descriptor": 1,
+  "name": "bog-payment-manager",
+  "title": "Bank of Georgia Payment Manager",
+  "base": "https://api.bog.ge",
+  "timeoutMs": 8000,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "token": {
+    "url": "https://oauth2.bog.ge/auth/realms/bog/protocol/openid-connect/token",
+    "scheme": "basic",
+    "clientId": "clientId",
+    "clientSecret": "clientSecret"
+  },
+  "idempotency": {
+    "header": "Idempotency-Key",
+    "format": "uuid"
+  },
+  "operations": {
+    "createCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "amount",
+          "attemptId",
+          "productId",
+          "successUrl",
+          "cancelUrl",
+          "callbackUrl"
+        ],
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 999999.99
+          },
+          "attemptId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "productId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "successUrl": {
+            "type": "string",
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^\\s]*)?$"
+          },
+          "cancelUrl": {
+            "type": "string",
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^\\s]*)?$"
+          },
+          "callbackUrl": {
+            "type": "string",
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^\\s]*)?$"
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/payments/v1/ecommerce/orders",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "callback_url": {
+            "$": "input.callbackUrl"
+          },
+          "external_order_id": {
+            "$": "input.attemptId"
+          },
+          "capture_method": "automatic",
+          "purchase_units": {
+            "currency": "GEL",
+            "total_amount": {
+              "$": "input.amount"
+            },
+            "basket": [
+              {
+                "product_id": {
+                  "$": "input.productId"
+                },
+                "quantity": 1,
+                "unit_price": {
+                  "$": "input.amount"
+                }
+              }
+            ]
+          },
+          "redirect_urls": {
+            "success": {
+              "$": "input.successUrl"
+            },
+            "fail": {
+              "$": "input.cancelUrl"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "id",
+          "_links"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9-]{36}$"
+          },
+          "_links": {
+            "type": "object",
+            "required": [
+              "redirect"
+            ],
+            "properties": {
+              "redirect": {
+                "type": "object",
+                "required": [
+                  "href"
+                ],
+                "properties": {
+                  "href": {
+                    "type": "string",
+                    "pattern": "^https://payment\\.bog\\.ge/"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.id",
+        "checkoutUrl": "$._links.redirect.href"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9-]{36}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/payments/v1/receipt/{input.id}",
+        "headers": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "order_id",
+          "external_order_id",
+          "order_status",
+          "purchase_units"
+        ],
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9-]{36}$"
+          },
+          "external_order_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "order_status": {
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "purchase_units": {
+            "type": "object",
+            "required": [
+              "transfer_amount",
+              "currency_code"
+            ],
+            "properties": {
+              "transfer_amount": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d{1,2})?$"
+              },
+              "refund_amount": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d{1,2})?$"
+              },
+              "currency_code": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.order_id",
+        "attemptId": "$.external_order_id",
+        "status": "$.order_status.key",
+        "amount": "$.purchase_units.transfer_amount",
+        "currency": "$.purchase_units.currency_code"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9-]{36}$"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 999999.99
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/payments/v1/payment/refund/{input.id}",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "amount": {
+            "$": "input.amount"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "key",
+          "action_id"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "result": {
+        "id": "$.action_id",
+        "status": "$.key"
+      },
+      "resultOnly": true
+    }
+  },
+  "inbound": {
+    "signature": {
+      "scheme": "rsa-sha256",
+      "header": "Callback-Signature"
+    },
+    "secret": "webhookPublicKey",
+    "type": "$.event",
+    "eventId": [
+      "$.body.order_id",
+      "$.zoned_request_time"
+    ],
+    "events": {
+      "order_payment": {
+        "schema": {
+          "type": "object",
+          "required": [
+            "event",
+            "zoned_request_time",
+            "body"
+          ],
+          "properties": {
+            "event": {
+              "type": "string",
+              "minLength": 1
+            },
+            "zoned_request_time": {
+              "type": "string",
+              "minLength": 1
+            },
+            "body": {
+              "type": "object",
+              "required": [
+                "order_id",
+                "external_order_id"
+              ],
+              "properties": {
+                "order_id": {
+                  "type": "string",
+                  "pattern": "^[a-fA-F0-9-]{36}$"
+                },
+                "external_order_id": {}
+              }
+            }
+          }
+        },
+        "require": [
+          "attemptId"
+        ],
+        "map": {
+          "id": "$.body.order_id",
+          "attemptId": "$.body.external_order_id"
+        }
+      }
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "amount": 1,
+        "attemptId": "sandbox-order",
+        "productId": "demo",
+        "successUrl": "https://example.test/return",
+        "cancelUrl": "https://example.test/return",
+        "callbackUrl": "https://example.test/hook/pay"
+      }
+    },
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "_links": {
+              "redirect": {
+                "href": "https://payment.bog.ge/?order_id=00000000-0000-4000-8000-000000000001"
+              }
+            }
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "order_id": {
+              "$": "input.id"
+            },
+            "external_order_id": "sandbox-order",
+            "order_status": {
+              "key": "processing"
+            },
+            "purchase_units": {
+              "transfer_amount": "1.00",
+              "refund_amount": "0.00",
+              "currency_code": "GEL"
+            }
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {
+            "key": "request_received",
+            "action_id": "refund_{key}"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "descriptor": 1,
+  "name": "tbc-checkout",
+  "title": "TBC Checkout",
+  "base": "https://api.tbcbank.ge",
+  "timeoutMs": 8000,
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "token": {
+    "url": "https://api.tbcbank.ge/v1/tpay/access-token",
+    "scheme": "form",
+    "clientId": "clientId",
+    "clientSecret": "clientSecret",
+    "apiKey": "apiKey"
+  },
+  "operations": {
+    "createCheckout": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "required": [
+          "amount",
+          "attemptId",
+          "returnUrl"
+        ],
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 999999.99
+          },
+          "attemptId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "returnUrl": {
+            "type": "string",
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^\\s]*)?$"
+          },
+          "callbackUrl": {
+            "type": "string",
+            "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^\\s]*)?$"
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v1/tpay/payments",
+        "headers": {
+          "content-type": "application/json",
+          "apikey": "{secret.apiKey}"
+        },
+        "body": {
+          "amount": {
+            "currency": "GEL",
+            "total": {
+              "$": "input.amount"
+            }
+          },
+          "returnurl": {
+            "$": "input.returnUrl"
+          },
+          "callbackUrl": {
+            "$": "input.callbackUrl"
+          },
+          "merchantPaymentId": {
+            "$": "input.attemptId"
+          },
+          "preAuth": false,
+          "saveCard": false
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "payId",
+          "status",
+          "links"
+        ],
+        "properties": {
+          "payId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{1,100}$"
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "rel",
+                "uri"
+              ],
+              "properties": {
+                "rel": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uri": {
+                  "type": "string",
+                  "pattern": "^https://(?:api|tpay)\\.tbcbank\\.ge/"
+                }
+              }
+            }
+          }
+        }
+      },
+      "result": {
+        "id": "$.payId",
+        "status": "$.status",
+        "checkoutUrl": "$.links[rel=approval_url].uri"
+      },
+      "resultOnly": true
+    },
+    "getCheckout": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{1,100}$"
+          }
+        }
+      },
+      "request": {
+        "method": "GET",
+        "url": "{base}/v1/tpay/payments/{input.id}",
+        "headers": {
+          "apikey": "{secret.apiKey}"
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "payId",
+          "status",
+          "amount",
+          "currency"
+        ],
+        "properties": {
+          "payId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{1,100}$"
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
+        }
+      },
+      "result": {
+        "id": "$.payId",
+        "status": "$.status",
+        "amount": "$.amount",
+        "currency": "$.currency"
+      },
+      "resultOnly": true
+    },
+    "refundCheckout": {
+      "idempotent": false,
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{1,100}$"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 999999.99
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/v1/tpay/payments/{input.id}/cancel",
+        "headers": {
+          "content-type": "application/json",
+          "apikey": "{secret.apiKey}"
+        },
+        "body": {
+          "amount": {
+            "$": "input.amount"
+          }
+        }
+      }
+    }
+  },
+  "sandbox": {
+    "test": {
+      "op": "createCheckout",
+      "input": {
+        "amount": 1,
+        "attemptId": "sandbox-order",
+        "returnUrl": "https://example.test/return"
+      }
+    },
+    "operations": {
+      "createCheckout": [
+        {
+          "body": {
+            "payId": "tpay-sandbox-{key}",
+            "status": "Created",
+            "links": [
+              {
+                "rel": "approval_url",
+                "uri": "https://tpay.tbcbank.ge/checkout/choose-payment-method/tpay-sandbox-{key}"
+              }
+            ]
+          }
+        }
+      ],
+      "getCheckout": [
+        {
+          "body": {
+            "payId": {
+              "$": "input.id"
+            },
+            "status": "Created",
+            "amount": 1,
+            "currency": "GEL"
+          }
+        }
+      ],
+      "refundCheckout": [
+        {
+          "body": {}
+        }
+      ]
+    }
+  }
+}

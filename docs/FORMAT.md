@@ -192,6 +192,7 @@ Every step is `{ "block": "<name>", …parameters }`. Values may be literals, `"
 | `http.send` | `connector`, `body`, optional `path` | queues a JSON request to an http connector; delivered after commit |
 | `connector.send` | `connector`, `body` | queues to any connector; its kind picks the transport (plugin transports) |
 | `connector.call` | `connector`, `op`, `input`, optional `ref` | calls operation `op` of a connector whose kind has a descriptor; `input` (an object; `@row.f` and `= expr` allowed) is checked against the operation's schema when the step runs, so a bad call refuses the action and queues nothing; delivered after commit |
+| `connector.capture` | `connector`, `op`, `deliveryField`, `set` | copies a completed `resultOnly` projection into the current row. The earlier call must have `ref: "@row"`. Store `@delivery` in the integer field named by `deliveryField`; `set` maps destination fields to projected names. Use in a later action, not in the transaction that queues the call. |
 | `mail.send` | `connector`, `to`, `subject`, optional `text` | queues a letter; `{row.field}` placeholders in subject/text |
 
 Steps run inside one transaction; a block that refuses (not enough stock, no such row) rolls
@@ -363,6 +364,24 @@ the slot is the name. A secret the store lacks fails the delivery for good (not 
 breaker is not touched). See "Secrets and modes" below.
 
 ### Connector descriptors
+
+Hosted payments with Stripe, Bank of Georgia and TBC are documented in
+[PAYMENTS.md](PAYMENTS.md). For sensitive replies, `resultOnly: true` requires
+both an output schema and a result projection. The engine does not store the
+raw response, and an invalid or incomplete projection fails the delivery.
+Result paths can select a unique array member by a string property, for
+example `$.links[rel=approval_url].uri`.
+
+A descriptor can declare `token: {url, scheme, clientId, clientSecret, apiKey?}`.
+The URL and descriptor base must be fixed HTTPS addresses. Credential values
+come from named secret slots; `scheme` is `basic` for HTTP Basic client
+credentials or `form` for form fields. The engine exchanges credentials at
+delivery, sends the bearer token only to the descriptor's origin, and follows
+no redirects. A failed exchange sends no operation. `idempotency.format:
+"uuid"` formats the stable outbox key for providers requiring UUID syntax.
+For RSA callbacks, use `signature: {scheme: "rsa-sha256", header: "..."}`
+with a trusted PEM public key in the inbound secret slot. The signing private
+key is never installed on the merchant app.
 
 A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed like a plugin
 (`"plugins": ["../../connectors/stripe/descriptor.json"]`); its `name` becomes the connector `kind`.

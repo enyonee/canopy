@@ -21,7 +21,7 @@ import { loadFixtures, loadDescriptor, connectorNames, replayFetch, canonicalBod
 
 const NAMES = ['postmark', 'slack', 'stripe'];
 const T0 = 1_700_000_000_000;
-const KEY = 'sandbox-key-for-the-test';
+const KEY = 'sandbox_key_for_the_test';
 const DESC = Object.fromEntries(NAMES.map((n) => [n, loadDescriptor(n)]));
 const FIX = Object.fromEntries(NAMES.map((n) => [n, loadFixtures(n)]));
 const opFixtures = (n) => FIX[n].filter((f) => f.op);
@@ -31,24 +31,25 @@ const secretOf = (slot) => `${TEST_SECRET}${slot}`;
 const CONFIG = { postmark: { from: 'shop@example.test' }, slack: {}, stripe: {} };
 const rowOf = (op, payload) => ({ id: 1, kind: 'x', connector: 'c', op, payload });
 
-test('the descriptors are the connectors/ directory: three, each valid, sandbox first, each operation says whether it is idempotent', () => {
-  assert.deepEqual(connectorNames(), NAMES);
-  for (const n of NAMES) {
-    const d = DESC[n];
+test('the connector catalog is valid, with sandbox first and explicit idempotency policies', () => {
+  const names = connectorNames();
+  assert.deepEqual(names, ['bog-payment-manager', ...NAMES, 'tbc-checkout']);
+  for (const n of names) {
+    const d = loadDescriptor(n);
     assert.deepEqual(checkDescriptor(d), [], n);
     assert.deepEqual(d.modes, ['sandbox', 'live'], `${n}: sandbox is the default mode`);
     assert.equal(d.base.startsWith('https://'), true, `${n}: a live base is https`);
     registerDescriptor(createRegistry(), d, `${n}/descriptor.json`);
   }
-  assert.deepEqual(Object.keys(DESC.stripe.operations), ['createPaymentIntent', 'retrievePaymentIntent', 'confirmPaymentIntent', 'createRefund']);
-  assert.deepEqual(Object.values(DESC.stripe.operations).map((o) => o.idempotent), [true, true, true, true], 'Stripe dedups on the Idempotency-Key header');
+  assert.deepEqual(Object.keys(DESC.stripe.operations), ['createCheckout', 'getCheckout', 'refundCheckout', 'createPaymentIntent', 'retrievePaymentIntent', 'confirmPaymentIntent', 'createRefund']);
+  assert.ok(Object.values(DESC.stripe.operations).every((o) => o.idempotent), 'Stripe dedups on the Idempotency-Key header');
   assert.deepEqual(DESC.stripe.idempotency, { header: 'Idempotency-Key' });
   assert.equal(DESC.postmark.operations.sendEmail.idempotent, false, 'a letter is not sent twice on a guess');
   assert.equal(DESC.slack.operations.postMessage.idempotent, false, 'a message is not posted twice on a guess');
   assert.deepEqual(DESC.postmark.inbound.signature, { scheme: 'basic' });
   assert.deepEqual(DESC.slack.inbound.signature, { scheme: 'slack' });
   assert.deepEqual(DESC.stripe.inbound.signature, { scheme: 'stripe' });
-  assert.deepEqual(Object.keys(DESC.stripe.inbound.events), ['payment_intent.succeeded', 'payment_intent.payment_failed', 'charge.refunded']);
+  assert.deepEqual(Object.keys(DESC.stripe.inbound.events), ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'payment_intent.succeeded', 'payment_intent.payment_failed', 'charge.refunded']);
   assert.deepEqual(Object.keys(DESC.postmark.inbound.events), ['Bounce', 'SubscriptionChange']);
 });
 
@@ -56,6 +57,9 @@ test('the descriptors are the connectors/ directory: three, each valid, sandbox 
 
 const SANDBOX_CASES = {
   stripe: {
+    createCheckout: [[{"amountMinor":100,"currency":"usd","attemptId":"a-1","productName":"Coffee","successUrl":"https://shop.example/orders","cancelUrl":"https://shop.example/orders"}, 'sent', 200]],
+    getCheckout: [[{"id":"cs_fixture_1"}, 'sent', 200]],
+    refundCheckout: [[{"paymentIntent":"pi_checkout_1","amountMinor":30}, 'sent', 200]],
     createPaymentIntent: [
       [{ amount: 1000, currency: 'usd' }, 'sent', 200, 'requires_payment_method'],
       [{ amount: 1000, currency: 'usd', paymentMethod: 'pm_card_visa' }, 'sent', 200, 'requires_confirmation'],
@@ -167,7 +171,7 @@ test('contract (c): the request built for each fixture\'s input equals the recor
       count++;
     }
   }
-  assert.equal(count, 12);
+  assert.equal(count, 15);
   const stripe = opFixtures('stripe');
   assert.ok(stripe.every((f) => f.request.headers['idempotency-key'] === 'idem_fixture_1'), 'Stripe\'s native idempotency header carries the row\'s key');
   assert.ok(stripe.filter((f) => f.request.method === 'POST').every((f) => f.request.headers['content-type'] === 'application/x-www-form-urlencoded'));
@@ -239,7 +243,7 @@ test('the fixtures are marked as written from the docs, and none holds anything 
       assert.deepEqual(suspicious(text), [], `${n}/${f.file}`);
     }
   }
-  assert.equal(files, 20);
+  assert.equal(files, 27);
   assert.deepEqual(suspicious('{"authorization": "Bearer abc"}'), ['a bearer token']);
   // Assembled at run time: a literal key-shaped string would trip the host's push protection.
   assert.equal(suspicious(['sk', 'test', 'Fake0Key0For0The0Scanner0'].join('_'))[0], 'a Stripe secret key (sk_)');
@@ -351,12 +355,12 @@ test('route: every provider fixture, signed, is accepted once and runs its event
       assert.equal(bad.status, 401, `${label}: a body that is not the signed one`);
     }
   }
-  assert.equal(accepted, 7);
-  assert.equal(w.logs().length, 7, 'one Log row per event, not per request');
-  assert.equal(w.ledger().length, 7);
+  assert.equal(accepted, 11);
+  assert.equal(w.logs().length, accepted, 'one Log row per event, not per request');
+  assert.equal(w.ledger().length, accepted);
 });
 
-test('route: Stripe — only its three events, the signature with a window, and an event for no graph step is ignored', async (t) => {
+test('route: Stripe signature window and ignoring events outside the graph', async (t) => {
   const w = await world(t);
   const paid = inboundFixtures('stripe').find((f) => f.case === 'paid').request.body;
   assert.equal((await w.hook('stripe', paid, { sign: false })).status, 401);
