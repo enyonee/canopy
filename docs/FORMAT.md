@@ -122,7 +122,9 @@ Keys are `"Entity.list"`, `"Entity.form"`, `"Entity.detail"`.
   covers every place the field could otherwise leak: this entity's own detail and list pages
   (HTML), its JSON answers, and its CSV export. A related child table, a saved list, a page
   section and search results all read the same field the same way, so the same redaction applies
-  there too — `private` is declared once, on `.detail`, and enforced wherever the field is read.
+  there too. Edit forms omit private fields the viewer cannot read, edits enforce the same
+  check, and file downloads check field access in addition to row access. A non-admin
+  cannot reassign a private field's controlling reference to grant access.
 - `related`: `[ { "entity": "OrderItem", "via": "order", "title": "Items", "columns": [...], "form": ["qty"] | true | false, "fill": {…}, "submit": "Add", "confirm": "…", "rowActions": ["edit", "delete"] } ]` — a child table with an inline add form; `fill` resolves `@row.*` against the **parent** row (the one the detail page is showing), unlike `Entity.form`'s top-level `fill`, which runs before any row of the new entity exists and has no `@row`; `form` lists the child fields the inline form asks for (`true` or absent: every input), and `false` means no add form and no `POST /Entity/:id/add/<Child>` either (404)
 
 ## Lists, dashboards, pages
@@ -462,20 +464,23 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
   holds `equals`, the delivery is `failed` with the status `codes[<the error text>]` (else `code`, else 400; 400 to
   599) and `error: "rejected: <text>"` (cut to 100 characters, cleaned), so retries, `Retry-After` and the breaker treat
   it as that HTTP status. An answer that is not JSON counts as a 502 failure. Read in sandbox mode too.
-- **Shipped descriptors** (`connectors/<name>/descriptor.json`, sandbox by default): `stripe` (`createPaymentIntent`,
-  `retrievePaymentIntent`, `confirmPaymentIntent`, `createRefund`; form bodies; the `Idempotency-Key` header; slots
+- **Example descriptors** (`connectors/<name>/descriptor.json`, sandbox by default): `stripe` (`createPaymentIntent`,
+  `retrievePaymentIntent`, `confirmPaymentIntent`, Checkout Sessions, refunds; the `Idempotency-Key` header; slots
   `apiKey`, `webhookSecret`; events `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`),
   `postmark` (`sendEmail`; config `from`, `stream`; slots `serverToken`, `webhookAuth`; events `Bounce`,
   `SubscriptionChange`) and `slack` (`postMessage` with the `failure` rule above; slots `botToken`, `signingSecret`;
   events `app_mention`, `reaction_added`, and the `url_verification` challenge). Their fixtures are written from the
   providers' documentation (`"source": "docs"`), not recorded. `apps/checkout` uses all three.
+  Live Stripe and Adyen calls use the official SDKs. See the [catalog](BUSINESS-CONNECTORS.md)
+  for other providers and the [library adapters](DEPENDENCIES.md) for integration details.
 - The outbox row of a call has `op`, the completed input as `payload`, and after delivery `response` (the
   answer text, up to 16 KB), `result` and `drift`. An answer that does not fit `output` sets `drift` to 1 and
   writes `contract_drift` to the trace; the row stays `sent` because the effect happened.
-- `http` is the built-in descriptor of today's connector: `"url"` (required), `"method"` (POST unless
+- `http` is a live-only built-in descriptor: `"url"` (required), `"method"` (POST unless
   set), `"headers"` merged over the JSON content type, `"timeout"` (3000 ms unless set). Its one
   operation `send` takes `body`, so `connector.call { connector, op: "send", input: { body } }`
   is `http.send` without a `path` (data may not extend the url). Plugin code (`.mjs`) and descriptors (`.json`) coexist in one `plugins` list.
+- Use final endpoint URLs. Connector deliveries do not follow HTTP redirects.
 
 ### Importing a descriptor from OpenAPI
 
@@ -483,7 +488,7 @@ A connector kind beyond `http` and `mail` is a **descriptor**: JSON data, listed
 node runtime/run.mjs --import-openapi spec.json --name acme [--out connectors/acme/descriptor.json]
 ```
 
-An OpenAPI 3.0 or 3.1 document **in JSON** (YAML is not read: the runtime has no dependencies; convert it first) becomes a
+An OpenAPI 3.0 or 3.1 document **in JSON** (the importer accepts JSON only; convert YAML first) becomes a
 descriptor: `operationId` is the operation, parameters and the request body its `input` and request template (a JSON body, or
 `"encoding": "form"`), the first 2xx JSON answer its `output`, `servers[0].url` the `base`, an `apiKey` header, `http` `bearer`
 or `basic` scheme a header with a secret slot (`{secret.<scheme name>}`); `idempotent` is true for GET, PUT and DELETE and false
@@ -556,6 +561,8 @@ The mode of each connector is not in `app.json` (the same graph runs on a laptop
 means each kind's first mode. It is read afresh on every delivery, so a switch takes effect without a restart,
 and a malformed file stops the app at boot instead of guessing a mode. A mode the kind does not offer fails the
 delivery; nothing ever falls back to sandbox or to live silently. The breaker of a connector is kept per mode.
+Canopy's sandbox uses local fixtures. Using a provider's test credentials with Canopy's live mode
+still sends real requests to the provider's endpoint.
 
 ```bash
 node runtime/run.mjs app.json --connectors status               # each connector, its mode, its secrets: set / MISSING
@@ -646,7 +653,15 @@ With `web`:
 
 `/` → home · `/Entity` list (`?q=`, `?<filter field>=`, `?<field>_from=&<field>_to=`) · `/Entity/new` · `POST /Entity` · `/Entity/:id` detail · `/Entity/:id/edit` · `POST /Entity/:id` edit · `POST /Entity/:id/delete` · `POST /Entity/:id/action/<name>` · `POST /Entity/:id/go/<transition>` · `POST /Entity/:id/add/<Child>` (related form) · `/list/<id>` · `/dashboard/<id>` (`?from=&to=`) · `/page/<id>` · `/search?q=` · `POST /action/<name>` · `POST /schedule/<name>/run` · `POST /hook/<connector>` (a signed webhook, no session) · `/outbox`, `POST /outbox/:id/retry`, `POST /outbox/:id/sent` (mark an `unknown` delivery as sent) · `/settings`, `POST /settings/secret`, `POST /settings/secret/remove`, `POST /settings/test` (the connector settings screen, admin only) · `/file/Entity/:id/<field>` · `/widget/<name>.mjs`, `/widget/_api.mjs` · `/login`, `/register`, `POST /logout` · `/api/*` (the JSON routes for a frontend of the app's own, below).
 
-Every successful POST answers 303 to a page with `?ok=<flash>`; validation failures answer 400 with the form and the messages; refusals 403; a transition from the wrong status 409.
+Successful scaffold form submissions redirect with 303; validation failures answer 400 with the form and
+messages, refusals 403, and a transition from the wrong status 409. Form POSTs reject cross-site or same-site
+browser requests identified by Fetch Metadata and reject a supplied `Origin` (or `Referer`) that does not match
+the request host and port. Unlike JSON API POSTs, form POSTs do not require those headers to be present.
+
+Non-multipart forms and webhooks have a 1 MiB body limit. For multipart forms, `AG_MAX_UPLOAD` is the per-file
+byte limit (default 8 MiB); the entire body is capped at four times that limit plus 1 MiB. Over-limit bodies
+return 413. CSV exports prefix formula-like cells with an apostrophe for spreadsheet safety, preserving plain
+negative numbers.
 
 ## JSON answers
 
@@ -681,7 +696,8 @@ the shapes of «JSON answers», plus `_labels` (below). Nothing to declare: ever
   `/settings`, `/file`, `/widget`, `/hook`, `/schedule` are not: a JSON 404 `{ "ok": false, "status": 404, "errors": […] }`.
 - **The session**: `POST /api/login` `{ "login", "password" }`, `POST /api/register` (the fields the sign-up form asks for; the
   role is always the graph's `register`), `POST /api/logout` → `{ "ok": true, "flash", "user", "role" }` with the same
-  `ag_session` cookie the forms set (`HttpOnly; SameSite=Lax`), 401 for a wrong password, 400 for a refused registration.
+  `ag_session` cookie the forms set (`HttpOnly; SameSite=Lax`; add `Secure` with `AG_SECURE_COOKIES=1`
+  behind HTTPS), 401 for a wrong password, 400 for a refused registration.
   `GET /api/me` → `{ "user": <row> | null, "role": <role> | null }` (the anonymous role for a signed-out visitor).
 - **A POST** must come from this site: `Origin` (else `Referer`) must name the request's `Host` (403 otherwise, nothing is
   read or written; only the host and port are compared, not the scheme, which behind a proxy the runtime cannot know),

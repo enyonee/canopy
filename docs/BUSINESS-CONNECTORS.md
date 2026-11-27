@@ -1,12 +1,14 @@
 # Business connector catalog
 
-Add the selected `connectors/<kind>/descriptor.json` to the app's `plugins`.
-Declare a named instance of that kind under `connectors`, and map its secret
-slots to names in the encrypted secret store. Each descriptor defaults to
-the offline sandbox. Use `--check` before deployment and enable live delivery
-only with the appropriate merchant or seller account. The GitHub revisions
-below are reference implementations for the HTTP contracts; their SDKs
-are not runtime dependencies.
+Follow the [setup guide](CONNECTORS.md#use-a-connector) to load a
+`connectors/<kind>/descriptor.json`, declare an instance and configure
+credentials. Catalog descriptors default to Canopy's local offline sandbox.
+Check each provider's setup before enabling live delivery; some need a bridge.
+
+The references below document upstream contracts. Stripe and Adyen use their
+official SDKs for live delivery in the runtime. Google Sheets and Shopify use
+their SDKs in the OAuth bridge. Other upstream clients listed here are
+references, not necessarily linked dependencies. See [library adapters](DEPENDENCIES.md).
 
 ## External databases
 
@@ -25,8 +27,8 @@ references, setup, permissions and result format.
 | `yandex-market` | Read order status by ID and stock by partner warehouse and SKU. Configure `businessId` and `apiKey`. | [Official OpenAPI and SDK generator, BSD-3-Clause](../connectors/yandex-market/SOURCES.md) |
 | `woocommerce` | List a bounded page of orders, get an order, set status and read stock. Configure the HTTPS `host` and base64 of the consumer key pair in `basicCredential`. | [Official REST client, MIT](../connectors/woocommerce/SOURCES.md) |
 | `hubspot` | Create/read a contact, create a deal and set its stage. A scoped Service Key in `accessToken` connects one account. | [Official CRM client, Apache-2.0](../connectors/hubspot/SOURCES.md) |
-| `shopify` | List/read orders and read available stock at a location, for a store in the app's own Shopify organization. Uses the loopback OAuth bridge. | [Admin GraphQL and bridge setup](../bridges/oauth-connectors/README.md) |
-| `google-sheets` | Read bounded rows and append one RAW row in an operator-selected sheet via user consent. | [Sheets API and bridge setup](../bridges/oauth-connectors/README.md) |
+| `shopify` | List/read orders and read available stock at a location, for a store in the app's own Shopify organization. Uses the loopback OAuth bridge. | [Admin GraphQL SDK and bridge setup](../bridges/oauth-connectors/README.md#shopify) |
+| `google-sheets` | Read bounded rows and append one RAW row in an operator-selected sheet via user consent. | [Sheets API SDK and bridge setup](../bridges/oauth-connectors/README.md#google-sheets) |
 | `amocrm` | Create/read contacts and deals and set a deal stage with OAuth for one portal. | [amoCRM SDK and bridge setup](../bridges/oauth-connectors/README.md) |
 | `quickbooks` | Read bounded invoice pages or one invoice from the configured QuickBooks Online company. | [Intuit SDK and bridge setup](../bridges/oauth-connectors/README.md) |
 | `xero` | Read bounded invoice pages or one invoice from the configured Xero organization. | [Xero SDK and bridge setup](../bridges/oauth-connectors/README.md) |
@@ -77,10 +79,10 @@ business need. Do not expose a checkout link or delivery result across buyer
 accounts. See [payment lifecycle](PAYMENTS.md) and the
 [Uzbekistan merchant bridge](../bridges/uz-payments/README.md).
 
-## Existing providers
+## Stripe, Georgian banks, Slack and Postmark
 
-The existing descriptors retain their APIs. Their request/response and
-callback contracts can be compared against these ready upstream clients:
+These descriptors' request, response and callback contracts can be compared
+against these upstream clients:
 
 | Kind | Upstream and coverage |
 | --- | --- |

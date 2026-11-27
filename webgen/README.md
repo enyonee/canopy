@@ -2,27 +2,46 @@
 
 This tool generates a React front end for a Canopy app from its graph (`app.json`) and its OpenAPI contract
 (`GET /api/openapi.json`, or `node runtime/run.mjs <app.json> --openapi --out <file>`). It has been run on two
-apps, `apps/shop` and `apps/crm`. webgen keeps its own dependencies, sits outside the runtime gates, and leaves the
-runtime with zero dependencies.
+apps, `apps/shop` and `apps/crm`. The generator has its own dependencies and tests.
+The runtime can serve the built frontend without installing the generator.
 
 A storefront app (`shop`) and a workspace app (`crm`) get different silhouettes from the same model: a guest
 catalogue with quick actions and a sticky buy box versus tables, a status pipeline and KPI dashboards. `apps/crm`
 declares `"web": "web/dist"` in its graph, so its front is served at `/` and the scaffold lives under `/admin`.
+The Shop graph does not declare `web`, so its built-in screens are served directly by the runtime.
+
+## Generate and build
+
+From the repository root after installing the runtime dependencies, regenerate the CRM frontend:
 
 ```bash
-cd webgen && npm ci
-node webgen/gen.mjs apps/shop/app.json --openapi <file|url> --out apps/shop/web   # writes the project (+ openapi.json snapshot)
-node webgen/gen.mjs apps/shop/app.json --openapi apps/shop/web/openapi.json --check  # exit 1 if anything would change
-node webgen/check-contract.mjs apps/shop/app.json [--runtime <checkout>]             # snapshot, types and files vs the runtime
-npm --prefix webgen test                                                             # generator tests (node --test)
-node webgen/e2e/run.mjs --base http://127.0.0.1:5193                                 # shop scenarios in headless Chrome
-node webgen/e2e/shots.mjs --app crm --base http://127.0.0.1:5194                     # screens, desktop and phone, light and dark
+npm ci --prefix webgen
+node runtime/run.mjs apps/crm/app.json --openapi --out apps/crm/web/openapi.json
+node webgen/gen.mjs apps/crm/app.json --openapi apps/crm/web/openapi.json --out apps/crm/web
+npm ci --prefix apps/crm/web
+npm --prefix apps/crm/web run build
+node runtime/run.mjs apps/crm/app.json --port 8902
 ```
 
 The generated project uses React 19, Vite, TypeScript, Tailwind CSS 4, shadcn/ui on Radix, TanStack Router and Query,
 `openapi-typescript` types and an `openapi-fetch` client. `dist/` is built with `npm run build` in the project and
 committed. An app that declares `"web": "web/dist"` gets the front at `/` and the stand under `/admin`; without it
-the front still builds, it is just not served by the runtime.
+the front still builds, but the runtime does not serve it. For a new generated project without a
+lockfile, use `npm install` in that project for the initial install.
+
+## Verify the frontend
+
+```bash
+node webgen/gen.mjs apps/crm/app.json --openapi apps/crm/web/openapi.json --check
+node webgen/check-contract.mjs apps/crm/app.json
+npm --prefix webgen test
+```
+
+`--check` detects generator drift; `check-contract.mjs` compares the snapshot, types and files
+with the runtime. Browser checks require Chrome and a running app: use
+`node webgen/e2e/shots.mjs --app crm --base http://127.0.0.1:8902` for CRM screenshots,
+or run `webgen/e2e/run.mjs` against a freshly seeded Shop frontend with `/api` proxied
+to the Shop runtime.
 
 ## What each graph node becomes
 

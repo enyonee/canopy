@@ -17,7 +17,7 @@ Open an issue and **discuss it before writing the implementation** for any of th
 - a new runtime dependency;
 - a new layer or module boundary in `runtime/`;
 - a new connector or transport;
-- anything on the [roadmap](README.md#roadmap).
+- a change to supported storage engines or the deployment model.
 
 Prior discussion does not guarantee a merge, but a large pull request without it is likely to
 be closed.

@@ -1,4 +1,7 @@
-# R10 design: async Driver seam and PostgreSQL (README roadmap step 1)
+# R10 design: async Driver seam and PostgreSQL
+
+**Historical design.** The runtime still uses SQLite for app storage. To use
+PostgreSQL as an external data source, follow the [data source bridge guide](../bridges/data-sources/README.md).
 
 **Status: design accepted (option C4); S1, S2, S3a, S3b, S3c and S4a-d done in 0.2.x.** Status per stage:
 

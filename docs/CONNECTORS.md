@@ -1,4 +1,52 @@
-# Canopy connector library: design (v0.2.0 baseline)
+# Canopy connectors
+
+## Use a connector
+
+1. Choose a provider and operation in the [business catalog](BUSINESS-CONNECTORS.md).
+   Load its `descriptor.json` in the graph's `plugins` list, using a path
+   relative to the graph. Start any required bridge separately using its guide.
+2. Add a named instance under `connectors`. Set its `kind`, any required provider
+   settings, and a `secrets` map from descriptor slots to deployment secret names.
+   For example, the [Checkout graph](../apps/checkout/app.json) loads
+   `../../connectors/stripe/descriptor.json` and declares an instance named `pay`.
+3. Add a `connector.call` step with the instance name, operation and input. For
+   inbound events, follow the [webhook contract](FORMAT.md#inbound-webhooks). Keep
+   payment confirmation separate from browser redirects; see [hosted checkout](PAYMENTS.md).
+4. Validate the graph and inspect the effective mode. The commands below refer
+   to the Checkout example and assume `state` is an existing private directory
+   path in a shell variable. Use the same database path for the server and CLI.
+
+```bash
+node runtime/run.mjs apps/checkout/app.json --check
+node runtime/run.mjs apps/checkout/app.json --db "$state/data.sqlite" --connectors status
+```
+
+With no deploy override, the first mode in the descriptor is used. Catalog
+descriptors start in Canopy's local sandbox, which uses fixtures without contacting
+the provider. The built-in `http` connector and imported OpenAPI drafts are
+live-only. To use a provider's test API, configure its test credentials and endpoint
+where supported, then enable Canopy live mode in a separate test deployment.
+
+For live Stripe delivery, read the API key from a secret supplied to the shell
+environment, pass it over stdin, then enable `pay` explicitly:
+
+```bash
+printf '%s' "${STRIPE_API_KEY:?set STRIPE_API_KEY}" |
+  node runtime/run.mjs apps/checkout/app.json --db "$state/data.sqlite" --secrets set checkout_stripe_key
+node runtime/run.mjs apps/checkout/app.json --db "$state/data.sqlite" --connectors live pay --confirm
+```
+
+Configure `checkout_stripe_whsec` separately before receiving live Stripe
+webhooks. Switch back with `--connectors sandbox pay`. Use the final provider
+URL: deliveries do not follow redirects. Inspect `/outbox` for delivery results
+and `/settings` for connector configuration (under `/admin` with a built front).
+A delivery with status `unknown` may already have taken effect; reconcile it
+with the provider before retrying. See the [descriptor reference](FORMAT.md#connector-descriptors).
+
+## Design history
+
+The rest of this document records the v0.2.0 baseline and original implementation.
+It is not a current catalog or test procedure.
 
 **Status: design accepted (maintainer decisions, section 9), and built: stages C1, C3, C2, C4, C5, C6 and C7 are done. The connector-library
 design is complete.** (C1: descriptor, checker, engine, `connector.call`, `http` on it; C3: retries with backoff, `unknown`,

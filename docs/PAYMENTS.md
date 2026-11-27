@@ -1,11 +1,12 @@
 # Hosted checkout
 
-Canopy ships native descriptors for Stripe Checkout, Bank of Georgia Payment
-Manager and TBC Checkout. Each defaults to Canopy's local sandbox, which sends
-no requests. For provider testing use the provider's test account and its
-credentials; Canopy's `live` mode means HTTP delivery, not that the credentials
-necessarily charge real money. Do not enable live delivery with production
-credentials until the app has been verified on the corresponding merchant.
+This guide illustrates the hosted checkout lifecycle with Stripe, Bank of Georgia
+Payment Manager and TBC Checkout. For other providers, see the [business catalog](BUSINESS-CONNECTORS.md).
+These descriptors default to Canopy's local sandbox, which sends no requests.
+To test with a provider, use a separate deployment with its test account,
+credentials and endpoint (where supported). Canopy's `live` mode sends real HTTP
+requests even when the provider account is in test mode. Stripe live requests use
+the official Node SDK; sandbox replies still come from the descriptor.
 
 | Descriptor under the repository root | Merchant secret slots | Operations |
 | --- | --- | --- |
@@ -17,6 +18,7 @@ Load the desired descriptor in `plugins`, declare a connector of its kind,
 and map the credential slots to deployment-specific secret names. Keep test
 and real merchants in separate app deployments with distinct secret names.
 The banks fetch a token per delivery; it is never available to graph code.
+Follow the [connector setup guide](CONNECTORS.md#use-a-connector) for CLI commands.
 
 ## Start and present a checkout
 
