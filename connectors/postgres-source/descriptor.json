@@ -1,0 +1,132 @@
+{
+  "descriptor": 1,
+  "name": "postgres-source",
+  "title": "PostgreSQL data source",
+  "base": "http://127.0.0.1:8907",
+  "timeoutMs": 15000,
+  "config": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "maxLength": 48,
+        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+      }
+    },
+    "required": [
+      "dataset"
+    ]
+  },
+  "modes": [
+    "sandbox",
+    "live"
+  ],
+  "operations": {
+    "readPage": {
+      "idempotent": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "default": 0
+          }
+        },
+        "required": []
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/postgres/read",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.operatorToken}"
+        },
+        "body": {
+          "dataset": {
+            "$": "config.dataset"
+          },
+          "limit": {
+            "$": "input.limit"
+          },
+          "offset": {
+            "$": "input.offset"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 63,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {}
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "rowsJson": {
+            "type": "string",
+            "maxLength": 65536
+          }
+        },
+        "required": [
+          "columns",
+          "rows",
+          "hasMore",
+          "rowsJson"
+        ]
+      },
+      "result": {
+        "columns": "$.columns",
+        "rows": "$.rows",
+        "hasMore": "$.hasMore",
+        "rowsJson": "$.rowsJson"
+      },
+      "resultOnly": true
+    }
+  },
+  "sandbox": {
+    "operations": {
+      "readPage": [
+        {
+          "body": {
+            "columns": [
+              "id",
+              "name"
+            ],
+            "rows": [
+              [
+                "1",
+                "Example"
+              ]
+            ],
+            "hasMore": false,
+            "rowsJson": "[[\"1\",\"Example\"]]"
+          }
+        }
+      ]
+    },
+    "test": {
+      "op": "readPage",
+      "input": {}
+    }
+  }
+}

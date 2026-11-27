@@ -5,6 +5,14 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.7.0 (2026-11-27)
+
+- **External data sources.** Read bounded pages from allowlisted PostgreSQL,
+  MySQL/MariaDB, SQLite, ClickHouse and SQL Server tables or views, MongoDB
+  collections and Redis lists through a local bridge.
+  The connector sandbox is offline and the internal SQLite store is unchanged.
+  See [the data source setup guide](bridges/data-sources/README.md).
+
 ## 0.6.0 (2026-11-27)
 
 - **Business connectors.** Yandex Market, WooCommerce, HubSpot, Telegram Bot,

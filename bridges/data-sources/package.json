@@ -1,0 +1,14 @@
+{
+  "name": "canopy-data-sources",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@clickhouse/client": "1.25.0",
+    "ioredis": "6.1.0",
+    "mongodb": "7.9.1",
+    "mssql": "12.8.1",
+    "mysql2": "3.24.6",
+    "pg": "8.23.1"
+  }
+}

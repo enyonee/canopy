@@ -8,6 +8,14 @@ only with the appropriate merchant or seller account. The GitHub revisions
 below are reference implementations for the HTTP contracts; their SDKs
 are not runtime dependencies.
 
+## External databases
+
+PostgreSQL, MySQL/MariaDB, SQLite, ClickHouse, SQL Server, MongoDB and Redis
+connectors read bounded pages from operator-configured tables, views,
+collections or lists. See the
+[data sources bridge](../bridges/data-sources/README.md) for the driver
+references, setup, permissions and result format.
+
 ## Commerce, messaging and CRM
 
 | Kind | Operations and configuration | Reference implementation |
