@@ -23,7 +23,6 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
   store.trace = trace;
   const CATALOG = registry.blocks;
   const exprCache = new Map();
-  const compiled = (src) => { if (!exprCache.has(src)) exprCache.set(src, parseExpr(src, registry.functions)); return exprCache.get(src); };
 
   // --- names inside steps: "@row.x", "@me", "@created", "= qty * price", "{row.title}" ------------
   const ROWS = { row: 'rowEntity', each: 'eachEntity', found: 'foundEntity', picked: 'pickedEntity' };
@@ -73,13 +72,21 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     else if (ast.t === 'agg' && ast.body) stepPaths(ast.body, out, true);
     return out;
   };
-  // The checker only lets bare names and aggregates through where a row exists. The expression is
-  // planned and loaded for the row it runs on before evaluate() starts (evalCtx), and so is every step name it reads.
-  const exprCtx = async (ctx, src) => {
-    const ast = compiled(src);
-    const base = await dbOf(ctx).evalCtx(ctx.rowEntity, ctx.row, `step:${src}`, [ast]);
+  const compiled = (src) => {
+    let plan = exprCache.get(src);
+    if (!plan) {
+      const ast = parseExpr(src, registry.functions);
+      plan = { asts: [ast], names: stepPaths(ast).map((path) => [path.join('.'), path]) };
+      exprCache.set(src, plan);
+    }
+    return plan;
+  };
+  // Load the expression's row snapshot and the step names it reads before evaluate() starts.
+  const exprCtx = async (ctx, src, { asts, names }) => {
+    const base = await dbOf(ctx).evalCtx(ctx.rowEntity, ctx.row, `step:${src}`, asts);
+    if (!names.length && !store.lazyEval) return base;
     const named = new Map();
-    for (const p of stepPaths(ast)) named.set(p.join('.'), await refValue(ctx, p));
+    for (const [name, path] of names) named.set(name, await refValue(ctx, path));
     return {
       clock: base.clock,
       get(p) {
@@ -98,7 +105,11 @@ export function createInterpreter({ graph, store, registry, perms, meId, trace =
     const one = async (v) => {
       if (typeof v === 'string') {
         if (v.startsWith('@')) return await refValue(ctx, v.slice(1).split('.'));
-        if (isExpression(v)) { const src = stripExpression(v); return evaluate(compiled(src), await exprCtx(ctx, src), registry.functions); }
+        if (isExpression(v)) {
+          const src = stripExpression(v);
+          const plan = compiled(src);
+          return evaluate(plan.asts[0], await exprCtx(ctx, src, plan), registry.functions);
+        }
         return v;
       }
       if (Array.isArray(v)) { const out = []; for (const x of v) out.push(await one(x)); return out; }

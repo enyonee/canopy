@@ -72,36 +72,42 @@ function checkChildren(schema, path) {
   return out;
 }
 
-const fail = (schema, path, text, value) => [[path, schema.message ? schema.message.replace('{value}', String(value)) : text, ...(schema.hint ? [schema.hint] : [])]];
-
-function checkString(schema, value, path) {
-  const out = [];
-  if (schema.minLength !== undefined && value.length < schema.minLength) out.push(...fail(schema, path, `must be at least ${schema.minLength} characters`, value));
-  if (schema.maxLength !== undefined && value.length > schema.maxLength) out.push(...fail(schema, path, `must be at most ${schema.maxLength} characters`, value));
-  if (schema.pattern !== undefined && !new RegExp(schema.pattern).test(value)) out.push(...fail(schema, path, `must match ${schema.pattern}`, value));
-  if (schema.format !== undefined && !FORMATS[schema.format](value)) out.push(...fail(schema, path, `must be a valid ${schema.format}`, value));
-  return out;
+function fail(out, schema, path, text, value) {
+  out.push([path, schema.message ? schema.message.replace('{value}', String(value)) : text, ...(schema.hint ? [schema.hint] : [])]);
 }
 
-function checkNumber(schema, value, path) {
-  const out = [];
-  if (schema.minimum !== undefined && value < schema.minimum) out.push(...fail(schema, path, `must be at least ${schema.minimum}`, value));
-  if (schema.maximum !== undefined && value > schema.maximum) out.push(...fail(schema, path, `must be at most ${schema.maximum}`, value));
-  return out;
+function checkString(schema, value, path, out) {
+  if (schema.minLength !== undefined && value.length < schema.minLength) fail(out, schema, path, `must be at least ${schema.minLength} characters`, value);
+  if (schema.maxLength !== undefined && value.length > schema.maxLength) fail(out, schema, path, `must be at most ${schema.maxLength} characters`, value);
+  if (schema.pattern !== undefined && !new RegExp(schema.pattern).test(value)) fail(out, schema, path, `must match ${schema.pattern}`, value);
+  if (schema.format !== undefined && !FORMATS[schema.format](value)) fail(out, schema, path, `must be a valid ${schema.format}`, value);
 }
 
-function checkObject(schema, value, path, opts) {
-  const out = [];
+function checkNumber(schema, value, path, out) {
+  if (schema.minimum !== undefined && value < schema.minimum) fail(out, schema, path, `must be at least ${schema.minimum}`, value);
+  if (schema.maximum !== undefined && value > schema.maximum) fail(out, schema, path, `must be at most ${schema.maximum}`, value);
+}
+
+function checkObject(schema, value, path, opts, out) {
   const props = schema.properties;
-  for (const k of schema.required || []) if (value[k] === undefined) out.push(...fail(props?.[k] || {}, join(path, k), 'is required', ''));
-  if (!props) return out;
+  for (const k of schema.required || []) if (value[k] === undefined) fail(out, props?.[k] || {}, join(path, k), 'is required', '');
+  if (!props) return;
   const extra = schema.additionalProperties ?? opts.extra;
   for (const [k, v] of Object.entries(value)) {
     if (v === undefined) continue;
-    if (props[k]) out.push(...validate(props[k], v, join(path, k), opts));
-    else if (!extra) out.push(...fail({}, join(path, k), `unknown property "${k}"`, k));
+    if (props[k]) validateInto(props[k], v, join(path, k), opts, out);
+    else if (!extra) fail(out, {}, join(path, k), `unknown property "${k}"`, k);
   }
-  return out;
+}
+
+function validateInto(schema, value, path, opts, out) {
+  if (schema.type !== undefined && !typeOk[schema.type](value)) return fail(out, schema, path, `must be ${schema.type === 'object' ? 'an object' : `a ${schema.type}`}`, value);
+  if (schema.enum !== undefined && !schema.enum.some((e) => JSON.stringify(e) === JSON.stringify(value))) return fail(out, schema, path, `must be one of: ${schema.enum.map((e) => JSON.stringify(e)).join(', ')}`, value);
+  if (typeof value === 'string') return checkString(schema, value, path, out);
+  if (typeof value === 'number') return checkNumber(schema, value, path, out);
+  if (Array.isArray(value)) {
+    if (schema.items) value.forEach((v, i) => validateInto(schema.items, v, join(path, i), opts, out));
+  } else if (isObject(value)) checkObject(schema, value, path, opts, out);
 }
 
 /**
@@ -109,12 +115,10 @@ function checkObject(schema, value, path, opts) {
  * (inputs and configuration are closed) unless the caller says otherwise (a provider's answer).
  */
 export function validate(schema, value, path = '', opts = { extra: false }) {
-  if (schema.type !== undefined && !typeOk[schema.type](value)) return fail(schema, path, `must be ${schema.type === 'object' ? 'an object' : `a ${schema.type}`}`, value);
-  if (schema.enum !== undefined && !schema.enum.some((e) => JSON.stringify(e) === JSON.stringify(value))) return fail(schema, path, `must be one of: ${schema.enum.map((e) => JSON.stringify(e)).join(', ')}`, value);
-  if (typeof value === 'string') return checkString(schema, value, path);
-  if (typeof value === 'number') return checkNumber(schema, value, path);
-  if (Array.isArray(value)) return schema.items ? value.flatMap((v, i) => validate(schema.items, v, join(path, i), opts)) : [];
-  return isObject(value) ? checkObject(schema, value, path, opts) : [];
+  /** @type {[string, string, string?][]} */
+  const out = [];
+  validateInto(schema, value, path, opts, out);
+  return out;
 }
 
 /** `value` with every declared default filled in where the property is missing (objects only, recursively). */

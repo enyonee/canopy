@@ -8,7 +8,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { createInterpreter } from '../runtime/interp.mjs';
 import { boot, tmpGraph } from './helpers.mjs';
+
+test('a cached step expression reads the current row and transaction on every call', async () => {
+  const store = { evalCtx() { assert.fail('a step must read through its transaction'); } };
+  const interp = createInterpreter({ graph: {}, registry: { blocks: {} }, store });
+  const expressions = ['= qty * 2', '= qty * 2 + values.delta + values.delta'];
+  for (const [qty, delta] of [[3, 2], [7, -1]]) {
+    const tx = { evalCtx: async (_entity, row) => ({ get: (p) => row[p[0]] }) };
+    const ctx = { rowEntity: 'Item', row: { qty }, tx, values: { delta } };
+    assert.deepEqual(await interp.resolve(ctx)(expressions), [qty * 2, qty * 2 + delta * 2]);
+  }
+});
 
 const throwing = path.resolve('tests/fixtures/throwing.mjs');
 const graph = {

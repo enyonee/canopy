@@ -30,6 +30,27 @@ const answer = (status, body) => ({ ok: status >= 200 && status < 300, status, t
 
 test('the descriptor used here is itself valid', () => assert.deepEqual(checkDescriptor(pay()), []));
 
+test('mapResponse preserves validation order and diagnostics across nested records', async () => {
+  const op = { output: { type: 'array', items: {
+    type: 'object', required: ['id'], additionalProperties: false,
+    properties: {
+      id: { type: 'integer', message: 'bad id: {value}', hint: 'use an integer' },
+      tags: { type: 'array', items: { type: 'string', minLength: 2, pattern: '^[a-z]+$' } },
+    },
+  } } };
+  const body = [{ tags: ['!', 4], extra: true }, { id: 'x', tags: ['ok'] }];
+  const { patch, drift } = await mapResponse(op, answer(200, body));
+  assert.equal(patch.response, JSON.stringify(body));
+  assert.deepEqual(drift, [
+    ['/0/id', 'bad id: ', 'use an integer'],
+    ['/0/tags/0', 'must be at least 2 characters'],
+    ['/0/tags/0', 'must match ^[a-z]+$'],
+    ['/0/tags/1', 'must be a string'],
+    ['/0/extra', 'unknown property "extra"'],
+    ['/1/id', 'bad id: x', 'use an integer'],
+  ]);
+});
+
 test('prepare: input gets its defaults, is validated with every problem named, and the url is built', () => {
   const d = pay();
   assert.deepEqual(prepare(d, cfg, 'charge', { amount: 5 }), { input: { amount: 5, currency: 'USD' }, target: 'https://pay.test/v1/charge/USD?r=eu' });

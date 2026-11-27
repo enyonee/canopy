@@ -5,6 +5,9 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Performance.** Reuse step expression plans and collect connector validation
+  errors without intermediate arrays. Results and validation diagnostics are unchanged.
+
 ## 0.8.0 (2026-11-27)
 
 - **External data source writes.** Opt in to inserts on SQL and MongoDB

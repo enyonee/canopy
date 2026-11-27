@@ -235,6 +235,7 @@ export async function deliverRow(d, row, connector, opts = {}) {
 }
 
 // `secrets` in a connector maps the descriptor's slots to names in the store: never a value.
+/** @returns {[string, string, string?][]} */
 function secretProblems(connector) {
   const map = connector?.secrets;
   if (map === undefined) return [];
@@ -248,7 +249,7 @@ export function synthesize(d) {
   return {
     summary: d.title || `the ${d.name} connector (${Object.keys(d.operations).join(', ')})`,
     validate: (connector) => [...secretProblems(connector), ...validate(d.config || { type: 'object', properties: {} }, configOf(d, connector), '')
-      .map(([p, m, h]) => (h ? [p.slice(1), m, h] : [p.slice(1), m]))],
+      .map(/** @returns {[string, string, string?]} */ ([p, m, h]) => (h ? [p.slice(1), m, h] : [p.slice(1), m]))],
     deliver: (row, connector, opts) => deliverRow(d, row, connector, opts),
   };
 }
