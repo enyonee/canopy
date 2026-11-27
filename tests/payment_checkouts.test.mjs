@@ -31,6 +31,68 @@ const startStripe = { amountMinor: 1234, currency: 'usd', attemptId: 'order-123'
 const startBog = { amount: 12.34, attemptId: 'order-123', productId: 'coffee', successUrl: RETURN, cancelUrl: RETURN, callbackUrl: RETURN };
 const startTbc = { amount: 12.34, attemptId: 'order-123', returnUrl: RETURN };
 
+async function stripeTransport() {
+  const { registry, errors } = await loadPlugins({ plugins: ['connectors/stripe/descriptor.json'] }, process.cwd());
+  assert.deepEqual(errors, []);
+  return registry.transports.stripe;
+}
+
+test('the shipped Stripe connector uses SDK methods for every live operation', async () => {
+  const transport = await stripeTransport();
+  const checkout = { id: 'cs_test_123', url: 'https://checkout.stripe.com/123', status: 'complete',
+    client_reference_id: 'order-123', payment_status: 'paid', amount_total: 1234, currency: 'usd',
+    livemode: false, payment_intent: 'pi_123' };
+  const intent = { id: 'pi_123', status: 'succeeded' };
+  const refund = { id: 're_123', status: 'succeeded', amount: 100, currency: 'usd', payment_intent: 'pi_123' };
+  const cases = {
+    createCheckout: [startStripe, checkout], getCheckout: [{ id: checkout.id }, checkout],
+    refundCheckout: [{ paymentIntent: 'pi_123', amountMinor: 100 }, refund],
+    createPaymentIntent: [{ amount: 1234, currency: 'usd', confirm: false,
+      metadata: { order: '7', ignored: null, nested: { values: [null, 'second'] } } }, intent],
+    retrievePaymentIntent: [{ id: 'pi_123' }, intent], confirmPaymentIntent: [{ id: 'pi_123' }, intent],
+    createRefund: [{ paymentIntent: 'pi_123', amount: 100 }, refund],
+  };
+  assert.deepEqual(Object.keys(cases).sort(), Object.keys(stripe.operations).sort());
+  for (const [op, [input, response]] of Object.entries(cases)) {
+    const expected = buildRequest(stripe, {}, op, input, opts);
+    const raw = JSON.stringify(response, null, 2);
+    const old = await deliverRow(stripe, row(op, input), {}, { ...opts, fetchImpl: async () => new Response(raw) });
+    const patch = await transport.deliver(row(op, input), {}, { ...opts, fetchImpl: async (url, request) => {
+      const headers = new Headers(request.headers);
+      assert.equal(url, expected.url);
+      assert.equal(request.method, expected.method);
+      assert.equal(request.redirect, 'manual');
+      assert.match(headers.get('user-agent'), /Stripe/);
+      assert.equal(headers.get('authorization'), 'Bearer ' + credentials.apiKey);
+      assert.equal(headers.get('stripe-version'), '2024-06-20');
+      assert.equal(headers.get('idempotency-key'), KEY);
+      assert.deepEqual([...new URLSearchParams(request.body)].sort(), [...new URLSearchParams(expected.body)].sort());
+      return new Response(raw);
+    } });
+    assert.deepEqual(patch, old, op);
+    assert.equal(patch.status, 'sent', op);
+  }
+});
+
+test('Stripe leaves retries, timeouts and HTTP error handling to Canopy', async () => {
+  const transport = await stripeTransport();
+  const payment = row('createCheckout', startStripe);
+  let attempts = 0;
+  await assert.rejects(transport.deliver(payment, {}, { ...opts, fetchImpl: async () => {
+    attempts++;
+    throw Object.assign(new Error('lost connection'), { code: 'ECONNRESET' });
+  } }), { message: 'lost connection', fault: 'net' });
+  assert.equal(attempts, 1);
+  const failed = await transport.deliver(payment, {}, { ...opts, fetchImpl: async () =>
+    new Response('provider diagnostic', { status: 429, headers: { 'retry-after': '12' } }) });
+  assert.deepEqual(failed, { code: 429, status: 'failed', error: 'HTTP 429', retryAfter: '12' });
+  const invalid = await transport.deliver(payment, {}, { ...opts, fetchImpl: async () => new Response('not JSON') });
+  assert.equal(invalid.code, 502);
+  const clock = { setTimer: (fn, ms) => { assert.equal(ms, 7); fn(); }, clear: () => {} };
+  await assert.rejects(transport.deliver(payment, {}, { ...opts, timeoutCapMs: 7, clock, fetchImpl: bogus }), { fault: 'timeout' });
+  assert.equal((await transport.deliver(payment, {}, { ...opts, mode: 'sandbox', fetchImpl: bogus })).status, 'sent');
+});
+
 test('payment descriptors load and their default sandbox builds a projected checkout', async () => {
   for (const [d, input] of [[stripe, startStripe], [bog, startBog], [tbc, startTbc]]) {
     assert.deepEqual(checkDescriptor(d), []);

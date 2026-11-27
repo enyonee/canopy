@@ -234,6 +234,7 @@ const ALLOWED = {
   'runtime/connectors/form.mjs': [],
   'runtime/connectors/inbound.mjs': ['runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/signature.mjs'],
   'runtime/connectors/engine.mjs': ['runtime/connectors/form.mjs', 'runtime/connectors/schema.mjs', 'runtime/connectors/template.mjs', 'runtime/connectors/descriptor.mjs', 'runtime/connectors/backoff.mjs', 'runtime/connectors/sandbox.mjs', 'runtime/connectors/token.mjs', 'runtime/connectors/redact.mjs', 'runtime/clock.mjs'],
+  'runtime/connectors/stripe.mjs': ['runtime/connectors/template.mjs'],
   'runtime/connectors/token.mjs': [],
   'runtime/connectors/oas_request.mjs': ['runtime/connectors/oas_schema.mjs'],
   'runtime/connectors/oas_schema.mjs': ['runtime/connectors/schema.mjs'],
@@ -253,7 +254,7 @@ const ALLOWED = {
   'runtime/settle.mjs': ['runtime/connectors/backoff.mjs'],
   'runtime/patch.mjs': ['runtime/validate.mjs'],
   'runtime/registry.mjs': ['runtime/fields.mjs', 'runtime/blocks.mjs', 'runtime/transports.mjs', 'runtime/functions.mjs', 'runtime/widgets.mjs',
-    'runtime/connectors/builtin.mjs', 'runtime/connectors/descriptor.mjs', 'runtime/connectors/engine.mjs'],
+    'runtime/connectors/builtin.mjs', 'runtime/connectors/descriptor.mjs', 'runtime/connectors/engine.mjs', 'runtime/connectors/stripe.mjs'],
   'runtime/render.mjs': ['runtime/spec.mjs'],
   'runtime/render/dashboard.mjs': ['runtime/spec.mjs', 'runtime/render.mjs'],
   'runtime/render/detail.mjs': ['runtime/render.mjs', 'runtime/render/form.mjs'],
@@ -263,7 +264,7 @@ const ALLOWED = {
   'runtime/render/search.mjs': ['runtime/render.mjs'],
   'runtime/render/settings.mjs': ['runtime/render.mjs'],
   'runtime/routes/api.mjs': ['runtime/routes/context.mjs', 'runtime/routes/load.mjs', 'runtime/contract.mjs'],
-  'runtime/routes/context.mjs': ['runtime/render.mjs'],
+  'runtime/routes/context.mjs': ['runtime/render.mjs', 'runtime/routes/multipart.mjs'],
   'runtime/routes/hooks.mjs': ['runtime/routes/context.mjs', 'runtime/connectors/engine.mjs', 'runtime/connectors/signature.mjs', 'runtime/connectors/inbound.mjs'],
   'runtime/routes/entity.mjs': ['runtime/render.mjs', 'runtime/render/list.mjs', 'runtime/render/form.mjs', 'runtime/routes/rows.mjs', 'runtime/routes/load.mjs'],
   'runtime/routes/load.mjs': ['runtime/render.mjs', 'runtime/render/list.mjs', 'runtime/render/form.mjs', 'runtime/render/detail.mjs', 'runtime/render/pages.mjs'],
@@ -316,7 +317,7 @@ const NODE_BUILTINS = {
   'runtime/cli.mjs': ['node:path', 'node:fs'],
   'runtime/patch.mjs': ['node:fs'],
   'runtime/registry.mjs': ['node:fs', 'node:path', 'node:url'],
-  'runtime/routes/context.mjs': ['node:fs', 'node:path', 'node:stream'],
+  'runtime/routes/multipart.mjs': ['node:fs', 'node:fs/promises', 'node:path', 'node:crypto', 'node:stream', 'node:stream/promises'],
   'runtime/routes/system.mjs': ['node:fs', 'node:path'],
   'runtime/routes/widgets.mjs': ['node:fs'],
   'runtime/web.mjs': ['node:fs', 'node:path'],
@@ -326,7 +327,7 @@ const NODE_BUILTINS = {
 
 function resolveSpecifier(fromFile, spec) {
   if (spec.startsWith('node:')) return spec;
-  if (!spec.startsWith('.')) return null; // a bare specifier (a real npm dep) — none exist in runtime/
+  if (!spec.startsWith('.')) return null; // a bare specifier (an npm dependency)
   const resolved = path.normalize(path.join(path.dirname(fromFile), spec)).replace(/\\/g, '/');
   return resolved;
 }

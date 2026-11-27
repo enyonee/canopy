@@ -37,7 +37,7 @@ When a task says "the app", it means an app under `apps/<name>/`. "The runtime" 
 ## Commands
 
 ```bash
-npm install                                   # dev-only dependency: typescript
+npm ci                                        # install locked runtime and dev dependencies
 node runtime/run.mjs apps/<name>/app.json --check        # validate a graph
 node runtime/run.mjs apps/<name>/app.json --port 8901    # serve it
 npm test                                      # runtime tests + architecture gates
@@ -82,8 +82,8 @@ The gates in `tests/arch.test.mjs` are part of `npm test`. Fix the code, never t
   values: the pure schema lookups (`field`, `fieldAt`, `label`, `labelField`, `childVia`) and `within` are the only exceptions. A plugin
   with blocks exports `async: true`. Never hand an async function to `filter/some/every/find/sort/forEach`. `tests/arch.test.mjs` fails on
   both, `npm run test:async` finds what a regex cannot.
-- The runtime has **zero runtime dependencies**. Adding one needs a discussion first (see
-  CONTRIBUTING).
+- Runtime dependencies need discussion first (see CONTRIBUTING). Pin approved packages,
+  keep them behind the relevant adapter, and document their license and compatibility.
 - **Performance** is measured, not assumed. Anything touching queries reports numbers before
   and after, and the JSON answers of the benchmark routes must stay byte-identical.
 

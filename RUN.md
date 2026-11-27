@@ -1,6 +1,7 @@
 # Как запустить
 
 ```bash
+npm ci                                              # runtime and development dependencies
 node runtime/run.mjs apps/shop/app.json --check     # проверить граф
 node runtime/run.mjs apps/shop/app.json --port 8901 # поднять приложение (admin@shop.test / admin123)
 node verify/run.mjs                                 # приёмочные проверки всех приложений + изменения патчами
@@ -9,7 +10,8 @@ node --test 'tests/*.test.mjs'                      # тесты рантайм�
 node runtime/patch.mjs apps/shop/app.json apps/shop/change-1-role.patch.json  # правка патчем
 ```
 
-Требуется Node 22+ (используется встроенный `node:sqlite`). Зависимостей нет.
+Требуется Node 22+ (используется встроенный `node:sqlite`). Для запуска без
+инструментов разработки используйте `npm ci --omit=dev`.
 Приложение — это каталог: `app.json`, `data.sqlite`, `trace.jsonl`, `session.key` (если есть
 роли), `files/` (если есть поля-файлы). Справочник формата — `docs/FORMAT.md`.
 

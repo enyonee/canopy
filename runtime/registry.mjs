@@ -6,7 +6,7 @@
 // they are the format, and the checker has to know all of them.
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { FIELDS } from './fields.mjs';
 import { CATALOG } from './blocks.mjs';
 import { TRANSPORTS } from './transports.mjs';
@@ -15,8 +15,10 @@ import { WIDGETS } from './widgets.mjs';
 import { BUILTIN } from './connectors/builtin.mjs';
 import { checkDescriptor } from './connectors/descriptor.mjs';
 import { synthesize } from './connectors/engine.mjs';
+import { fetchStripe } from './connectors/stripe.mjs';
 
 export const TABLES = ['fields', 'blocks', 'transports', 'functions', 'widgets'];
+const STRIPE_DESCRIPTOR = fileURLToPath(new URL('../connectors/stripe/descriptor.json', import.meta.url));
 
 export function createRegistry() {
   return { fields: { ...FIELDS }, blocks: { ...CATALOG }, transports: { ...TRANSPORTS }, functions: { ...FUNCTIONS },
@@ -25,13 +27,13 @@ export function createRegistry() {
 
 // A connector descriptor (a .json plugin): checked, then registered as a descriptor and as the
 // transport of the same name, so its kind is a connector kind like any other.
-export function registerDescriptor(registry, descriptor, name = 'descriptor') {
+export function registerDescriptor(registry, descriptor, name = 'descriptor', sdk = undefined) {
   const bad = checkDescriptor(descriptor);
   if (bad.length) throw new Error(`${name}: invalid descriptor — ${bad.map(([p, m]) => `${p || '/'} ${m}`).join('; ')}`);
   const kind = descriptor.name;
   if (registry.transports[kind]) throw new Error(`${name}: connector kind "${kind}" is already registered${registry.transports[kind].plugin ? ` by ${registry.transports[kind].plugin}` : ''}`);
   registry.descriptors[kind] = descriptor;
-  registry.transports[kind] = { ...synthesize(descriptor), plugin: name };
+  registry.transports[kind] = { ...synthesize(descriptor, sdk), plugin: name };
   registry.plugins.push(name);
   return registry;
 }
@@ -69,8 +71,12 @@ export async function loadPlugins(graph, baseDir) {
   for (const [i, p] of list.entries()) {
     if (typeof p !== 'string') { errors.push({ path: `/plugins/${i}`, message: 'a plugin is a path to an ES module or to a connector descriptor (.json)', hint: '"./plugins/loyalty.mjs", "../../connectors/stripe/descriptor.json"' }); continue; }
     try {
-      if (p.endsWith('.json')) { registerDescriptor(registry, JSON.parse(fs.readFileSync(path.resolve(baseDir, p), 'utf8')), p); continue; }
-      const mod = await import(pathToFileURL(path.resolve(baseDir, p)).href);
+      const file = path.resolve(baseDir, p);
+      if (p.endsWith('.json')) {
+        registerDescriptor(registry, JSON.parse(fs.readFileSync(file, 'utf8')), p, file === STRIPE_DESCRIPTOR ? fetchStripe : undefined);
+        continue;
+      }
+      const mod = await import(pathToFileURL(file).href);
       const decl = mod.default || mod;
       register(registry, decl, p);
       for (const [name, w] of Object.entries(decl.widgets || {})) {

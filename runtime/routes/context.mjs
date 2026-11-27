@@ -2,10 +2,9 @@
 // request. `vc` (view context) is the read-only "who is looking, what may
 // they do" object render.mjs already expects; `send`/`redirect`/`ok`/`deny`
 // are the only ways a route module answers the client.
-import fs from 'node:fs';
-import path from 'node:path';
-import { Readable } from 'node:stream';
 import { forbiddenPage, csv, plain, label, prefetched, refPairs } from '../render.mjs';
+import { parseMultipart, TooBig } from './multipart.mjs';
+export { TooBig } from './multipart.mjs';
 
 const readText = (req) => new Promise((resolve) => {
   let data = '';
@@ -13,8 +12,7 @@ const readText = (req) => new Promise((resolve) => {
   req.on('end', () => resolve(data));
 });
 
-export class TooBig extends Error {}
-// A JSON body (/api) that is not one flat object of plain values: the answer is a 400, never a guess.
+// A JSON body (/api) that is not one flat object of plain values: refuse it as 400.
 export class BadBody extends Error {}
 
 // The largest body a webhook may send.
@@ -40,31 +38,11 @@ export function rawBody(req, cap = MAX_RAW) {
   });
 }
 
-const MAX_UPLOAD = Number(process.env.AG_MAX_UPLOAD || 8 * 1024 * 1024);
-
 // The files this request uploaded, by field name: the name each was stored under (routes may store no other).
 /** @param {Map<string, string>} uploads */
 function parseBody(req, filesDir, uploads) {
   const ct = req.headers['content-type'] || '';
-  if (ct.startsWith('multipart/form-data')) {
-    return new Response(Readable.toWeb(req), { headers: { 'content-type': ct } }).formData().then(async (fd) => {
-      const out = {};
-      for (const [k, v] of fd.entries()) {
-        if (typeof v === 'string') { out[k] = v; continue; }
-        // An empty upload still sends a part: record it as "" rather than dropping the
-        // key outright (item 13) — interp.mjs's dropEmptyUploads is what then decides,
-        // per field, whether that means "unchanged"/"none" or a required-field error.
-        if (!v.size) { out[k] = ''; continue; }
-        if (v.size > MAX_UPLOAD) throw new TooBig(`${v.name || 'file'} is larger than ${Math.round(MAX_UPLOAD / 1024 / 1024)} MB`);
-        fs.mkdirSync(filesDir, { recursive: true });
-        const name = `${Date.now()}-${String(v.name || 'file').replace(/[^\w.-]/g, '_')}`;
-        fs.writeFileSync(path.join(filesDir, name), Buffer.from(await v.arrayBuffer()));
-        uploads.set(k, name);
-        out[k] = name;
-      }
-      return out;
-    });
-  }
+  if (ct.startsWith('multipart/form-data')) return parseMultipart(req, filesDir, uploads);
   return readText(req).then((text) => Object.fromEntries(new URLSearchParams(text)));
 }
 

@@ -22,6 +22,7 @@ const operation = (d, name) => {
   return op;
 };
 const configOf = (d, connector) => { const { kind, secrets, ...rest } = connector || {}; return withDefaults(d.config || {}, rest); };
+const timeoutOf = (d, config, cap) => Math.min(config.timeout || d.timeoutMs || DEFAULT_TIMEOUT_MS, cap);
 const problems = (list, root) => list.map(([p, m]) => `${root}${p}: ${m}`).join('; ');
 
 function scopesOf(d, connector, input, secret) {
@@ -106,7 +107,7 @@ export function buildRequest(d, connector, opName, input, opts = {}) {
   return {
     method, url: r.pathSecret ? privateUrl(op, scopes, secret?.(r.pathSecret)) : target ?? requestUrl(op, scopes), headers,
     body: text,
-    timeout: Math.min(scopes.config.timeout || d.timeoutMs || DEFAULT_TIMEOUT_MS, timeoutCapMs),
+    timeout: timeoutOf(d, scopes.config, timeoutCapMs),
   };
 }
 
@@ -216,7 +217,7 @@ async function sendLive(d, op, req, fetchImpl, clock, secret) {
  * nothing is built or sent: the descriptor's sandbox rules answer. `secrets` is the store `{secret.x}` is read from.
  * @param {{ fetchImpl?: typeof fetch, trace?: (event: any) => void, secret?: (name: string) => any, secrets?: any, mode?: string, clock?: import('../types.d.ts').Clock, idemKey?: string, timeoutCapMs?: number }} [opts]
  */
-export async function deliverRow(d, row, connector, opts = {}) {
+export async function deliverRow(d, row, connector, opts = {}, sdk = undefined) {
   const { fetchImpl = fetch, trace = (_event) => {}, secrets, mode = 'live', clock = systemClock, idemKey, timeoutCapMs } = opts;
   const secret = opts.secret ?? (secrets && resolver(secrets, connector));
   const legacy = row.op === null || row.op === undefined;
@@ -226,6 +227,12 @@ export async function deliverRow(d, row, connector, opts = {}) {
   const op = operation(d, opName);
   let done;
   if (mode === 'sandbox') done = await mapResponse(op, sandboxResponse(d, opName, connector, input, idemKey));
+  else if (sdk) {
+    const scopes = scopesOf(d, connector, input, secret);
+    const timeout = timeoutOf(d, scopes.config, timeoutCapMs ?? MAX_TIMEOUT_MS);
+    const args = { op, scopes, timeout, idemKey, opName };
+    done = await send({ timeout }, (_url, init) => sdk(fetchImpl, args, init.signal), clock, (res) => mapResponse(op, res));
+  }
   else {
     const req = buildRequest(d, connector, opName, input, { secret, target: legacy ? row.target : undefined, idemKey, timeoutCapMs });
     done = await sendLive(d, op, req, fetchImpl, clock, secret);
@@ -245,11 +252,11 @@ function secretProblems(connector) {
 }
 
 /** The registry transport of a descriptor: its configuration is checked against "config", its rows go through the engine. */
-export function synthesize(d) {
+export function synthesize(d, sdk = undefined) {
   return {
     summary: d.title || `the ${d.name} connector (${Object.keys(d.operations).join(', ')})`,
     validate: (connector) => [...secretProblems(connector), ...validate(d.config || { type: 'object', properties: {} }, configOf(d, connector), '')
       .map(/** @returns {[string, string, string?]} */ ([p, m, h]) => (h ? [p.slice(1), m, h] : [p.slice(1), m]))],
-    deliver: (row, connector, opts) => deliverRow(d, row, connector, opts),
+    deliver: (row, connector, opts) => deliverRow(d, row, connector, opts, sdk),
   };
 }
