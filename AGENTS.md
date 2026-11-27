@@ -54,7 +54,8 @@ npm --prefix webgen test                      # generator tests
 ```
 
 - On shared machines, run tests sequentially (`node --test --test-concurrency=1 'tests/*.test.mjs'`)
-  and use OS CPU and memory limits where available.
+  and use OS CPU, memory and disk I/O limits where available. On Linux, use
+  `ionice -c3` to give tests low disk priority when a cgroup I/O limit is unavailable.
 - `verify/run.mjs` listens on port 8999 (outgoing-HTTP sink) and serves apps from 8910 upward.
   Parallel runs need `AG_SINK_PORT`/`AG_PORT`. Some apps' connectors are hard-wired to
   `127.0.0.1:8999`, so those apps only pass with the default sink port.
