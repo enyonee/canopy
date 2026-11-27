@@ -4,12 +4,44 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { prepare, buildRequest, mapResponse, deliverRow, synthesize, DEFAULT_TIMEOUT_MS, RESPONSE_CAP } from '../runtime/connectors/engine.mjs';
-import { validate } from '../runtime/connectors/schema.mjs';
+import { validate, validateOutput } from '../runtime/connectors/schema.mjs';
+import fs from 'node:fs';
 import { checkDescriptor } from '../runtime/connectors/descriptor.mjs';
 import { originProblem } from '../runtime/connectors/template.mjs';
 import { BUILTIN } from '../runtime/connectors/builtin.mjs';
 import { TRANSPORTS } from '../runtime/transports.mjs';
 import { fakeFetch } from './helpers.mjs';
+
+test('compiled output validation preserves Canopy JSON semantics and diagnostics', () => {
+  const cases = [
+    [{ minLength: 2, maxLength: 2 }, ['x', '😀', 'abc', false]],
+    [{ enum: [{ x: 1, y: 2 }, null, ['x']] }, [{ x: 1, y: 2 }, { y: 2, x: 1 }, null, ['x'], ['y']]],
+    [JSON.parse('{"properties":{"__proto__":{"type":"string"}}}'), [JSON.parse('{"__proto__":42}'), {}]],
+    [{ items: { properties: { n: { minimum: 0, maximum: 4 } }, required: ['n'], additionalProperties: false } },
+      [[{ n: 0 }], [{ n: -1, extra: true }, {}, { n: 5 }], ['x']]],
+    [{ format: 'email', pattern: '@example\\.test$' }, ['x@example.test', '@example.test', 'x@else.test', 42]],
+  ];
+  for (const [schema, values] of cases)
+    for (const value of values) assert.deepEqual(validateOutput(schema, value), validate(schema, value, '', { extra: true }));
+});
+
+test('every shipped provider output compiles and matches interpretation', () => {
+  const output = (s) => s.enum?.[0] ?? ({
+    object: () => Object.fromEntries(Object.entries(s.properties ?? {}).map(([k, v]) => [k, output(v)])),
+    array: () => s.items ? [output(s.items)] : [], string: () => 'fixture@example.test',
+    integer: () => 1, number: () => 1, boolean: () => false, null: () => null,
+  }[s.type]?.() ?? null);
+  for (const entry of fs.readdirSync('connectors', { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const d = JSON.parse(fs.readFileSync(`connectors/${entry.name}/descriptor.json`, 'utf8'));
+    for (const { output: schema } of Object.values(d.operations)) {
+      if (!schema) continue;
+      for (const value of [output(schema), null, [], {}, { extra: 'provider-only' }]) {
+        assert.deepEqual(validateOutput(schema, value), validate(schema, value, '', { extra: true }), entry.name);
+      }
+    }
+  }
+});
 
 const pay = () => ({
   descriptor: 1, name: 'pay', timeoutMs: 5000, base: '{config.host}/v1',

@@ -184,7 +184,7 @@ test('Google Sheets uses offline consent and bounded RAW operations for the conf
       assert.equal(createHash('sha256').update(form.get('code_verifier')).digest('base64url'), codeChallenge);
       return Response.json({ access_token: 'sheets-token', refresh_token: 'sheets-refresh', expires_in: 3600 });
     }
-    assert.equal(req.headers.authorization, 'Bearer sheets-token');
+    assert.equal(new Headers(req.headers).get('authorization'), 'Bearer sheets-token');
     accesses.push(url);
     if (req.method === 'GET') {
       assert.equal(decodeURIComponent(url), root + "'Owner''s Sheet'!A3:T4?valueRenderOption=UNFORMATTED_VALUE&majorDimension=ROWS");

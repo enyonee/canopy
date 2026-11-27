@@ -8,12 +8,22 @@
 // `properties` is), items, enum, format (email date-time uri), minLength, maxLength,
 // pattern, minimum, maximum. Annotations: default, title, description, and
 // `message` (the text a failure at this node reports, "{value}" is the value) and `hint`.
+import { compiler } from './compiled.mjs';
+
 const TYPES = ['object', 'array', 'string', 'integer', 'number', 'boolean', 'null'];
 const FORMATS = {
   email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
   'date-time': (v) => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(v) && !Number.isNaN(Date.parse(v)),
   uri: (v) => { try { return Boolean(new URL(v)); } catch { return false; } },
 };
+const outputValidator = compiler(FORMATS);
+
+// Provider replies are JSON. A compiled check handles success; the existing
+// diagnostics preserve exact path, message and ordering on rejection.
+export function validateOutput(schema, value) {
+  return outputValidator(schema)(value) ? [] : validate(schema, value, '', { extra: true });
+}
+
 const ANNOTATIONS = ['default', 'title', 'description', 'message', 'hint'];
 export const KEYWORDS = ['type', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'format', 'minLength', 'maxLength',
   'pattern', 'minimum', 'maximum', ...ANNOTATIONS];

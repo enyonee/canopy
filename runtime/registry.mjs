@@ -16,9 +16,11 @@ import { BUILTIN } from './connectors/builtin.mjs';
 import { checkDescriptor } from './connectors/descriptor.mjs';
 import { synthesize } from './connectors/engine.mjs';
 import { fetchStripe } from './connectors/stripe.mjs';
+import { fetchAdyen } from './connectors/adyen.mjs';
 
 export const TABLES = ['fields', 'blocks', 'transports', 'functions', 'widgets'];
-const STRIPE_DESCRIPTOR = fileURLToPath(new URL('../connectors/stripe/descriptor.json', import.meta.url));
+const SDK_ADAPTERS = new Map(Object.entries({ stripe: fetchStripe, adyen: fetchAdyen }).map(([name, adapter]) =>
+  [fileURLToPath(new URL(`../connectors/${name}/descriptor.json`, import.meta.url)), adapter]));
 
 export function createRegistry() {
   return { fields: { ...FIELDS }, blocks: { ...CATALOG }, transports: { ...TRANSPORTS }, functions: { ...FUNCTIONS },
@@ -73,7 +75,7 @@ export async function loadPlugins(graph, baseDir) {
     try {
       const file = path.resolve(baseDir, p);
       if (p.endsWith('.json')) {
-        registerDescriptor(registry, JSON.parse(fs.readFileSync(file, 'utf8')), p, file === STRIPE_DESCRIPTOR ? fetchStripe : undefined);
+        registerDescriptor(registry, JSON.parse(fs.readFileSync(file, 'utf8')), p, SDK_ADAPTERS.get(file));
         continue;
       }
       const mod = await import(pathToFileURL(file).href);

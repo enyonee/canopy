@@ -32,13 +32,12 @@ export function shopifyProvider(config) {
     tokenUrl: base + '/admin/oauth/access_token',
     routes(token, fetchImpl) {
       async function query(document, variables) {
+        const { createAdminApiClient } = await import('@shopify/admin-api-client');
         const { accessToken } = await token();
-        const r = await fetchImpl(base + '/admin/api/' + VERSION + '/graphql.json', { method: 'POST', redirect: 'manual',
-          headers: { 'content-type': 'application/json', 'X-Shopify-Access-Token': accessToken },
-          body: JSON.stringify({ query: document, variables }), signal: AbortSignal.timeout(4500) });
-        if (!r.ok) throw new Error('Shopify request failed');
-        const result = await r.json();
-        if (result?.errors?.length || !result?.data) throw new Error('Shopify GraphQL rejected the query');
+        const client = createAdminApiClient({ storeDomain: base, apiVersion: VERSION, accessToken, retries: 0,
+          customFetchApi: (url, init) => fetchImpl(url, { ...init, redirect: 'manual', signal: AbortSignal.timeout(4500) }) });
+        const result = await client.request(document, { variables });
+        if (result.errors || !result.data) throw new Error('Shopify GraphQL rejected the query');
         return result.data;
       }
       return {

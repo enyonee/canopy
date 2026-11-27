@@ -5,6 +5,11 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+- **Libraries:** live Adyen, Google Sheets and Shopify requests use the provider
+  SDKs. Connector replies use compiled Ajv checks with the same drift diagnostics.
+- **CSV and acceptance:** entity exports serialize in batches; browser acceptance
+  uses Puppeteer with the existing Chrome installation.
+
 - **Stripe:** live requests for the shipped descriptor use the official Stripe Node
   SDK. API version, operation names and outbox retry rules stay the same.
 - **Uploads:** multipart forms stream to disk with size and part-count limits.

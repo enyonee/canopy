@@ -200,11 +200,6 @@ export function transitionsFor(graph, entity, row, vc = anyone) {
 
 export const enctype = (fields) => (fields.some((f) => f.type.upload) ? ' enctype="multipart/form-data"' : '');
 
-// CSV: one line per row, cells quoted when they need it, formatted like the page but without HTML.
-export function csv(header, rows) {
-  const cell = (v) => { const s = v === null || v === undefined ? '' : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  return [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
-}
 // A cell's plain-text value for export: labels for references and booleans, money as 12.34.
 export function plain(store, entity, f, row, labels = {}, vc = anyone, pre = noPre) {
   if (!mayReadField(store.graph, entity, f.name, row, vc)) return 'Hidden';

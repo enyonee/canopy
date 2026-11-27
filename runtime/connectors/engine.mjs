@@ -2,7 +2,7 @@
 // request, from the response it builds the outbox patch. No storage, no network of its
 // own — the caller passes `fetchImpl`. `synthesize` turns a descriptor into the
 // registry's transport, so the outbox delivers a descriptor's rows like any other.
-import { validate, withDefaults } from './schema.mjs';
+import { validate, validateOutput, withDefaults } from './schema.mjs';
 import { expand, expandUrl, pick, refs } from './template.mjs';
 import { sandboxAnswer } from './sandbox.mjs';
 import { METHODS, MAX_TIMEOUT_MS } from './descriptor.mjs';
@@ -121,7 +121,7 @@ async function readAnswer(op, res) {
     if (op.resultOnly) return { drift: [['/', 'the answer is not JSON']] };
     return { response: raw.slice(0, RESPONSE_CAP), drift: [['/', `the answer is not JSON: ${e.message}`]] };
   }
-  const drift = op.output ? validate(op.output, body, '', { extra: true }) : [];
+  const drift = op.output ? validateOutput(op.output, body) : [];
   /** @type {{ response?: string, result?: string, body?: any, drift: string[][] }} */
   const answer = { ...(op.resultOnly ? {} : { response: raw.slice(0, RESPONSE_CAP) }), drift, body };
   if (op.result) {

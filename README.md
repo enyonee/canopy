@@ -23,12 +23,12 @@ app.json ──► checker ──► SQLite schema + migrations
 
 ## Lightweight by design
 
-The runtime uses Node built-ins and two focused libraries:
+The runtime uses Node built-ins and focused libraries:
 
 | | |
 |---|---|
 | Runtime code | ~9.6k lines |
-| Runtime dependencies | `@fastify/busboy` for multipart forms and `stripe` for live Stripe delivery, both MIT |
+| Runtime dependencies | `@fastify/busboy`, `ajv`, `csv-stringify`, and the official Stripe and Adyen SDKs |
 | Build step | none for the runtime; optional fronts are built by `webgen` in their own project |
 | An app | one `app.json`: median **77 lines** across the 105 apps in this repo |
 | Storage | one SQLite file per app, migrated from the graph on start |
@@ -216,7 +216,7 @@ failing test in `tests/arch.test.mjs`, part of `npm test`.
 | `tasks/` | the 101 WebGen-Bench test tasks (instruction + `ui_instruct` cases) |
 | `webgen/` | the React front generator, its tests, and the Tailwind UI Plus components it draws on |
 | `plugins/` | shared plugins: `payment.mjs` (sandbox card gateway), `messaging.mjs` (SMS, WhatsApp) |
-| `verify/` | the acceptance harness, an HTTP sink for outgoing effects, and a zero-dependency headless-Chrome driver |
+| `verify/` | the acceptance harness, an HTTP sink for outgoing effects, and a Puppeteer driver for local Chrome |
 | `tests/` | runtime tests, architecture gates and coverage |
 | `REPORT.md`, `TESTS.md` | round-by-round report and test inventory (Russian) |
 | `AGENTS.md`, `CONTRIBUTING.md` | how to work on the repo: layout, gates, rules for agents, pull requests, versions |

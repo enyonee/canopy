@@ -31,11 +31,8 @@ async function listRoute(ctx, entity, fields, ov) {
   const q = url.searchParams.get('q') || '';
   const sort = sortOf(entity, ov);
   const opts = { search: ov.search || [], q, where, sort };
-  // CSV hydrates every matching row (store.list, already batched — item 3); the
-  // HTML/JSON page hydrates only the rows it shows (store.listPage — item 2).
   if (wantsCsv) {
-    const all = await store.list(entity, opts);
-    await exportRows(entity, entity, all, ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name), ov.labels || {});
+    await exportRows(entity, entity, opts, ov.columns || fields.filter((f) => !f.type.secret).map((f) => f.name), ov.labels || {});
     return true;
   }
   const pg = await paged(entity, opts, ov);

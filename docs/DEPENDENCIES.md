@@ -17,6 +17,23 @@ change the graph or bypass its outbox.
   The whole request is capped at four times this value plus 1 MiB. Forms also
   have limits of 32 files, 128 fields, and 1 MiB per text field. The exact-byte
   JSON and webhook parsers do not use Busboy.
+- [Adyen Node API Library](https://github.com/Adyen/adyen-node-api-library), MIT:
+  SDK methods build all three live requests. The custom HTTP client keeps
+  Checkout v71, the configured live origin, raw responses and Canopy retries.
+- [Ajv](https://ajv.js.org/), MIT: compiles connector output checks on first
+  use. The original diagnostic path still runs on rejection, and checking
+  graph schemas, defaults and inputs is unchanged.
+- [CSV Stringify](https://csv.js.org/stringify/), MIT: entity and saved-list
+  exports select ordered ids once, then reapply filters and hydrate and encode
+  up to 256 rows at a time. This reduces memory, but it is not a transaction
+  snapshot: rows changed or deleted during export can be omitted or reflect
+  their latest values. Derived sorting and filters retain the full-result path.
+- [Google Sheets](https://github.com/googleapis/google-api-nodejs-client),
+  Apache-2.0, and [Shopify Admin API](https://github.com/Shopify/shopify-app-js),
+  MIT: the bridges use per-API SDKs. OAuth grants, account binding, raw Sheet
+  writes, validation and data projections remain bridge responsibilities.
+- [Puppeteer Core](https://pptr.dev/), Apache-2.0, is development-only. It
+  launches installed Chrome for widget acceptance, with no browser download.
 
 ## Local measurements
 
@@ -35,14 +52,28 @@ the same CPU and disk. The benchmark asserts response fields and uploaded byte
 counts; Stripe request parameters and all seven response contracts are also
 compared in the test suite.
 
+The second migration was measured against `9b375e0`, on Node 22.23.4, one
+core, three alternating runs. The hashes of both CSV and JSON HTTP answers,
+along with the projected provider replies, matched in every run.
+
+| Scenario | Before | After |
+|---|---:|---:|
+| Map a 250-record reply, p50 | 402 us | 145 us |
+| Map a 250-record reply, p95 batch | 509 us | 187 us |
+| Export 12,000 rows (3.52 MB), total time | 147 ms | 213 ms |
+| Export peak process RSS | 114 MiB | 101 MiB |
+
+Reproduce with `node --expose-gc bench/csv-stream.mjs <checkout> 12000` and
+`node bench/hotpaths.mjs <checkout> connector`. CSV favors lower peak memory
+over total download time; the client and server share the benchmark process.
+
 ## Next candidates
 
 | Order | Candidate | What to prove before switching |
 |---|---|---|
-| 1 | [`@adyen/api-library`](https://github.com/Adyen/adyen-node-api-library) | MIT and a custom HTTP client. Prove the three existing operations: create/get Pay by Link and refund with the existing idempotency and `Retry-After`. |
-| 2 | [`@paypal/paypal-server-sdk`](https://github.com/paypal/PayPal-TypeScript-Server-SDK) | Keep the HTTP descriptor for now: npm metadata for 2.5.0 says MIT, but the published tarball's `package/LICENSE` contains PayPal's SDK terms. Resolve distribution terms before adopting and prove exact Orders/Payments coverage, including ambiguous capture/refund recovery. |
-| 3 | [`@mollie/api-client`](https://github.com/mollie/mollie-api-node), [`@googleapis/sheets`](https://github.com/googleapis/google-api-nodejs-client), [`@shopify/admin-api-client`](https://github.com/Shopify/shopify-app-js) | Mollie calls its Node client community-maintained; check endpoint and status mapping. Pilot the per-API Sheets and Shopify Admin packages inside their existing bridges, retaining tenant scope. |
-| 4 | [Ajv](https://ajv.js.org/guide/managing-schemas.html), [Scalar OpenAPI parser](https://github.com/scalar/scalar/blob/main/packages/openapi-parser/README.md) | Compare schema acceptance and exact diagnostic ordering against the interpreter. Compile at descriptor load. Keep the importer offline and do not dereference remote URLs or files outside the input. |
+| 1 | [`@mollie/api-client`](https://github.com/mollie/mollie-api-node) | Community-maintained according to Mollie; check endpoint and status mapping. |
+| 2 | [Scalar OpenAPI parser](https://github.com/scalar/scalar/blob/main/packages/openapi-parser/README.md) | Keep the importer offline; do not dereference remote URLs or files outside the input. |
+| 3 | [`@paypal/paypal-server-sdk`](https://github.com/paypal/PayPal-TypeScript-Server-SDK) | Keep HTTP for now: npm metadata for 2.5.0 says MIT, but the published tarball's `package/LICENSE` contains PayPal's SDK terms. Resolve distribution terms before adopting. |
 
 Use regional provider SDKs only when the required operations and licensing are
 verified. An SDK's existence alone is not a reason to replace a bounded

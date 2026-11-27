@@ -31,6 +31,48 @@ const startStripe = { amountMinor: 1234, currency: 'usd', attemptId: 'order-123'
 const startBog = { amount: 12.34, attemptId: 'order-123', productId: 'coffee', successUrl: RETURN, cancelUrl: RETURN, callbackUrl: RETURN };
 const startTbc = { amount: 12.34, attemptId: 'order-123', returnUrl: RETURN };
 
+test('Adyen SDK keeps the v71 requests, exact response patches and retry headers', async () => {
+  const d = descriptor('adyen');
+  const { registry, errors } = await loadPlugins({ plugins: ['connectors/adyen/descriptor.json'] }, process.cwd());
+  assert.deepEqual(errors, []);
+  const transport = registry.transports.adyen;
+  const config = { endpointPrefix: 'fixture', merchantAccount: 'merchant', countryCode: 'NL' };
+  const cases = [
+    ['createCheckout', { orderId: 'order-41', amountMinor: 1250, currency: 'EUR', returnUrl: RETURN },
+      { id: 'PL12345', url: 'https://eu.adyen.link/PL12345', status: 'active', reference: 'order-41', amount: { value: 1250, currency: 'EUR' } }],
+    ['getCheckout', { id: 'PL12345' }, { id: 'PL12345', status: 'completed', reference: 'order-41', amount: { value: 1250, currency: 'EUR' } }],
+    ['refundCheckout', { paymentPspReference: '123456789', reference: 'refund-41', amountMinor: 1250, currency: 'EUR' },
+      { pspReference: '987654321', paymentPspReference: '123456789', status: 'received', reference: 'refund-41' }],
+  ];
+  for (const [op, input, body] of cases) {
+    const delivery = row(op, input);
+    const request = buildRequest(d, config, op, input, opts);
+    const legacy = await deliverRow(d, delivery, config, { ...opts, fetchImpl: async () => reply(body) });
+    const patch = await transport.deliver(delivery, config, { ...opts, fetchImpl: async (url, init) => {
+      assert.equal(url, request.url);
+      assert.equal(init.method, request.method);
+      assert.equal(init.redirect, 'manual');
+      assert.deepEqual(init.headers, request.headers);
+      assert.deepEqual(JSON.parse(init.body || 'null'), JSON.parse(request.body || 'null'));
+      return reply(body);
+    } });
+    assert.deepEqual(patch, legacy);
+    assert.equal(patch.status, 'sent');
+  }
+  const [op, input] = cases[0];
+  const limited = await transport.deliver(row(op, input), config, { ...opts, fetchImpl: async () =>
+    new Response('not JSON', { status: 429, headers: { 'Retry-After': '20' } }) });
+  assert.equal(limited.retryAfter, '20');
+  assert.equal(limited.code, 429);
+  const drift = await transport.deliver(row(op, input), config, { ...opts, fetchImpl: async () => new Response('not JSON') });
+  assert.equal(drift.code, 502);
+  const clock = { setTimer: (fn) => fn(), clear: () => {} };
+  await assert.rejects(transport.deliver(row(op, input), config, { ...opts, clock, fetchImpl: bogus }), { fault: 'timeout' });
+  // The SDK target must agree with the descriptor before sending anything.
+  await assert.rejects(transport.deliver(row(op, input), { ...config, endpointPrefix: 'Bad Host' }, { ...opts, fetchImpl: bogus }),
+    /differs from its descriptor|Invalid URL/);
+});
+
 async function stripeTransport() {
   const { registry, errors } = await loadPlugins({ plugins: ['connectors/stripe/descriptor.json'] }, process.cwd());
   assert.deepEqual(errors, []);

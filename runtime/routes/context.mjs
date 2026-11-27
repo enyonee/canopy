@@ -2,7 +2,8 @@
 // request. `vc` (view context) is the read-only "who is looking, what may
 // they do" object render.mjs already expects; `send`/`redirect`/`ok`/`deny`
 // are the only ways a route module answers the client.
-import { forbiddenPage, csv, plain, label, prefetched, refPairs } from '../render.mjs';
+import { forbiddenPage, plain, label, prefetched, refPairs } from '../render.mjs';
+import { streamCsv } from './csv.mjs';
 import { parseMultipart, TooBig } from './multipart.mjs';
 export { TooBig } from './multipart.mjs';
 
@@ -100,12 +101,23 @@ function createListHelpers(url, store, sendCsv, vc) {
     if (field && (field === 'id' || store.field(entity, field))) return { field, dir: url.searchParams.get('dir') === 'desc' ? 'desc' : 'asc' };
     return ov.sort || null;
   };
-  const exportRows = async (name, entity, rows, cols, labels) => {
+  const exportRows = (name, entity, opts, cols, labels) => {
     const fields = store.fields[entity];
-    // The labels of every reference cell, loaded before the first line is formatted.
-    const pre = prefetched(await store.labelsFor(refPairs(fields, cols, rows)));
-    const pick = (r, c) => { const f = fields.find((x) => x.name === c); return f ? plain(store, entity, f, r, labels, vc, pre) : r[c]; };
-    return sendCsv(name, cols.map(label), rows.map((r) => cols.map((c) => pick(r, c))));
+    const columns = cols.map((c) => fields.find((f) => f.name === c));
+    const format = async (rows) => {
+      const pre = prefetched(await store.labelsFor(refPairs(fields, cols, rows)));
+      return rows.map((row) => cols.map((c, i) => columns[i] ? plain(store, entity, columns[i], row, labels, vc, pre) : row[c]));
+    };
+    async function* records() {
+      const ids = await store.exportIds(entity, opts);
+      if (ids === null) {
+        const rows = await store.list(entity, opts);
+        for (let i = 0; i < rows.length; i += 256) yield await format(rows.slice(i, i + 256));
+      } else {
+        for (let i = 0; i < ids.length; i += 256) yield await format(await store.exportBatch(entity, opts, ids.slice(i, i + 256)));
+      }
+    }
+    return sendCsv(name, cols.map(label), records());
   };
   return { paged, sortOf, exportRows };
 }
@@ -146,7 +158,7 @@ export async function createContext({ req, res, url, graph, store, perms, sess, 
   const send = (code, html) => { res.writeHead(code, { 'content-type': 'text/html; charset=utf-8', ...headers }); res.end(base ? rebase(html, base) : html); };
   const redirect = (to) => { res.writeHead(303, { location: base ? rebaseTo(to, base) : to, ...headers }); res.end(); };
   const ok = (to, msg) => redirect(msg ? `${to}${to.includes('?') ? '&' : '?'}ok=${encodeURIComponent(msg)}` : to);
-  const sendCsv = (name, header, lines) => { res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}.csv"`, ...headers }); res.end(csv(header, lines)); };
+  const sendCsv = (name, header, batches) => streamCsv(res, headers, name, header, batches);
   const sendJson = (code, data) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', ...headers }); res.end(JSON.stringify(data)); };
   // The one place HTML vs JSON is decided for a route that already built both:
   // called at the exact point a route would otherwise `send(code, html)`.

@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
+    "puppeteer-core": "25.18.1",
     "typescript": "^5.9.3"
   },
   "description": "A lightweight app runtime: one JSON document in, a working app out.",
@@ -34,7 +35,12 @@
     "declarative"
   ],
   "dependencies": {
+    "@adyen/api-library": "32.3.0",
     "@fastify/busboy": "3.2.6",
+    "@googleapis/sheets": "18.1.3",
+    "@shopify/admin-api-client": "2.0.1",
+    "ajv": "8.20.0",
+    "csv-stringify": "6.9.0",
     "stripe": "23.2.0"
   }
 }

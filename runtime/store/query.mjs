@@ -175,6 +175,26 @@ export function list(entity, opts = {}) {
   return rows;
 }
 
+// Select the export order once. Keep only ids between batches; derived
+// filters or ordering still require the full logical result.
+export function exportIds(entity, opts) {
+  const derived = this.clauses(entity, opts.where).later.length || (opts.sort && this.field(entity, opts.sort.field)?.derive);
+  if (derived) return null;
+  const { sql, vals } = buildWhere(this, entity, opts);
+  const table = this.drv.dialect.quote(entity.toLowerCase());
+  return this.drv.all(`SELECT id FROM ${table}${sql} ${orderBy(this, entity, opts.sort)}`, vals).map((r) => r.id);
+}
+
+export function exportBatch(entity, opts, ids) {
+  const { sql, vals } = buildWhere(this, entity, opts);
+  const { quote, phs } = this.drv.dialect;
+  // Recheck the entire filter, including ownership, when reading the batch.
+  const selection = `${sql || ' WHERE'}${sql ? ' AND' : ''} id IN (${phs(ids.length, vals.length + 1)})`;
+  const raw = this.drv.all(`SELECT * FROM ${quote(entity.toLowerCase())}${selection}`, [...vals, ...ids]);
+  const rows = new Map(raw.map((r) => [r.id, r]));
+  return this.hydratePage(entity, ids.map((id) => rows.get(id)).filter(Boolean));
+}
+
 // Page-before-hydrate (item 2): when neither an in-memory ("later") where nor
 // a derived-field sort forces a full scan, SQL itself counts and pages the
 // rows, and only the page's own rows are ever hydrated (batched — item 3).

@@ -39,7 +39,7 @@ function dashboardCsv(ctx, d, mine, pre) {
       lines.push([c.title, c.metric.fn, group(g, r.grp) ?? '', mf?.kind === 'money' && c.metric.fn !== 'count' && r.v != null ? formatMoney(Math.round(r.v)) : (r.v ?? '')]);
     }
   });
-  return sendCsv(d.id, ['Section', 'Metric', 'Group', 'Value'], lines);
+  return sendCsv(d.id, ['Section', 'Metric', 'Group', 'Value'], [lines]);
 }
 
 // A money aggregate, converted to the major-unit number every JSON row
@@ -106,7 +106,7 @@ async function dashboard(ctx) {
   const mine = { ...d, cards: [], tables: [], charts: [] };
   for (const part of ['cards', 'tables', 'charts']) for (const x of d[part] || []) mine[part].push(await scoped(x));
   const pre = await dashboardPre(ctx, d, mine, period);
-  if (wantsCsv) { dashboardCsv(ctx, d, mine, pre); return true; }
+  if (wantsCsv) { await dashboardCsv(ctx, d, mine, pre); return true; }
   if (ctx.wantsJSON) { dashboardJson(ctx, mine, pre); return true; }
   ctx.send(200, dashboardView(graph, store, mine, flash, vc, period, pre));
   return true;
@@ -122,7 +122,7 @@ async function list(ctx) {
   const sort = sortOf(l.entity, view);
   const opts = { where, sort, search: l.search || [], q: url.searchParams.get('q') || '' };
   const cols = view.columns || store.fields[l.entity].filter((f) => !f.type.secret).map((f) => f.name);
-  if (wantsCsv) { await exportRows(l.id, l.entity, await store.list(l.entity, opts), cols, view.labels || {}); return true; }
+  if (wantsCsv) { await exportRows(l.id, l.entity, opts, cols, view.labels || {}); return true; }
   const pg = await paged(l.entity, opts, view);
   if (ctx.wantsJSON) { ctx.sendJson(200, { rows: await jsonRows(ctx, l.entity, pg.rows), total: pg.total, page: pg.page, pages: pg.pages }); return true; }
   const g = { ...graph, override: { ...graph.override, [`${l.entity}.list`]: view } };

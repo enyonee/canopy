@@ -382,6 +382,8 @@ declare module './store.mjs' {
     countRaw(entity: string, opts?: Record<string, any>): number;
     list(entity: string, opts?: Record<string, any>): any[];
     listPage(entity: string, opts?: Record<string, any>, page?: { page?: number; pageSize?: number }): { rows: any[]; total: number; page: number; pages: number };
+    exportIds(entity: string, opts: Record<string, any>): number[] | null;
+    exportBatch(entity: string, opts: Record<string, any>, ids: number[]): any[];
     buildAggCache(entity: string, ids: any[], cache?: AggCache, seen?: Set<string>): AggCache;
     aggValue(entity: string, row: any, node: any, cache: AggCache | null, clock?: Date): any;
     hydratePage(entity: string, rows: any[]): any[];

@@ -137,6 +137,7 @@ function requestHandler({ graph, store, perms, sess, interp, trace, registry, fi
       if (e instanceof TooBig) { trace({ kind: 'refused', message: e.message }); ctx.send(413, noticePage(graph, ctx.vc, 'Too large', e.message)); return; }
       trace({ kind: 'error', message: String(e && e.message), stack: String(e && e.stack) });
       console.error(e && e.stack);
+      if (res.headersSent || res.destroyed) { res.destroy(); return; }
       if (ctx.api) ctx.sendJson(500, { ok: false, status: 500, errors: [String(e && e.message)] });
       else ctx.send(500, errorPage(graph, String(e && e.message)));
     }
