@@ -106,8 +106,12 @@ export const checks = [
         await b.until(`document.querySelector('[data-node-group="2"]')`);
         await b.eval(`document.querySelector('[data-node-group="2"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 260, clientY: 200 }))`);
         await b.eval(`document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 300, clientY: 260, movementX: 40, movementY: 60 }))`);
+        const labelX = `document.querySelector('[data-node-group="2"] [data-label]').getAttribute('x')`;
+        await b.until(`${labelX} !== '${before.body.x}'`);
+        const previewX = await b.eval(labelX);
         await b.eval(`document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 340, clientY: 300 }))`);
-        await b.until(`document.querySelector('[data-node-group="2"] [data-label]').getAttribute('x') !== '${before.body.x}'`);
+        // The preview is local; the widget renders the drop point only after the save succeeds.
+        await b.until(`${labelX} !== ${JSON.stringify(previewX)}`);
         must(!b.errors.length, `page errors while dragging: ${b.errors.join('; ')}`);
       } finally { await b.close(); }
       const after = await jsonGet(base, '/Node/2');
