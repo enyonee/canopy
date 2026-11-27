@@ -18,9 +18,10 @@ const STROKES = ['slategray', 'seagreen', 'goldenrod', 'crimson', 'slateblue', '
 const DRAG_THRESHOLD = 6; // px of total movement below which a mousedown+mouseup counts as a click, not a drag
 
 function shapeEl(n) {
-  if (n.shape === 'rectangle') return `<rect data-node="${n.id}" x="${n.x - 42}" y="${n.y - 22}" width="84" height="44" rx="8" fill="${n.fill}" stroke="${n.stroke}" stroke-width="2"></rect>`;
-  if (n.shape === 'diamond') return `<polygon data-node="${n.id}" points="${n.x},${n.y - 30} ${n.x + 54},${n.y} ${n.x},${n.y + 30} ${n.x - 54},${n.y}" fill="${n.fill}" stroke="${n.stroke}" stroke-width="2"></polygon>`;
-  return `<ellipse data-node="${n.id}" cx="${n.x}" cy="${n.y}" rx="48" ry="26" fill="${n.fill}" stroke="${n.stroke}" stroke-width="2"></ellipse>`;
+  const fill = color(n.fill, 'white'), stroke = color(n.stroke, 'slategray');
+  if (n.shape === 'rectangle') return `<rect data-node="${n.id}" x="${n.x - 42}" y="${n.y - 22}" width="84" height="44" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="2"></rect>`;
+  if (n.shape === 'diamond') return `<polygon data-node="${n.id}" points="${n.x},${n.y - 30} ${n.x + 54},${n.y} ${n.x},${n.y + 30} ${n.x - 54},${n.y}" fill="${fill}" stroke="${stroke}" stroke-width="2"></polygon>`;
+  return `<ellipse data-node="${n.id}" cx="${n.x}" cy="${n.y}" rx="48" ry="26" fill="${fill}" stroke="${stroke}" stroke-width="2"></ellipse>`;
 }
 
 function svgOf(state) {
@@ -40,11 +41,12 @@ function svgOf(state) {
 }
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+const color = (value, fallback) => CSS.supports('color', value) ? esc(value) : fallback;
 
 function editorHtml(node) {
   if (!node) return '<p data-editor-empty>Click a shape to edit it, or drag one from the palette onto the canvas.</p>';
   const opt = (list, cur) => list.map((v) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${v}</option>`)
-    .join('') + (list.includes(cur) ? '' : `<option value="${cur}" selected>${cur}</option>`);
+    .join('') + (list.includes(cur) ? '' : `<option value="${esc(cur)}" selected>${esc(cur)}</option>`);
   return `<div data-editor>
     <label>Label <input data-field="label" value="${esc(node.label)}"></label>
     <label>Fill <select data-field="fill">${opt(FILLS, node.fill)}</select></label>

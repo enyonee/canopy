@@ -120,12 +120,16 @@ export const checks = [
     } },
   { task: 'Adjust the style of an element (e.g., change the color or border)',
     run: async ({ base, must }) => {
+      const badColor = '<em>not a color</em>';
+      must((await jsonPost(base, '/Node/3', { fill: badColor })).status === 200, 'could not set color fixture');
       const b = await openBrowser(`${base}/Diagram/1`);
       try {
         await b.until(`document.querySelector('[data-node-group="3"]')`);
+        must(await b.eval(`document.querySelector('[data-node-group="3"] polygon').getAttribute('fill')`) === 'white', 'invalid fill uses a safe color');
         await b.eval(`document.querySelector('[data-node-group="3"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 440, clientY: 200 }))`);
         await b.eval(`document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 440, clientY: 200 }))`);
         await b.until(`document.querySelector('[data-field="stroke"]')`);
+        must(await b.eval(`document.querySelector('[data-field="fill"]').value`) === badColor, 'color options display literal text');
         await b.eval(`(() => { document.querySelector('[data-field="fill"]').value = 'mistyrose'; document.querySelector('[data-field="stroke"]').value = 'crimson'; })()`);
         await b.eval(`document.querySelector('[data-apply]').click()`);
         await b.until(`document.querySelector('[data-node-group="3"] polygon').getAttribute('fill') === 'mistyrose'`);

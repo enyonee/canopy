@@ -176,9 +176,13 @@ export const checks = [
       const id2 = created2.body.id;
       await bob.post(`/Room/${id2}/action/join`, {}, { json: true });
       await alice.post(`/Room/${id2}/action/startHand`, {}, { json: true });
+      const bobSeat2 = (await seatsOf(admin, id2)).find((seat) => seat.label === 'Bob');
+      const labelFixture = '<em>Bob & guest</em>';
+      must((await admin.post(`/Seat/${bobSeat2.id}`, { label: labelFixture }, { json: true })).status === 200, 'could not set label fixture');
       const b = await openBrowser(`${base}/Room/${id2}`, { cookie: alice.cookie() });
       try {
         await b.until(`document.querySelectorAll('[data-seat]').length === 2`, 8000);
+        must(await b.eval(`document.querySelector('[data-seat="1"] b').textContent`) === labelFixture, 'seat labels are literal text');
         await b.eval(`document.querySelector('[data-action="call"]').click()`);
         await b.until(`document.querySelector('[data-seat="0"] [data-committed]')?.textContent.includes('20')`, 8000);
         must(!b.errors.length, `page errors: ${b.errors.join('; ')}`);
