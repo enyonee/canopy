@@ -13,7 +13,7 @@
 
 ---
 
-- [ ] `npm run gate` passes (tests, architecture gates, coverage, types, mutations), for runtime changes
+- [ ] `npm run gate` passes locally (tests, async-store tests, architecture gates, coverage, types), for runtime changes
 - [ ] `node verify/run.mjs` passes
 - [ ] I reviewed every changed file and exercised the changed behaviour myself
 - [ ] `docs/FORMAT.md` updated, for format changes
