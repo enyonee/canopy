@@ -133,11 +133,19 @@ function navLinks(graph, vc) {
 // (direct, ref:<roles.entity>) owner field names, plus any admin — one predicate,
 // consulted by every output a field can reach (HTML detail/list, JSON, CSV), so
 // declaring it once on ".detail" is never bypassed by reading the row another way.
-function mayReadField(graph, entity, field, row, vc = anyone) {
+export function mayReadField(graph, entity, field, row, vc = anyone) {
   const owner = graph?.override?.[`${entity}.detail`]?.private?.[field];
   if (!owner || !row) return true;
   if (vc.isAdmin) return true;
   return vc.user ? String(row[owner]) === String(vc.user.id) : false;
+}
+
+export function mayEditField(graph, entity, field, row, vc) {
+  if (!mayReadField(graph, entity, field, row, vc)) return false;
+  const rules = graph?.override?.[`${entity}.detail`]?.private;
+  // An owner reference grants read access to the private fields it controls.
+  if (!rules || vc.isAdmin || !Object.values(rules).includes(field)) return true;
+  return Boolean(vc.user) && String(row[field]) === String(vc.user.id);
 }
 const HIDDEN = '<span class="muted">Hidden</span>';
 

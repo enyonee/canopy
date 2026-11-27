@@ -5,7 +5,7 @@
 // is "no entity at /X", and an unmatched shape under a real entity really is
 // "no route". Row actions/transitions/related-add are routes/rows.mjs, called
 // from here once the row itself is resolved.
-import { errorPage, label } from '../render.mjs';
+import { errorPage, label, mayEditField } from '../render.mjs';
 import { listView } from '../render/list.mjs';
 import { formFieldsFor } from '../render/form.mjs';
 import { handleRow } from './rows.mjs';
@@ -85,6 +85,7 @@ async function updateRoute(ctx, entity, fields, formOv, id, row) {
   if (!vc.can(entity, 'edit', row)) { ctx.deny(); return true; }
   const submitted = interp.onlyWritable(entity, user, await ctx.body(), formFieldsFor(formOv, role));
   ctx.submitted(entity, submitted);
+  for (const key of Object.keys(submitted)) if (!mayEditField(graph, entity, key, row, vc)) delete submitted[key];
   const problems = await interp.validateValues(entity, submitted, { partial: true, existing: await store.raw(entity, id) });
   if (problems.length) {
     ctx.answer(400, await renderForm(ctx, entity, fields, { ...row, ...submitted }, 'edit', problems), { ok: false, status: 400, errors: problems });

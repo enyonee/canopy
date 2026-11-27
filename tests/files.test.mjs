@@ -47,6 +47,34 @@ before(async () => {
 });
 after(() => s.close());
 
+test('FILES: private uploads are only downloadable by the field owner and admins', async () => {
+  const g = graph({ Product: [{ name: 'Private', owner: 2, photo: { from: 'seed/mug.png' } }] });
+  g.data.Product.owner = 'ref:User';
+  g.data.Product.memo = 'text=owner-only';
+  g.override = { 'Product.detail': { private: { photo: 'owner', memo: 'owner' } } };
+  g.seed.User.push({ email: 'owner@files', password: 'owner', role: 'member' },
+    { email: 'other@files', password: 'other', role: 'member' });
+  const app = await boot(appWith(g));
+  try {
+    const file = '/file/Product/1/photo';
+    assert.match((await app.get(file)).location, /^\/login/);
+    await app.login('other@files', 'other');
+    assert.equal((await app.get(file)).status, 403);
+    const edit = await app.get('/Product/1/edit');
+    assert.equal(edit.status, 200);
+    assert.doesNotMatch(edit.html, /owner-only|name="(?:memo|owner)"|mug\.png/);
+    assert.equal((await app.post('/Product/1', { name: 'Renamed', memo: 'do not write', owner: 3 })).status, 303);
+    const current = await app.app.store.get('Product', 1);
+    assert.equal(current.memo, 'owner-only');
+    assert.equal(String(current.owner), '2');
+    await app.login('owner@files', 'owner');
+    assert.equal((await app.get(file)).status, 200);
+    assert.match((await app.get('/Product/1/edit')).html, /owner-only/);
+    await app.login('root@files', 'root');
+    assert.equal((await app.get(file)).status, 200);
+  } finally { app.close(); }
+});
+
 test('FILES: sniff names a raster image by its first bytes, never by its name, and never an SVG', () => {
   const sniff = FIELDS.image.sniff;
   assert.deepEqual([PNG, JPEG, GIF, WEBP].map(sniff), ['png', 'jpeg', 'gif', 'webp']);

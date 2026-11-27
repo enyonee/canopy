@@ -31,14 +31,14 @@ export function detailNeeds(graph, store, entity, fields, row, vc, kids) {
 function transitionForms(graph, store, entity, fields, row, vc, pre) {
   return transitionsFor(graph, entity, row, vc).map((t) =>
     `<form class="card inline-block" method="post" action="/${entity}/${row.id}/go/${t.name}">
-      ${t.fields?.length ? formFields(store, entity, fields, row, t.fields, { pre }) : ''}
+      ${t.fields?.length ? formFields(store, entity, fields, row, t.fields, { pre, vc }) : ''}
       <p><button type="submit">${esc(t.title || label(t.name))}</button></p></form>`).join('');
 }
 
 function actionForms(graph, store, entity, fields, row, vc, names, pre) {
   return formActions(graph, entity, row, vc, names)
     .map((act) => `<form class="card inline-block" method="post" action="/${entity}/${row.id}/action/${act.name}">
-      ${formFields(store, entity, fields, row, act.fields, { pre })}
+      ${formFields(store, entity, fields, row, act.fields, { pre, vc })}
       <p><button type="submit">${esc(act.title || label(act.name))}</button></p></form>`).join('');
 }
 

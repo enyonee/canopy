@@ -2,7 +2,7 @@
 // POST /action/<name> (an action with no "in").
 import fs from 'node:fs';
 import path from 'node:path';
-import { errorPage, noticePage } from '../render.mjs';
+import { errorPage, mayReadField, noticePage } from '../render.mjs';
 import { outboxView } from '../render/pages.mjs';
 import { noReplay } from '../settle.mjs';
 
@@ -54,9 +54,10 @@ async function file(ctx) {
   if (!entity || !f || !f.type.upload) { send(404, errorPage(graph, 'no such file')); return true; }
   if (!vc.can(entity, 'view')) { ctx.deny(); return true; }
   const row = await store.get(entity, id);
-  if (!row || !row[fieldName]) { send(404, errorPage(graph, 'no such file')); return true; }
+  if (!row) { send(404, errorPage(graph, 'no such file')); return true; }
   await vc.prime(entity, [row]);
-  if (!vc.can(entity, 'view', row)) { ctx.deny(); return true; }
+  if (!vc.can(entity, 'view', row) || !mayReadField(graph, entity, fieldName, row, vc)) { ctx.deny(); return true; }
+  if (!row[fieldName]) { send(404, errorPage(graph, 'no such file')); return true; }
   const at = path.join(filesDir, path.basename(row[fieldName]));
   if (!fs.existsSync(at)) { send(404, errorPage(graph, 'file is missing on disk')); return true; }
   const raster = f.type.sniff?.(headOf(at));

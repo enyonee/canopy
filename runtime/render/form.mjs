@@ -2,7 +2,7 @@
 // natural order. Shared by Entity.form, the related add-form (detail.mjs) and
 // /register (pages.mjs).
 import { isStored } from '../spec.mjs';
-import { esc, label, anyone, noPre, page, enctype } from '../render.mjs';
+import { esc, label, anyone, noPre, page, enctype, mayEditField } from '../render.mjs';
 
 // The fields a form renders, in order: stored, visible (the state field only when asked for by name),
 // with an input. Shared by the renderer (formFields) and by the route that loads what they need.
@@ -15,8 +15,8 @@ export function inputFields(store, entity, fields, only, skip = []) {
 // The target entities whose rows those inputs offer (`ctx.options(target)`): load them first, `Store#optionsFor`.
 export const inputTargets = (store, entity, fields, only, skip = []) => inputFields(store, entity, fields, only, skip).filter((f) => f.target).map((f) => f.target);
 
-export function formFields(store, entity, fields, row, only, { skip = [], pre = noPre } = {}) {
-  return inputFields(store, entity, fields, only, skip).map((f) =>
+export function formFields(store, entity, fields, row, only, { skip = [], pre = noPre, vc = anyone } = {}) {
+  return inputFields(store, entity, fields, only, skip).filter((f) => !row?.id || mayEditField(store.graph, entity, f.name, row, vc)).map((f) =>
     `<label for="f_${f.name}">${esc(label(f.name))}${f.required ? ' *' : ''}</label>${f.type.input(f, row?.[f.name], { esc, options: pre.options, entity, row })}`).join('');
 }
 
@@ -43,7 +43,7 @@ export function formView(graph, store, entity, fields, row, mode, errors = [], v
   return page(graph, {
     title, vc, flash,
     body: `<h2>${esc(title)}</h2>${problems}${ov.intro ? `<p>${esc(ov.intro)}</p>` : ''}
-      <form class="card" method="post" action="${action}"${enctype(fields)}>${formFields(store, entity, fields, row, only, { skip, pre })}
+      <form class="card" method="post" action="${action}"${enctype(fields)}>${formFields(store, entity, fields, row, only, { skip, pre, vc })}
       <p><button type="submit">${esc(ov.submit || (mode === 'new' ? 'Submit' : 'Save'))}</button>
       <a class="btn" href="/${entity}">Cancel</a></p></form>`,
   });
