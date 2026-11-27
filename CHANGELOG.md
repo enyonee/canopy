@@ -5,6 +5,13 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.8.0 (2026-11-27)
+
+- **External data source writes.** Opt in to inserts on SQL and MongoDB
+  sources or appends to configured Redis lists. PostgreSQL, MySQL/MariaDB,
+  SQLite, SQL Server and MongoDB also support single-key updates.
+  Writes use a distinct credential; existing datasets stay read-only.
+
 ## 0.7.0 (2026-11-27)
 
 - **External data sources.** Read bounded pages from allowlisted PostgreSQL,

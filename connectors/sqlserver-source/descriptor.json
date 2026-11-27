@@ -101,6 +101,109 @@
         "rowsJson": "$.rowsJson"
       },
       "resultOnly": true
+    },
+    "insertRow": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "values": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "values"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/sqlserver/insert",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.writeToken}"
+        },
+        "body": {
+          "dataset": {
+            "$": "config.dataset"
+          },
+          "values": {
+            "$": "input.values"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "affected": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "affected"
+        ]
+      },
+      "result": {
+        "affected": "$.affected"
+      },
+      "resultOnly": true
+    },
+    "updateRow": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "key": {},
+          "values": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "key",
+          "values"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/sqlserver/update",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.writeToken}"
+        },
+        "body": {
+          "dataset": {
+            "$": "config.dataset"
+          },
+          "key": {
+            "$": "input.key"
+          },
+          "values": {
+            "$": "input.values"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "affected": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "affected"
+        ]
+      },
+      "result": {
+        "affected": "$.affected"
+      },
+      "resultOnly": true
     }
   },
   "sandbox": {
@@ -120,6 +223,20 @@
             ],
             "hasMore": false,
             "rowsJson": "[[\"1\",\"Example\"]]"
+          }
+        }
+      ],
+      "insertRow": [
+        {
+          "body": {
+            "affected": 1
+          }
+        }
+      ],
+      "updateRow": [
+        {
+          "body": {
+            "affected": 1
           }
         }
       ]

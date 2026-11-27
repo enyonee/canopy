@@ -1,7 +1,7 @@
 # External database sources
 
-These connectors read external data through a loopback process, independently
-of Canopy's internal application database.
+These connectors read and optionally write external data through a loopback
+process, independently of Canopy's internal application database.
 
 | Descriptor | Driver |
 | --- | --- |
@@ -110,6 +110,59 @@ not bulk exports or an automatic synchronization job.
 Sandbox is the default; it never reaches the bridge or reads credentials.
 Use the normal Canopy connector deployment controls to enable live mode.
 
+## Enable writes
+
+By default existing datasets remain read-only. Add a `write` object to
+the dataset in the bridge configuration, for example:
+
+```json
+{
+  "connectionEnv": "ORDERS_WRITE_DSN",
+  "columns": ["id", "status", "total"],
+  "key": "id"
+}
+```
+
+Set `CANOPY_DATA_WRITE_TOKEN` to a separate random credential of at least
+24 printable characters. Map the descriptor's `writeToken` slot to that
+secret only in applications authorized to write. The read token cannot
+write and the write token cannot read. The write token authorizes all
+write-enabled datasets on the bridge. Put write credentials in the bridge
+environment only, preferably in a different database account from the
+read account. SQLite uses a separate writable handle to an existing file.
+
+| Databases | Operations |
+| --- | --- |
+| PostgreSQL, MySQL/MariaDB, SQLite, SQL Server, MongoDB | `insertRow`, `updateRow` when a key is configured |
+| ClickHouse | `insertRow` only; no asynchronous mutations |
+| Redis | `appendValue` only, to the configured list |
+
+`insertRow` takes `{ "values": { ... } }`; `updateRow` takes
+`{ "key": ..., "values": { ... } }`. Values are null, booleans, finite
+numbers (integers in the safe JSON range), or UTF-8 strings up to 4 KiB.
+The bridge request is limited to 8 KiB total. Omitted insert columns
+use the database defaults. An update cannot change its own key column,
+create a missing row, or specify a predicate. Configure an indexed unique
+key and do not change the schema while the writer is running. SQL writers
+roll back if more than one row is matched; MySQL/MariaDB writers require an
+InnoDB table. Grant only needed INSERT and UPDATE rights, and SELECT on
+the key column where the engine needs it for the update predicate.
+
+MongoDB updates use `key: "_id"`. The value is a string unless
+`objectId: true` is configured, in which case pass a 24-character hex
+string; an insert can also omit `_id` and let MongoDB assign it. Grant
+only `insert` and `update` on the configured collection. ClickHouse only
+needs INSERT permission. For Redis the `write` object contains only
+`connectionEnv`; grant `RPUSH` for the configured list and pass
+`{ "value": "..." }` to `appendValue`.
+
+Writes return `{ "affected": 1 }`, or `{ "affected": 0 }` when nothing
+matched an update. The sandbox does not write. There is no deletion,
+arbitrary command, or bulk write API. The outbox does not automatically
+replay an ambiguous write. Verify the target state before submitting a
+replacement, even if the delivery reports a provider failure. Prefer
+unique source IDs for inserts when the destination supports them.
+
 ## Driver verification
 
 The repository tests exercise the bridge and a real disposable SQLite file.
@@ -122,3 +175,8 @@ with two rows, `(2, 'First')` and `(9007199254740993, 'Second')`, in
 `id` and `label` fields. Use BIGINT, UInt64 or BSON Long for the
 second ID. For Redis seed the `export:rows` list with `First` and
 `Second`. Run the verification as a read-only user.
+To exercise writes as well, set `CANOPY_TEST_DB_WRITE_DSN` for the same
+disposable database. Use a fresh fixture on each run: the test appends
+or inserts one record. For MongoDB, also create the empty
+`report.write_rows` collection and grant read and write access to it
+to the appropriate test users separately.

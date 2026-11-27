@@ -12,7 +12,9 @@ are not runtime dependencies.
 
 PostgreSQL, MySQL/MariaDB, SQLite, ClickHouse, SQL Server, MongoDB and Redis
 connectors read bounded pages from operator-configured tables, views,
-collections or lists. See the
+collections or lists. Optional writes are scoped to the configured
+dataset, use a separate credential, and support inserts, keyed updates
+where available, or Redis list appends. See the
 [data sources bridge](../bridges/data-sources/README.md) for the driver
 references, setup, permissions and result format.
 

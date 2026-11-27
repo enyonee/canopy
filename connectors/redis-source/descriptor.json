@@ -101,6 +101,55 @@
         "rowsJson": "$.rowsJson"
       },
       "resultOnly": true
+    },
+    "appendValue": {
+      "idempotent": false,
+      "noReplay": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "value"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "{base}/redis/append",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer {secret.writeToken}"
+        },
+        "body": {
+          "dataset": {
+            "$": "config.dataset"
+          },
+          "value": {
+            "$": "input.value"
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "affected": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "affected"
+        ]
+      },
+      "result": {
+        "affected": "$.affected"
+      },
+      "resultOnly": true
     }
   },
   "sandbox": {
@@ -118,6 +167,13 @@
             ],
             "hasMore": false,
             "rowsJson": "[[\"Example\"]]"
+          }
+        }
+      ],
+      "appendValue": [
+        {
+          "body": {
+            "affected": 1
           }
         }
       ]

@@ -21,12 +21,17 @@ async function read(req) {
   return data;
 }
 
-export function merchantServer(token, routes) {
+export function merchantServer(token, routes, routeTokens = {}) {
   if (!validOperatorToken(token)) throw new Error('invalid bridge operator token');
   const expected = Buffer.from('Bearer ' + token);
+  const overrides = new Map(Object.entries(routeTokens).map(([route, key]) => {
+    if (!Object.hasOwn(routes, route) || !validOperatorToken(key)) throw new Error('invalid route token');
+    return [route, Buffer.from('Bearer ' + key)];
+  }));
   return createServer(async (req, res) => {
     const provided = Buffer.from(req.headers.authorization || '');
-    if (provided.length !== expected.length || !timingSafeEqual(provided, expected))
+    const required = overrides.get(req.url) ?? expected;
+    if (provided.length !== required.length || !timingSafeEqual(provided, required))
       return reply(res, 401, { error: 'unauthorized' });
     if (req.method !== 'POST' || !Object.hasOwn(routes, req.url))
       return reply(res, 404, { error: 'not found' });

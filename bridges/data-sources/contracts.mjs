@@ -1,12 +1,19 @@
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 const DATASET = /^[a-z][a-z0-9-]{0,47}$/;
 export const types = ['postgres', 'mysql', 'sqlite', 'clickhouse', 'sqlserver', 'mongodb', 'redis'];
+export const updateTypes = ['postgres', 'mysql', 'sqlite', 'sqlserver', 'mongodb'];
 const identifier = (s) => typeof s === 'string' && IDENTIFIER.test(s);
 export const datasetName = (s) => typeof s === 'string' && DATASET.test(s);
 const object = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const only = (v, keys) => object(v) && Object.keys(v).every((key) => keys.includes(key));
 
 export function readSpec(name, spec) {
+  const { write, ...read } = spec ?? {};
+  const parsed = readDefinition(name, read);
+  return write === undefined ? parsed : { ...parsed, write: writeDefinition(parsed, write) };
+}
+
+function readDefinition(name, spec) {
   if (spec?.type === 'redis') {
     if (!datasetName(name) || !only(spec, ['type', 'connectionEnv', 'key']) ||
       !envName(spec.connectionEnv) || typeof spec.key !== 'string' || !/^[A-Za-z0-9_.:-]{1,200}$/.test(spec.key))
@@ -27,6 +34,40 @@ export function readSpec(name, spec) {
 
 const envName = (s) => typeof s === 'string' && /^[A-Z][A-Z0-9_]{0,90}$/.test(s);
 
+function writeDefinition(spec, write) {
+  const redis = spec.type === 'redis';
+  if (!only(write, redis ? ['connectionEnv'] : ['connectionEnv', 'columns', 'key', 'objectId']) ||
+    !envName(write.connectionEnv) ||
+    (!redis && (!Array.isArray(write.columns) || !write.columns.length || write.columns.length > 20 ||
+      !write.columns.every(identifier) || new Set(write.columns).size !== write.columns.length)) ||
+    (write.key !== undefined && (!updateTypes.includes(spec.type) || !identifier(write.key) ||
+      !spec.columns.includes(write.key) || (spec.type === 'mongodb' && write.key !== '_id'))) ||
+    (write.objectId !== undefined && !(spec.type === 'mongodb' && write.key === '_id' && typeof write.objectId === 'boolean')))
+    throw new Error('invalid write definition');
+  return write;
+}
+
+const valueOk = (value) => value === null || typeof value === 'boolean' ||
+  (typeof value === 'string' && !value.includes('\0') && Buffer.byteLength(value) <= 4096) ||
+  (typeof value === 'number' && Number.isFinite(value) && (!Number.isInteger(value) || Number.isSafeInteger(value)));
+
+export function writeInput(spec, op, body) {
+  if (!spec.write) return null;
+  if (op === 'append') return only(body, ['dataset', 'value']) && typeof body.value === 'string' && valueOk(body.value)
+    ? { value: body.value } : null;
+  const update = op === 'update';
+  if (!only(body, update ? ['dataset', 'key', 'values'] : ['dataset', 'values']) || !object(body.values)) return null;
+  const values = Object.entries(body.values);
+  if (!values.length || !values.every(([k, v]) => spec.write.columns.includes(k) && valueOk(v))) return null;
+  const { key, objectId } = spec.write;
+  const validKey = (v) => spec.type === 'mongodb'
+    ? typeof v === 'string' && v.length > 0 && valueOk(v) && (!objectId || /^[0-9a-fA-F]{24}$/.test(v))
+    : valueOk(v) && (typeof v === 'string' && v.length > 0 || Number.isSafeInteger(v));
+  if (key && !update && Object.hasOwn(body.values, key) && !validKey(body.values[key])) return null;
+  if (update && (!key || !validKey(body.key) || Object.hasOwn(body.values, key))) return null;
+  return { values, ...(update && { key: body.key }) };
+}
+
 export function readPage(body) {
   if (!only(body, ['dataset', 'limit', 'offset']) || !datasetName(body.dataset) ||
     !Number.isSafeInteger(body.limit) || body.limit < 1 || body.limit > 50 ||
@@ -34,9 +75,15 @@ export function readPage(body) {
   return body;
 }
 
+export function quoted(type, name) {
+  if (!identifier(name)) throw new Error('invalid identifier');
+  if (type === 'sqlserver') return '[' + name + ']';
+  if (type === 'mysql' || type === 'clickhouse') return '`' + name + '`';
+  return '"' + name + '"';
+}
+
 export function select(spec, limit, offset) {
-  const backticks = spec.type === 'mysql' || spec.type === 'clickhouse';
-  const quote = (name) => spec.type === 'sqlserver' ? '[' + name + ']' : backticks ? '`' + name + '`' : '"' + name + '"';
+  const quote = (name) => quoted(spec.type, name);
   const page = spec.type === 'sqlserver'
     ? ' OFFSET ' + offset + ' ROWS FETCH NEXT ' + (limit + 1) + ' ROWS ONLY'
     : ' LIMIT ' + (limit + 1) + ' OFFSET ' + offset;
