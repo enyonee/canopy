@@ -44,3 +44,13 @@ test('CSV failures after headers abort the download without writing a second res
     assert.ok(s.trace().some((e) => e.kind === 'error' && /CSV export batch failed/.test(e.message)));
   } finally { s.close(); }
 });
+
+test('CSV treats formula-like text as text but keeps signed numbers numeric', async () => {
+  const s = await boot(tmpGraph({ ...graph, seed: { ...graph.seed, Item: [
+    { name: '  =1+1', rank: -7 }, { name: '\uFF20name', rank: 2 }, { name: 'ordinary', rank: 3 },
+  ] } }));
+  try {
+    const r = await s.get('/Item.csv?sort=rank&dir=asc');
+    assert.equal(r.html, "Name,Group,Rank,Doubled\r\n'  =1+1,,-7,-14\r\n'\uFF20name,,2,4\r\nordinary,,3,6\r\n");
+  } finally { s.close(); }
+});

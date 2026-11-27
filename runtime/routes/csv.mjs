@@ -3,11 +3,18 @@ import { stringify } from 'csv-stringify/sync';
 
 const options = { record_delimiter: 'windows', quoted_match: /[\r\n]/ };
 
+function cell(value) {
+  const text = String(value ?? '');
+  if (/^-\d+(?:\.\d+)?$/.test(text)) return text;
+  // CSV quoting alone does not stop spreadsheet formula interpretation.
+  return /^[\t\r\n]|^\s*[=+@\uFF1D\uFF0B\uFF0D\uFF20-]/u.test(text) ? "'" + text : text;
+}
+
 export async function streamCsv(res, headers, name, header, batches) {
   async function* chunks() {
-    yield stringify([header], options);
+    yield stringify([header.map(cell)], options);
     for await (const batch of batches)
-      yield stringify(batch.map((row) => row.map((v) => v == null ? '' : String(v))), options);
+      yield stringify(batch.map((row) => row.map(cell)), options);
   }
   res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8',
     'content-disposition': `attachment; filename="${name}.csv"`, ...headers });
