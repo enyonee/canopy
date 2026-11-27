@@ -5,18 +5,34 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.8.1 (2026-11-27)
+
 - **Libraries:** live Adyen, Google Sheets and Shopify requests use the provider
   SDKs. Connector replies use compiled Ajv checks with the same drift diagnostics.
 - **CSV and acceptance:** entity exports serialize in batches; browser acceptance
-  uses Puppeteer with the existing Chrome installation.
-
+  uses Puppeteer with the existing Chrome installation. CSV rechecks filters for
+  each batch and is not a transaction snapshot.
 - **Stripe:** live requests for the shipped descriptor use the official Stripe Node
   SDK. API version, operation names and outbox retry rules stay the same.
 - **Uploads:** multipart forms stream to disk with size and part-count limits.
   Incomplete or rejected forms do not leave partial uploads behind.
-
 - **Performance.** Reuse step expression plans and collect connector validation
   errors without intermediate arrays. Results and validation diagnostics are unchanged.
+
+| Local benchmark | Before | After |
+|---|---:|---:|
+| Two step expressions, p50 | 3.21 us | 2.21 us |
+| Map a 250-record connector reply, p50 | 402 us | 145 us |
+| Multipart upload of 4 MiB, p50 | 7.35 ms | 4.66 ms |
+| Multipart upload peak RSS | 120 MiB | 62 MiB |
+| CSV export of 12,000 rows, total time | 147 ms | 213 ms |
+| CSV export peak RSS | 114 MiB | 101 MiB |
+| Stripe test-double lookup, p50 | 0.072 ms | 0.268 ms |
+
+Each row compares the baseline immediately before its change. The CSV and JSON
+benchmark responses were byte-identical. Provider SDKs were checked locally
+against fixtures, not against live accounts. Install the locked dependencies
+with `npm ci` (or `npm ci --omit=dev` for runtime only).
 
 ## 0.8.0 (2026-11-27)
 
