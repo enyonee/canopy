@@ -5,6 +5,17 @@ within the current goal. See [CONTRIBUTING.md](CONTRIBUTING.md#versions-and-rele
 
 ## Unreleased
 
+## 0.8.2 (2026-11-27)
+
+- **Security:** apply private-field rules to forms, edits, owner assignments,
+  and downloads; render Poker labels and Diagram fields safely.
+- Reject malformed session tokens, create new signing keys with owner-only
+  permissions, and support `AG_SECURE_COOKIES=1` for HTTPS deployments.
+- Bound buffered form bodies, reject cross-origin browser form submissions,
+  set browser security headers, and keep internal errors out of responses.
+- Neutralize formula-like text in CSV exports. Connector requests now stop
+  at redirect responses; configure the final destination URL.
+
 ## 0.8.1 (2026-11-27)
 
 - **Libraries:** live Adyen, Google Sheets and Shopify requests use the provider
