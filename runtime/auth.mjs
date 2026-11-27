@@ -22,18 +22,18 @@ export const verifyPassword = (plain, stored) => {
 // The cookie carries an opaque session id, never the user id: a token is revocable
 // (logout deletes the row), does not survive a password change, and two logins of the
 // same user are two different tokens.
-export function sessions(keyFile, store = null) {
+export function sessions(keyFile, store = null, secure = false) {
   let key;
   if (keyFile && fs.existsSync(keyFile)) key = fs.readFileSync(keyFile, 'utf8').trim();
-  else { key = crypto.randomBytes(24).toString('hex'); if (keyFile) fs.writeFileSync(keyFile, key); }
+  else { key = crypto.randomBytes(24).toString('hex'); if (keyFile) fs.writeFileSync(keyFile, key, { mode: 0o600, flag: 'wx' }); }
   const mac = (body) => crypto.createHmac('sha256', key).update(body).digest('hex');
   const sign = (sid) => { const body = String(sid); return `${body}.${mac(body)}`; };
   const verify = (token) => {
     if (!token) return null;
-    const [body, sig] = String(token).split('.');
-    if (!body || !sig) return null;
-    const expect = mac(body);
-    if (sig.length !== expect.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
+    const match = /^([a-f0-9]{32})\.([a-f0-9]{64})$/.exec(String(token));
+    if (!match) return null;
+    const [, body, sig] = match;
+    if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(mac(body), 'hex'))) return null;
     return body;
   };
   // A cookie header is client input: a broken escape is a wrong cookie, never a crash.
@@ -55,8 +55,9 @@ export function sessions(keyFile, store = null) {
     const sid = verify(token(cookieHeader));
     if (sid) await store.sessionEnd(sid);
   };
-  const setCookie = (tok) => `ag_session=${encodeURIComponent(tok)}; Path=/; HttpOnly; SameSite=Lax`;
-  const clearCookie = () => 'ag_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+  const attributes = `; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+  const setCookie = (tok) => `ag_session=${encodeURIComponent(tok)}${attributes}`;
+  const clearCookie = () => `ag_session=${attributes}; Max-Age=0`;
   return { sign, verify, token, start, read, end, setCookie, clearCookie };
 }
 

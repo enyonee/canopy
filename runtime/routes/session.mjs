@@ -23,6 +23,7 @@ export async function handle(ctx) {
   const { sess, graph, store, interp, trace } = ctx;
   if (!sess) return undefined;
   const { parts, req, send, headers, vc, safeNext } = ctx;
+  if (req.method !== 'GET' && req.method !== 'POST') return undefined;
 
   if (parts[0] === 'login' && parts.length === 1) {
     if (req.method === 'GET') { send(200, loginView(graph, { next: ctx.url.searchParams.get('next') || '' }, vc)); return true; }

@@ -7,12 +7,6 @@ import { streamCsv } from './csv.mjs';
 import { parseMultipart, TooBig } from './multipart.mjs';
 export { TooBig } from './multipart.mjs';
 
-const readText = (req) => new Promise((resolve) => {
-  let data = '';
-  req.on('data', (c) => { data += c; });
-  req.on('end', () => resolve(data));
-});
-
 // A JSON body (/api) that is not one flat object of plain values: refuse it as 400.
 export class BadBody extends Error {}
 
@@ -44,14 +38,23 @@ export function rawBody(req, cap = MAX_RAW) {
 function parseBody(req, filesDir, uploads) {
   const ct = req.headers['content-type'] || '';
   if (ct.startsWith('multipart/form-data')) return parseMultipart(req, filesDir, uploads);
-  return readText(req).then((text) => Object.fromEntries(new URLSearchParams(text)));
+  return rawBody(req).then((bytes) => Object.fromEntries(new URLSearchParams(bytes.toString('utf8'))));
 }
 
 /** Is this POST from the page's own site? The Origin (else the Referer) names the same host the request was sent to. */
 export function sameOrigin(req) {
   const from = req.headers.origin ?? req.headers.referer;
   if (!from) return false;
-  try { return new URL(from).host === req.headers.host; } catch { return false; } // allow-swallow: a header that is not a URL is a cross-site request, refused
+  try {
+    const url = new URL(from);
+    return ['http:', 'https:'].includes(url.protocol) && url.host === req.headers.host;
+  } catch { return false; } // allow-swallow: malformed origin is refused
+}
+
+export function foreignForm(req) {
+  const { origin, referer, 'sec-fetch-site': site } = req.headers;
+  return site === 'cross-site' || site === 'same-site' ||
+    ((origin !== undefined || referer !== undefined) && !sameOrigin(req));
 }
 
 // The largest JSON body /api reads.

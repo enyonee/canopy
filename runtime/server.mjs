@@ -16,7 +16,7 @@ import { permissions, sessions } from './auth.mjs';
 import { createInterpreter } from './interp.mjs';
 import { bootstrapIdentity, bootstrapSeed } from './boot.mjs';
 import { errorPage, noticePage } from './render.mjs';
-import { createContext, TooBig } from './routes/context.mjs';
+import { createContext, foreignForm, TooBig } from './routes/context.mjs';
 import * as session from './routes/session.mjs';
 import * as views from './routes/views.mjs';
 import * as system from './routes/system.mjs';
@@ -53,6 +53,7 @@ async function dispatch(ctx) {
   if (await api.handle(ctx)) return; // /api/*: its refusals and "who am I"; a route it serves goes on below, prefix gone
   if (widgets.handle(ctx)) return;
   if (await hooks.handle(ctx)) return; // a provider's webhook: signed, never a session — before the gate below
+  if (ctx.req.method === 'POST' && !ctx.api && foreignForm(ctx.req)) { ctx.deny('This request did not come from this site.'); return; }
   if (await session.handle(ctx)) return;
   if (ctx.perms.enabled && !ctx.role) { ctx.deny('Please sign in.'); return; }
   if (api.contract(ctx)) return;
@@ -123,23 +124,31 @@ export function startFlusher({ store, graph, server, trace, noTimers, clock = sy
 function requestHandler({ graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile }) {
   const front = graph.web ? openFront(webRoot(graphFile, graph)) : null;
   return async (req, res) => {
-    let url = new URL(req.url, `http://${req.headers.host}`), base = '';
+    res.setHeader('x-content-type-options', 'nosniff');
+    res.setHeader('x-frame-options', 'SAMEORIGIN');
+    res.setHeader('referrer-policy', 'same-origin');
+    let url, base = '', ctx;
+    try { url = new URL(req.url, `http://${req.headers.host}`); } catch {
+      res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' }).end('Invalid request URL');
+      return;
+    }
     if (front) {
       let to;
       try { to = front(req, res, url); } catch (e) { trace({ kind: 'error', message: String(e && e.message) }); res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }); res.end('the front could not be read'); return; }
       if (!to) return;
       ({ url, base } = to);
     }
-    const ctx = await createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile, base });
     try {
+      ctx = await createContext({ req, res, url, graph, store, perms, sess, interp, trace, registry, filesDir, fetchImpl, clock, env, graphFile, base });
       await dispatch(ctx);
     } catch (e) {
-      if (e instanceof TooBig) { trace({ kind: 'refused', message: e.message }); ctx.send(413, noticePage(graph, ctx.vc, 'Too large', e.message)); return; }
+      if (ctx && e instanceof TooBig) { trace({ kind: 'refused', message: e.message }); ctx.send(413, noticePage(graph, ctx.vc, 'Too large', e.message)); return; }
       trace({ kind: 'error', message: String(e && e.message), stack: String(e && e.stack) });
       console.error(e && e.stack);
       if (res.headersSent || res.destroyed) { res.destroy(); return; }
-      if (ctx.api) ctx.sendJson(500, { ok: false, status: 500, errors: [String(e && e.message)] });
-      else ctx.send(500, errorPage(graph, String(e && e.message)));
+      if (!ctx) res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }).end('Internal server error');
+      else if (ctx.api) ctx.sendJson(500, { ok: false, status: 500, errors: ['Internal server error'] });
+      else ctx.send(500, errorPage(graph, 'Internal server error'));
     }
   };
 }
@@ -179,7 +188,7 @@ export function serve({ graphFile, dbFile, traceFile, port, host = '127.0.0.1', 
     const store = app.store = await Store.open(graph, dbFile, registry);
     store.migrations.forEach((m) => console.log(`migration: ${m}`));
     const perms = app.perms = permissions(graph, store);
-    const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key'), store) : null;
+    const sess = graph.roles ? sessions(keyFile || path.join(dir, 'session.key'), store, process.env.AG_SECURE_COOKIES === '1') : null;
     let meId;
     try { meId = await bootData(graph, store, graphFile, filesDir); } catch (e) { return refuse([{ path: '/seed', message: e.message }]); }
     // The deploy file (each connector's mode) must be sound before anything is delivered.

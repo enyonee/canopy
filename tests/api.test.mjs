@@ -217,7 +217,7 @@ test('F1: api: a JSON body cannot name a stored file; a crash is a JSON 500', as
     try {
       const crash = await v2.get('/api/Project');
       assert.equal(crash.status, 500);
-      assert.deepEqual(JSON.parse(crash.html), { ok: false, status: 500, errors: ['disk gone'] });
+      assert.deepEqual(JSON.parse(crash.html), { ok: false, status: 500, errors: ['Internal server error'] });
       assert.equal((await v2.get('/Project')).status, 500, 'the HTML path is still its error page');
     } finally { store.listPage = real; }
   } finally { v2.close(); }

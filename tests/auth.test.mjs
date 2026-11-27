@@ -30,6 +30,7 @@ test('sessions are rows: the cookie carries an opaque id, logout ends it, a brok
   };
   const a = sessions(keyFile, store);
   assert.ok(fs.existsSync(keyFile), 'the key is written next to the database');
+  assert.equal(fs.statSync(keyFile).mode & 0o777, 0o600);
   const token = await a.start(7);
   assert.equal(a.verify(token), token.split('.')[0], 'the token is a signed session id');
   assert.notEqual(token.split('.')[0], '7', 'the cookie never carries the user id');
@@ -41,6 +42,8 @@ test('sessions are rows: the cookie carries an opaque id, logout ends it, a brok
   assert.equal(a.verify(''), null);
   assert.equal(a.verify(null), null);
   assert.equal(a.verify(`${token}0`), null, 'a signature of the wrong length is rejected');
+  assert.equal(a.verify(`${token}.trailing`), null, 'only two token components are accepted');
+  assert.equal(a.verify(`${token.split('.')[0]}.${'\u00e9'.repeat(64)}`), null, 'non-ASCII is refused before byte comparison');
   assert.equal(await a.read('x=1'), null, 'no cookie, no session');
   assert.equal(await a.read(undefined), null);
   assert.equal(await a.read('ag_session=%ZZ'), null, 'a malformed escape is a wrong cookie, not a throw');
@@ -53,6 +56,9 @@ test('sessions are rows: the cookie carries an opaque id, logout ends it, a brok
   assert.match(a.setCookie(token), /^ag_session=.+; Path=\/; HttpOnly; SameSite=Lax$/);
   assert.match(a.clearCookie(), /Max-Age=0/);
   assert.match(a.clearCookie(), /SameSite=Lax/);
+  const secure = sessions(keyFile, store, true);
+  assert.match(secure.setCookie(token), /; Secure$/);
+  assert.match(secure.clearCookie(), /; Secure;/);
   const c = sessions(null, store);
   const own = await c.start(1);
   assert.equal(c.verify(own), own.split('.')[0], 'without a key file the key lives in memory');
