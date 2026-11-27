@@ -176,7 +176,8 @@ async function send(req, fetchImpl, clock, answer) {
   const abort = new AbortController();
   const timer = clock.setTimer(() => abort.abort(new DOMException(`no answer within ${req.timeout} ms`, 'TimeoutError')), req.timeout);
   /** @type {RequestInit} */
-  const init = { method: req.method, headers: req.headers, signal: abort.signal, ...(req.redirect && { redirect: req.redirect }) };
+  // A provider response must not select a second destination for the payload.
+  const init = { method: req.method, headers: req.headers, signal: abort.signal, redirect: 'manual' };
   if (req.body !== undefined) init.body = req.body;
   try {
     let res;
@@ -186,7 +187,6 @@ async function send(req, fetchImpl, clock, answer) {
 }
 
 async function sendLive(d, op, req, fetchImpl, clock, secret) {
-  if (op.resultOnly) req.redirect = 'manual';
   if (op.request.pathSecret) {
     const credential = secret(op.request.pathSecret);
     try {
@@ -204,7 +204,6 @@ async function sendLive(d, op, req, fetchImpl, clock, secret) {
   try { token = await send(preflight, fetchImpl, clock, accessToken); }
   catch (e) { throw new Error('could not authorize provider request', { cause: e }); }
   req.headers.authorization = `Bearer ${token}`;
-  req.redirect = 'manual';
   try {
     return redactDeep(await send(req, fetchImpl, clock, (res) => mapResponse(op, res)), [token]);
   } catch (e) {

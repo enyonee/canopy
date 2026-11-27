@@ -58,6 +58,17 @@ const pay = () => ({
   },
 });
 const cfg = { kind: 'pay', host: 'https://pay.test' };
+test('generic connector sends once and treats a redirect as a provider failure', async () => {
+  let sent = 0;
+  const patch = await deliverRow(pay(), { op: 'ping', payload: {} }, cfg, { fetchImpl: async (url, init) => {
+    sent++;
+    assert.equal(url, 'https://pay.test/v1/ping');
+    assert.equal(init.redirect, 'manual');
+    return new Response(null, { status: 307, headers: { location: 'https://other.test/' } });
+  } });
+  assert.equal(sent, 1);
+  assert.deepEqual(patch, { code: 307, status: 'failed', error: 'HTTP 307' });
+});
 const answer = (status, body) => ({ ok: status >= 200 && status < 300, status, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) });
 
 test('the descriptor used here is itself valid', () => assert.deepEqual(checkDescriptor(pay()), []));
@@ -225,6 +236,8 @@ test('http: the same raw request — key order, header merge, and a timeout sign
   const old = [];
   await OLD.deliver(row, connector, { fetchImpl: capture(old) });
   await TRANSPORTS.http.deliver(row, connector, { fetchImpl: capture(seen) });
+  assert.equal(seen[0].init.redirect, 'manual');
+  delete seen[0].init.redirect;
   assert.equal(JSON.stringify(seen), JSON.stringify(old), 'byte for byte, key order included');
   assert.equal(buildRequest(BUILTIN.http, connector, 'send', { body: row.payload }).timeout, 50);
   assert.equal(buildRequest(BUILTIN.http, { url: 'http://s.test' }, 'send', {}).timeout, 3000);
